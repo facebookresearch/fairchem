@@ -782,6 +782,13 @@ std::vector<torch::Tensor> node_to_edge_wigner_permute_bwd_combined(
     return {grad_x, grad_wigner};
 }
 
+// Forward declaration
+std::vector<torch::Tensor> fused_so2_conv1_forward(
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    int64_t, const std::vector<int64_t>&, const std::vector<int64_t>&);
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("node_to_edge_wigner_permute_fwd", &node_to_edge_wigner_permute_fwd,
           "Fused gather + Wigner rotate + L->M permute (forward)");
@@ -799,4 +806,83 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Fused M->L permute + Wigner inverse + scatter to nodes");
     m.def("node_to_edge_wigner_permute_bwd_combined", &node_to_edge_wigner_permute_bwd_combined,
           "Combined bwd_dx + bwd_dw for node_to_edge_wigner_permute");
+    m.def("fused_so2_conv1_forward", &fused_so2_conv1_forward,
+          "Fused SO2 conv1 forward");
+}
+
+/*
+ * Fused SO2 conv1 forward: radial multiply + GEMM + output assembly
+ * for all m-orders in a single call.
+ *
+ * Eliminates: x.split(), x.view(), x*radial.unsqueeze(), x.flatten(),
+ *             torch.cat(out), and the Python dispatch for each.
+ *
+ * Input: x [E, 9, 2C], x_edge [E, total_radial_features],
+ *        fc_m0_weight [m0_out, m0_in], fc_m0_bias [m0_out],
+ *        w_block_1 [2*out1, 2*in1], w_block_2 [2*out2, 2*in2]
+ * Output: out [E, 9, C_out], gating [E, extra_m0]
+ */
+std::vector<torch::Tensor> fused_so2_conv1_forward(
+    const torch::Tensor& x,           // [E, 9, 2C]
+    const torch::Tensor& x_edge,      // [E, total_radial]
+    const torch::Tensor& fc_m0_weight, // [m0_out, m0_in]
+    const torch::Tensor& fc_m0_bias,   // [m0_out]
+    const torch::Tensor& w_block_1,    // [2*out_half1, 2*in_size1]
+    const torch::Tensor& w_block_2,    // [2*out_half2, 2*in_size2]
+    int64_t extra_m0_channels,
+    const std::vector<int64_t>& m_split_sizes,    // [3, 4, 2]
+    const std::vector<int64_t>& edge_split_sizes   // [768, 512, 256]
+) {
+    const int64_t E = x.size(0);
+    const int64_t C_in = x.size(2);
+
+    // m=0: radial * flatten → addmm
+    int64_t m0_coeffs = m_split_sizes[0];  // 3
+    auto x_m0 = x.narrow(1, 0, m0_coeffs).reshape({E, -1});  // [E, 3*2C]
+    auto edge_m0 = x_edge.narrow(1, 0, edge_split_sizes[0]);
+    auto x_m0_scaled = x_m0 * edge_m0;
+    auto m0_out_full = torch::addmm(fc_m0_bias, x_m0_scaled, fc_m0_weight.t());
+
+    int64_t m0_main_size = fc_m0_weight.size(0) - extra_m0_channels;
+    int64_t C_out = m0_main_size / m0_coeffs;
+    auto gating = m0_out_full.narrow(1, 0, extra_m0_channels);
+    auto m0_out = m0_out_full.narrow(1, extra_m0_channels, m0_main_size);
+
+    // Pre-allocate output [E, 9, C_out]
+    auto out = torch::empty({E, 9, C_out}, x.options());
+
+    // Write m0 output
+    out.narrow(1, 0, m0_coeffs).copy_(m0_out.view({E, m0_coeffs, C_out}));
+
+    // m=1: radial * x → mm(w_block_1) → write real/imag
+    int64_t m1_coeffs = m_split_sizes[1];  // 4
+    int64_t m1_offset = m0_coeffs;
+    auto x_m1 = x.narrow(1, m1_offset, m1_coeffs).reshape({E, 2, -1});
+    int64_t edge_m1_offset = edge_split_sizes[0];
+    auto edge_m1 = x_edge.narrow(1, edge_m1_offset, edge_split_sizes[1]);
+    auto x_m1_scaled = (x_m1 * edge_m1.unsqueeze(1)).reshape({E, -1});
+    auto m1_result = torch::mm(x_m1_scaled, w_block_1.t());
+    int64_t num_l_1 = m1_result.size(1) / (2 * C_out);
+    auto m1_view = m1_result.view({E, 2, num_l_1, C_out});
+    int64_t out_offset = m0_coeffs;
+    out.narrow(1, out_offset, num_l_1).copy_(m1_view.select(1, 0));
+    out_offset += num_l_1;
+    out.narrow(1, out_offset, num_l_1).copy_(m1_view.select(1, 1));
+    out_offset += num_l_1;
+
+    // m=2: radial * x → mm(w_block_2) → write real/imag
+    int64_t m2_coeffs = m_split_sizes[2];  // 2
+    int64_t m2_input_offset = m1_offset + m1_coeffs;
+    auto x_m2 = x.narrow(1, m2_input_offset, m2_coeffs).reshape({E, 2, -1});
+    int64_t edge_m2_offset = edge_m1_offset + edge_split_sizes[1];
+    auto edge_m2 = x_edge.narrow(1, edge_m2_offset, edge_split_sizes[2]);
+    auto x_m2_scaled = (x_m2 * edge_m2.unsqueeze(1)).reshape({E, -1});
+    auto m2_result = torch::mm(x_m2_scaled, w_block_2.t());
+    int64_t num_l_2 = m2_result.size(1) / (2 * C_out);
+    auto m2_view = m2_result.view({E, 2, num_l_2, C_out});
+    out.narrow(1, out_offset, num_l_2).copy_(m2_view.select(1, 0));
+    out_offset += num_l_2;
+    out.narrow(1, out_offset, num_l_2).copy_(m2_view.select(1, 1));
+
+    return {out, gating};
 }
