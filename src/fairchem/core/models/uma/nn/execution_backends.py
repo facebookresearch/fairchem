@@ -42,6 +42,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastCPUBackend",
     "get_execution_backend",
 ]
 
@@ -57,6 +58,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FAST_CPU = "umas_fast_cpu"
 
 
 class ExecutionBackend:
@@ -480,10 +482,98 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class UMASFastCPUBackend(UMASFastPytorchBackend):
+    """
+    CPU-optimized backend: SO2 block conversion + CPU kernels.
+
+    Extends UMASFastPytorchBackend with CPU-optimized
+    node_to_edge_wigner_permute and permute_wigner_inv_edge_to_node
+    that use block-diagonal Wigner structure with L↔M permutation
+    (same math as the GPU Triton kernels, but using PyTorch CPU ops).
+
+    Requires lmax==2, mmax==2, and merge_mole=True.
+    """
+
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
+        UMASFastPytorchBackend.validate(model, settings)
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("umas_fast_cpu requires lmax==2 and mmax==2")
+        if settings is not None and not settings.merge_mole:
+            raise ValueError("umas_fast_cpu requires merge_mole=True")
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Passthrough — CPU kernels handle L-to-M internally
+        return wigner, wigner_inv
+
+    @staticmethod
+    def node_to_edge_wigner_permute(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.cpu import (
+            CPUNodeToEdgeWignerPermuteFunction,
+        )
+
+        return CPUNodeToEdgeWignerPermuteFunction.apply(x_full, edge_index, wigner)
+
+    @staticmethod
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.cpu import (
+            CPUPermuteWignerInvEdgeToNodeFunction,
+        )
+
+        # Rotate M->L using CPU kernel
+        x_rotated = CPUPermuteWignerInvEdgeToNodeFunction.apply(x_message, wigner_inv)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
+
+    @staticmethod
+    def edge_degree_scatter(
+        x: torch.Tensor,
+        radial_output: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        m_0_num_coefficients: int,
+        sphere_channels: int,
+        rescale_factor: float,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+
+        return _EdgeDegreeScatterFunction.apply(
+            x, radial, wigner_inv_m0, edge_index[1] - node_offset, rescale_factor
+        )
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FAST_CPU: UMASFastCPUBackend,
 }
 
 
