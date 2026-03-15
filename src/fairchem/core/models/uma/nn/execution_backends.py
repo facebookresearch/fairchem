@@ -23,6 +23,12 @@ if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
 torch._inductor.config.coordinate_descent_tuning = True
 # Enable aggressive fusion of inductor ops
 torch._inductor.config.aggressive_fusion = True
+# Reduce inductor compilation overhead
+torch._inductor.config.triton.unique_kernel_names = False
+# Allow inductor to reorder nodes for better locality
+torch._inductor.config.reorder_for_locality = True
+# Disable size asserts in generated code (small speedup)
+torch._inductor.config.size_asserts = False
 
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
