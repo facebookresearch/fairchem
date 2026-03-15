@@ -35,6 +35,12 @@ cd /home/ubuntu/fairchem/configs/uma/speed
 
 Package management uses `uv pip install` (inside fairchem_venv). The fairchem source tree at `/home/ubuntu/fairchem/src` is on PYTHONPATH and takes precedence over site-packages.
 
+**CRITICAL: Use tcmalloc for ~19% speedup.** The model allocates ~4.3GB of temporaries per inference call. tcmalloc handles this allocation churn much better than glibc malloc:
+```bash
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc.so.4 python ...
+```
+Install: `sudo apt-get install libgoogle-perftools-dev`
+
 ## Branch
 
 All work happens on the **`cpu_backend_autoresearch`** branch in `/home/ubuntu/fairchem`.
