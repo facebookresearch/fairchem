@@ -64,13 +64,11 @@ class CPUNodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         kernels = _get_cpp_kernels()
 
         if kernels:
-            x_c = x
             ei_c = edge_index.to(torch.int64)
-            w_c = wigner
 
-            out = kernels.node_to_edge_wigner_permute_fwd(x_c, ei_c, w_c)
+            out = kernels.node_to_edge_wigner_permute_fwd(x, ei_c, wigner)
 
-            ctx.save_for_backward(x_c, ei_c, w_c)
+            ctx.save_for_backward(x, ei_c, wigner)
             ctx.num_nodes = x.shape[0]
             ctx.use_cpp = True
             return out
@@ -83,7 +81,7 @@ class CPUNodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             x, edge_index, wigner = ctx.saved_tensors
             kernels = _get_cpp_kernels()
 
-            # Use separate bwd_dx and bwd_dw kernels
+            # Use separate bwd_dx and bwd_dw kernels via custom ops
             # Note: wigner grad is ALWAYS needed because Wigner matrices
             # depend on positions and forces = -dE/dpos requires this gradient.
             grad_x = kernels.node_to_edge_wigner_permute_bwd_dx(
@@ -113,12 +111,9 @@ class CPUPermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         kernels = _get_cpp_kernels()
 
         if kernels:
-            x_c = x
-            w_c = wigner_inv
+            out = kernels.permute_wigner_inv_fwd(x, wigner_inv)
 
-            out = kernels.permute_wigner_inv_fwd(x_c, w_c)
-
-            ctx.save_for_backward(x_c, w_c)
+            ctx.save_for_backward(x, wigner_inv)
             ctx.use_cpp = True
             return out
         else:
