@@ -909,7 +909,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
-@pytest.mark.skip()
+# @pytest.mark.skip()
 @pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
@@ -926,10 +926,13 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
     """
+    import torch
     from ase import units
     from ase.md.langevin import Langevin
     from ase.md.nptberendsen import NPTBerendsen
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+
+    torch.use_deterministic_algorithms(True)
 
     # Simple system
     atoms_template = bulk("Cu", "fcc", a=3.6)
