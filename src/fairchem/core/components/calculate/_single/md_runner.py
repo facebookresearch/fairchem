@@ -148,7 +148,6 @@ class MDRunner(CalculateRunner):
         if self._thermostat_state_to_restore is not None:
             self.thermostat.restore_state(self._dyn, self._thermostat_state_to_restore)
 
-        # Restore the step counter so get_time() returns global time
         self._dyn.nsteps = self._start_step
 
         self._trajectory_writer = self._trajectory_writer_fn(trajectory_file)
@@ -228,9 +227,7 @@ class MDRunner(CalculateRunner):
         remaining_steps = self.steps - self._start_step
         stopped_by_stopfair = False
 
-        # On resume, ASE's irun() skips the initial call_observers() because
-        # nsteps != 0. Manually trigger it so the resume-step frame is captured
-        # and the logger records the initial state.
+        # On job restart, let's also save the resume-step frame.
         if self._start_step > 0:
             self._dyn.call_observers()
 
@@ -240,9 +237,6 @@ class MDRunner(CalculateRunner):
             stopped_by_stopfair = True
         finally:
             self._elapsed_wall_time += time.monotonic() - self._wall_t0
-            # On STOPFAIR the writer was already closed inside save_state
-            # (is_preemption=True). For all other exits (success or error),
-            # close here so the Parquet footer is written and data is not lost.
             if not stopped_by_stopfair and self._trajectory_writer:
                 self._trajectory_writer.close()
 
@@ -328,18 +322,8 @@ class MDRunner(CalculateRunner):
 
         try:
             # Clean up any leftover temp dir from a previous failed save.
-            # On NFS, rmtree can fail due to .nfs* silly-rename files from
-            # open handles. Rename the stale dir aside and delete it with
-            # ignore_errors so it doesn't block the new save.
             if tmp_dir.exists():
-                stale = checkpoint_dir.with_name(checkpoint_dir.name + ".stale")
-                if stale.exists():
-                    shutil.rmtree(stale, ignore_errors=True)
-                try:
-                    tmp_dir.rename(stale)
-                    shutil.rmtree(stale, ignore_errors=True)
-                except OSError:
-                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
             if self._trajectory_writer:
@@ -395,14 +379,9 @@ class MDRunner(CalculateRunner):
                 portable_path = tmp_dir / "portable_config.yaml"
                 OmegaConf.save(portable_cfg, portable_path)
 
-            # Atomically swap: rename old checkpoint aside, move temp into place.
-            # Use ignore_errors on cleanup to handle NFS silly-rename files.
+            # Atomically swap: remove old checkpoint, move temp into place.
             if checkpoint_dir.exists():
-                old_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".old")
-                if old_dir.exists():
-                    shutil.rmtree(old_dir, ignore_errors=True)
-                checkpoint_dir.rename(old_dir)
-                shutil.rmtree(old_dir, ignore_errors=True)
+                shutil.rmtree(checkpoint_dir, ignore_errors=True)
             tmp_dir.rename(checkpoint_dir)
             return True
         except Exception as e:
