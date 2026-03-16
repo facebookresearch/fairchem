@@ -115,6 +115,7 @@ class MDRunner(CalculateRunner):
         self._start_step = 0
         self._thermostat_state_to_restore: dict | None = None
         self._elapsed_wall_time: float = 0.0
+        self._wall_t0: float = time.monotonic()
 
         super().__init__(calculator=calculator, input_data=[atoms])
 
@@ -332,6 +333,7 @@ class MDRunner(CalculateRunner):
                     self._trajectory_writer.flush()
 
             atoms_path = tmp_dir / "checkpoint.xyz"
+            self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
             thermostat_state = self.thermostat.save_state(self._dyn)
@@ -352,7 +354,7 @@ class MDRunner(CalculateRunner):
 
             # Save resume configs from the canonical config
             config_path = Path(self.job_config.metadata.config_path)
-            if config_path.exists():
+            if config_path.is_file():
                 cfg = OmegaConf.load(config_path)
                 cfg.job.runner_state_path = checkpoint_location
                 # Remove atoms from runner since state is in checkpoint.xyz
