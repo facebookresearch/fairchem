@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import time
 from pathlib import Path
@@ -333,8 +332,6 @@ class MDRunner(CalculateRunner):
                     self._trajectory_writer.flush()
 
             atoms_path = tmp_dir / "checkpoint.xyz"
-            current_step = self._dyn.get_number_of_steps()
-            self._atoms.info["md_step"] = current_step
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
             thermostat_state = self.thermostat.save_state(self._dyn)
@@ -343,7 +340,7 @@ class MDRunner(CalculateRunner):
                 json.dump(thermostat_state, f)
 
             md_state = {
-                "current_step": current_step,
+                "current_step": self._dyn.get_number_of_steps(),
                 "total_steps": self.steps,
                 "elapsed_wall_time": (
                     self._elapsed_wall_time + time.monotonic() - self._wall_t0
@@ -354,8 +351,8 @@ class MDRunner(CalculateRunner):
                 json.dump(md_state, f)
 
             # Save resume configs from the canonical config
-            config_path = self.job_config.metadata.config_path
-            if os.path.exists(config_path):
+            config_path = Path(self.job_config.metadata.config_path)
+            if config_path.exists():
                 cfg = OmegaConf.load(config_path)
                 cfg.job.runner_state_path = checkpoint_location
                 # Remove atoms from runner since state is in checkpoint.xyz
@@ -421,11 +418,10 @@ class MDRunner(CalculateRunner):
         self._start_step = md_state["current_step"]
         self._elapsed_wall_time = md_state.get("elapsed_wall_time", 0.0)
 
-        if self._start_step > self.steps:
+        if self._start_step >= self.steps:
             raise ValueError(
-                f"Checkpoint step ({self._start_step}) exceeds configured "
-                f"total steps ({self.steps}). Increase 'steps' or use a "
-                f"different checkpoint."
+                f"Checkpoint step ({self._start_step}) is already at or beyond "
+                f"configured total steps ({self.steps})."
             )
 
         thermostat_path = checkpoint_dir / "thermostat_state.json"
