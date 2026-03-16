@@ -13,10 +13,10 @@ from ._single.adsorption_singlepoint_runner import AdsorptionSinglePointRunner
 from ._single.elasticity_runner import ElasticityRunner
 from ._single.kappa_runner import KappaRunner
 from ._single.md_runner import MDRunner
-from ._single.nve_md_runner import NVEMDRunner
+from ._single.nve_md_runner import NVEMDRunner, get_nve_md_data
 from ._single.omol_runner import OMolRunner
 from ._single.pairwise_ct_runner import PairwiseCountRunner
-from ._single.phonon_runner import MDRPhononRunner
+from ._single.phonon_runner import MDRPhononRunner, get_mdr_phonon_data_list
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
 from .utils.thermostats import (
@@ -35,8 +35,10 @@ __all__ = [
     "ElasticityRunner",
     "KappaRunner",
     "LangevinThermostat",
+    "get_mdr_phonon_data_list",
     "MDRPhononRunner",
     "MDRunner",
+    "get_nve_md_data",
     "NVEMDRunner",
     "NoseHooverNVT",
     "OMolRunner",

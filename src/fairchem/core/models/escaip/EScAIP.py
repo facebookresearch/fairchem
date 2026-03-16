@@ -36,6 +36,8 @@ from fairchem.core.models.escaip.utils.nn_utils import (
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.models.escaip.custom_types import GraphAttentionData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
 @registry.register_model("EScAIP_backbone")
@@ -130,6 +132,13 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
     def build_inference_settings(cls, settings) -> dict:
         """EScAIP has no inference-time config overrides."""
         return {}
+
+    def get_default_untrained_tasks(
+        self,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        return []
 
     def validate_tasks(self, dataset_to_tasks: dict) -> None:
         """

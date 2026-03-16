@@ -13,11 +13,15 @@ from __future__ import annotations
 # Must be a power of 2. sphere_channels must be divisible by this.
 BLOCK_C = 128
 
-# Permutation indices for L-major to M-major ordering.
+# Fixed grid size for edge dimension grid-stride loop.
+# Kernels loop: edge_id = program_id(0); while edge_id < num_edges: ...; edge_id += GRID_E_STRIDE
+# This avoids torch.compile recompiles from dynamic edge counts while correctly
+# handling any number of edges (no upper bound).
+GRID_E_STRIDE = 2048
+
+# Permutation indices for M-major to L-major ordering.
 # For lmax=2: coefficients ordered as (l=0), (l=1, m=-1,0,1), (l=2, m=-2,-1,0,1,2)
 # L-major: [0, 1, 2, 3, 4, 5, 6, 7, 8] = [l0, l1m-1, l1m0, l1m1, l2m-2, l2m-1, l2m0, l2m1, l2m2]
 # M-major: [0, 2, 6, 3, 7, 1, 5, 8, 4] = reordered by m value
-L_TO_M_GATHER_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
-
-# Permutation indices for M-major to L-major ordering (inverse of above).
+# Used in backward pass of NodeToEdgeWignerPermuteFunction
 M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]

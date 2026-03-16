@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import random
@@ -25,7 +26,7 @@ from torch.profiler import ProfilerActivity, profile, record_function
 from fairchem.core.common import distutils
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
-from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
@@ -44,23 +45,6 @@ def seed_everywhere(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def ase_to_graph(
-    atoms, neighbors: int, cutoff: float, external_graph=True, dataset_name="omat"
-):
-    data_object = AtomicData.from_ase(
-        atoms,
-        max_neigh=neighbors,
-        radius=cutoff,
-        r_edges=external_graph,
-        task_name=dataset_name,
-    )
-    data_object.natoms = torch.tensor(len(atoms))
-    data_object.charge = torch.LongTensor([0])
-    data_object.spin = torch.LongTensor([0])
-    data_object.pos.requires_grad = True
-    return atomicdata_list_to_batch([data_object])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5):
@@ -265,68 +249,114 @@ class InferenceBenchRunner(Runner):
             logging.info(
                 f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
             )
+
             predictor = MLIPPredictUnit(
                 model_checkpoint,
                 self.device,
                 overrides=self.overrides,
                 inference_settings=self.inference_settings,
             )
-            max_neighbors = predictor.model.module.backbone.max_neighbors
-            cutoff = predictor.model.module.backbone.cutoff
-            logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
-            def yield_inputs(max_neighbors=max_neighbors, cutoff=cutoff):
-                if self.natoms_list is not None:
-                    for natoms in self.natoms_list:
-                        atoms = get_fcc_crystal_by_num_atoms(natoms)
-                        data = ase_to_graph(
-                            atoms,
-                            max_neighbors,
-                            cutoff,
-                            external_graph=self.inference_settings.external_graph_gen,
-                            dataset_name=self.dataset_name,
-                        )
-                        yield data.natoms.item(), data
-                else:
-                    for k, v in self.input_system.items():
-                        atoms = read(v)
-                        if self.expand_supercells is not None:
-                            size = self.expand_supercells
-                            supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
-                            atoms = make_supercell(atoms, supercell_size)
+            # Determine data kwargs based on external_graph_gen setting
+            if self.inference_settings.external_graph_gen:
+                backbone = predictor.model.module.backbone
+                max_neighbors = backbone.max_neighbors
+                cutoff = backbone.cutoff
+                logging.info(
+                    f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}"
+                )
+                from_ase_kwargs = dict(
+                    task_name=self.dataset_name,
+                    r_edges=True,
+                    max_neigh=max_neighbors,
+                    radius=cutoff,
+                )
+                del predictor
+                torch.cuda.empty_cache()
+            else:
+                from_ase_kwargs = dict(task_name=self.dataset_name)
+                del predictor
 
-                        data = ase_to_graph(
-                            atoms,
-                            max_neighbors,
-                            cutoff,
-                            external_graph=self.inference_settings.external_graph_gen,
-                            dataset_name=self.dataset_name,
-                        )
-                        yield k, data
+            # Build inputs list
+            inputs = []
+            if self.natoms_list is not None:
+                for natoms in self.natoms_list:
+                    atoms = get_fcc_crystal_by_num_atoms(natoms)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((len(atoms), data))
+            else:
+                for k, v in self.input_system.items():
+                    atoms = read(v)
+                    if self.expand_supercells is not None:
+                        size = self.expand_supercells
+                        supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
+                        atoms = make_supercell(atoms, supercell_size)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((k, data))
 
             # benchmark all models or number of atoms
-            for name, data in yield_inputs():
-                num_atoms = data.natoms.item()
+            for name, data in inputs:
+                # Reinitialize predictor for each input to ensure clean state
+                predictor = MLIPPredictUnit(
+                    model_checkpoint,
+                    self.device,
+                    overrides=self.overrides,
+                    inference_settings=self.inference_settings,
+                )
+                num_atoms = name if isinstance(name, int) else data.natoms.item()
                 print_info = f"Starting profile: model: {model_checkpoint}, input: {name}, num_atoms: {num_atoms}"
-                if self.inference_settings.external_graph_gen:
-                    num_edges = data.edge_index.shape[1]
-                    print_info += f" num edges compute on: {num_edges}"
                 logging.info(print_info)
-                inp = data.clone()
+                inp = data
 
                 # Run dynamo.explain() if debug enabled
                 if self.debug_compile.enabled and self.debug_compile.run_dynamo_explain:
                     _run_dynamo_explain(predictor.model, inp, f"{model_name}_{name}")
 
-                if self.generate_traces:
-                    make_profile(inp, predictor, name=name, save_loc=self.run_dir)
-                qps, ns_per_day = get_qps(
-                    inp, predictor, timeiters=self.timeiters, repeats=self.repeats
-                )
-                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
-                logging.info(
-                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
-                )
+                try:
+                    if self.generate_traces:
+                        make_profile(inp, predictor, name=name, save_loc=self.run_dir)
+                    qps, ns_per_day = get_qps(
+                        inp, predictor, timeiters=self.timeiters, repeats=self.repeats
+                    )
+                    model_to_qps_data[model_name].append([num_atoms, ns_per_day])
+                    logging.info(
+                        f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
+                    )
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                    # Check if it's an OOM error
+                    if isinstance(e, torch.cuda.OutOfMemoryError) or (
+                        isinstance(e, RuntimeError)
+                        and "out of memory" in str(e).lower()
+                    ):
+                        logging.warning(
+                            f"GPU OOM: model: {model_checkpoint}, num_atoms: {num_atoms}"
+                        )
+                        # Mark as OOM instead of crashing
+                        model_to_qps_data[model_name].append([num_atoms, "OOM"])
+                        break  # No need to test larger inputs if this one already OOMs
+                    # Re-raise if it's not an OOM error
+                    raise
+                finally:
+                    # Free GPU memory after each input
+                    torch.cuda.empty_cache()
+
+        # Save results to file
+        if distutils.is_master():
+            results_file = os.path.join(self.run_dir, "benchmark_results.json")
+            results = {
+                "model_to_qps_data": dict(model_to_qps_data),
+                "config": {
+                    "timeiters": self.timeiters,
+                    "repeats": self.repeats,
+                    "natoms_list": list(self.natoms_list) if self.natoms_list else None,
+                    "device": self.device,
+                    "dataset_name": self.dataset_name,
+                    "world_size": distutils.get_world_size(),
+                },
+            }
+            with open(results_file, "w") as f:
+                json.dump(results, f, indent=2)
+            logging.info(f"Saved benchmark results to {results_file}")
 
     def save_state(self, _):
         return
