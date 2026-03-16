@@ -1055,12 +1055,15 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     # The drift between A-C should be comparable to the baseline drift A-B
     # Allow some tolerance factor (e.g., 10x) for merge_mole overhead
     tolerance_factor = 10.0
+    # Absolute tolerance for floating-point variations from operations like
+    # rescale_factor position changes (dividing before vs after bmm)
+    absolute_tolerance = 2e-6
 
     # For energy: max drift A-C should be within tolerance of max drift A-B
     baseline_energy_drift = max(energy_drift_AB.max(), 1e-10)  # avoid division by zero
     npt.assert_array_less(
         energy_drift_AC.max(),
-        tolerance_factor * baseline_energy_drift + 1e-6,
+        tolerance_factor * baseline_energy_drift + absolute_tolerance,
         err_msg=f"Energy drift A-C ({energy_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_energy_drift:.2e})",
     )
@@ -1069,7 +1072,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     baseline_forces_drift = max(forces_drift_AB.max(), 1e-10)
     npt.assert_array_less(
         forces_drift_AC.max(),
-        tolerance_factor * baseline_forces_drift + 1e-6,
+        tolerance_factor * baseline_forces_drift + absolute_tolerance,
         err_msg=f"Forces drift A-C ({forces_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_forces_drift:.2e})",
     )
@@ -1078,7 +1081,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     baseline_stress_drift = max(stress_drift_AB.max(), 1e-10)
     npt.assert_array_less(
         stress_drift_AC.max(),
-        tolerance_factor * baseline_stress_drift + 1e-6,
+        tolerance_factor * baseline_stress_drift + absolute_tolerance,
         err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
     )
