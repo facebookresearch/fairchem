@@ -14,6 +14,13 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
+
+if TYPE_CHECKING:
+    from fairchem.core.units.mlip_unit.api.inference import (
+        InferenceSettings,
+    )
+
 # Enable expandable segments for the CUDA caching allocator to reduce
 # memory fragmentation and eliminate periodic GC stalls during inference.
 # Must be set before the first CUDA allocation.
@@ -24,13 +31,6 @@ if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
 torch._inductor.config.coordinate_descent_tuning = True
 # Enable aggressive fusion of inductor ops
 torch._inductor.config.aggressive_fusion = True
-
-from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
-
-if TYPE_CHECKING:
-    from fairchem.core.units.mlip_unit.api.inference import (
-        InferenceSettings,
-    )
 
 __all__ = [
     "ExecutionMode",
