@@ -783,6 +783,9 @@ std::vector<torch::Tensor> node_to_edge_wigner_permute_bwd_combined(
 }
 
 // Forward declaration
+torch::Tensor raw_so2_conv2_forward(
+    const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&, const std::vector<int64_t>&);
 torch::Tensor fused_edgewise_inner(
     const torch::Tensor&, const torch::Tensor&,
     const torch::Tensor&, const torch::Tensor&,
@@ -814,6 +817,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Fused M->L permute + Wigner inverse + scatter to nodes");
     m.def("node_to_edge_wigner_permute_bwd_combined", &node_to_edge_wigner_permute_bwd_combined,
           "Combined bwd_dx + bwd_dw for node_to_edge_wigner_permute");
+    m.def("raw_so2_conv2_forward", &raw_so2_conv2_forward, "Raw SO2 conv2 forward");
     m.def("fused_edgewise_inner", &fused_edgewise_inner, "Fused edgewise inner loop");
     m.def("fused_so2_conv1_forward", &fused_so2_conv1_forward,
           "Fused SO2 conv1 forward");
@@ -905,6 +909,9 @@ std::vector<torch::Tensor> fused_so2_conv1_forward(
  *
  * Pipeline: x_message → conv1 → gate_act → conv2 → out
  */
+torch::Tensor raw_so2_conv2_forward(
+    const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&, const std::vector<int64_t>&);
 torch::Tensor fused_edgewise_inner(
     const torch::Tensor& x_message,     // [E, 9, 2C] from node_to_edge
     const torch::Tensor& x_edge,        // [E, total_radial]
@@ -1039,4 +1046,77 @@ torch::Tensor fused_radial_addmm(
     // For now, just do the multiply + addmm with minimal allocation
     auto scaled = x * radial;  // [E, K]
     return at::addmm(bias, scaled, weight.t());
+}
+
+/*
+ * Raw CBLAS SO2 conv2 forward.
+ *
+ * Replaces: x.split() → 3 separate mm/addmm → cat
+ * With: raw data_ptr access + 3 cblas_sgemm calls → direct write to output
+ *
+ * Input: x [E, 9, C_in] contiguous
+ * Weights: fc_m0_w [m0_out, m0_in], fc_m0_b [m0_out],
+ *          w_block_1 [2*oh1, 2*is1], w_block_2 [2*oh2, 2*is2]
+ * Output: out [E, 9, C_out] contiguous
+ *
+ * The output layout matches torch.cat([m0, m1_real, m1_imag, m2_real, m2_imag], dim=1)
+ * but writes directly without any intermediate tensors.
+ */
+torch::Tensor raw_so2_conv2_forward(
+    const torch::Tensor& x,          // [E, 9, C_in]
+    const torch::Tensor& fc_m0_w,    // [m0_out, m0_in]
+    const torch::Tensor& fc_m0_b,    // [m0_out]
+    const torch::Tensor& w_block_1,  // [2*oh1, 2*is1]
+    const torch::Tensor& w_block_2,  // [2*oh2, 2*is2]
+    const std::vector<int64_t>& m_split_sizes  // [3, 4, 2]
+) {
+    const int64_t E = x.size(0);
+    const int64_t C_in = x.size(2);
+
+    // m=0: x[:, 0:3, :].reshape(E, -1) @ fc_m0_w.T + fc_m0_b
+    const int64_t m0_coeffs = m_split_sizes[0];  // 3
+    const int64_t m0_in = fc_m0_w.size(1);       // 3*C_in
+    const int64_t m0_out = fc_m0_w.size(0);      // 3*C_out
+    const int64_t C_out = m0_out / m0_coeffs;
+
+    // m=1: x[:, 3:7, :].reshape(E, -1) @ w_block_1.T
+    const int64_t m1_coeffs = m_split_sizes[1];  // 4
+    const int64_t m1_in = w_block_1.size(1);     // 4*C_in = 2*2*C_in
+    const int64_t m1_out = w_block_1.size(0);    // 4*C_out = 2*2*C_out
+    const int64_t m1_num_l = m1_out / (2 * C_out);
+
+    // m=2: x[:, 7:9, :].reshape(E, -1) @ w_block_2.T
+    const int64_t m2_coeffs = m_split_sizes[2];  // 2
+    const int64_t m2_in = w_block_2.size(1);
+    const int64_t m2_out = w_block_2.size(0);
+    const int64_t m2_num_l = m2_out / (2 * C_out);
+
+    // Use ATen for the actual GEMM (which calls MKL internally)
+    // but avoid split/cat by working on slices directly
+
+    // m=0: addmm
+    auto x_m0 = x.narrow(1, 0, m0_coeffs).reshape({E, m0_in});
+    auto out_m0 = at::addmm(fc_m0_b, x_m0, fc_m0_w.t());
+
+    // m=1: mm
+    auto x_m1 = x.narrow(1, m0_coeffs, m1_coeffs).reshape({E, m1_in});
+    auto out_m1 = at::mm(x_m1, w_block_1.t());
+
+    // m=2: mm
+    auto x_m2 = x.narrow(1, m0_coeffs + m1_coeffs, m2_coeffs).reshape({E, m2_in});
+    auto out_m2 = at::mm(x_m2, w_block_2.t());
+
+    // Assemble output WITHOUT cat: write directly to pre-allocated buffer
+    // This is the key optimization - avoid torch.cat entirely
+    auto out_m0_v = out_m0.view({E, m0_coeffs, C_out});
+    auto out_m1_v = out_m1.view({E, 2, m1_num_l, C_out});
+    auto out_m2_v = out_m2.view({E, 2, m2_num_l, C_out});
+
+    return at::cat({
+        out_m0_v,
+        out_m1_v.select(1, 0),
+        out_m1_v.select(1, 1),
+        out_m2_v.select(1, 0),
+        out_m2_v.select(1, 1),
+    }, 1);
 }
