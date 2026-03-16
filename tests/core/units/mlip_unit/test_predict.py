@@ -927,12 +927,13 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     the inherent noise between identical runs.
     """
     import torch
+
+    torch.use_deterministic_algorithms(True)
+
     from ase import units
     from ase.md.langevin import Langevin
     from ase.md.nptberendsen import NPTBerendsen
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
-
-    torch.use_deterministic_algorithms(True)
 
     # Simple system
     atoms_template = bulk("Cu", "fcc", a=3.6)
