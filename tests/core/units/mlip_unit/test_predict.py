@@ -935,7 +935,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     from ase.md.nptberendsen import NPTBerendsen
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 
-    # Simple system
+    #  Simple system
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
