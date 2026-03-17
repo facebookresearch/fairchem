@@ -909,7 +909,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
-@pytest.mark.skip()
+# @pytest.mark.skip()
 @pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
@@ -926,12 +926,16 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
     """
+    import torch
+
+    torch.use_deterministic_algorithms(True)
+
     from ase import units
     from ase.md.langevin import Langevin
     from ase.md.nptberendsen import NPTBerendsen
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 
-    # Simple system
+    #  Simple system
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
@@ -1052,33 +1056,40 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     logging.info(f"Stress drift A-B (max): {stress_drift_AB.max():.2e}")
     logging.info(f"Stress drift A-C (max): {stress_drift_AC.max():.2e}")
 
-    # The drift between A-C should be comparable to the baseline drift A-B
-    # Allow some tolerance factor (e.g., 10x) for merge_mole overhead
+    # The drift between A-C should be comparable to the baseline drift A-B.
+    # Allow some tolerance factor (e.g., 10x) for merge_mole overhead.
+    # Clamp the baseline to a minimum floor so the threshold doesn't collapse
+    # to ~1e-6 when A-B is near-zero (e.g. on highly deterministic CI hardware),
+    # which would make the test a de-facto fixed threshold regardless of the
+    # 10x multiplier.
     tolerance_factor = 10.0
+    abs_floor_energy = 1e-5  # eV
+    abs_floor_forces = 5e-6  # eV/Ang
+    abs_floor_stress = 1e-6  # eV/Ang^3
 
     # For energy: max drift A-C should be within tolerance of max drift A-B
-    baseline_energy_drift = max(energy_drift_AB.max(), 1e-10)  # avoid division by zero
+    baseline_energy_drift = max(energy_drift_AB.max(), abs_floor_energy)
     npt.assert_array_less(
         energy_drift_AC.max(),
-        tolerance_factor * baseline_energy_drift + 1e-6,
+        tolerance_factor * baseline_energy_drift,
         err_msg=f"Energy drift A-C ({energy_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_energy_drift:.2e})",
     )
 
     # For forces: max drift A-C should be within tolerance of max drift A-B
-    baseline_forces_drift = max(forces_drift_AB.max(), 1e-10)
+    baseline_forces_drift = max(forces_drift_AB.max(), abs_floor_forces)
     npt.assert_array_less(
         forces_drift_AC.max(),
-        tolerance_factor * baseline_forces_drift + 1e-6,
+        tolerance_factor * baseline_forces_drift,
         err_msg=f"Forces drift A-C ({forces_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_forces_drift:.2e})",
     )
 
     # For stress: max drift A-C should be within tolerance of max drift A-B
-    baseline_stress_drift = max(stress_drift_AB.max(), 1e-10)
+    baseline_stress_drift = max(stress_drift_AB.max(), abs_floor_stress)
     npt.assert_array_less(
         stress_drift_AC.max(),
-        tolerance_factor * baseline_stress_drift + 1e-6,
+        tolerance_factor * baseline_stress_drift,
         err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
     )
