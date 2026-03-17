@@ -24,18 +24,23 @@ from ase.calculators.calculator import PropertyNotImplementedError
 @dataclass
 class TrajectoryFrame:
     """
-    Single frame of MD trajectory data.
+    Single frame of simulation trajectory data.
+
+    Note:
+        Currently only step, atomic_numbers, positions, cell, and pbc are
+        required. Additional fields may be made optional in the future as
+        new simulation types are supported.
     """
 
     step: int
-    time: float
     atomic_numbers: np.ndarray  # (N,)
     positions: np.ndarray  # (N, 3)
-    velocities: np.ndarray  # (N, 3)
     cell: np.ndarray  # (3, 3)
     pbc: np.ndarray  # (3,) bool
-    energy: float
-    forces: np.ndarray  # (N, 3)
+    time: float | None = None  # femtoseconds
+    velocities: np.ndarray | None = None  # (N, 3)
+    energy: float | None = None
+    forces: np.ndarray | None = None  # (N, 3)
     stress: np.ndarray | None = None  # (6,) Voigt notation
     sid: str | int | None = None
 
@@ -43,23 +48,31 @@ class TrajectoryFrame:
         """
         Convert to dictionary for Parquet serialization.
         """
-        return {
+        d = {
             "step": self.step,
-            "time": self.time,
             "natoms": len(self.positions),
             "atomic_numbers": self.atomic_numbers.tolist(),
             "positions": self.positions.tolist(),
-            "velocities": self.velocities.tolist(),
             "cell": self.cell.tolist(),
             "pbc": self.pbc.tolist(),
-            "energy": self.energy,
-            "forces": self.forces.tolist(),
-            "stress": self.stress.tolist() if self.stress is not None else None,
             "sid": self.sid,
         }
+        if self.time is not None:
+            d["time"] = self.time
+        if self.velocities is not None:
+            d["velocities"] = self.velocities.tolist()
+        if self.energy is not None:
+            d["energy"] = self.energy
+        if self.forces is not None:
+            d["forces"] = self.forces.tolist()
+        if self.stress is not None:
+            d["stress"] = self.stress.tolist()
+        return d
 
     @classmethod
-    def from_atoms(cls, atoms: Atoms, step: int, time: float) -> TrajectoryFrame:
+    def from_atoms(
+        cls, atoms: Atoms, step: int, time: float | None = None
+    ) -> TrajectoryFrame:
         """
         Create a TrajectoryFrame from an ASE Atoms object.
 
@@ -73,19 +86,34 @@ class TrajectoryFrame:
         """
         try:
             stress = atoms.get_stress()
-        except PropertyNotImplementedError:
+        except (PropertyNotImplementedError, RuntimeError):
             stress = None
+
+        try:
+            energy = atoms.get_potential_energy()
+        except (PropertyNotImplementedError, RuntimeError):
+            energy = None
+
+        try:
+            forces = atoms.get_forces().copy()
+        except (PropertyNotImplementedError, RuntimeError):
+            forces = None
+
+        try:
+            velocities = atoms.get_velocities().copy()
+        except (PropertyNotImplementedError, RuntimeError):
+            velocities = None
 
         return cls(
             step=step,
             time=time,
             atomic_numbers=atoms.get_atomic_numbers().copy(),
             positions=atoms.get_positions().copy(),
-            velocities=atoms.get_velocities().copy(),
             cell=atoms.get_cell()[:].copy(),
             pbc=np.array(atoms.get_pbc()),
-            energy=atoms.get_potential_energy(),
-            forces=atoms.get_forces().copy(),
+            velocities=velocities,
+            energy=energy,
+            forces=forces,
             stress=stress,
             sid=atoms.info.get("sid"),
         )

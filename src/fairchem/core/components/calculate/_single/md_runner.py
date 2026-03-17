@@ -20,7 +20,7 @@ from ase.md import MDLogger
 from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
-from fairchem.core.components.calculate.utils.trajectory import (
+from fairchem.core.components.calculate.simulation_tools.trajectory import (
     ParquetTrajectoryWriter,
     TrajectoryFrame,
 )
@@ -30,11 +30,8 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
 
-    from fairchem.core.components.calculate.utils.thermostats import (
-        BussiThermostat,
-        LangevinThermostat,
-        NoseHooverNVT,
-        VelocityVerletThermostat,
+    from fairchem.core.components.calculate.simulation_tools.thermostats import (
+        Thermostat,
     )
 
 
@@ -57,10 +54,7 @@ class MDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        thermostat: VelocityVerletThermostat
-        | NoseHooverNVT
-        | BussiThermostat
-        | LangevinThermostat,
+        thermostat: Thermostat,
         atoms: Atoms | None = None,
         timestep_fs: float = 1.0,
         steps: int = 1000,
