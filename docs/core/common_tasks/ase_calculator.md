@@ -87,7 +87,7 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 | edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
 | use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
 | base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
-| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "general". "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
+| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "None", when set to "None", the predictor will automatically determine the best backend. For example, "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
 
