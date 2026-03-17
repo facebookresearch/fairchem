@@ -160,10 +160,10 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
+        baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
+        baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -222,10 +222,10 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
+        baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
+        baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -470,7 +470,7 @@ def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
     triton_dw = grad_wigner_flat.reshape(num_edges, 9, 9)
 
     # Compare — tolerance should be tight (numerical precision only)
-    assert torch.allclose(ref_dw, triton_dw, rtol=1e-3, atol=1e-3), (
+    assert torch.allclose(ref_dw, triton_dw, rtol=1e-4, atol=1e-4), (
         f"permute_wigner_inv bwd_dw mismatch at sphere_channels={sphere_channels}: "
         f"max abs diff={( ref_dw - triton_dw).abs().max().item():.6e}, "
         f"ref norm={ref_dw.norm().item():.4f}, "
@@ -537,10 +537,10 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
+        baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
+        baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -599,10 +599,10 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
+        baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
+        baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -666,14 +666,14 @@ def test_compiled_backends_match_baseline(request, model_name):
 
         # Force comparison
         assert torch.allclose(
-            baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
+            baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
         ), (
             f"{model_name} {test_mode} compile={test_compile}: "
             f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
         )
         # Energy comparison
         assert torch.allclose(
-            baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
+            baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
         ), (
             f"{model_name} {test_mode} compile={test_compile}: "
             f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"
