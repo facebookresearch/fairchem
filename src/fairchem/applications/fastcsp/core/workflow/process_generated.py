@@ -235,7 +235,11 @@ def process_genarris_outputs_single(
 
     structures_df = pd.DataFrame(all_rows)
     structures_df = deduplicate_structures(
-        structures_df, remove_duplicates, ltol, stol, angle_tol
+        structures_df,
+        remove_duplicates,
+        ltol=ltol,
+        stol=stol,
+        angle_tol=angle_tol,
     )
     structures_df = structures_df.drop(columns=["structure"])
     structures_df.to_parquet(
