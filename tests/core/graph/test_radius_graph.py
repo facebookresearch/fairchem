@@ -25,7 +25,11 @@ from fairchem.core.datasets.common_structures import (
     get_fcc_crystal_by_num_cells,
     get_water_box,
 )
-from fairchem.core.graph.compute import generate_graph
+from fairchem.core.graph.compute import (
+    filter_edges_by_node_partition,
+    generate_graph,
+    get_pbc_distances,
+)
 from fairchem.core.graph.radius_graph_pbc import (
     radius_graph_pbc,
     radius_graph_pbc_v2,
@@ -559,6 +563,305 @@ def test_nvidia_graph_larger_system(external_graph_method):
     assert _validate_edges_match(
         data, data_ref
     ), f"{external_graph_method} produced different edges than pymatgen for larger system"
+
+
+class TestFilterEdgesByNodePartition:
+    """Test filter_edges_by_node_partition function."""
+
+    @pytest.mark.parametrize(
+        "edge_index, node_partition, num_atoms, expected_edges, expected_count",
+        [
+            # Basic case: 4 atoms, 6 edges, partition {0, 1}
+            (
+                torch.tensor([[0, 0, 1, 1, 2, 3], [1, 2, 0, 3, 3, 2]]),
+                torch.tensor([0, 1]),
+                4,
+                {(0, 1), (1, 0)},
+                2,
+            ),
+            # Larger system: 8 atoms, 12 edges, partition {0, 2, 4, 6} (even atoms)
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3],
+                        [1, 0, 3, 2, 5, 4, 7, 6, 2, 3, 4, 5],
+                    ]
+                ),
+                torch.tensor([0, 2, 4, 6]),
+                8,
+                {(1, 0), (3, 2), (5, 4), (7, 6), (0, 2), (2, 4)},
+                6,
+            ),
+            # Dense connectivity: 5 atoms, all-to-all edges (20 edges), partition {1, 3}
+            (
+                torch.tensor(
+                    [
+                        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+                        [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3],
+                    ]
+                ),
+                torch.tensor([1, 3]),
+                5,
+                {(0, 1), (0, 3), (2, 1), (2, 3), (4, 1), (4, 3), (1, 3), (3, 1)},
+                8,
+            ),
+            # Single atom partition: 6 atoms, 10 edges, partition {3}
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 0, 1, 2, 4],
+                        [1, 2, 3, 4, 5, 0, 3, 3, 4, 3],
+                    ]
+                ),
+                torch.tensor([3]),
+                6,
+                {(2, 3), (0, 3), (1, 3), (4, 3)},
+                4,
+            ),
+            # Non-contiguous partition: 10 atoms, 15 edges, partition {0, 3, 7, 9}
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4],
+                        [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 3, 7, 9, 0, 7],
+                    ]
+                ),
+                torch.tensor([0, 3, 7, 9]),
+                10,
+                {
+                    (9, 0),
+                    (2, 3),
+                    (6, 7),
+                    (0, 3),
+                    (1, 7),
+                    (2, 9),
+                    (3, 0),
+                    (4, 7),
+                    (8, 9),
+                },
+                9,
+            ),
+        ],
+    )
+    def test_filter_keeps_correct_edges(
+        self, edge_index, node_partition, num_atoms, expected_edges, expected_count
+    ):
+        """Test that only edges with target atoms in node_partition are kept."""
+        cell_offsets = torch.zeros(edge_index.shape[1], 3, dtype=torch.long)
+        neighbors = torch.tensor([edge_index.shape[1]])  # single system
+
+        new_edge_index, new_cell_offsets, new_neighbors = (
+            filter_edges_by_node_partition(
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=num_atoms
+            )
+        )
+
+        # Check edge count matches expected
+        assert new_edge_index.shape[1] == expected_count
+
+        # Check exact edges match
+        edge_pairs = {
+            (new_edge_index[0, i].item(), new_edge_index[1, i].item())
+            for i in range(new_edge_index.shape[1])
+        }
+        assert edge_pairs == expected_edges
+        assert new_neighbors.sum().item() == expected_count
+
+    def test_filter_with_multiple_systems(self):
+        """Test filtering with batched systems."""
+        # 2 systems: system 0 has 3 edges, system 1 has 2 edges
+        edge_index = torch.tensor([[0, 0, 1, 2, 3], [1, 2, 0, 3, 2]])
+        cell_offsets = torch.zeros(5, 3, dtype=torch.long)
+        neighbors = torch.tensor([3, 2])  # 3 edges in sys0, 2 in sys1
+        node_partition = torch.tensor([0, 2])  # atoms 0 and 2
+
+        new_edge_index, new_cell_offsets, new_neighbors = (
+            filter_edges_by_node_partition(
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=4
+            )
+        )
+
+        # Edges with target in {0, 2}: 0->2, 1->0, 3->2
+        assert new_edge_index.shape[1] == 3
+        # System 0 had edges 0->1, 0->2, 1->0; targets {0,2} keeps 0->2, 1->0 (2 edges)
+        # System 1 had edges 2->3, 3->2; targets {0,2} keeps 3->2 (1 edge)
+        assert new_neighbors.tolist() == [2, 1]
+
+    def test_filter_empty_partition(self):
+        edge_index = torch.tensor([[0, 1], [1, 0]])
+        cell_offsets = torch.zeros(2, 3, dtype=torch.long)
+        neighbors = torch.tensor([2])
+        node_partition = torch.tensor([], dtype=torch.long)
+
+        new_edge_index, new_cell_offsets, new_neighbors = (
+            filter_edges_by_node_partition(
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=2
+            )
+        )
+
+        assert new_edge_index.shape[1] == 0
+        assert new_neighbors[0] == 0
+        assert cell_offsets.shape[0] == 2
+
+    def test_filter_all_atoms_in_partition(self):
+        """Test with all atoms in partition keeps all edges."""
+        edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]])
+        cell_offsets = torch.zeros(3, 3, dtype=torch.long)
+        neighbors = torch.tensor([3])
+        node_partition = torch.tensor([0, 1, 2])
+
+        new_edge_index, new_cell_offsets, new_neighbors = (
+            filter_edges_by_node_partition(
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=3
+            )
+        )
+
+        assert new_edge_index.shape[1] == 3
+        assert new_neighbors.tolist() == [3]
+
+    def test_filter_preserves_cell_offsets(self):
+        """Test that cell_offsets are correctly filtered."""
+        edge_index = torch.tensor([[0, 1, 2], [1, 0, 1]])
+        cell_offsets = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        neighbors = torch.tensor([3])
+        node_partition = torch.tensor([1])  # only atom 1
+
+        new_edge_index, new_cell_offsets, new_neighbors = (
+            filter_edges_by_node_partition(
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=3
+            )
+        )
+
+        # Edges with target=1: 0->1, 2->1
+        assert new_edge_index.shape[1] == 2
+        assert new_cell_offsets.shape[0] == 2
+        # Check offsets match the kept edges
+        offsets_set = {tuple(new_cell_offsets[i].tolist()) for i in range(2)}
+        assert offsets_set == {(1, 0, 0), (0, 0, 1)}
+
+
+class TestGetPbcDistances:
+    """Test get_pbc_distances function."""
+
+    def test_basic_distances_no_pbc(self):
+        """Test distance calculation without periodic boundary conditions."""
+        # 3 atoms in a line: 0 at origin, 1 at (1,0,0), 2 at (3,0,0)
+        pos = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
+        edge_index = torch.tensor(
+            [[0, 1, 0, 2], [1, 0, 2, 0]]
+        )  # 0->1, 1->0, 0->2, 2->0
+        cell = torch.eye(3).unsqueeze(0) * 10.0  # single system, 10x10x10 cell
+        cell_offsets = torch.zeros(4, 3, dtype=torch.long)  # no PBC offsets
+        neighbors = torch.tensor([4])
+
+        out = get_pbc_distances(
+            pos,
+            edge_index,
+            cell,
+            cell_offsets,
+            neighbors,
+            return_offsets=True,
+            return_distance_vec=True,
+        )
+
+        # Distances: 0->1 = 1.0, 1->0 = 1.0, 0->2 = 3.0, 2->0 = 3.0
+        expected_distances = torch.tensor([1.0, 1.0, 3.0, 3.0])
+        assert torch.allclose(out["distances"], expected_distances)
+
+    def test_distances_with_pbc_offsets(self):
+        """Test distance calculation with periodic boundary condition offsets."""
+        # 2 atoms at opposite ends of a 10 Å cell
+        pos = torch.tensor([[0.5, 0.0, 0.0], [9.5, 0.0, 0.0]])
+        edge_index = torch.tensor([[0], [1]])  # 0->1
+        cell = torch.eye(3).unsqueeze(0) * 10.0  # 10x10x10 cell
+        # Offset of [-1, 0, 0] means atom 1 is in the previous cell image
+        cell_offsets = torch.tensor([[-1, 0, 0]])
+        neighbors = torch.tensor([1])
+
+        get_pbc_distances(
+            pos,
+            edge_index,
+            cell,
+            cell_offsets,
+            neighbors,
+            return_offsets=True,
+            return_distance_vec=True,
+        )
+
+        # Let's test with the positive offset for minimum image
+        cell_offsets_min = torch.tensor([[1, 0, 0]])
+        out_min = get_pbc_distances(
+            pos,
+            edge_index,
+            cell,
+            cell_offsets_min,
+            neighbors,
+            return_offsets=True,
+            return_distance_vec=True,
+        )
+        assert torch.allclose(out_min["distances"], torch.tensor([1.0]))
+
+    def test_returns_distance_vec(self):
+        """Test that distance vectors are correctly returned."""
+        pos = torch.tensor([[0.0, 0.0, 0.0], [3.0, 4.0, 0.0]])
+        edge_index = torch.tensor([[0], [1]])
+        cell = torch.eye(3).unsqueeze(0) * 10.0
+        cell_offsets = torch.zeros(1, 3, dtype=torch.long)
+        neighbors = torch.tensor([1])
+
+        out = get_pbc_distances(
+            pos, edge_index, cell, cell_offsets, neighbors, return_distance_vec=True
+        )
+
+        expected_vec = torch.tensor([[-3.0, -4.0, 0.0]])
+        assert torch.allclose(out["distance_vec"], expected_vec)
+        assert torch.allclose(out["distances"], torch.tensor([5.0]))
+
+    def test_multiple_systems_in_batch(self):
+        """Test with multiple systems batched together."""
+        # System 0: 2 atoms, System 1: 2 atoms
+        pos = torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],  # System 0
+                [0.0, 0.0, 0.0],
+                [0.0, 3.0, 0.0],  # System 1
+            ]
+        )
+        edge_index = torch.tensor(
+            [
+                [0, 1, 2, 3],  # sources
+                [1, 0, 3, 2],  # targets
+            ]
+        )
+        cell = torch.stack([torch.eye(3) * 10.0, torch.eye(3) * 10.0])  # 2 cells
+        cell_offsets = torch.zeros(4, 3, dtype=torch.long)
+        neighbors = torch.tensor([2, 2])  # 2 edges per system
+
+        out = get_pbc_distances(
+            pos, edge_index, cell, cell_offsets, neighbors, return_distance_vec=True
+        )
+
+        # System 0: distances = 2.0, 2.0
+        # System 1: distances = 3.0, 3.0
+        expected_distances = torch.tensor([2.0, 2.0, 3.0, 3.0])
+        assert torch.allclose(out["distances"], expected_distances)
+
+    def test_returns_offsets(self):
+        """Test that offset distances are correctly returned."""
+        pos = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        edge_index = torch.tensor([[0], [1]])
+        cell = torch.eye(3).unsqueeze(0) * 10.0
+        cell_offsets = torch.tensor([[1, 0, 0]])  # offset in x direction
+        neighbors = torch.tensor([1])
+
+        out = get_pbc_distances(
+            pos, edge_index, cell, cell_offsets, neighbors, return_offsets=True
+        )
+
+        # Offset should be cell_offsets @ cell = [1,0,0] @ [[10,0,0],...] = [10,0,0]
+        expected_offsets = torch.tensor([[10.0, 0.0, 0.0]])
+        assert torch.allclose(out["offsets"], expected_offsets)
 
 
 # ==============================================================================

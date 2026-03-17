@@ -41,6 +41,34 @@ Heterogeneous Catalysis
 [Learn more →](../catalysts/datasets/summary.md)
 ::::
 
+::::{card} oc22
+:link: ../catalysts/datasets/oc22.md
+
+```{image} ../assets/icons/catalysis.svg
+:alt: Oxide Catalysts
+:width: 60px
+:align: center
+```
+
+Oxide Catalysts
++++
+[Learn more →](../catalysts/datasets/oc22.md)
+::::
+
+::::{card} oc25
+:link: ../catalysts/datasets/oc25.md
+
+```{image} ../assets/icons/catalysis.svg
+:alt: Electrocatalysis
+:width: 60px
+:align: center
+```
+
+Electrolyte Interfaces
++++
+[Learn more →](../catalysts/datasets/oc25.md)
+::::
+
 ::::{card} omat
 :link: ../inorganic_materials/datasets/summary.md
 
@@ -135,7 +163,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -158,7 +186,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -177,7 +205,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -204,7 +232,7 @@ For molecular systems using the `omol` task, you can specify charge and spin mul
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
