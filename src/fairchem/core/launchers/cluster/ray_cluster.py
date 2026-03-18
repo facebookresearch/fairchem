@@ -91,7 +91,7 @@ class HeadInfo:
     port: Optional[int] = None  # Ray GCS port
     client_port: Optional[int] = None  # Ray Client server port (if enabled)
     temp_dir: Optional[str] = None
-    namespace_fairchem_inference_server: Optional[str] = None
+    namespace_serve_fairchem: Optional[str] = None
 
 
 class RayClusterState:
@@ -334,7 +334,7 @@ def _ray_head_script(
             port=int(port),
             client_port=client_port,
             temp_dir=temp_dir,
-            namespace_fairchem_inference_server=cluster_state.cluster_id,
+            namespace_serve_fairchem=cluster_state.cluster_id,
         )
         cluster_state.save_head_info(info)
         os.environ.update(head_env)

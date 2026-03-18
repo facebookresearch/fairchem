@@ -14,7 +14,7 @@ from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Literal, Protocol
 
-from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
+from fairchem.core.units.mlip_unit.batch import setup_batch_predict_server
 from fairchem.core.units.mlip_unit.predict import (
     BatchServerPredictUnit,
     MLIPPredictUnit,
