@@ -119,6 +119,7 @@ class InferenceBatcher:
     def batch_predict_unit(self) -> BatchServerPredictUnit:
         return BatchServerPredictUnit(
             server_handle=self.predict_server_handle,
+            predict_unit=self.predict_unit,
         )
 
     def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:

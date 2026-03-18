@@ -15,10 +15,21 @@ import torch
 
 
 def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
-    sums = torch.zeros(partition_idxs.shape[0] - 1, device=x.device, dtype=x.dtype)
-    for idx in range(partition_idxs.shape[0] - 1):
-        sums[idx] = x[partition_idxs[idx] : partition_idxs[idx + 1]].sum()
-    return sums
+    """
+    Sum values within partitions defined by indices.
+    """
+    num_partitions = partition_idxs.shape[0] - 1
+    if num_partitions == 0:
+        return torch.zeros(0, device=x.device, dtype=x.dtype)
+
+    # Use cumsum-based approach for vectorization
+    cumsum = torch.zeros(len(x) + 1, device=x.device, dtype=x.dtype)
+    cumsum[1:] = torch.cumsum(x, dim=0)
+
+    # Gather cumsum at partition boundaries and compute differences
+    starts = cumsum[partition_idxs[:-1]]
+    ends = cumsum[partition_idxs[1:]]
+    return ends - starts
 
 
 def get_counts(x: torch.Tensor, length: int):
@@ -435,13 +446,13 @@ def radius_graph_pbc_v2(
     offset = 0
     for i in range(batch_size):
         cells_x = torch.arange(
-            -rep[i][0], rep[i][0] + 1, device=device, dtype=torch.float
+            -rep[i][0], rep[i][0] + 1, device=device, dtype=data.cell.dtype
         )
         cells_y = torch.arange(
-            -rep[i][1], rep[i][1] + 1, device=device, dtype=torch.float
+            -rep[i][1], rep[i][1] + 1, device=device, dtype=data.cell.dtype
         )
         cells_z = torch.arange(
-            -rep[i][2], rep[i][2] + 1, device=device, dtype=torch.float
+            -rep[i][2], rep[i][2] + 1, device=device, dtype=data.cell.dtype
         )
         unit_cell[offset : cells_per_image[i] + offset] = torch.cartesian_prod(
             cells_x, cells_y, cells_z

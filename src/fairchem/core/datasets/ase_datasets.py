@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from functools import cache, partial
 from glob import glob
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import ase
 import numpy as np
@@ -27,6 +27,9 @@ from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.modules.transforms import DataTransforms
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def apply_one_tags(

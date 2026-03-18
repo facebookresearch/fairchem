@@ -50,7 +50,7 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: 18.x
 
@@ -90,7 +90,7 @@ jobs:
         cd docs && jupyter-book build --html --execute --execute-parallel 1
 
     - name: Upload documentation artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: docs-html
         path: docs/_build/html/*

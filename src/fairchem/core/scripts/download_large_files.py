@@ -8,7 +8,10 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
+import os
+import tempfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
@@ -149,7 +152,19 @@ def download_file_group(file_group: str, test_par_dir: Path | None = None) -> No
             missing_path = True
         elif not file.exists():
             print(f"Downloading {file}...")
-            urlretrieve(S3_ROOT + file.name, file)
+            # Download to a temporary file first, then atomically rename.
+            # This prevents race conditions when multiple processes (e.g.
+            # pytest-xdist workers) try to download or read the same file
+            # concurrently — readers will never see a partially-written file.
+            fd, tmp_path = tempfile.mkstemp(dir=file.parent, suffix=".tmp")
+            os.close(fd)
+            try:
+                urlretrieve(S3_ROOT + file.name, tmp_path)
+                os.replace(tmp_path, file)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
         else:
             print(f"{file} already exists")
 

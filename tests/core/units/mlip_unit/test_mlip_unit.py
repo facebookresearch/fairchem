@@ -185,7 +185,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=13.662819862365723",
+        "+expected_loss=13.661060333251953",
     ]
     launch_main(sys_args)
 
@@ -368,20 +368,34 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "train_config, dataset_config, num_ddps",
+    "train_config, dataset_config, num_ddps, backbone_overrides",
     [
-        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1),
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2),
+        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
+        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
+        # test charge balancing GP support
+        (
+            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "aselmdb",
+            2,
+            ["++backbone.charge_balanced_channels=[0]"],
+        ),
         (
             "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
             "aselmdb_conserving",
             2,
+            [],
         ),
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, num_ddps, fake_uma_dataset, torch_deterministic
+    train_config,
+    dataset_config,
+    num_ddps,
+    backbone_overrides,
+    fake_uma_dataset,
+    torch_deterministic,
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -396,7 +410,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
             "runner.max_steps=1",
-        ]
+        ] + backbone_overrides
 
         gp_size = 2
 
@@ -475,9 +489,9 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 6.207584857940674),
-        (6, 2, 6.207584857940674),
-        (5, 2, 6.207584857940674),
+        (3, 2, 6.206212997436523),
+        (6, 2, 6.206212997436523),
+        (5, 2, 6.206212997436523),
         (6, 3, 43.08491516113281),
         (14, 3, 43.08491516113281),
     ],
