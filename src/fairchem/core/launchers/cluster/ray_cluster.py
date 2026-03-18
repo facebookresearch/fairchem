@@ -207,11 +207,13 @@ class CheckpointableRayJob(Checkpointable):
         cluster_state: RayClusterState,
         worker_wait_timeout_seconds: int,
         payload: Optional[Callable[..., PayloadReturnT]],
+        temp_dir_template: Optional[str] = None,
         **kwargs,
     ):
         self.cluster_state = cluster_state
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.payload = payload
+        self.temp_dir_template = temp_dir_template
         self.kwargs = kwargs
 
     def __call__(self):
@@ -223,12 +225,14 @@ class CheckpointableRayJob(Checkpointable):
                 cluster_state=self.cluster_state,
                 worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
                 payload=self.payload,
+                temp_dir_template=self.temp_dir_template,
                 **self.kwargs,
             )
         else:
             worker_script(
                 cluster_state=self.cluster_state,
                 worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+                temp_dir_template=self.temp_dir_template,
             )
 
     def checkpoint(self) -> DelayedSubmission:
@@ -239,6 +243,7 @@ class CheckpointableRayJob(Checkpointable):
             cluster_state=self.cluster_state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=self.payload,
+            temp_dir_template=self.temp_dir_template,
             **self.kwargs,
         )
         return DelayedSubmission(job)
@@ -250,6 +255,7 @@ def _ray_head_script(
     payload: Optional[Callable[..., PayloadReturnT]] = None,
     dashboard_port: Optional[int] = None,
     enable_client_server: bool = False,
+    temp_dir_template: Optional[str] = None,
     **kwargs,
 ):
     """Start the head node of the Ray cluster on slurm.
@@ -260,6 +266,8 @@ def _ray_head_script(
         payload: Optional function to run after head starts
         dashboard_port: Port for Ray dashboard (auto-assigned if None)
         enable_client_server: If True, start Ray Client server for remote connections
+        temp_dir_template: Template path for Ray temp files. Supports environment variable
+            expansion (e.g., "/scratch/$SLURM_JOB_ID"). Defaults to system temp directory.
         **kwargs: Additional arguments passed to payload
     """
     hostname = socket.gethostname()
@@ -275,9 +283,12 @@ def _ray_head_script(
         worker_wait_timeout_seconds
     )
     logger.info(f"host {hostname}:{port}")
-    # Use SLURM job-specific scratch directory for Ray temp files
-    slurm_job_id = os.environ.get("SLURM_JOB_ID", "local")
-    temp_dir = f"/scratch/slurm_tmpdir/{slurm_job_id}/ray_head"
+    # Use specified temp directory with environment variable expansion, or system temp
+    if temp_dir_template is None:
+        temp_dir_template = tempfile.gettempdir()
+    else:
+        temp_dir_template = os.path.expandvars(temp_dir_template)
+    temp_dir = f"{temp_dir_template}/ray_head"
     Path(temp_dir).mkdir(parents=True, exist_ok=True)
     try:
         ray_cmd = [
@@ -342,8 +353,17 @@ def worker_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
     start_wait_time_seconds: int = 60,  # TODO pass this around properly
+    temp_dir_template: Optional[str] = None,
 ):
-    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
+    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first.
+    
+    Args:
+        cluster_state: State object for cluster coordination
+        worker_wait_timeout_seconds: Timeout for workers to connect
+        start_wait_time_seconds: Time to wait for head node to start
+        temp_dir_template: Template path for Ray temp files. Supports environment variable
+            expansion (e.g., "/scratch/$SLURM_JOB_ID"). Defaults to system temp directory.
+    """
     logger.info(f"Waiting for head node. {cluster_state.cluster_id}")
     while not cluster_state.is_head_ready():
         # wait for head to have started
@@ -360,9 +380,12 @@ def worker_script(
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
     num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
-    # Use SLURM job-specific scratch directory for Ray temp files
-    slurm_job_id = os.environ.get("SLURM_JOB_ID", "local")
-    temp_dir = f"/scratch/slurm_tmpdir/{slurm_job_id}/ray_worker"
+    # Use specified temp directory with environment variable expansion, or system temp
+    if temp_dir_template is None:
+        temp_dir_template = tempfile.gettempdir()
+    else:
+        temp_dir_template = os.path.expandvars(temp_dir_template)
+    temp_dir = f"{temp_dir_template}/ray_worker"
     Path(temp_dir).mkdir(parents=True, exist_ok=True)
 
     try:
@@ -409,6 +432,8 @@ class RayCluster:
     cluster_id: A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
     worker_wait_timeout_seconds (int): The number of seconds ray will wait for a worker to be ready before giving up. Defaults to 60 seconds. If you are scheduling
         workers in a queue that takes time for allocation, you might want to increase this otherwise your ray payload will fail, not finding resources.
+    temp_dir_template: Template path for Ray temp files. Supports environment variable expansion
+        (e.g., "/scratch/slurm_tmpdir/$SLURM_JOB_ID"). If None, uses the system temp directory.
 
     """
 
@@ -418,6 +443,7 @@ class RayCluster:
         rdv_dir: Optional[Path] = None,
         cluster_id: Optional[str] = None,
         worker_wait_timeout_seconds: int = 60,
+        temp_dir_template: Optional[str] = None,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
         logger.info(f"cluster {self.state.cluster_id}")
@@ -425,6 +451,7 @@ class RayCluster:
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.temp_dir_template = temp_dir_template
         self.is_shutdown = False
         self.num_worker_groups = 0
         self.num_drivers = 0
@@ -455,6 +482,7 @@ class RayCluster:
             cluster_state=self.state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=payload,
+            temp_dir_template=self.temp_dir_template,
             **kwargs,
         )
         slurm_job = s_executor.submit(ray_job)
@@ -491,6 +519,7 @@ class RayCluster:
             self.state,
             self.worker_wait_timeout_seconds,
             payload,
+            temp_dir_template=self.temp_dir_template,
             **kwargs,
         )
         self.state.add_job(head_job)
@@ -526,6 +555,7 @@ class RayCluster:
                         worker_script,
                         self.state,
                         self.worker_wait_timeout_seconds,
+                        temp_dir_template=self.temp_dir_template,
                     )
                 )
 
