@@ -150,6 +150,11 @@ def initialize_finetuning_model(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
     )
 
+    # if no heads are provided use heads from the checkpoint
+    if heads is None:
+        model.finetune_model_full_config = checkpoint.model_config
+        return model
+
     checkpoint.model_config["heads"] = deepcopy(heads)
     model.finetune_model_full_config = checkpoint.model_config
 

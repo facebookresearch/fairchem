@@ -12,11 +12,11 @@ import os
 import hydra
 import pytest
 import torch
-import torch.distributed as dist
 from omegaconf import OmegaConf
 
 from fairchem.core._cli import get_hydra_config_from_yaml
-from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
+from fairchem.core.common.distutils import assign_device_for_local_rank
+from fairchem.core.common.test_utils import init_local_distributed_process_group
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 from fairchem.core.units.mlip_unit.utils import update_configs
 
@@ -36,9 +36,8 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
 @pytest.mark.skip()
 def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    setup_env_local()
     assign_device_for_local_rank(True, 0)
-    dist.init_process_group(backend="gloo", rank=0, world_size=1)
+    init_local_distributed_process_group(backend="gloo")
     config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
 

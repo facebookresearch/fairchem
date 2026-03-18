@@ -10,8 +10,10 @@ from __future__ import annotations
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
+import hydra
 import torch
 from torch import nn
 
@@ -21,7 +23,22 @@ from fairchem.core.common.utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ase import Atoms
+
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+
+def _get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+    """Create a mapping from dataset names to their associated tasks."""
+    dset_to_tasks_map = defaultdict(list)
+    for task in tasks:
+        for dataset_name in task.datasets:
+            dset_to_tasks_map[dataset_name].append(task)
+    return dict(dset_to_tasks_map)
 
 
 class HeadInterface(metaclass=ABCMeta):
@@ -67,9 +84,235 @@ class BackboneInterface(metaclass=ABCMeta):
         """
         return
 
+    @classmethod
+    @abstractmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """
+        Build config overrides from inference settings.
+
+        Called BEFORE model instantiation. Override in subclasses to handle
+        model-specific settings like activation_checkpointing.
+
+        Can also perform validation of settings and raise errors if incompatible.
+
+        Returns:
+            Dict of backbone config key-value pairs to override.
+        """
+        return {}
+
+    @abstractmethod
+    def get_default_untrained_tasks(
+        self,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        """
+        Return default untrained tasks this backbone wants to add during inference.
+
+        Override in backbones that support computing properties via autograd
+        or other methods without explicit training. Returns empty list by default.
+
+        Args:
+            checkpoint_tasks: Tasks from the checkpoint (task name -> Task)
+            inference_settings: Current inference settings
+
+        Returns:
+            List of Task objects to add. Tasks with names already in checkpoint_tasks
+            or already in predict_untrained_* settings will be skipped.
+        """
+        return []
+
+    @abstractmethod
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """Validate that task datasets are compatible with this backbone."""
+        pass  # noqa
+
+    @abstractmethod
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        """Prepare backbone for inference. Called once on first prediction.
+
+        Returns:
+            self or a new backbone if replacement occurred (e.g., after MOLE merge).
+        """
+        return self
+
+    @abstractmethod
+    def on_predict_check(self, data: AtomicData) -> None:
+        """Called before each prediction for any per-prediction checks."""
+        pass  # noqa
+
+    @abstractmethod
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """Validate and set defaults for calculator input data.
+
+        Models should set appropriate defaults for atoms.info (e.g., charge, spin)
+        and validate that required fields are present and within valid ranges.
+        """
+        pass  # noqa
+
+
+class HydraInterfaceMixin:
+    """Mixin class providing shared task management functionality for Hydra models."""
+
+    @property
+    def tasks(self) -> dict[str, Task]:
+        """
+        Mapping from task names to their associated Task objects.
+        """
+        return self._tasks
+
+    @property
+    def direct_forces(self) -> bool:
+        """
+        Whether this model uses direct force prediction.
+        """
+        return getattr(self.backbone, "direct_forces", False)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        """
+        Mapping from dataset names to their associated tasks.
+        """
+        if self._dataset_to_tasks is None:
+            raise RuntimeError(
+                "setup_tasks() must be called before accessing dataset_to_tasks"
+            )
+        return self._dataset_to_tasks
+
+    def _validate_task_compatibility(self, task: Task) -> None:
+        """
+        Validate that a task is compatible with this model's capabilities.
+
+        Args:
+            task: Task to validate
+
+        Raises:
+            ValueError: If the task is incompatible with the model
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+
+        if (
+            self.direct_forces
+            and task.inference_only
+            and task.property in derivative_properties
+        ):
+            raise ValueError(
+                f"Cannot add autograd-based '{task.property}' task to direct-force model. "
+                f"Derivative properties require energy-conserving (autograd forces) models."
+            )
+
+        if task.inference_only and task.property in derivative_properties:
+            energy_datasets: set[str] = set()
+            for existing_task in self.tasks.values():
+                if existing_task.property == "energy":
+                    energy_datasets.update(existing_task.datasets)
+
+            task_datasets = set(task.datasets)
+            uncovered_datasets = task_datasets - energy_datasets
+
+            if uncovered_datasets:
+                raise ValueError(
+                    f"Cannot add '{task.property}' task for datasets {task.datasets}. "
+                    f"Datasets {sorted(uncovered_datasets)} have no energy task to derive from. "
+                    f"Derivative properties require energy to compute via autograd."
+                )
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        """
+        Called before each prediction for any per-prediction checks.
+        """
+        self.backbone.on_predict_check(data)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+        """
+        self.backbone.validate_atoms_data(atoms, task_name)
+
+    def setup_tasks(self, tasks_config: list) -> None:
+        """
+        Setup tasks from checkpoint config.
+
+        Args:
+            tasks_config: List of task configurations from checkpoint
+        """
+        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
+        self._tasks = {t.name: t for t in tasks}
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def add_tasks(self, tasks: Sequence[Task]) -> None:
+        """
+        Add additional tasks to the model.
+
+        This is useful for adding inference-only tasks that weren't in the
+        original checkpoint, such as untrained derivative properties.
+
+        For inference-only derivative tasks (forces, stress, hessian), this method
+        automatically configures the head's gradient settings to enable computation.
+
+        Args:
+            tasks: List of Task objects to add
+
+        Raises:
+            RuntimeError: If setup_tasks() has not been called
+            ValueError: If a task is incompatible with the model
+        """
+        if not hasattr(self, "tasks"):
+            raise RuntimeError("setup_tasks() must be called before add_tasks()")
+        for task in tasks:
+            if task.name in self.tasks:
+                logging.warning(
+                    f"Task '{task.name}' already exists, skipping adding as a new task."
+                )
+                continue
+            self._validate_task_compatibility(task)
+            self.tasks[task.name] = task
+            if task.inference_only:
+                self._configure_gradient_for_task(task)
+
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def _configure_gradient_for_task(self, task: Task) -> None:
+        """
+        Configure backbone gradient settings for a single inference-only task.
+
+        Since heads share the backbone's regress_config, we configure it directly
+        on the backbone rather than iterating through heads.
+
+        Args:
+            task: The inference-only task to configure gradients for
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+        if task.property not in derivative_properties:
+            return
+
+        if not hasattr(self.backbone, "regress_config"):
+            return
+
+        regress_config = self.backbone.regress_config
+
+        if task.property == "forces":
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
+        elif task.property == "stress":
+            regress_config.stress = True
+            # Stress requires forces computation
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
+        elif task.property == "hessian":
+            regress_config.hessian = True
+            regress_config.hessian_vmap = True
+            # Hessian requires forces with create_graph=True
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
 
 @registry.register_model("hydra")
-class HydraModel(nn.Module):
+class HydraModel(nn.Module, HydraInterfaceMixin):
     def __init__(
         self,
         backbone: dict | None = None,
@@ -78,6 +321,8 @@ class HydraModel(nn.Module):
         otf_graph: bool = True,
         pass_through_head_outputs: bool = False,
         freeze_backbone: bool = False,
+        supports_single_atoms: bool = False,
+        model_id: str | None = None,
     ):
         super().__init__()
         self.device = None
@@ -86,6 +331,13 @@ class HydraModel(nn.Module):
         # the old config system at some point, this will prevent the need to make major modifications to the trainer
         # because they all expect the name of the outputs directly instead of the head_name.property_name
         self.pass_through_head_outputs = pass_through_head_outputs
+        self._tasks = None
+        self._dataset_to_tasks = None
+
+        # Does this model support inference on single atom systems
+        self.supports_single_atoms = supports_single_atoms
+        # model_id string in form of NAME-VERSION e.g. UMA-1.2
+        self.model_id = model_id
 
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
@@ -189,8 +441,42 @@ class HydraModel(nn.Module):
 
         return out
 
+    def prepare_for_inference(
+        self, data: AtomicData, settings: InferenceSettings
+    ) -> None:
+        """
+        Prepare model for inference. Called once on first prediction.
 
-class HydraModelV2(nn.Module):
+        Delegates to backbone and each head that implements prepare_for_inference.
+        """
+        need_eval = False
+        # Backbone may return a new backbone (e.g., after MOLE merge)
+        new_backbone = self.backbone.prepare_for_inference(data, settings)
+        if new_backbone is not self.backbone:
+            self.backbone = new_backbone
+            need_eval = True
+
+        new_output_heads = torch.nn.ModuleDict()
+        heads_changed = False
+        for head_name, head in self.output_heads.items():
+            if hasattr(head, "prepare_for_inference"):
+                new_head = head.prepare_for_inference(data, settings)
+                new_output_heads[head_name] = new_head
+                if new_head is not head:
+                    heads_changed = True
+            else:
+                new_output_heads[head_name] = head
+
+        if heads_changed:
+            self.output_heads = new_output_heads
+            need_eval = True
+
+        if need_eval:
+            self.eval()
+
+
+# TODO this model is only used to initialize models in tests.....clean this up
+class HydraModelV2(nn.Module, HydraInterfaceMixin):
     def __init__(
         self,
         backbone: BackboneInterface,
@@ -201,6 +487,9 @@ class HydraModelV2(nn.Module):
         self.backbone = backbone
         self.output_heads = torch.nn.ModuleDict(heads)
         self.device = None
+        self._tasks = None
+        self._dataset_to_tasks = None
+
         if freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
@@ -225,3 +514,35 @@ class HydraModelV2(nn.Module):
             ):
                 out[k] = self.output_heads[k](data, emb)
         return out
+
+    def prepare_for_inference(
+        self, data: AtomicData, settings: InferenceSettings
+    ) -> None:
+        """
+        Prepare model for inference. Called once on first prediction.
+        """
+        data_clone = data.clone()
+        need_eval = False
+        # Backbone may return a new backbone (e.g., after MOLE merge)
+        new_backbone = self.backbone.prepare_for_inference(data_clone, settings)
+        if new_backbone is not self.backbone:
+            self.backbone = new_backbone
+            need_eval = True
+
+        new_output_heads = torch.nn.ModuleDict()
+        heads_changed = False
+        for head_name, head in self.output_heads.items():
+            if hasattr(head, "prepare_for_inference"):
+                new_head = head.prepare_for_inference(data_clone, settings)
+                new_output_heads[head_name] = new_head
+                if new_head is not head:
+                    heads_changed = True
+            else:
+                new_output_heads[head_name] = head
+
+        if heads_changed:
+            self.output_heads = new_output_heads
+            need_eval = True
+
+        if need_eval:
+            self.eval()

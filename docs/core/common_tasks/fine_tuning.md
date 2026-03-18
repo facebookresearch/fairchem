@@ -44,7 +44,7 @@ os.chdir('../../../../fairchem')
 ```
 
 :::{warning}
-**Task Selection:** The `uma-task` can be one of: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in a multi-task fashion, we ONLY support fine-tuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on GitHub if you have a special use-case for multi-task fine-tuning, or refer to the training configs in `/training_release` to mimic the original UMA training configs.
+**Task Selection:** The `uma-task` can be one of: `omol`, `odac`, `oc20`, `oc22`, `oc25`, `omat`, `omc`. While UMA was trained in a multi-task fashion, we ONLY support fine-tuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on GitHub if you have a special use-case for multi-task fine-tuning, or refer to the training configs in `/training_release` to mimic the original UMA training configs.
 :::
 
 :::{admonition} Regression Task Options
@@ -106,7 +106,7 @@ job:
     project: uma_finetune
 
 
-base_model_name: uma-s-1p1
+base_model_name: uma-s-1p2
 max_neighbors: 300
 epochs: 1
 steps: null

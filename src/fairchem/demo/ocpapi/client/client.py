@@ -212,7 +212,7 @@ class Client:
         input slab.
 
         Args:
-            adsorbate: Description of the the adsorbate to place.
+            adsorbate: Description of the adsorbate to place.
             slab: Information about the slab on which the adsorbate should
                 be placed.
 

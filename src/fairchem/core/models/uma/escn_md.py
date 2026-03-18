@@ -7,11 +7,16 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig, ListConfig
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -19,15 +24,24 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
+    create_wigner_data_module,
+)
+from fairchem.core.models.uma.common.quaternion.wigner_d_hybrid import (
+    axis_angle_wigner_hybrid,
+)
 from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
-from fairchem.core.models.uma.nn.embedding_dev import (
+from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
     EdgeDegreeEmbedding,
+)
+from fairchem.core.models.uma.nn.execution_backends import (
+    get_execution_backend,
 )
 from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
@@ -39,15 +53,50 @@ from fairchem.core.models.uma.nn.layer_norm import (
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.outputs import (
+    compute_energy,
+    compute_forces,
+    compute_forces_and_stress,
+    compute_hessian,
+    get_l_component_range,
+    reduce_node_to_system,
+)
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
+from fairchem.core.units.mlip_unit.api.inference import (
+    CHARGE_RANGE,
+    DEFAULT_CHARGE,
+    DEFAULT_SPIN,
+    DEFAULT_SPIN_OMOL,
+    SPIN_RANGE,
+    UMATask,
+)
+from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 
 from .escn_md_block import eSCNMD_Block
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+AUTO_EDGE_CHUNK_FRACTION = 0.05
+
+
+@dataclass
+class GradRegressConfig:
+    """
+    Configuration for gradient-based computation of forces and stress.
+    """
+
+    direct_forces: bool = False
+    direct_stress: bool = False
+    forces: bool = False
+    stress: bool = False
+    hessian: bool = False
+    hessian_vmap: bool = True
 
 
 def add_n_empty_edges(
@@ -76,23 +125,144 @@ def add_n_empty_edges(
     )
 
 
-@torch.compiler.disable
-def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
-    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+def validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, int]:
+    """Validate channels are contiguous, return (start, end) slice indices.
 
-    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
-        # make sure we have a multiple of self.edge_chunk_size edges
-        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+    Args:
+        channels: List of channel indices to validate
+        name: Name of the channel list for error messages
 
-    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
-    if n_edges_post > n_edges:
-        # We append synthetic padding edges whose distance vector has norm > cutoff
-        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
-        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
-        # contribute to embeddings or message passing; they only ensure the edge count
-        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
-        # activation checkpointing and avoiding empty tensor edge cases.
-        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
+    Returns:
+        Tuple of (start_idx, end_idx) for slicing. Returns (0, 0) if channels is empty.
+
+    Raises:
+        ValueError: If channels are not contiguous
+    """
+    if not channels:
+        return 0, 0
+    sorted_channels = sorted(channels)
+    expected = list(range(sorted_channels[0], sorted_channels[-1] + 1))
+    if sorted_channels != expected:
+        raise ValueError(f"{name} must be contiguous (e.g., [0, 1, 2]). Got {channels}")
+    return sorted_channels[0], sorted_channels[-1] + 1
+
+
+def balance_channels_batched(
+    emb: torch.Tensor,
+    target: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    start_idx: int,
+    end_idx: int,
+    target_offset: float = 0.0,
+) -> torch.Tensor:
+    """Balance a contiguous range of channels to target sum per system.
+
+    This batched version processes all channels in a contiguous range in a single
+    call, which is more efficient than processing each channel individually.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        start_idx: Start index of channel range (inclusive)
+        end_idx: End index of channel range (exclusive)
+        target_offset: Offset to subtract from target (e.g., 1.0 for spin)
+
+    Returns:
+        Modified embeddings with the specified channel range balanced to sum to target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
+    out_emb = emb.clone()
+    num_systems = len(natoms)
+    n_channels = end_idx - start_idx
+
+    # Batched extraction: [num_atoms, n_channels]
+    channels_to_balance = emb[:, 0, start_idx:end_idx]
+
+    # Batched sum: [num_systems, n_channels]
+    system_sums = torch.zeros(
+        num_systems, n_channels, device=emb.device, dtype=emb.dtype
+    )
+    system_sums.index_add_(0, batch, channels_to_balance)
+
+    # Reduce partial sums across all graph parallel ranks
+    if gp_utils.initialized():
+        system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
+
+    # Batched correction: broadcast target to all channels
+    target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
+    corrections = (system_sums - target_sums) / natoms.unsqueeze(1)
+
+    out_emb[:, 0, start_idx:end_idx] = channels_to_balance - corrections[batch]
+    return out_emb
+
+
+def resolve_dataset_mapping(
+    deprecated_list: list[str] | None,
+    dataset_mapping: dict[str, str] | None,
+    deprecated_param_name: str = "dataset_list",
+) -> dict[str, str]:
+    """
+    Validate and resolve dataset mapping from either a deprecated list or a mapping dict.
+
+    Args:
+        deprecated_list: Deprecated list of dataset names. If provided, it is
+            converted to a mapping where each name maps to itself.
+        dataset_mapping: Mapping from the config dataset name to desired dataset name for embeddings and heads.
+            Allows multiple subsets to share the same dataset embedding and/or output head by mapping
+            them to the same identifier.
+        deprecated_param_name: Name of the deprecated parameter, used in
+            warning/error messages.
+
+    Returns:
+        The resolved dataset mapping dict.
+
+    Raises:
+        ValueError: If both or neither arguments are provided, if the mapping
+            is not a non-empty dict, or if mapping values are not a subset of
+            mapping keys.
+    """
+    if deprecated_list is not None and dataset_mapping is not None:
+        msg = (
+            f"Both '{deprecated_param_name}' (={deprecated_list}) and "
+            f"'dataset_mapping' (={dataset_mapping}) have been provided. "
+            f"Please provide 'dataset_mapping' only in the config as '{deprecated_param_name}' is deprecated."
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is None and dataset_mapping is None:
+        msg = "'dataset_mapping' must be provided in the config to use dataset embeddings."
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is not None:
+        if not isinstance(deprecated_list, (list, ListConfig)):
+            msg = f"If '{deprecated_param_name}' is provided in the config, it must be a list of dataset names. Got: {deprecated_list!r}"
+            logging.error(msg, stack_info=True)
+            raise ValueError(msg)
+        dataset_mapping = {name: name for name in deprecated_list}
+        logging.warning(
+            f"If '{deprecated_param_name}' is provided in the config, the code assumes that each dataset "
+            f"maps to itself. Please use 'dataset_mapping' as '{deprecated_param_name}' "
+            "is deprecated and will be removed in the future."
+        )
+    if not isinstance(dataset_mapping, (dict, DictConfig)) or not dataset_mapping:
+        msg = f"'dataset_mapping' must be a non-empty dictionary, got: {dataset_mapping!r}"
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if not set(dataset_mapping.values()) <= set(dataset_mapping.keys()):
+        missing = set(dataset_mapping.values()) - set(dataset_mapping.keys())
+        msg = (
+            f"dataset_mapping values {missing} are not present in "
+            f"dataset_mapping keys {set(dataset_mapping.keys())}. "
+            f"Values must be a subset of keys. Full mapping provided: {dataset_mapping}"
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    return dataset_mapping
 
 
 @registry.register_model("escnmd_backbone")
@@ -116,7 +286,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         num_distance_basis: int = 512,
         direct_forces: bool = True,
         regress_forces: bool = True,
+        direct_stress: bool = False,
         regress_stress: bool = False,
+        regress_hessian: bool = False,
+        hessian_vmap: bool = True,
         # escnmd specific
         num_layers: int = 2,
         hidden_channels: int = 128,
@@ -127,12 +300,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
-        dataset_list: list[str] | None = None,
+        dataset_list: (
+            list[str] | None
+        ) = None,  # deprecated, use dataset_mapping instead
+        dataset_mapping: (
+            dict[str, str] | None
+        ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
-        edge_chunk_size: int | None = None,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
+        edge_chunk_size: int = 1,
+        execution_mode: str = "general",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -148,14 +330,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.always_use_pbc = always_use_pbc
 
         # energy conservation related
-        self.regress_forces = regress_forces
-        self.direct_forces = direct_forces
-        self.regress_stress = regress_stress
+        self.regress_config = GradRegressConfig(
+            direct_forces=direct_forces,
+            forces=regress_forces,
+            stress=regress_stress,
+            direct_stress=direct_stress,
+            hessian=regress_hessian,
+            hessian_vmap=hessian_vmap,
+        )
+
+        # which channels to balance - validate contiguity and store slice indices
+        charge_channels = (
+            list(charge_balanced_channels) if charge_balanced_channels else []
+        )
+        spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
+
+        self.charge_channel_start, self.charge_channel_end = (
+            validate_contiguous_channels(charge_channels, "charge_balanced_channels")
+        )
+        self.spin_channel_start, self.spin_channel_end = validate_contiguous_channels(
+            spin_channels, "spin_balanced_channels"
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
         activation_checkpoint_chunk_size = None
@@ -166,21 +367,29 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         self.edge_chunk_size = edge_chunk_size
 
+        self.backend = get_execution_backend(execution_mode)
+
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
+        self.dataset_mapping = dataset_mapping
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
-            assert (
-                self.dataset_list
-            ), "the dataset list is empty, please add it to the model backbone config"
-
+            self.dataset_mapping = resolve_dataset_mapping(
+                self.dataset_list, dataset_mapping, "dataset_list"
+            )
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
             self.register_buffer(f"Jd_{l}", Jd_list[l])
+
+        # Precompute Wigner coefficients for quaternion path (like Jd for Euler path)
+        if self.use_quaternion_wigner:
+            # lmin=5 because l=0,1,2,3,4 use custom kernels in the hybrid method
+            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=5)
+
         self.sph_feature_size = int((self.lmax + 1) ** 2)
         self.mappingReduced = CoefficientMapping(self.lmax, self.mmax)
 
@@ -216,8 +425,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.use_dataset_embedding:
             self.dataset_embedding = DatasetEmbedding(
                 self.sphere_channels,
-                grad=self.dataset_emb_grad,
-                dataset_list=self.dataset_list,
+                enable_grad=self.dataset_emb_grad,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
@@ -261,6 +470,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            backend=self.backend,
         )
 
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -287,6 +497,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                backend=self.backend,
             )
             self.blocks.append(block)
 
@@ -301,78 +512,80 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @property
+    def direct_forces(self) -> bool:
+        return self.regress_config.direct_forces
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
+
+    def balance_channels(
+        self,
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+        if self.charge_channel_end > self.charge_channel_start:
+            x_message_prime = balance_channels_batched(
+                emb=x_message_prime,
+                target=charge,
+                natoms=natoms,
+                batch=batch,
+                start_idx=self.charge_channel_start,
+                end_idx=self.charge_channel_end,
+                target_offset=0.0,
+            )
+        if self.spin_channel_end > self.spin_channel_start:
+            x_message_prime = balance_channels_batched(
+                emb=x_message_prime,
+                target=spin,
+                natoms=natoms,
+                batch=batch,
+                start_idx=self.spin_channel_start,
+                end_idx=self.spin_channel_end,
+                target_offset=1.0,
+            )
+        return x_message_prime
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
-            for l in range(self.lmax + 1)
-        ]
+        if self.use_quaternion_wigner:
+            with record_function("obtain rotmat wigner quaternion"):
+                wigner, wigner_inv = axis_angle_wigner_hybrid(
+                    edge_distance_vecs,
+                    self.lmax,
+                    coeffs=self.wigner_data.coeffs,
+                    U_blocks=self.wigner_data.U_blocks,
+                    custom_kernels=self.wigner_data.custom_kernels,
+                )
+        else:
+            Jd_buffers = [
+                getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
+                for l in range(self.lmax + 1)
+            ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+            with record_function("obtain rotmat wigner original"):
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        # select subset of coefficients we are using
-        if self.mmax != self.lmax:
-            wigner = wigner.index_select(1, self.coefficient_index)
-            wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
-
-        wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
-        )
-        wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
-        )
-        return wigner_and_M_mapping, wigner_and_M_mapping_inv
-
-    def _get_displacement_and_cell(
-        self, data_dict: AtomicData
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        ###############################################################
-        # gradient-based forces/stress
-        ###############################################################
-        displacement = None
-        orig_cell = None
-        if self.regress_stress and not self.direct_forces:
-            displacement = torch.zeros(
-                (3, 3),
-                dtype=data_dict["pos"].dtype,
-                device=data_dict["pos"].device,
-            )
-            num_batch = len(data_dict["natoms"])
-            displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
-            displacement.requires_grad = True
-            symmetric_displacement = 0.5 * (
-                displacement + displacement.transpose(-1, -2)
-            )
-            if data_dict["pos"].requires_grad is False:
-                data_dict["pos"].requires_grad = True
-            data_dict["pos_original"] = data_dict["pos"]
-            data_dict["pos"] = data_dict["pos"] + torch.bmm(
-                data_dict["pos"].unsqueeze(-2),
-                torch.index_select(symmetric_displacement, 0, data_dict["batch"]),
-            ).squeeze(-2)
-
-            orig_cell = data_dict["cell"]
-            data_dict["cell"] = data_dict["cell"] + torch.bmm(
-                data_dict["cell"], symmetric_displacement
-            )
-
-        if (
-            not self.regress_stress
-            and self.regress_forces
-            and not self.direct_forces
-            and data_dict["pos"].requires_grad is False
-        ):
-            data_dict["pos"].requires_grad = True
-        return displacement, orig_cell
+        # Both axis_angle_wigner_hybrid and eulers_to_wigner return contiguous D
+        # (created via torch.zeros + slice assignment)
+        # wigner_inv is made contiguous by .transpose().contiguous() above
+        return wigner, wigner_inv
 
     def csd_embedding(self, charge, spin, dataset):
         with record_function("charge spin dataset embeddings"):
@@ -389,6 +602,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
+        node_partition = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -401,7 +615,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-            data_dict["node_partition"] = node_partition
 
         if self.otf_graph:
             pbc = None
@@ -415,6 +628,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
+            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
+            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -422,20 +637,30 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                node_partition=node_partition,
             )
         else:
             # this assume edge_index is provided
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
-            shifts = torch.einsum(
-                "ij,ijk->ik",
-                data_dict["cell_offsets"].to(cell_per_edge.dtype),
-                cell_per_edge,
-            )
+
+            # Compute shifts from cell offsets
+            if len(data_dict["natoms"]) == 1:
+                # Single system: use matmul (compile-friendly, no data-dependent ops)
+                shifts = data_dict["cell_offsets"].to(
+                    data_dict["cell"].dtype
+                ) @ data_dict["cell"].squeeze(0)
+            else:
+                # Batched: need repeat_interleave for variable edges per system
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+                shifts = torch.einsum(
+                    "ij,ijk->ik",
+                    data_dict["cell_offsets"].to(cell_per_edge.dtype),
+                    cell_per_edge,
+                )
             edge_distance_vec = (
                 data_dict["pos"][data_dict["edge_index"][0]]
                 - data_dict["pos"][data_dict["edge_index"][1]]
@@ -459,13 +684,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
 
-        if self.edge_chunk_size is not None:
-            pad_edges(
-                graph_dict,
-                self.edge_chunk_size,
-                self.cutoff,
-                data_dict["gp_node_offset"],
-            )
+        if graph_dict["edge_index"].shape[1] == 0:
+            add_n_empty_edges(graph_dict, 1, self.cutoff, data_dict["gp_node_offset"])
 
         return graph_dict
 
@@ -487,22 +707,30 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             csd_mixed_emb=csd_mixed_emb,
         )
 
-        with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = self._get_displacement_and_cell(data_dict)
+        # Enable gradients for autograd-based force/stress computation.
+        # Must be set before graph generation so the computation graph
+        # tracks positions and cell through edge distance calculations.
+        if not self.regress_config.direct_forces:
+            if self.regress_config.forces or self.regress_config.stress:
+                data_dict["pos"].requires_grad_(True)
+            if self.regress_config.stress:
+                data_dict["cell"].requires_grad_(True)
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
 
-        if graph_dict["edge_index"].numel() == 0:
-            raise ValueError(
-                f"No edges found in input system, this means either you have a single atom in the system or the atoms are farther apart than the radius cutoff of the model of {self.cutoff} Angstroms. We don't know how to handle this case. Check the positions of system: {data_dict['pos']}"
-            )
-
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
-                )
+            wigner, wigner_inv = self._get_rotmat_and_wigner(
+                graph_dict["edge_distance_vec"],
+            )
+            coefficient_index = (
+                self.coefficient_index if self.mmax != self.lmax else None
+            )
+            wigner, wigner_inv = self.backend.prepare_wigner(
+                wigner,
+                wigner_inv,
+                self.mappingReduced,
+                coefficient_index,
             )
 
         ###############################################################
@@ -547,43 +775,58 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
             )
             x_edge = torch.cat(
-                (edge_distance_embedding, source_embedding, target_embedding), dim=1
+                (edge_distance_embedding, source_embedding, target_embedding),
+                dim=1,
             )
+
+            # Pre-fuse envelope into wigner_inv
+            wigner_inv_envelope = wigner_inv * edge_envelope
+
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
 
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+
+        # Get edge embeddings for each layer
+        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
+        # Fast backends: precomputed radials
+        with record_function("layer_radial_emb"):
+            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
-                    graph_dict["edge_distance"],
+                    x_edge_per_layer[i],
                     graph_dict["edge_index"],
-                    wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv,
-                    edge_envelope,
+                    wigner,
+                    wigner_inv_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
                 )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
+                )
 
         # Final layer norm
         x_message = self.norm(x_message)
         out = {
             "node_embedding": x_message,
-            "displacement": displacement,
-            "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
         return out
@@ -621,19 +864,284 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return set(no_wd_list)
 
+    @classmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """Build backbone config overrides from inference settings."""
+        overrides = {}
+
+        # Always disable PBC wrapping for inference
+        overrides["always_use_pbc"] = False
+
+        if settings.activation_checkpointing is not None:
+            overrides["activation_checkpointing"] = settings.activation_checkpointing
+        if settings.edge_chunk_size is not None:
+            overrides["edge_chunk_size"] = settings.edge_chunk_size
+        if settings.external_graph_gen is not None:
+            overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.internal_graph_gen_version is not None:
+            overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.use_quaternion_wigner is not None:
+            overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
+        if settings.execution_mode is not None:
+            overrides["execution_mode"] = settings.execution_mode
+
+        return overrides
+
+    def get_default_untrained_tasks(
+        self,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        """
+        Return default untrained tasks for eSCNMDBackbone.
+
+        For this backbone, we add stress tasks for all energy datasets
+        that don't already have stress (either trained or explicitly requested).
+        Stress can be computed via autograd from energy predictions.
+
+        Returns empty list if the model uses direct forces, since autograd-based
+        stress computation requires energy-conserving force computation.
+        """
+        # Direct force models can't compute stress via autograd
+        if self.direct_forces:
+            return []
+
+        tasks = []
+
+        # Find datasets with energy but no stress
+        energy_datasets = set()
+        stress_datasets = set()
+        energy_task_by_dataset = {}
+
+        for task in checkpoint_tasks.values():
+            if task.property == "energy":
+                for dataset in task.datasets:
+                    energy_datasets.add(dataset)
+                    energy_task_by_dataset[dataset] = task
+            elif task.property == "stress":
+                stress_datasets.update(task.datasets)
+
+        # Also exclude datasets already in predict_untrained_stress
+        stress_datasets.update(inference_settings.predict_untrained_stress)
+
+        # Create stress tasks for missing datasets
+        missing_stress_datasets = energy_datasets - stress_datasets
+
+        for dataset in missing_stress_datasets:
+            energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
+            tasks.append(
+                Task(
+                    name=f"{task_prefix}stress",
+                    level="system",
+                    property="stress",
+                    out_spec=OutputSpec(
+                        dim=[1, 9], dtype=inference_settings.base_precision_dtype
+                    ),
+                    normalizer=energy_task.normalizer,
+                    datasets=[dataset],
+                    loss_fn=None,
+                    element_references=None,
+                    metrics=[],
+                    train_on_free_atoms=True,
+                    eval_on_free_atoms=True,
+                    inference_only=True,
+                )
+            )
+
+        return tasks
+
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        if self.use_dataset_embedding:
+            assert set(dataset_to_tasks.keys()).issubset(
+                set(self.dataset_mapping.keys())
+            ), "Datasets in tasks is not a strict subset of datasets in backbone."
+
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        """
+        Prepare model for inference. Called once on first prediction.
+
+        For UMA: handles MOLE merging if settings.merge_mole is True.
+        Stores initial composition for consistency checking.
+
+        Returns:
+            self or a new merged backbone if MOLE merging was performed. We return
+            because type could have changed due to merging MOLE.
+        """
+        self._inference_settings = settings
+        self._merged_composition = None
+
+        # Validate settings against backend requirements (fail early)
+        self.backend.validate(self.lmax, self.mmax, settings)
+
+        if settings.merge_mole:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot merge model with multiple systems in batch"
+            # Store composition we merged on
+            self._merged_composition = self._get_composition_info(data)
+            # Merge the model - returns new merged backbone
+            new_backbone = self.merge_MOLE_model(data)
+            # Transfer inference state to new backbone
+            new_backbone._inference_settings = settings
+            new_backbone._merged_composition = self._merged_composition
+            self.backend.prepare_model_for_inference(new_backbone)
+            return new_backbone
+
+        self.backend.prepare_model_for_inference(self)
+        return self
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        """
+        Called before each prediction. UMA checks MOLE consistency here.
+        """
+        if not getattr(self, "_inference_settings", None):
+            return  # Not initialized yet
+
+        if self._inference_settings.merge_mole and self._merged_composition is not None:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot run merged model on batch with multiple systems"
+            current = self._get_composition_info(data)
+            self._assert_composition_matches(current)
+
+    def _get_composition_info(self, data) -> tuple:
+        """
+        Get composition info for MOLE consistency checking.
+        """
+        composition = data.atomic_numbers.new_zeros(
+            self.max_num_elements, dtype=torch.int
+        ).index_add(
+            0,
+            data.atomic_numbers.to(torch.int),
+            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int),
+        )
+        return (
+            composition,
+            getattr(data, "charge", None),
+            getattr(data, "spin", None),
+            getattr(data, "dataset", [None]),
+        )
+
+    def _assert_composition_matches(self, current: tuple) -> None:
+        """
+        Assert current composition matches what model was merged on.
+        """
+        merged = self._merged_composition
+        # Move current tensors to same device as merged (CPU) for comparison
+        device = merged[0].device
+
+        merged_norm = merged[0].float() / merged[0].sum()
+        curr_norm = current[0].float().to(device) / current[0].sum().to(device)
+
+        assert merged_norm.isclose(
+            curr_norm, rtol=1e-5
+        ).all(), "Compositions differ from merged model"
+
+        # Charge and spin are tensors that need device alignment
+        merged_charge = merged[1]
+        curr_charge = (
+            current[1].to(device)
+            if isinstance(current[1], torch.Tensor)
+            else current[1]
+        )
+        assert (
+            (merged_charge == curr_charge).all()
+            if isinstance(merged_charge, torch.Tensor)
+            else merged_charge == curr_charge
+        ), f"Charge differs: {merged_charge} vs {current[1]}"
+
+        merged_spin = merged[2]
+        curr_spin = (
+            current[2].to(device)
+            if isinstance(current[2], torch.Tensor)
+            else current[2]
+        )
+        assert (
+            (merged_spin == curr_spin).all()
+            if isinstance(merged_spin, torch.Tensor)
+            else merged_spin == curr_spin
+        ), f"Spin differs: {merged_spin} vs {current[2]}"
+
+        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        UMA-specific validation: handle charge/spin for OMOL task.
+
+        Sets default values for charge and spin in atoms.info and validates
+        they are within acceptable ranges.
+        """
+        # Set charge defaults
+        if "charge" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. "
+                    "Defaulting to charge=0. Ensure charge is an integer representing "
+                    "the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
+        # Set spin defaults (OMOL uses spin=1, others use spin=0)
+        if "spin" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in "
+                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
+                    "representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
+
+        # Validate charge range
+        charge = atoms.info["charge"]
+        if not isinstance(charge, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for charge: {type(charge)}. "
+                "Charge must be an integer representing the total charge on the system."
+            )
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for charge: {charge}. "
+                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+            )
+
+        # Validate spin range
+        spin = atoms.info["spin"]
+        if not isinstance(spin, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for spin: {type(spin)}. "
+                "Spin must be an integer representing the spin multiplicity."
+            )
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for spin: {spin}. "
+                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            )
+
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
+    """MLP head for predicting energy, forces, and stress using autograd derivatives.
+
+    This head computes forces and stress by taking gradients of the energy with respect to
+    atomic positions and cell displacement.
+    """
+
     def __init__(
         self,
         backbone: eSCNMDBackbone,
+        reduce: str = "sum",
         prefix: str | None = None,
         wrap_property: bool = True,
     ) -> None:
         super().__init__()
-        backbone.energy_block = None
-        backbone.force_block = None
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
+
+        self.reduce = reduce
         self.prefix = prefix
         self.wrap_property = wrap_property
 
@@ -647,40 +1155,38 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
-        # TODO: this is not very clean, bug-prone.
-        # but is currently necessary for finetuning pretrained models that did not have
-        # the direct_forces flag set to False
-        backbone.direct_forces = False
-        assert (
-            not backbone.direct_forces
-        ), "EFS head is only used for gradient-based forces/stress."
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_config = backbone.regress_config
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        if self.prefix:
-            energy_key = f"{self.prefix}_energy"
-            forces_key = f"{self.prefix}_forces"
-            stress_key = f"{self.prefix}_stress"
-        else:
-            energy_key = "energy"
-            forces_key = "forces"
-            stress_key = "stress"
+        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
+        forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
+        stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
+        hessian_key = f"{self.prefix}_hessian" if self.prefix else "hessian"
 
         outputs = {}
-        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        _output = self.energy_block(_input)
-        node_energy = _output.view(-1, 1, 1)
-        energy_part = torch.zeros(
-            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
-        )
-        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
 
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        # Use shared energy computation from parent class
+        energy, energy_part = compute_energy(
+            emb,
+            self.energy_block,
+            data["batch"],
+            len(data["natoms"]),
+            natoms=data["natoms"],
+            reduce=self.reduce,
+        )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
@@ -690,84 +1196,70 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
-        if self.regress_stress:
-            grads = torch.autograd.grad(
-                [energy_part.sum()],
-                [data["pos_original"], emb["displacement"]],
-                create_graph=self.training,
-            )
-            if gp_utils.initialized():
-                grads = (
-                    gp_utils.reduce_from_model_parallel_region(grads[0]),
-                    gp_utils.reduce_from_model_parallel_region(grads[1]),
-                )
+        # Determine if we need create_graph for higher-order derivatives
+        # Hessian computation requires second derivatives, so we need create_graph=True
+        create_graph = self.training or self.regress_config.hessian
 
-            forces = torch.neg(grads[0])
-            virial = grads[1].view(-1, 3, 3)
-            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
-            stress = virial / volume.view(-1, 1, 1)
-            virial = torch.neg(virial)
-            stress = stress.view(
-                -1, 9
-            )  # NOTE to work better with current Multi-task trainer
+        if self.regress_config.stress and not self.regress_config.direct_stress:
+            forces, stress = compute_forces_and_stress(
+                energy_part,
+                data["pos"],
+                data["cell"],
+                batch=data["batch_full"],  # use batch_full to work with GP reduction
+                training=create_graph,
+            )
+            # TODO should we assume gradient forces always when stress is requested?
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
-        elif self.regress_forces:
-            forces = (
-                -1
-                * torch.autograd.grad(
-                    energy_part.sum(), data["pos"], create_graph=self.training
-                )[0]
-            )
-            if gp_utils.initialized():
-                forces = gp_utils.reduce_from_model_parallel_region(forces)
+        elif self.regress_config.forces and not self.regress_config.direct_forces:
+            forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+        else:
+            forces = None
+
+        if self.regress_config.hessian:
+            if forces is None:
+                raise ValueError(
+                    "Hessian computation requires forces. "
+                    "Please enable regress_forces or regress_stress."
+                )
+            if data["natoms"].numel() != 1:
+                raise ValueError(
+                    f"Hessian computation requires exactly 1 system in batch, "
+                    f"found {data['natoms'].numel()}"
+                )
+
+            hessian = compute_hessian(
+                forces,
+                data["pos"],
+                vmap=self.regress_config.hessian_vmap,
+                training=create_graph,
+            )
+            outputs[hessian_key] = (
+                {"hessian": hessian} if self.wrap_property else hessian
+            )
+
         return outputs
 
 
-class MLP_Energy_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
-        super().__init__()
-        self.reduce = reduce
+# Deprecate this head in favor of MLP_EFS_Head with a regress_config.forces=False and regress_config.stress=False.
+class MLP_Energy_Head(MLP_EFS_Head):
+    """MLP head for predicting energy."""
 
-        self.sphere_channels = backbone.sphere_channels
-        self.hidden_channels = backbone.hidden_channels
-        self.energy_block = nn.Sequential(
-            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, 1, bias=True),
+    def __init__(
+        self,
+        backbone: eSCNMDBackbone,
+        reduce: str = "sum",
+        prefix: str | None = None,
+        wrap_property: bool = False,
+    ) -> None:
+        super().__init__(backbone, reduce, prefix, wrap_property)
+        assert (
+            backbone.regress_forces is False and backbone.regress_stress is False
+        ) or (backbone.direct_forces is True or backbone.direct_stress is True), (
+            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
+            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
         )
-
-    def forward(
-        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        node_energy = self.energy_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
-
-        energy_part = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_energy.device,
-            dtype=node_energy.dtype,
-        )
-
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
 
 
 class Linear_Energy_Head(nn.Module, HeadInterface):
@@ -779,31 +1271,15 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        node_energy = self.energy_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
-
-        energy_part = torch.zeros(
+        energy, _ = compute_energy(
+            emb,
+            self.energy_block,
+            data_dict["batch"],
             len(data_dict["natoms"]),
-            device=node_energy.device,
-            dtype=node_energy.dtype,
+            natoms=data_dict["natoms"],
+            reduce=self.reduce,
         )
-
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
+        return {"energy": energy}
 
 
 class Linear_Force_Head(nn.Module, HeadInterface):
@@ -812,9 +1288,14 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
     def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
-        forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
-        forces = forces.narrow(1, 1, 3)
+        # SO3_Linear with lmax=1 requires both L=0 and L=1 as input
+        l0_l1_embedding = get_l_component_range(emb["node_embedding"], l_min=0, l_max=1)
+        forces_output = self.linear(l0_l1_embedding)
+
+        # Extract L=1 (vector) component from the output
+        forces = get_l_component_range(forces_output, l_min=1, l_max=1)
         forces = forces.view(-1, 3).contiguous()
+
         if gp_utils.initialized():
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
@@ -864,12 +1345,14 @@ def compose_tensor(
 
 
 class MLP_Stress_Head(nn.Module, HeadInterface):
+    """MLP head for predicting the stress tensor.
+
+    Predicts the isotropic (L=0) and anisotropic (L=2) parts of the stress tensor
+    separately to ensure symmetry, then recomposes back to the full stress tensor.
+    """
+
     def __init__(self, backbone: eSCNMDBackbone, reduce: str = "mean") -> None:
         super().__init__()
-        """
-        predict the isotropic and anisotropic parts of the stress tensor
-        to ensure symmetry and then recompose back to the full stress tensor
-        """
         self.reduce = reduce
         assert reduce in ["sum", "mean"]
         self.sphere_channels = backbone.sphere_channels
@@ -887,41 +1370,34 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        node_scalar = self.scalar_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
+        num_systems = len(data_dict["natoms"])
+        batch = data_dict["batch"]
 
-        iso_stress = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_scalar.device,
-            dtype=node_scalar.dtype,
-        )
-        iso_stress.index_add_(0, data_dict["batch"], node_scalar.view(-1))
-
-        if gp_utils.initialized():
-            raise NotImplementedError("This code hasn't been tested yet.")
-            # iso_stress = gp_utils.reduce_from_model_parallel_region(iso_stress)
+        # Compute isotropic (L=0) part of stress using MLP on scalar embedding
+        scalar_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=0
+        ).squeeze(1)
+        node_scalar = self.scalar_block(scalar_embedding).view(-1)
+        iso_stress, _ = reduce_node_to_system(node_scalar, batch, num_systems)
 
         if self.reduce == "mean":
-            iso_stress /= data_dict["natoms"]
+            iso_stress = iso_stress / data_dict["natoms"]
 
-        node_l2 = self.l2_linear(emb["node_embedding"].narrow(1, 0, 9))
-        node_l2 = node_l2.narrow(1, 4, 5)
-        node_l2 = node_l2.view(-1, 5).contiguous()
-
-        aniso_stress = torch.zeros(
-            (len(data_dict["natoms"]), 5),
-            device=node_l2.device,
-            dtype=node_l2.dtype,
+        # Compute anisotropic (L=2) part of stress using SO3_Linear
+        l0l1l2_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=2
         )
-        aniso_stress.index_add_(0, data_dict["batch"], node_l2)
-        if gp_utils.initialized():
-            raise NotImplementedError("This code hasn't been tested yet.")
-            # aniso_stress = gp_utils.reduce_from_model_parallel_region(aniso_stress)
+        l2_output = self.l2_linear(l0l1l2_embedding)
+
+        node_l2 = (
+            get_l_component_range(l2_output, l_min=2, l_max=2).view(-1, 5).contiguous()
+        )
+        aniso_stress, _ = reduce_node_to_system(node_l2, batch, num_systems)
 
         if self.reduce == "mean":
-            aniso_stress /= data_dict["natoms"].unsqueeze(1)
+            aniso_stress = aniso_stress / data_dict["natoms"].unsqueeze(1)
 
+        # Recompose the full stress tensor from isotropic and anisotropic parts
         stress = compose_tensor(iso_stress.unsqueeze(1), aniso_stress)
 
         return {"stress": stress}
