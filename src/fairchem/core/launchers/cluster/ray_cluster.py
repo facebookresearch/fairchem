@@ -72,8 +72,10 @@ class HeadInfo:
     """
 
     hostname: Optional[str] = None
-    port: Optional[int] = None
+    port: Optional[int] = None  # Ray GCS port
+    client_port: Optional[int] = None  # Ray Client server port (if enabled)
     temp_dir: Optional[str] = None
+    namespace_fairchem_inference_server: Optional[str] = None
 
 
 class RayClusterState:
@@ -230,9 +232,20 @@ def _ray_head_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
     payload: Optional[Callable[..., PayloadReturnT]] = None,
+    dashboard_port: Optional[int] = None,
+    enable_client_server: bool = False,
     **kwargs,
 ):
-    """Start the head node of the Ray cluster on slurm."""
+    """Start the head node of the Ray cluster on slurm.
+    
+    Args:
+        cluster_state: State object for cluster coordination
+        worker_wait_timeout_seconds: Timeout for workers to connect
+        payload: Optional function to run after head starts
+        dashboard_port: Port for Ray dashboard (auto-assigned if None)
+        enable_client_server: If True, start Ray Client server for remote connections
+        **kwargs: Additional arguments passed to payload
+    """
     hostname = socket.gethostname()
     head_env = os.environ.copy()
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
@@ -240,30 +253,37 @@ def _ray_head_script(
     # using 0 as the port for the head will make ray search for an open port instead of
     # always using the same one.
     port = find_free_port()
+    if dashboard_port is None:
+        dashboard_port = find_free_port()
     head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
     )
     logger.info(f"host {hostname}:{port}")
-    with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
-        # ray workers have the same tempdir name (even on a different host)
-        # as the head. This is a problem when we use  /scratch/slurm_tmpdir/JOBID as
-        # the tempdir of the head job will not be accessible/visible from other workers if they
-        # are scheduled on the same host. We are forced to use a different tempdir than /scratch
-        # TODO ideally, we would still have a /scratch dir that everyone can share.
+    # Use SLURM job-specific scratch directory for Ray temp files
+    slurm_job_id = os.environ.get("SLURM_JOB_ID", "local")
+    temp_dir = f"/scratch/slurm_tmpdir/{slurm_job_id}/ray_head"
+    Path(temp_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        ray_cmd = [
+            "ray",
+            "start",
+            "--head",
+            f"--port={port}",
+            f"--temp-dir={temp_dir}",
+            "--num-cpus",
+            f"{num_cpus}",
+            "--num-gpus",
+            f"{num_gpus}",
+            "--dashboard-host=0.0.0.0",
+            f"--dashboard-port={dashboard_port}",
+        ]
+        client_port = None
+        if enable_client_server:
+            client_port = find_free_port()
+            ray_cmd.append(f"--ray-client-server-port={client_port}")
         process = subprocess.Popen(
-            [
-                "ray",
-                "start",
-                "--head",
-                f"--port={port}",
-                f"--temp-dir={temp_dir}",
-                "--num-cpus",
-                f"{num_cpus}",
-                "--num-gpus",
-                f"{num_gpus}",
-                "--dashboard-host=0.0.0.0",
-            ],
+            ray_cmd,
             env=head_env,
             stdout=subprocess.PIPE,
             text=True,
@@ -280,7 +300,14 @@ def _ray_head_script(
             started
         ), "couldn't find head address in stdout. Check head.err for details"
         print(f"Head started, ip: {hostname}:{port} ({cluster_state.cluster_id})")
-        info = HeadInfo(hostname=hostname, port=int(port), temp_dir=temp_dir)
+        print(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
+        info = HeadInfo(
+            hostname=hostname,
+            port=int(port),
+            client_port=client_port,
+            temp_dir=temp_dir,
+            namespace_fairchem_inference_server=cluster_state.cluster_id,
+        )
         cluster_state.save_head_info(info)
         os.environ.update(head_env)
         if payload is not None:
@@ -289,6 +316,9 @@ def _ray_head_script(
             while True:
                 # practically, we should wait from driver signal to die here
                 time.sleep(60)
+    finally:
+        # Clean up temp directory
+        shutil.rmtree(Path(temp_dir), ignore_errors=True)
 
 
 def worker_script(
@@ -313,6 +343,11 @@ def worker_script(
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
     num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
+    # Use SLURM job-specific scratch directory for Ray temp files
+    slurm_job_id = os.environ.get("SLURM_JOB_ID", "local")
+    temp_dir = f"/scratch/slurm_tmpdir/{slurm_job_id}/ray_worker"
+    Path(temp_dir).mkdir(parents=True, exist_ok=True)
+
     try:
         subprocess.run(
             [
@@ -321,6 +356,8 @@ def worker_script(
                 "--address",
                 "auto",
                 "--block",
+                "--temp-dir",
+                temp_dir,
                 "--num-cpus",
                 f"{num_cpus}",
                 "--num-gpus",
@@ -330,7 +367,8 @@ def worker_script(
             check=False,
         )
     finally:
-        pass  # Ray manages its own temp directory cleanup
+        # Clean up worker temp directory
+        shutil.rmtree(Path(temp_dir), ignore_errors=True)
 
 
 # TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
