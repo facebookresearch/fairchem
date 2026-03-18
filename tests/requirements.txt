@@ -13,6 +13,6 @@ lmdb==1.6.2
 pymatgen==v2025.10.7
 ray[serve]==2.54.0
 ipykernel==7.2.0
-jupyter_book==2.1.1
+jupyter_book==2.1.2
 pytest-xdist==3.8.0
 nvalchemi-toolkit-ops==0.2.0
