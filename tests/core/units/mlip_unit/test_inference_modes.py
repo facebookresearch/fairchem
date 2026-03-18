@@ -120,6 +120,14 @@ def test_conserving_mole_inference_modes_gpu(
     compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # TF32 uses reduced precision (10-bit mantissa vs 23-bit for FP32), causing
+    # ~1-2% relative differences in force computations with production models.
+    # The fake test checkpoint shows larger differences (~5-10%), so we use
+    # relaxed tolerances for TF32=True tests. TF32=False tests compare against
+    # a TF32=False baseline so can use tighter tolerances.
+    forces_rtol = 1e-1 if tf32 else 2e-4  # 10% for TF32, 0.02% for non-TF32
+    forces_atol = 5e-2 if tf32 else 1e-3  # 0.05 abs tol for TF32
+    energy_rtol = 2e-4 if tf32 else 1e-4
     mole_inference(
         InferenceSettings(
             tf32=tf32,
@@ -131,7 +139,9 @@ def test_conserving_mole_inference_modes_gpu(
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
-        forces_rtol=5e-2,
+        forces_rtol=forces_rtol,
+        forces_atol=forces_atol,
+        energy_rtol=energy_rtol,
     )
 
 
@@ -198,13 +208,14 @@ def test_conserving_mole_inference_mode_default_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # inference_settings_default() uses TF32=False, so tight tolerances are fine
     mole_inference(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
-        forces_rtol=5e-2,
+        forces_rtol=2e-4,
     )
 
 
@@ -213,13 +224,14 @@ def test_conserving_mole_inference_mode_md_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # inference_settings_default() uses TF32=False, so tight tolerances are fine
     mole_inference(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
-        forces_rtol=5e-2,
+        forces_rtol=2e-4,
     )
 
 
@@ -230,6 +242,7 @@ def mole_inference(
     device,
     energy_rtol=1e-4,
     forces_rtol=2e-4,
+    forces_atol=1e-3,  # atol handles near-zero forces where rtol can blow up
 ):
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
@@ -277,11 +290,13 @@ def mole_inference(
                 .max()
                 .item(),
             )
-            assert (
-                output_baseline[k]
-                .isclose(output[k], rtol=energy_rtol if "energy" in k else forces_rtol)
-                .all()
-            )
+            # Use atol for forces to handle near-zero values where rtol blows up
+            if "energy" in k:
+                assert output_baseline[k].isclose(output[k], rtol=energy_rtol).all()
+            else:
+                assert output_baseline[k].isclose(
+                    output[k], rtol=forces_rtol, atol=forces_atol
+                ).all()
             assert output[k].device.type == device
             assert output_baseline[k].device.type == device
 
