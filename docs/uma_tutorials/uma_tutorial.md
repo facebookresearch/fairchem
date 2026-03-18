@@ -38,7 +38,7 @@ You need a Huggingface account, request access to https://huggingface.co/faceboo
 
 Permissions: Read access to contents of all public gated repos you can access
 
-Then, add the token as an environment variable (using `huggingface-cli login`:
+Then, add the token as an environment variable (using `huggingface-cli login`):
 
 ```{code-cell}
 :tags: [skip-execution]
