@@ -9,7 +9,7 @@ torchtnt==0.2.4
 numba==0.64.0
 numpy==2.4.2
 scikit-learn==1.7.2
-lmdb==1.6.2
+lmdb==2.0.0
 pymatgen==v2025.10.7
 ray[serve]==2.54.0
 ipykernel==7.2.0
