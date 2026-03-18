@@ -379,3 +379,23 @@ def fake_uma_dataset(tmp_path_factory):
             marker.touch()
 
     return data_dir
+
+
+@pytest.fixture(scope="session")
+def uma_s_1p1_checkpoint():
+    """Session-scoped pretrained uma-s-1p1 checkpoint path (cached by HuggingFace Hub)."""
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+
+    return pretrained_checkpoint_path_from_name("uma-s-1p1")
+
+
+@pytest.fixture(scope="session")
+def uma_s_1p2_checkpoint():
+    """Session-scoped pretrained uma-s-1p2 checkpoint path (cached by HuggingFace Hub)."""
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+
+    return pretrained_checkpoint_path_from_name("uma-s-1p2")

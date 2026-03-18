@@ -36,6 +36,9 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
+from fairchem.core.models.uma.nn.execution_backends import (
+    maybe_update_settings_backend,
+)
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -114,7 +117,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.inference_settings = inference_settings
         self._setup_threads(inference_settings)
 
-        if inference_settings.wigner_cuda:
+        if self.inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
@@ -124,16 +127,21 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             inference_model_path, map_location="cpu", weights_only=False
         )
 
+        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
+        self.inference_settings = maybe_update_settings_backend(
+            self.inference_settings, checkpoint.model_config
+        )
+
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
-            checkpoint, overrides, inference_settings
+            checkpoint, overrides, self.inference_settings
         )
 
         # Set default dtype during model construction so that non-persistent
         # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
         # requested precision rather than being cast from float32 later.
         prev_dtype = torch.get_default_dtype()
-        torch.set_default_dtype(inference_settings.base_precision_dtype)
+        torch.set_default_dtype(self.inference_settings.base_precision_dtype)
 
         try:
             # Load model with overrides, passing pre-loaded checkpoint
@@ -149,9 +157,30 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         finally:
             torch.set_default_dtype(prev_dtype)
 
+        # Get backbone's default untrained tasks (if supported and enabled)
+        default_backbone_tasks = []
+        if self.inference_settings.auto_add_default_untrained_tasks:
+            backbone = self.model.module.backbone
+            if hasattr(backbone, "get_default_untrained_tasks"):
+                default_backbone_tasks = backbone.get_default_untrained_tasks(
+                    self.model.module.tasks,
+                    self.inference_settings,
+                )
+
+        # Create explicitly requested untrained tasks
         untrained_tasks = self._create_untrained_tasks(
-            inference_settings, self.model.module.tasks
+            self.inference_settings, self.model.module.tasks
         )
+
+        explicit_task_names = {t.name for t in untrained_tasks}
+        checkpoint_task_names = set(self.model.module.tasks.keys())
+
+        for task in default_backbone_tasks:
+            if (
+                task.name not in explicit_task_names
+                and task.name not in checkpoint_task_names
+            ):
+                untrained_tasks.append(task)
 
         if untrained_tasks:
             logging.info(
@@ -159,9 +188,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"{[t.name for t in untrained_tasks]}"
             )
             self.model.module.add_tasks(untrained_tasks)
-
-        self._validate_untrained_property_requests(inference_settings)
-        self._configure_head_gradients(inference_settings)
 
         self._setup_device(device)
 
@@ -289,9 +315,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_forces",
+                    name=f"{task_prefix}forces",
                     level="atom",
                     property="forces",
                     out_spec=OutputSpec(
@@ -318,9 +346,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_stress",
+                    name=f"{task_prefix}stress",
                     level="system",
                     property="stress",
                     out_spec=OutputSpec(
@@ -347,9 +377,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_hessian",
+                    name=f"{task_prefix}hessian",
                     level="system",
                     property="hessian",
                     out_spec=OutputSpec(
@@ -368,91 +400,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         return untrained_tasks
-
-    def _configure_head_gradients(self, settings: InferenceSettings) -> None:
-        """
-        Update head's GradRegressConfig to enable autograd for requested properties.
-
-        Note: For single-head models, enabling a property (e.g., stress) will cause
-        the head to compute it for ALL datasets, even if only specific datasets
-        requested it. The filtering happens at the task level - only tasks that
-        exist will be processed and returned.
-
-        Args:
-            settings: InferenceSettings with compute_untrained_* flags
-        """
-        # Determine which properties are requested (any dataset)
-        needs_forces = len(settings.predict_untrained_forces) > 0
-        needs_stress = len(settings.predict_untrained_stress) > 0
-        needs_hessian = len(settings.predict_untrained_hessian) > 0
-
-        # Find and configure all heads
-        for head in self.model.module.output_heads.values():
-            # Handle wrapped heads (DatasetSpecificSingleHeadWrapper)
-            actual_head = head
-            if hasattr(head, "head"):
-                actual_head = head.head
-
-            # Only configure heads that have regress_config
-            if hasattr(actual_head, "regress_config"):
-                if needs_forces and not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
-
-                if needs_stress:
-                    actual_head.regress_config.stress = True
-                    # Stress requires forces computation
-                    if not actual_head.regress_config.direct_forces:
-                        actual_head.regress_config.forces = True
-
-                if needs_hessian:
-                    actual_head.regress_config.hessian = True
-                    actual_head.regress_config.hessian_vmap = settings.hessian_vmap
-                    # Hessian requires forces with create_graph=True
-                    if not actual_head.regress_config.direct_forces:
-                        actual_head.regress_config.forces = True
-
-    # TODO simplify this, only conservative models allowed to do this, just delegate to the head
-    def _validate_untrained_property_requests(
-        self,
-        settings: InferenceSettings,
-    ) -> None:
-        """
-        Validate that requested untrained properties are compatible with the model.
-
-        Raises:
-            ValueError: If incompatible property requested
-        """
-        # Check 1: Can't compute derivatives from direct-force models
-        if self.model.module.direct_forces:
-            if settings.predict_untrained_hessian:
-                raise ValueError(
-                    "Cannot compute Hessian for direct-force models. "
-                    "Hessian requires energy-conserving (autograd forces) models."
-                )
-            if settings.predict_untrained_stress:
-                raise ValueError(
-                    "Cannot compute stress for direct-force models. "
-                    "Stress requires energy-conserving (autograd forces) models."
-                )
-
-        # Check 2: Hessian requires single-system batches (validated per-prediction)
-        # This is a runtime constraint, not init-time
-
-        # Check 3: At least one energy task must exist
-        has_energy = any(
-            task.property == "energy" for task in self.model.module.tasks.values()
-        )
-        if not has_energy and any(
-            [
-                settings.predict_untrained_forces,
-                settings.predict_untrained_stress,
-                settings.predict_untrained_hessian,
-            ]
-        ):
-            raise ValueError(
-                "Cannot compute derivative properties without an energy task. "
-                "Model must predict energy to compute forces/stress/hessian via autograd."
-            )
 
     def move_to_device(self):
         self.model.to(self.device)

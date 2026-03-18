@@ -101,10 +101,12 @@ class InferenceSettings:
     # Accepts a torch.dtype or a string in ALLOWED_DTYPES (e.g. "float32").
     base_precision_dtype: torch.dtype | str = torch.float32
 
-    # Execution backend mode for the backbone. The default is "general".
+    # Execution backend mode for the backbone.
+    # Set to "general" for the default execution mode that works across all models and hardware.
     # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
-    execution_mode: str = "general"
+    # If None, the predictor will decide the best execution mode based on the model and hardware capabilities (e.g., will choose "umas_fast_gpu" for uma-s if running on compatible Nvidia GPU).
+    execution_mode: str | None = None
 
     # New fields for untrained derivative properties
     # These flags request computation of properties NOT in the checkpoint's task list.
@@ -116,6 +118,10 @@ class InferenceSettings:
     predict_untrained_stress: set[str] = field(default_factory=set)
     predict_untrained_hessian: set[str] = field(default_factory=set)
     hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+
+    # When True, allow backbones to add their default untrained tasks
+    # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
+    auto_add_default_untrained_tasks: bool = True
 
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
@@ -152,7 +158,6 @@ def inference_settings_default():
         compile=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
-        execution_mode="general",
     )
 
 
@@ -171,19 +176,6 @@ def inference_settings_turbo():
     )
 
 
-# this setting is specific for UMA-S on cuda for maximum speed.
-def inference_settings_turbo_umas():
-    return InferenceSettings(
-        tf32=True,
-        activation_checkpointing=False,
-        merge_mole=True,
-        compile=True,
-        external_graph_gen=False,
-        internal_graph_gen_version=2,
-        execution_mode="umas_fast_gpu",
-    )
-
-
 # this mode corresponds to the default settings used for training and evaluation
 def inference_settings_traineval():
     return InferenceSettings(
@@ -199,7 +191,6 @@ NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
     "turbo": inference_settings_turbo(),
     "traineval": inference_settings_traineval(),
-    "turbo_umas": inference_settings_turbo_umas(),
 }
 
 
