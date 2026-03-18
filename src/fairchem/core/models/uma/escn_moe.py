@@ -19,8 +19,9 @@ from matplotlib import pyplot as plt
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
-from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
+    MOLE,
     MOLEGlobals,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
@@ -50,6 +51,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_dropout: float = 0.0,
         use_global_embedding: bool = False,  # obsolete
         use_composition_embedding: bool = False,
+        composition_dropout: float = 0.0,
         moe_expert_coefficient_norm: str = "softmax",
         act=torch.nn.SiLU,
         layers_moe=None,
@@ -72,6 +74,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 act=act,
                 layers_mole=layers_moe,
                 use_composition_embedding=use_composition_embedding,
+                composition_dropout=composition_dropout,
                 mole_layer_type=moe_layer_type,
                 mole_single=moe_single,
                 mole_type=moe_type,
@@ -114,13 +117,27 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.autocast(device_type=atomic_numbers_full.device.type, enabled=False):
             embeddings = []
             if self.use_composition_embedding:
-                composition_by_atom = self.composition_embedding(atomic_numbers_full)
+                effective_atomic_numbers_full = atomic_numbers_full
+                effective_batch_full = batch_full
+
+                if self.training and self.composition_dropout > 0.0:
+                    # if greater than keep
+                    mask = (
+                        torch.rand_like(atomic_numbers_full, dtype=torch.float)
+                        > self.composition_dropout
+                    )
+                    effective_atomic_numbers_full = atomic_numbers_full[mask]
+                    effective_batch_full = batch_full[mask]
+
+                composition_by_atom = self.composition_embedding(
+                    effective_atomic_numbers_full
+                )
                 composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
                 ).index_reduce_(
                     0,
-                    batch_full,
+                    effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
                     include_self=np.isclose(self.model_version, 1.0).item(),
@@ -165,7 +182,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.no_grad():
             if self.counter % 500 == 0:
                 logging.info(
-                    f"{self.counter }: Expert variance: "
+                    f"{self.counter}: Expert variance: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -176,7 +193,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     )
                 )
                 logging.info(
-                    f"{self.counter }: Expert mean: "
+                    f"{self.counter}: Expert mean: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -196,23 +213,40 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone,
-        dataset_names,
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_names: (
+            list[str] | None
+        ) = None,  # deprecated in favor of dataset_mapping
+        dataset_mapping: dict[str, str] | None = None,
     ):
+        """
+        Initialize the DatasetSpecificMoEWrapper.
+
+        Args:
+            backbone: The backbone model providing embeddings.
+            head_cls: Registry name of the head class to instantiate.
+            wrap_property: If True, wrap output tensors in a dict with the key name.
+            head_kwargs: Additional keyword arguments passed to the head constructor.
+            dataset_names: Deprecated. Use dataset_mapping instead.
+            dataset_mapping: A mapping from dataset names to output head identifiers.
+                Allows multiple datasets to share the same head/expert by mapping
+                them to the same identifier. Example:
+                {"omol": "omol", "omat": "omat", "oc20": "oc20", "oc20_subset": "oc20"}
+                Here omol and omat have their own heads while oc20 and oc20_subset
+                share the same oc20 head. Dict values must be a subset of dict keys.
+        """
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
-        self.dataset_names = sorted(dataset_names)
-        self.dataset_name_to_exp = {
-            value: idx for idx, value in enumerate(self.dataset_names)
-        }
+        self.dataset_names, self.dataset_name_to_exp = self._build_expert_mapping(
+            dataset_names, dataset_mapping
+        )
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(
@@ -227,8 +261,100 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         )
         recursive_replace_all_linear(self.head, replacement_factory)
 
+        # Track merge state for single-dataset inference
+        self.merged_on_dataset = None
+        self.non_merged_dataset_names: list[str] = []
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
+
+    @staticmethod
+    def _build_expert_mapping(
+        dataset_names: list[str] | None,
+        dataset_mapping: dict[str, str] | None,
+    ) -> tuple[list[str], dict[str, int]]:
+        """
+        Build the dataset-to-expert-index mapping.
+
+        Args:
+            dataset_names: Deprecated list of dataset names.
+            dataset_mapping: Dict mapping dataset names to head identifiers.
+
+        Returns:
+            A tuple of (sorted dataset names list, dict mapping names to expert indices).
+        """
+        dataset_mapping = resolve_dataset_mapping(
+            dataset_names, dataset_mapping, "dataset_names"
+        )
+
+        sorted_names = sorted(dataset_mapping.keys())
+        unique_targets = sorted(set(dataset_mapping.values()))
+        name_to_exp = {
+            name: unique_targets.index(dataset_mapping[name]) for name in sorted_names
+        }
+        return sorted_names, name_to_exp
+
+    def merge_MOLE_model(self, data):
+        """
+        Merge MOLE layers into single Linear for single-dataset inference.
+
+        Sets one-hot expert coefficients and replaces all MOLE→Linear.
+        """
+        self.merged_on_dataset = data.dataset[0]
+        expert_idx = self.dataset_name_to_exp[self.merged_on_dataset]
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            1,
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter_(1, torch.tensor([[expert_idx]], device=data.pos.device), 1.0)
+
+        def replace_mole(module):
+            for name, child in list(module.named_children()):
+                if isinstance(child, MOLE):
+                    setattr(module, name, child.merged_linear_layer())
+                else:
+                    replace_mole(child)
+
+        replace_mole(self.head)
+
+        self.non_merged_dataset_names = [
+            n for n in self.dataset_names if n != self.merged_on_dataset
+        ]
+        return self
+
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare head for inference. Handles MOLE merging if needed.
+        """
+        if settings.merge_mole:
+            return self.merge_MOLE_model(data)
+        return self
+
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        # Fast path for merged model - skip MOLE routing overhead
+        if self.merged_on_dataset is not None:
+            head_output = self.head(data, emb)
+            full_output = {}
+            for key in head_output:
+                full_output[f"{self.merged_on_dataset}_{key}"] = (
+                    {key: head_output[key]} if self.wrap_property else head_output[key]
+                )
+                nan_tensor = head_output[key].new_full(
+                    head_output[key].shape, float("nan")
+                )
+                for dataset in self.non_merged_dataset_names:
+                    full_output[f"{dataset}_{key}"] = (
+                        {key: nan_tensor} if self.wrap_property else nan_tensor
+                    )
+            return full_output
+
         self.global_mole_tensors.mole_sizes = torch.zeros(
             data.natoms.shape[0], dtype=torch.int, device=emb["batch"].device
         ).scatter(0, emb["batch"], 1, reduce="add")  # data.natoms.cpu()
@@ -236,23 +362,21 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         data_batch_full = data.batch_full.cpu()
 
         # generate a one hot mask based on dataset , one for each system
-        self.global_mole_tensors.expert_mixing_coefficients = (
-            torch.zeros(
-                data.natoms.shape[0],
-                len(self.dataset_name_to_exp),
-                dtype=data.pos.dtype,
-            )
-            .scatter(
-                1,
-                torch.tensor(
-                    [
-                        self.dataset_name_to_exp[dataset_name]
-                        for dataset_name in data.dataset
-                    ],
-                ).unsqueeze(1),
-                1.0,
-            )
-            .to(data.pos.device)
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            data.natoms.shape[0],
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter(
+            1,
+            torch.tensor(
+                [
+                    self.dataset_name_to_exp[dataset_name]
+                    for dataset_name in data.dataset
+                ],
+                device=data.pos.device,
+            ).unsqueeze(1),
+            1.0,
         )
 
         # run the internal head
@@ -290,9 +414,8 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
@@ -300,6 +423,14 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]

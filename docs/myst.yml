@@ -24,6 +24,7 @@ project:
     - title: AI/ML Models & Usage
       children:
         - file: core/uma.md
+        - file: core/uma_changelog.md
         - file: core/intro.md
         - file: core/common_tasks/summary.md
           children:

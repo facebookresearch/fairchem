@@ -123,6 +123,6 @@ class TestBulk:
         max_miller = 0
         for slab in slabs:
             millers = slab.millers
-            max_miller = max(max_miller, max(millers))
+            max_miller = max(max_miller, *millers)
 
         return max_miller
