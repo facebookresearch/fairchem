@@ -52,7 +52,6 @@ project:
             - file: molecules/datasets/omol25_elec.md
             - file: molecules/datasets/omc25.md
         - file: molecules/models.md
-        - file: molecules/leaderboard.md
         - file: molecules/FAQ.md
     - title: Heterogeneous Catalysis
       children:
@@ -75,10 +74,13 @@ project:
             - file: catalysts/examples_tutorials/cattsunami_tutorial.md
             - file: catalysts/examples_tutorials/ocpapi.md
         - file: catalysts/FAQ.md
-        - url: https://opencatalystproject.org
-          title: OCP Leaderboard
         - url: https://open-catalyst.metademolab.com/
           title: OCP Demo (no install required!)
+    - title: Leaderboard
+      children:
+        - file: leaderboard/summary.md
+        - file: leaderboard/omol.md
+        - file: leaderboard/oc20.md
     - title: Inorganic Materials
       children:
         - file: inorganic_materials/datasets/summary.md
