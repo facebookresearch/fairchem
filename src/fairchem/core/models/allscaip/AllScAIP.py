@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.models.allscaip.custom_types import GraphAttentionData
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
 @registry.register_model("AllScAIP_backbone")
@@ -156,6 +157,13 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         return self
+
+    def get_default_untrained_tasks(
+        self,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        return []
 
     def on_predict_check(self, data: AtomicData) -> None:
         pass
