@@ -86,9 +86,6 @@
     <loc>http://localhost:3000/models</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/leaderboard</loc>
-  </url>
-  <url>
     <loc>http://localhost:3000/faq</loc>
   </url>
   <url>
@@ -143,13 +140,22 @@
     <loc>http://localhost:3000/summary-5</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/omol</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/oc20-1</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/summary-6</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/omat24</loc>
   </url>
   <url>
     <loc>http://localhost:3000/models-2</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-6</loc>
+    <loc>http://localhost:3000/summary-7</loc>
   </url>
   <url>
     <loc>http://localhost:3000/formation-energy</loc>
@@ -164,7 +170,7 @@
     <loc>http://localhost:3000/faq-2</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-7</loc>
+    <loc>http://localhost:3000/summary-8</loc>
   </url>
   <url>
     <loc>http://localhost:3000/odac25</loc>
@@ -176,7 +182,7 @@
     <loc>http://localhost:3000/models-3</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-8</loc>
+    <loc>http://localhost:3000/summary-9</loc>
   </url>
   <url>
     <loc>http://localhost:3000/adsorption-energy</loc>
