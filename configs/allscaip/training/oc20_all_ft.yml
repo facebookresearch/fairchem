@@ -1,0 +1,156 @@
+defaults:
+  - cluster: local
+  # - backbone: md_NeNo
+  - dataset: oc20
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: oc20_cons
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 32 # Num of ranks = 8 * 32 = 256
+    slurm:
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: ${cluster.timeout_hr}
+      cpus_per_task: ${cluster.cpus_per_task}
+      additional_parameters: ${cluster.additional_parameters}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: oc20_all_sm_NeAnNoSi_ft_40E20F
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: ericqu
+    project: oc20_v2
+
+starting_checkpoint: Null # path to the checkpoint
+
+# cpu_graph: True
+bf16: False
+max_neighbors: 30
+max_neighbors_pad_size: 45
+cutoff_radius: 6
+epochs: 1
+steps: null
+max_atoms: 400
+normalizer_rmsd: 1.423
+force_coef: 20
+energy_coef: 40
+# use_compile: False
+
+regress_stress: False
+direct_forces: False
+
+oc20_forces_key: oc20_forces
+
+dataset_list: ["oc20"]
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    oc20: ${dataset.oc20_train}
+  combined_dataset_config:
+    sampling:
+      type: explicit
+      ratios:
+        oc20.train: 1.0
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    oc20: ${dataset.oc20_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+
+
+heads:
+  energyandforcehead:
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
+    head_cls: fairchem.core.models.allscaip.AllScAIP.AllScAIPGradientEnergyForceStressHead
+    head_kwargs:
+      wrap_property: False
+    dataset_names:
+      - oc20
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+      checkpoint_location: ${starting_checkpoint}
+      strict: false
+      overrides:
+        backbone:
+          max_atoms: ${max_atoms}
+          direct_forces: ${direct_forces}
+          regress_stress: ${regress_stress}
+          cutoff_radius: ${cutoff_radius}
+          max_neighbors: ${max_neighbors}
+          max_neighbors_pad_size: ${max_neighbors_pad_size}
+          use_pbc: ${use_pbc}
+          dataset_list: ${dataset_list}
+          use_compile: False
+          use_padding: False
+        pass_through_head_outputs: True
+      heads: ${heads}
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 4e-4
+      weight_decay: 1e-3
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 0.01
+      lr_min_factor: 0.1
+      epochs: ${epochs}
+      steps: ${steps}
+    print_every: 10
+    clip_grad_norm: 100
+    bf16: ${bf16}
+  max_epochs: ${epochs}
+  max_steps: ${steps}
+  evaluate_every_n_steps: 2000
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 2000
+      max_saved_checkpoints: 5
