@@ -85,12 +85,7 @@ def test_rayserve_remote_task_single_system(
         from fairchem.core.units.mlip_unit.batch import RayServeMLIPUnit
 
         # Reconstruct atoms from dict
-        atoms = Atoms(
-            symbols=atoms_dict["symbols"],
-            positions=atoms_dict["positions"],
-            cell=atoms_dict["cell"],
-            pbc=atoms_dict["pbc"],
-        )
+        atoms = Atoms.fromdict(atoms_dict)
 
         # Create RayServeMLIPUnit - connects to inference server automatically
         rayserve_unit = RayServeMLIPUnit(
@@ -108,12 +103,7 @@ def test_rayserve_remote_task_single_system(
 
     # Create test atoms and serialize
     atoms = bulk("Cu")
-    atoms_dict = {
-        "symbols": atoms.get_chemical_symbols(),
-        "positions": atoms.get_positions().tolist(),
-        "cell": atoms.get_cell().tolist(),
-        "pbc": atoms.get_pbc().tolist(),
-    }
+    atoms_dict = atoms.todict()
 
     # Submit as remote task
     result = ray.get(compute_energy_forces.remote(model_name, atoms_dict))
@@ -144,12 +134,7 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
         from fairchem.core import FAIRChemCalculator
         from fairchem.core.units.mlip_unit.batch import RayServeMLIPUnit
 
-        atoms = Atoms(
-            symbols=atoms_dict["symbols"],
-            positions=atoms_dict["positions"],
-            cell=atoms_dict["cell"],
-            pbc=atoms_dict["pbc"],
-        )
+        atoms = Atoms.fromdict(atoms_dict)
 
         rayserve_unit = RayServeMLIPUnit(
             model_id=model_name,
@@ -161,15 +146,7 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
 
     # Create multiple systems
     systems = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
-    atoms_dicts = [
-        {
-            "symbols": atoms.get_chemical_symbols(),
-            "positions": atoms.get_positions().tolist(),
-            "cell": atoms.get_cell().tolist(),
-            "pbc": atoms.get_pbc().tolist(),
-        }
-        for atoms in systems
-    ]
+    atoms_dicts = [atoms.todict() for atoms in systems]
 
     # Submit all tasks concurrently
     futures = [compute_energy.remote(model_name, d) for d in atoms_dicts]
@@ -196,12 +173,7 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
         from fairchem.core.datasets.atomic_data import AtomicData
         from fairchem.core.units.mlip_unit.batch import FAIRChemInferenceClient
 
-        atoms = Atoms(
-            symbols=atoms_dict["symbols"],
-            positions=atoms_dict["positions"],
-            cell=atoms_dict["cell"],
-            pbc=atoms_dict["pbc"],
-        )
+        atoms = Atoms.fromdict(atoms_dict)
 
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
         client = FAIRChemInferenceClient()
@@ -214,15 +186,7 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
 
     # Submit many concurrent requests to trigger batching
     systems = [bulk("Cu") for _ in range(10)]
-    atoms_dicts = [
-        {
-            "symbols": atoms.get_chemical_symbols(),
-            "positions": atoms.get_positions().tolist(),
-            "cell": atoms.get_cell().tolist(),
-            "pbc": atoms.get_pbc().tolist(),
-        }
-        for atoms in systems
-    ]
+    atoms_dicts = [atoms.todict() for atoms in systems]
 
     futures = [compute_via_client.remote(model_name, d) for d in atoms_dicts]
     results = ray.get(futures)
