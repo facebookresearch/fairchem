@@ -525,11 +525,11 @@ def get_local_ray_cluster(
     if head_file is None:
         cluster_id = str(uuid.uuid4())
         head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
-        namespace_serve_fairchem = cluster_id
     else:
         head_file_path = Path(head_file).expanduser()
-        # Extract namespace from path (parent dir is cluster_id)
-        namespace_serve_fairchem = head_file_path.parent.name
+
+    # Set namespace only when starting inference server
+    namespace_serve_fairchem = "fairchem_inference" if start_inference_server else None
 
     # Find free ports for this cluster instance
     dashboard_port = find_free_port()

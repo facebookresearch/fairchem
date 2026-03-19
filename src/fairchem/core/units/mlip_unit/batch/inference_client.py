@@ -53,14 +53,26 @@ class FAIRChemInferenceClient:
     def _get_handle(self):
         """Get or create the deployment handle."""
         if FAIRChemInferenceClient._handle is None:
+            import ray
             from ray import serve
 
-            # Get handle to the inference deployment
-            FAIRChemInferenceClient._handle = serve.get_deployment_handle(
-                "ConfiguredFAIRChemInferenceServer",
-                "fairchem_inference",
-            )
-            logger.info("Connected to FAIRChem inference server")
+            # In Ray 2.x, Serve runs in the "serve" namespace by default.
+            # When calling from a Ray task in a different namespace, we need
+            # to ensure we can connect to the Serve controller.
+            # Use get_app_handle which is the recommended way in Ray 2.x
+            try:
+                FAIRChemInferenceClient._handle = serve.get_app_handle(
+                    "fairchem_inference"
+                )
+                logger.info("Connected to FAIRChem inference server via app handle")
+            except Exception as e:
+                # Fallback to deployment handle
+                logger.debug(f"get_app_handle failed ({e}), trying get_deployment_handle")
+                FAIRChemInferenceClient._handle = serve.get_deployment_handle(
+                    "ConfiguredFAIRChemInferenceServer",
+                    "fairchem_inference",
+                )
+                logger.info("Connected to FAIRChem inference server via deployment handle")
 
         return FAIRChemInferenceClient._handle
 

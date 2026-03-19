@@ -166,8 +166,11 @@ class RayServeMLIPUnit:
     def inference_settings(self):
         """Return inference settings object-like wrapper."""
         # Return a simple namespace that has the attributes FAIRChemCalculator expects
+        # - external_graph_gen: False by default (we use internal graph gen)
+        # - base_precision_dtype: torch.float32 by default (matches InferenceSettings)
+        import torch
         from types import SimpleNamespace
-        return SimpleNamespace(external_graph_gen=None)
+        return SimpleNamespace(external_graph_gen=False, base_precision_dtype=torch.float32)
 
     @property
     def form_elem_refs(self) -> dict:
@@ -283,6 +286,16 @@ class RayServeMLIPUnit:
 
         return tensor_result
 
+    def validate_atoms_data(self, atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Uses the shared UMA validation logic from the api.inference module.
+        """
+        from fairchem.core.units.mlip_unit.api.inference import validate_uma_atoms_data
+
+        validate_uma_atoms_data(atoms, task_name, logger=logger)
+
     def move_to_device(self):
         """No-op for RayServeMLIPUnit - Ray Serve manages devices."""
 
@@ -295,7 +308,7 @@ class RayServeMLIPUnit:
         return f"RayServeMLIPUnit(model_id='{self.model_id}', settings='{self._inference_settings}')"
 
 
-def get_ray_connection_info(head_file: str) -> dict[str, str]:
+def get_ray_connection_info(head_file: str) -> dict[str, str | None]:
     """
     Read Ray connection info from a head.json file.
 
@@ -303,7 +316,9 @@ def get_ray_connection_info(head_file: str) -> dict[str, str]:
         head_file: Path to head.json file from a Ray cluster.
 
     Returns:
-        Dictionary with 'ray_address' and 'namespace_serve_fairchem' keys.
+        Dictionary with 'ray_address', 'namespace_serve_fairchem', and 'local' keys.
+        For local clusters (started with get_local_ray_cluster), 'ray_address' will be None
+        and 'local' will be True - indicating that Ray is already initialized locally.
 
     Example:
         ```python
@@ -323,9 +338,20 @@ def get_ray_connection_info(head_file: str) -> dict[str, str]:
     with open(head_file) as f:
         head_info = json.load(f)
 
+    namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
+    is_local = head_info.get("local", False)
+
+    # For local clusters, Ray is already initialized - no need for ray_address
+    if is_local:
+        return {
+            "ray_address": None,
+            "namespace_serve_fairchem": namespace_serve_fairchem,
+            "local": True,
+        }
+
+    # For remote clusters, we need hostname and client_port
     hostname = head_info.get("hostname")
     client_port = head_info.get("client_port")
-    namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
 
     if not hostname or not client_port:
         raise ValueError(f"Invalid head.json: missing hostname or client_port in {head_file}")
@@ -333,4 +359,5 @@ def get_ray_connection_info(head_file: str) -> dict[str, str]:
     return {
         "ray_address": f"ray://{hostname}:{client_port}",
         "namespace_serve_fairchem": namespace_serve_fairchem,
+        "local": False,
     }
