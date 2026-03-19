@@ -102,19 +102,6 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
-        """Save the current state of the calculation to a checkpoint.
-
-        Args:
-            checkpoint_location (str): Location to save the checkpoint
-            is_preemption (bool, optional): Whether this save is due to preemption. Defaults to False.
-
-        Returns:
-            bool: True if state was successfully saved, False otherwise
-        """
-        raise NotImplementedError
-
     def load_state(self, checkpoint_location: str | None) -> None:
         """Load a previously saved state from a checkpoint.
 
