@@ -192,7 +192,7 @@ calc = FAIRChemCalculator(predictor, task_name="omat")
 atoms = bulk("Fe")
 atoms.calc = calc
 
-opt = LBFGS(FrechetCellFilter(atoms))
+opt = FIRE(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
