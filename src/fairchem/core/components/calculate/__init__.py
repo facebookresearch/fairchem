@@ -19,13 +19,14 @@ from ._single.pairwise_ct_runner import PairwiseCountRunner
 from ._single.phonon_runner import MDRPhononRunner, get_mdr_phonon_data_list
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
-from .utils.thermostats import (
+from .simulation_tools.thermostats import (
     BussiThermostat,
     LangevinThermostat,
     NoseHooverNVT,
+    Thermostat,
     VelocityVerletThermostat,
 )
-from .utils.trajectory import ParquetTrajectoryWriter, TrajectoryFrame
+from .simulation_tools.trajectory import ParquetTrajectoryWriter, TrajectoryFrame
 
 __all__ = [
     "AdsorbMLRunner",
@@ -46,6 +47,7 @@ __all__ = [
     "ParquetTrajectoryWriter",
     "RelaxationRunner",
     "SinglePointRunner",
+    "Thermostat",
     "TrajectoryFrame",
     "VelocityVerletThermostat",
 ]
