@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -22,8 +23,54 @@ if TYPE_CHECKING:
     from ase.md.md import MolecularDynamics
 
 
+class Thermostat(ABC):
+    """
+    Abstract base class defining the interface for MD thermostats.
+
+    All thermostats must implement three methods:
+        - build: construct an ASE MolecularDynamics integrator
+        - save_state: serialize thermostat-specific state for checkpointing
+        - restore_state: restore thermostat state from a checkpoint
+    """
+
+    @abstractmethod
+    def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
+        """
+        Build and return an ASE MolecularDynamics integrator.
+
+        Args:
+            atoms: The atomic system to simulate.
+            timestep_fs: Integration timestep in femtoseconds.
+
+        Returns:
+            An ASE MolecularDynamics object.
+        """
+
+    @abstractmethod
+    def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
+        """
+        Save thermostat-specific state for checkpointing.
+
+        Args:
+            dyn: The active MolecularDynamics integrator.
+
+        Returns:
+            A JSON-serializable dict of thermostat state.
+        """
+
+    @abstractmethod
+    def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
+        """
+        Restore thermostat state from a checkpoint.
+
+        Args:
+            dyn: The active MolecularDynamics integrator.
+            state: The state dict previously returned by save_state.
+        """
+
+
 @dataclass
-class VelocityVerletThermostat:
+class VelocityVerletThermostat(Thermostat):
     """
     NVE dynamics (no thermostat).
     """
@@ -39,13 +86,13 @@ class VelocityVerletThermostat:
 
 
 @dataclass
-class NoseHooverNVT:
+class NoseHooverNVT(Thermostat):
     """
     Nose-Hoover chain NVT thermostat.
     """
 
-    temperature_K: float
-    tdamp_fs: float
+    temperature_K: float  # Kelvin
+    tdamp_fs: float  # femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return NoseHooverChainNVT(
@@ -70,13 +117,13 @@ class NoseHooverNVT:
 
 
 @dataclass
-class BussiThermostat:
+class BussiThermostat(Thermostat):
     """
     Bussi stochastic velocity rescaling thermostat.
     """
 
-    temperature_K: float
-    taut_fs: float
+    temperature_K: float  # Kelvin
+    taut_fs: float  # femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return Bussi(
@@ -116,13 +163,13 @@ class BussiThermostat:
 
 
 @dataclass
-class LangevinThermostat:
+class LangevinThermostat(Thermostat):
     """
     Langevin stochastic dynamics thermostat.
     """
 
-    temperature_K: float
-    friction_per_fs: float
+    temperature_K: float  # Kelvin
+    friction_per_fs: float  # 1/femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return Langevin(
