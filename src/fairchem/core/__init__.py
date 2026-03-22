@@ -23,7 +23,9 @@ warnings.filterwarnings(
 
 from fairchem.core._config import clear_cache
 from fairchem.core.calculate import pretrained_mlip
-from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
+from fairchem.core.calculate.ase_calculator import (
+    FAIRChemCalculator,
+)
 
 try:
     __version__ = version("fairchem.core")

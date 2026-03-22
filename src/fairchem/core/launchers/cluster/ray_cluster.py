@@ -20,6 +20,8 @@ from fairchem.core.common.distutils import os_environ_get_or_throw
 import submitit
 from submitit.helpers import Checkpointable, DelayedSubmission
 
+logger = logging.getLogger(__name__)
+
 
 def kill_proc_tree(pid, including_parent=True):
     parent = psutil.Process(pid)
@@ -86,8 +88,10 @@ class HeadInfo:
     """
 
     hostname: Optional[str] = None
-    port: Optional[int] = None
+    port: Optional[int] = None  # Ray GCS port
+    client_port: Optional[int] = None  # Ray Client server port (if enabled)
     temp_dir: Optional[str] = None
+    namespace_serve_fairchem: Optional[str] = None
 
 
 class RayClusterState:
@@ -150,7 +154,7 @@ class RayClusterState:
             with self._head_json.open("r") as f:
                 return HeadInfo(**json.load(f))
         except Exception as ex:
-            print(f"failed to load head info: {ex}. Maybe it's not ready yet?")
+            logger.info(f"failed to load head info: {ex}. Maybe it's not ready yet?")
             return None
 
     def save_head_info(self, head_info: HeadInfo):
@@ -203,11 +207,13 @@ class CheckpointableRayJob(Checkpointable):
         cluster_state: RayClusterState,
         worker_wait_timeout_seconds: int,
         payload: Optional[Callable[..., PayloadReturnT]],
+        temp_dir_template: Optional[str] = None,
         **kwargs,
     ):
         self.cluster_state = cluster_state
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.payload = payload
+        self.temp_dir_template = temp_dir_template
         self.kwargs = kwargs
 
     def __call__(self):
@@ -219,12 +225,14 @@ class CheckpointableRayJob(Checkpointable):
                 cluster_state=self.cluster_state,
                 worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
                 payload=self.payload,
+                temp_dir_template=self.temp_dir_template,
                 **self.kwargs,
             )
         else:
             worker_script(
                 cluster_state=self.cluster_state,
                 worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+                temp_dir_template=self.temp_dir_template,
             )
 
     def checkpoint(self) -> DelayedSubmission:
@@ -235,6 +243,7 @@ class CheckpointableRayJob(Checkpointable):
             cluster_state=self.cluster_state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=self.payload,
+            temp_dir_template=self.temp_dir_template,
             **self.kwargs,
         )
         return DelayedSubmission(job)
@@ -244,9 +253,23 @@ def _ray_head_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
     payload: Optional[Callable[..., PayloadReturnT]] = None,
+    dashboard_port: Optional[int] = None,
+    enable_client_server: bool = False,
+    temp_dir_template: Optional[str] = None,
     **kwargs,
 ):
-    """Start the head node of the Ray cluster on slurm."""
+    """Start the head node of the Ray cluster on slurm.
+    
+    Args:
+        cluster_state: State object for cluster coordination
+        worker_wait_timeout_seconds: Timeout for workers to connect
+        payload: Optional function to run after head starts
+        dashboard_port: Port for Ray dashboard (auto-assigned if None)
+        enable_client_server: If True, start Ray Client server for remote connections
+        temp_dir_template: Template path for Ray temp files. Supports environment variable
+            expansion (e.g., "/scratch/$SLURM_JOB_ID"). Defaults to system temp directory.
+        **kwargs: Additional arguments passed to payload
+    """
     hostname = socket.gethostname()
     head_env = os.environ.copy()
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
@@ -259,29 +282,36 @@ def _ray_head_script(
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
     )
-    print(f"host {hostname}:{port}")
-    with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
-        # ray workers have the same tempdir name (even on a different host)
-        # as the head. This is a problem when we use  /scratch/slurm_tmpdir/JOBID as
-        # the tempdir of the head job will not be accessible/visible from other workers if they
-        # are scheduled on the same host. We are forced to use a different tempdir than /scratch
-        # TODO ideally, we would still have a /scratch dir that everyone can share.
+    logger.info(f"host {hostname}:{port}")
+    # Use specified temp directory with environment variable expansion, or system temp
+    if temp_dir_template is None:
+        temp_dir_template = tempfile.gettempdir()
+    else:
+        temp_dir_template = os.path.expandvars(temp_dir_template)
+    temp_dir = f"{temp_dir_template}/ray_head"
+    Path(temp_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        ray_cmd = [
+            "ray",
+            "start",
+            "--head",
+            f"--port={port}",
+            f"--temp-dir={temp_dir}",
+            "--num-cpus",
+            f"{num_cpus}",
+            "--num-gpus",
+            f"{num_gpus}",
+            "--dashboard-host=0.0.0.0",
+            f"--dashboard-port={dashboard_port}",
+            "--min-worker-port=0",
+            "--max-worker-port=0",
+        ]
+        client_port = None
+        if enable_client_server:
+            client_port = find_free_port()
+            ray_cmd.append(f"--ray-client-server-port={client_port}")
         process = subprocess.Popen(
-            [
-                "ray",
-                "start",
-                "--head",
-                f"--port={port}",
-                f"--temp-dir={temp_dir}",
-                "--num-cpus",
-                f"{num_cpus}",
-                "--num-gpus",
-                f"{num_gpus}",
-                "--dashboard-host=0.0.0.0",
-                f"--dashboard-port={dashboard_port}",
-                "--min-worker-port=0",
-                "--max-worker-port=0",
-            ],
+            ray_cmd,
             env=head_env,
             stdout=subprocess.PIPE,
             text=True,
@@ -298,7 +328,14 @@ def _ray_head_script(
             started
         ), "couldn't find head address in stdout. Check head.err for details"
         print(f"Head started, ip: {hostname}:{port} ({cluster_state.cluster_id})")
-        info = HeadInfo(hostname=hostname, port=int(port), temp_dir=temp_dir)
+        print(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
+        info = HeadInfo(
+            hostname=hostname,
+            port=int(port),
+            client_port=client_port,
+            temp_dir=temp_dir,
+            namespace_serve_fairchem=cluster_state.cluster_id,
+        )
         cluster_state.save_head_info(info)
         os.environ.update(head_env)
         if payload is not None:
@@ -307,19 +344,31 @@ def _ray_head_script(
             while True:
                 # practically, we should wait from driver signal to die here
                 time.sleep(60)
+    finally:
+        # Clean up temp directory
+        shutil.rmtree(Path(temp_dir), ignore_errors=True)
 
 
 def worker_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
     start_wait_time_seconds: int = 60,  # TODO pass this around properly
+    temp_dir_template: Optional[str] = None,
 ):
-    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
-    print(f"Waiting for head node. {cluster_state.cluster_id}")
+    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first.
+    
+    Args:
+        cluster_state: State object for cluster coordination
+        worker_wait_timeout_seconds: Timeout for workers to connect
+        start_wait_time_seconds: Time to wait for head node to start
+        temp_dir_template: Template path for Ray temp files. Supports environment variable
+            expansion (e.g., "/scratch/$SLURM_JOB_ID"). Defaults to system temp directory.
+    """
+    logger.info(f"Waiting for head node. {cluster_state.cluster_id}")
     while not cluster_state.is_head_ready():
         # wait for head to have started
         time.sleep(5)
-    print("Head node found.")
+    logger.info("Head node found.")
     head_info = cluster_state.head_info()
     assert head_info is not None, "something went wrong getting head information."
     worker_env = os.environ.copy()
@@ -331,6 +380,14 @@ def worker_script(
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
     num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
+    # Use specified temp directory with environment variable expansion, or system temp
+    if temp_dir_template is None:
+        temp_dir_template = tempfile.gettempdir()
+    else:
+        temp_dir_template = os.path.expandvars(temp_dir_template)
+    temp_dir = f"{temp_dir_template}/ray_worker"
+    Path(temp_dir).mkdir(parents=True, exist_ok=True)
+
     try:
         subprocess.run(
             [
@@ -339,6 +396,8 @@ def worker_script(
                 "--address",
                 "auto",
                 "--block",
+                "--temp-dir",
+                temp_dir,
                 "--num-cpus",
                 f"{num_cpus}",
                 "--num-gpus",
@@ -350,8 +409,8 @@ def worker_script(
             check=False,
         )
     finally:
-        if head_info.temp_dir:
-            shutil.rmtree(Path(head_info.temp_dir))
+        # Clean up worker temp directory
+        shutil.rmtree(Path(temp_dir), ignore_errors=True)
 
 
 # TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
@@ -373,6 +432,8 @@ class RayCluster:
     cluster_id: A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
     worker_wait_timeout_seconds (int): The number of seconds ray will wait for a worker to be ready before giving up. Defaults to 60 seconds. If you are scheduling
         workers in a queue that takes time for allocation, you might want to increase this otherwise your ray payload will fail, not finding resources.
+    temp_dir_template: Template path for Ray temp files. Supports environment variable expansion
+        (e.g., "/scratch/slurm_tmpdir/$SLURM_JOB_ID"). If None, uses the system temp directory.
 
     """
 
@@ -382,19 +443,21 @@ class RayCluster:
         rdv_dir: Optional[Path] = None,
         cluster_id: Optional[str] = None,
         worker_wait_timeout_seconds: int = 60,
+        temp_dir_template: Optional[str] = None,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
-        print(f"cluster {self.state.cluster_id}")
+        logger.info(f"cluster {self.state.cluster_id}")
         self.output_dir = log_dir
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.temp_dir_template = temp_dir_template
         self.is_shutdown = False
         self.num_worker_groups = 0
         self.num_drivers = 0
         self.head_started = False
         self.jobs: list[submitit.Job] = []
-        print(f"logs will be in {self.log_dir.resolve()}")
+        logger.info(f"logs will be in {self.log_dir.resolve()}")
 
     def start_head_and_workers(
         self,
@@ -419,13 +482,14 @@ class RayCluster:
             cluster_state=self.state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=payload,
+            temp_dir_template=self.temp_dir_template,
             **kwargs,
         )
         slurm_job = s_executor.submit(ray_job)
         self.state.add_job(slurm_job)
         self.jobs.append(slurm_job)
         mk_symlinks(self.log_dir, "job", slurm_job.paths)
-        print("slurm job id:", slurm_job.job_id)
+        logger.info(f"slurm job id: {slurm_job.job_id}")
         return slurm_job.job_id
 
     def start_head(
@@ -455,12 +519,13 @@ class RayCluster:
             self.state,
             self.worker_wait_timeout_seconds,
             payload,
+            temp_dir_template=self.temp_dir_template,
             **kwargs,
         )
         self.state.add_job(head_job)
         self.jobs.append(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
-        print("head slurm job id:", head_job.job_id)
+        logger.info(f"head slurm job id: {head_job.job_id}")
         return head_job.job_id
 
     def start_workers(
@@ -490,12 +555,13 @@ class RayCluster:
                         worker_script,
                         self.state,
                         self.worker_wait_timeout_seconds,
+                        temp_dir_template=self.temp_dir_template,
                     )
                 )
 
         for idx, j in enumerate(jobs):
             mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
-        print("workers slurm job ids:", [job.job_id for job in jobs])
+        logger.info(f"workers slurm job ids: {[job.job_id for job in jobs]}")
         for j in jobs:
             self.state.add_job(j)
             self.jobs.append(j)
@@ -512,7 +578,7 @@ class RayCluster:
             os.getpid(), including_parent=False
         )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
-        print(f"cluster {self.state.cluster_id} shutdown")
+        logger.info(f"cluster {self.state.cluster_id} shutdown")
 
     def __enter__(self):
         # only use as a context if you have something blocking waiting on the driver

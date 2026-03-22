@@ -1,0 +1,40 @@
+# Default configuration for SLURM Ray clusters
+# These can be overridden by passing arguments to get_slurm_ray_cluster()
+
+# SLURM settings
+partition: scavenge
+time_minutes: 4320
+cpus_per_node: 10
+gpus_per_node: 0
+mem_gb: 32
+
+# SLURM constraint (e.g., GPU type like "volta32gb")
+# Set to null/empty for no constraint
+slurm_constraint: null
+
+# Additional SLURM parameters passed to submitit (for future flexibility)
+# These are passed directly to the SLURM executor
+# Example: {"slurm_account": "myaccount", "slurm_qos": "high"}
+slurm_additional_parameters: {}
+
+# Cluster settings
+num_workers: 1
+worker_wait_timeout_seconds: 300
+
+# Environment variables set on workers via runtime_env
+env_vars:
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+  RAY_raylet_start_wait_time_s: "300"
+  RAY_SERVE_THROUGHPUT_OPTIMIZED: "1"
+  RAY_SERVE_QUEUE_LENGTH_RESPONSE_DEADLINE_S: "1"
+
+# Job exclusions (nodes to skip)
+exclude_nodes: []
+
+# Inference server settings
+start_inference_server: false
+# Log level for Ray Serve inference server (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+serve_log_level: WARNING
