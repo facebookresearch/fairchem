@@ -567,6 +567,14 @@ def get_local_ray_cluster(
                 serve.start(detached=True)
                 logger.info("Ray Serve started")
 
+            # Apply default batch_config if not provided
+            if batch_config is None:
+                batch_config = {
+                    "max_batch_size": 8192,  # Max atoms in a batch
+                    "batch_wait_timeout_s": 0.1,  # Max time to wait for batch to fill
+                    "max_concurrent_batches": 8,  # Max concurrent batches per replica
+                }
+
             # Start the FAIRChem inference server deployment
             logger.info("Initializing FAIRChem inference server deployment...")
             from fairchem.core.units.mlip_unit.batch import start_serve as start_fairchem_serve
