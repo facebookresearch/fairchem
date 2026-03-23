@@ -1,5 +1,5 @@
 # this file used only for installing pinned packages for testing only! please do not install using this manually!
-ase==3.27.0
+ase==3.28.0
 ase-db-backends==0.11.0
 e3nn==0.6.0
 huggingface-hub==1.5.0
