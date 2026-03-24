@@ -9,17 +9,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import shutil
+import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import ase.io
-import pandas as pd
+import ase.units
 from ase.md import MDLogger
 from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
-from fairchem.core.components.calculate.utils.trajectory import (
+from fairchem.core.components.calculate.simulation_tools.trajectory import (
     ParquetTrajectoryWriter,
     TrajectoryFrame,
 )
@@ -29,11 +30,8 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
 
-    from fairchem.core.components.calculate.utils.thermostats import (
-        BussiThermostat,
-        LangevinThermostat,
-        NoseHooverNVT,
-        VelocityVerletThermostat,
+    from fairchem.core.components.calculate.simulation_tools.thermostats import (
+        Thermostat,
     )
 
 
@@ -51,15 +49,12 @@ class MDRunner(CalculateRunner):
     dynamics integrator and any trajectory writer.
     """
 
-    result_glob_pattern: ClassVar[str] = "trajectory_*.*"
+    result_glob_pattern: ClassVar[str] = "trajectory*.*"
 
     def __init__(
         self,
         calculator: Calculator,
-        thermostat: VelocityVerletThermostat
-        | NoseHooverNVT
-        | BussiThermostat
-        | LangevinThermostat,
+        thermostat: Thermostat,
         atoms: Atoms | None = None,
         timestep_fs: float = 1.0,
         steps: int = 1000,
@@ -67,8 +62,9 @@ class MDRunner(CalculateRunner):
         log_interval: int = 10,
         checkpoint_interval: int | None = None,
         heartbeat_interval: int | None = None,
-        trajectory_writer: type[ParquetTrajectoryWriter] | None = None,
-        trajectory_writer_kwargs: dict[str, Any] | None = None,
+        trajectory_writer: Callable[
+            ..., ParquetTrajectoryWriter
+        ] = ParquetTrajectoryWriter,
     ):
         """
         Initialize the MDRunner for single-structure MD.
@@ -91,10 +87,11 @@ class MDRunner(CalculateRunner):
                 STOPFAIR file in run_dir. If a STOPFAIR file is found, the
                 simulation saves state and stops gracefully. If None, no
                 STOPFAIR checking is performed.
-            trajectory_writer: Trajectory writer class or factory function.
-                Defaults to ParquetTrajectoryWriter if None.
-            trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
-                writer constructor (e.g., flush_interval for parquet).
+            trajectory_writer: Factory or partial for trajectory writer.
+                Called as ``trajectory_writer_fn(path)`` to create the writer.
+                Defaults to ParquetTrajectoryWriter. Use Hydra
+                ``_partial_: true`` in config to bind extra kwargs (e.g.
+                flush_interval) while leaving the path argument for runtime.
         """
         self._atoms = atoms
         self.thermostat = thermostat
@@ -104,25 +101,17 @@ class MDRunner(CalculateRunner):
         self.log_interval = log_interval
         self.checkpoint_interval = checkpoint_interval
         self.heartbeat_interval = heartbeat_interval
-        self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
-        self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
+        self._trajectory_writer_fn = trajectory_writer
 
         # State tracking
         self._dyn: MolecularDynamics | None = None
         self._trajectory_writer: ParquetTrajectoryWriter | None = None
         self._start_step = 0
         self._thermostat_state_to_restore: dict | None = None
+        self._elapsed_wall_time: float = 0.0
+        self._wall_t0: float = time.monotonic()
 
         super().__init__(calculator=calculator, input_data=[atoms])
-
-    def _get_trajectory_extension(self) -> str:
-        """
-        Get the file extension for the trajectory based on writer type.
-
-        Returns:
-            File extension string (e.g., ".parquet")
-        """
-        return ".parquet"
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
@@ -141,11 +130,10 @@ class MDRunner(CalculateRunner):
         )
 
         results_dir = Path(self.job_config.metadata.results_dir)
-        sid = self._atoms.info.get("sid", job_num)
+        sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
 
-        extension = self._get_trajectory_extension()
-        trajectory_file = results_dir / f"trajectory_{num_jobs}-{job_num}{extension}"
-        log_file = results_dir / f"thermo_{num_jobs}-{job_num}.log"
+        trajectory_file = results_dir / "trajectory.parquet"
+        log_file = results_dir / "thermo.log"
 
         self._atoms.calc = self.calculator
 
@@ -154,12 +142,9 @@ class MDRunner(CalculateRunner):
         if self._thermostat_state_to_restore is not None:
             self.thermostat.restore_state(self._dyn, self._thermostat_state_to_restore)
 
-        # Restore the step counter so get_time() returns global time
         self._dyn.nsteps = self._start_step
 
-        self._trajectory_writer = self._trajectory_writer_class(
-            trajectory_file, **self._trajectory_writer_kwargs
-        )
+        self._trajectory_writer = self._trajectory_writer_fn(trajectory_file)
 
         # Attach trajectory collector with global step alignment
         # We use interval=1 and check alignment manually to handle checkpoint resume correctly
@@ -170,16 +155,18 @@ class MDRunner(CalculateRunner):
                 frame = TrajectoryFrame.from_atoms(
                     self._atoms,
                     step=global_step,
-                    time=self._dyn.get_time(),
+                    time=self._dyn.get_time() / ase.units.fs,
                 )
                 self._trajectory_writer.append(frame)
 
         self._dyn.attach(collect_frame, interval=1)
 
+        self._wall_t0 = time.monotonic()
+
         logger = MDLogger(
             dyn=self._dyn,
             atoms=self._atoms,
-            logfile=log_file,
+            logfile=str(log_file),
             header=True,
             mode="a" if self._start_step > 0 else "w",
         )
@@ -234,9 +221,7 @@ class MDRunner(CalculateRunner):
         remaining_steps = self.steps - self._start_step
         stopped_by_stopfair = False
 
-        # On resume, ASE's irun() skips the initial call_observers() because
-        # nsteps != 0. Manually trigger it so the resume-step frame is captured
-        # and the logger records the initial state.
+        # On job restart, let's also save the resume-step frame.
         if self._start_step > 0:
             self._dyn.call_observers()
 
@@ -244,9 +229,10 @@ class MDRunner(CalculateRunner):
             self._dyn.run(remaining_steps)
         except _StopfairDetected:
             stopped_by_stopfair = True
-
-        if not stopped_by_stopfair:
-            self._trajectory_writer.close()
+        finally:
+            self._elapsed_wall_time += time.monotonic() - self._wall_t0
+            if not stopped_by_stopfair and self._trajectory_writer:
+                self._trajectory_writer.close()
 
         return {
             "trajectory_file": str(trajectory_file),
@@ -255,6 +241,7 @@ class MDRunner(CalculateRunner):
             "start_step": self._start_step,
             "structure_id": sid,
             "stopped_by_stopfair": stopped_by_stopfair,
+            "elapsed_time_s": self._elapsed_wall_time,
         }
 
     def write_results(
@@ -284,27 +271,27 @@ class MDRunner(CalculateRunner):
         if not log_file.exists():
             return
 
-        traj_df = pd.read_parquet(trajectory_file)
-        num_frames = len(traj_df)
-
         metadata = {
             "trajectory_file": str(trajectory_file),
             "log_file": str(log_file),
             "total_steps": results["total_steps"],
-            "num_frames": num_frames,
             "trajectory_interval": self.trajectory_interval,
             "log_interval": self.log_interval,
             "thermostat_class": type(self.thermostat).__name__,
             "structure_id": results["structure_id"],
+            "elapsed_time_s": results["elapsed_time_s"],
         }
 
-        metadata_file = Path(results_dir) / f"metadata_{num_jobs}-{job_num}.json"
+        metadata_file = Path(results_dir) / "metadata.json"
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         """
         Save current MD state for resumption.
+
+        Writes to a temporary directory first, then swaps it into place so
+        that a crash mid-write never leaves a corrupt checkpoint.
 
         Saves:
         - Atoms state (positions, velocities) in ExtXYZ format
@@ -325,41 +312,43 @@ class MDRunner(CalculateRunner):
             return False
 
         checkpoint_dir = Path(checkpoint_location)
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        tmp_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".tmp")
 
         try:
+            # Clean up any leftover temp dir from a previous failed save.
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+
             if self._trajectory_writer:
                 if is_preemption:
                     self._trajectory_writer.close()
                 elif hasattr(self._trajectory_writer, "flush"):
                     self._trajectory_writer.flush()
 
-            atoms_path = checkpoint_dir / "checkpoint.xyz"
-            current_step = self._dyn.get_number_of_steps()
-            self._atoms.info["md_step"] = current_step
+            atoms_path = tmp_dir / "checkpoint.xyz"
+            self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
             thermostat_state = self.thermostat.save_state(self._dyn)
-            thermostat_path = checkpoint_dir / "thermostat_state.json"
+            thermostat_path = tmp_dir / "thermostat_state.json"
             with open(thermostat_path, "w") as f:
                 json.dump(thermostat_state, f)
 
             md_state = {
-                "current_step": current_step,
+                "current_step": self._dyn.get_number_of_steps(),
                 "total_steps": self.steps,
-                "trajectory_frames_written": (
-                    self._trajectory_writer.total_frames
-                    if self._trajectory_writer
-                    else 0
+                "elapsed_wall_time": (
+                    self._elapsed_wall_time + time.monotonic() - self._wall_t0
                 ),
             }
-            state_path = checkpoint_dir / "md_state.json"
+            state_path = tmp_dir / "md_state.json"
             with open(state_path, "w") as f:
                 json.dump(md_state, f)
 
             # Save resume configs from the canonical config
-            config_path = self.job_config.metadata.config_path
-            if os.path.exists(config_path):
+            config_path = Path(self.job_config.metadata.config_path)
+            if config_path.is_file():
                 cfg = OmegaConf.load(config_path)
                 cfg.job.runner_state_path = checkpoint_location
                 # Remove atoms from runner since state is in checkpoint.xyz
@@ -367,7 +356,7 @@ class MDRunner(CalculateRunner):
                     del cfg.runner.atoms
 
                 # System-specific resume config (same machine)
-                resume_path = checkpoint_dir / "resume_config.yaml"
+                resume_path = tmp_dir / "resume_config.yaml"
                 OmegaConf.save(cfg, resume_path)
 
                 # Portable config (new machine): strip auto-generated fields
@@ -380,10 +369,18 @@ class MDRunner(CalculateRunner):
                     del portable_cfg.job.metadata
                 if "timestamp_id" in portable_cfg.get("job", {}):
                     del portable_cfg.job.timestamp_id
-                portable_path = checkpoint_dir / "portable_config.yaml"
+                portable_path = tmp_dir / "portable_config.yaml"
                 OmegaConf.save(portable_cfg, portable_path)
+
+            # Atomically swap: remove old checkpoint, move temp into place.
+            if checkpoint_dir.exists():
+                shutil.rmtree(checkpoint_dir, ignore_errors=True)
+            tmp_dir.rename(checkpoint_dir)
             return True
         except Exception as e:
+            # Clean up the temp dir so it doesn't interfere with future saves
+            if tmp_dir.exists():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
             logging.exception(f"Failed to save checkpoint: {e}")
             return False
 
@@ -415,11 +412,27 @@ class MDRunner(CalculateRunner):
             md_state = json.load(f)
 
         self._start_step = md_state["current_step"]
+        self._elapsed_wall_time = md_state.get("elapsed_wall_time", 0.0)
+
+        if self._start_step >= self.steps:
+            raise ValueError(
+                f"Checkpoint step ({self._start_step}) is already at or beyond "
+                f"configured total steps ({self.steps})."
+            )
 
         thermostat_path = checkpoint_dir / "thermostat_state.json"
         if thermostat_path.exists():
             with open(thermostat_path) as f:
                 self._thermostat_state_to_restore = json.load(f)
+
+            checkpoint_thermostat = self._thermostat_state_to_restore.get("class_name")
+            current_thermostat = type(self.thermostat).__name__
+            if checkpoint_thermostat and checkpoint_thermostat != current_thermostat:
+                raise ValueError(
+                    f"Thermostat mismatch: checkpoint was saved with "
+                    f"{checkpoint_thermostat} but current config uses "
+                    f"{current_thermostat}."
+                )
         else:
             self._thermostat_state_to_restore = None
 
