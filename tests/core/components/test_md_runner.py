@@ -26,6 +26,8 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 
 from fairchem.core.components.calculate import (
+    BussiThermostat,
+    LangevinThermostat,
     MDRunner,
     NoseHooverNVT,
     ParquetTrajectoryWriter,
@@ -139,7 +141,17 @@ class TestMDRunner:
                 row["energy"], ase_atoms.get_potential_energy(), atol=1e-10
             )
 
-    def test_checkpoint_resume(self, cu_atoms, results_dir):
+    @pytest.mark.parametrize(
+        "thermostat",
+        [
+            VelocityVerletThermostat(),
+            NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0),
+            BussiThermostat(temperature_K=300.0, taut_fs=25.0),
+            LangevinThermostat(temperature_K=300.0, friction_per_fs=0.01),
+        ],
+        ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin"],
+    )
+    def test_checkpoint_resume(self, cu_atoms, results_dir, thermostat):
         """
         Interrupt at a non-aligned step, checkpoint, resume, and verify
         trajectory alignment across runs.
@@ -153,8 +165,6 @@ class TestMDRunner:
         trajectory_interval = 10
         interrupt_at_step = 36
         total_steps = 100
-
-        thermostat = NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0)
 
         runner1 = MDRunner(
             calculator=EMT(),
