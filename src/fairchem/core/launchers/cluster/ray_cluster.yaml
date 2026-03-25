@@ -63,3 +63,5 @@ batch_config:
   max_batch_size: 8192  # Max atoms in a batch
   batch_wait_timeout_s: 0.1  # Max time to wait for batch to fill
   max_concurrent_batches: 8  # Max concurrent batches per replica
+
+temp_dir_template: '/scratch/slurm_tmpdir/$SLURM_JOB_ID'

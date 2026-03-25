@@ -46,8 +46,8 @@ def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
     if preferred:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                s.bind(("", preferred))
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("", preferred))
                 return preferred
         except OSError:
             pass
@@ -57,8 +57,8 @@ def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
         port = random.randint(49152, 65535)
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                s.bind(("", port))
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("", port))
                 return port
         except OSError:
             continue
@@ -293,7 +293,6 @@ def _ray_head_script(
 
     port = find_free_port()
     dashboard_port = find_free_port()
-    head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
 
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
@@ -342,25 +341,23 @@ def _ray_head_script(
             started
         ), "couldn't find head address in stdout. Check head.err for details"
         
-        # # Read the actual address from ray_current_cluster file
-        # current_cluster_file = Path(temp_dir) / "ray_current_cluster"
-        # assert current_cluster_file.exists(), f"ray_current_cluster file not found at {current_cluster_file}"
-        # address = current_cluster_file.read_text().strip()
-        # # Address format is "hostname:port"
-        # head_hostname, port_str = address.rsplit(":", 1)
-        # port = int(port_str)
+        # Read the actual address from ray_current_cluster file
+        current_cluster_file = Path(temp_dir) / "ray_current_cluster"
+        assert current_cluster_file.exists(), f"ray_current_cluster file not found at {current_cluster_file}"
+        address = current_cluster_file.read_text().strip()
+        # Address format is "hostname:port"
+        head_hostname, port_str = address.rsplit(":", 1)
+        port = int(port_str)
         
-        # head_env["RAY_ADDRESS"] = address
-        # logger.info(f"host {address}")
-        # print(f"Head started, ip: {address} ({cluster_state.cluster_id})")
-        # # Dashboard port can be read from ray status if needed, but for now just note it's auto-assigned
-        # print(f"Ray dashboard running (auto-assigned port)")
+        head_env["RAY_ADDRESS"] = address
+        logger.info(f"host {address}")
+        print(f"Head started, ip: {address} ({cluster_state.cluster_id})")
+        # Dashboard port can be read from ray status if needed, but for now just note it's auto-assigned
+        print(f"Ray dashboard running (auto-assigned port)")
 
-        print(f"Head started, ip: {hostname}:{port} ({cluster_state.cluster_id})")
-        print(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
-
+        
         info = HeadInfo(
-            hostname=hostname,
+            hostname=head_hostname,
             port=port,
             client_port=client_port,
             temp_dir=temp_dir,
