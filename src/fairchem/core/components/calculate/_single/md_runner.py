@@ -417,8 +417,10 @@ class MDRunner(CalculateRunner):
         if self._start_step >= self.steps:
             logging.warning(
                 f"Checkpoint step ({self._start_step}) is already at or beyond "
-                f"configured total steps ({self.steps}). "
+                f"configured total steps ({self.steps}). Stopping immediately."
             )
+            self._already_calculated = True
+            return
 
         thermostat_path = checkpoint_dir / "thermostat_state.json"
         if thermostat_path.exists():
