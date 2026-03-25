@@ -130,7 +130,7 @@ class MDRunner(CalculateRunner):
         )
 
         results_dir = Path(self.job_config.metadata.results_dir)
-        sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
+        sid = str(self._atoms.info.get("sid", f"{job_num}_{num_jobs}"))
 
         trajectory_file = results_dir / "trajectory.parquet"
         log_file = results_dir / "thermo.log"
@@ -415,9 +415,9 @@ class MDRunner(CalculateRunner):
         self._elapsed_wall_time = md_state.get("elapsed_wall_time", 0.0)
 
         if self._start_step >= self.steps:
-            raise ValueError(
+            logging.warning(
                 f"Checkpoint step ({self._start_step}) is already at or beyond "
-                f"configured total steps ({self.steps})."
+                f"configured total steps ({self.steps}). "
             )
 
         thermostat_path = checkpoint_dir / "thermostat_state.json"

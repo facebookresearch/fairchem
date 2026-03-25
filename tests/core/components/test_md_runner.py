@@ -72,6 +72,7 @@ def _create_mock_job_config(
 @pytest.fixture()
 def cu_atoms():
     atoms = bulk("Cu", cubic=True) * (2, 2, 2)
+    atoms.info["sid"] = 123
     np.random.seed(42)
     MaxwellBoltzmannDistribution(atoms, temperature_K=300)
     return atoms
@@ -230,12 +231,61 @@ class TestMDRunner:
         )
 
         results2 = runner2.calculate(job_num=0, num_jobs=1)
+        runner2.write_results(results2, str(results_dir2), job_num=0, num_jobs=1)
         df2 = pd.read_parquet(results2["trajectory_file"])
         steps2 = list(df2["step"])
 
         all_steps = sorted(steps1 + steps2)
         expected = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         assert all_steps == expected, f"Expected {expected}, got {all_steps}"
+
+        # Verify write_results produced valid metadata JSON
+        metadata_file = results_dir2 / "metadata.json"
+        assert metadata_file.exists()
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+        assert metadata["structure_id"] == str(cu_atoms.info["sid"])
+        assert metadata["total_steps"] == total_steps
+
+    def test_load_state_beyond_total_steps(self, cu_atoms, results_dir):
+        """
+        When checkpoint step >= total steps, load_state should warn
+        and the simulation should end immediately without error.
+        """
+        checkpoint_dir = results_dir / "checkpoint"
+        checkpoint_dir.mkdir()
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        # Create a fake checkpoint with current_step beyond what we'll configure
+        atoms = cu_atoms.copy()
+        atoms.info["md_step"] = 50
+        ase.io.write(str(checkpoint_dir / "checkpoint.xyz"), atoms, format="extxyz")
+
+        with open(checkpoint_dir / "md_state.json", "w") as f:
+            json.dump({"current_step": 50, "total_steps": 100}, f)
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=30,  # less than checkpoint step of 50
+            trajectory_interval=10,
+            log_interval=10,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+
+        # load_state should not raise, just warn
+        runner.load_state(str(checkpoint_dir))
+        assert runner._start_step == 50
+
+        # calculate should finish immediately with only the resume-step frame
+        results = runner.calculate(job_num=0, num_jobs=1)
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        assert len(traj_df) == 1
+        assert traj_df.iloc[0]["step"] == 50
 
     def test_stopfair_graceful_stop(self, cu_atoms, results_dir):
         """
