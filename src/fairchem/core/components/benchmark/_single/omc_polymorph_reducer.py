@@ -31,7 +31,7 @@ except ImportError:
 try:
     from pymatgen.analysis.local_env import JmolNN
     from pymatgen.analysis.structure_matcher import StructureMatcher
-    from pymatgen.io.ase import AseAtomsAdaptor
+    from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
 
     pmg_installed = True
 except ImportError:
@@ -145,7 +145,7 @@ class OMCPolymorphReducer(JsonDFReducer):
                         decode(entry["atoms"])
                     )
                     reference_structure = AseAtomsAdaptor.get_structure(
-                        decode(entry["atoms_relaxed_target"])
+                        MSONAtoms.from_dict(entry["atoms_relaxed_target"])
                     )
 
                     # not clean but call this directly to avoid rematching (rms, max_dist, mask, cost, mapping)

@@ -21,6 +21,7 @@ from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
+    MOLE,
     MOLEGlobals,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
@@ -181,7 +182,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.no_grad():
             if self.counter % 500 == 0:
                 logging.info(
-                    f"{self.counter }: Expert variance: "
+                    f"{self.counter}: Expert variance: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -192,7 +193,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     )
                 )
                 logging.info(
-                    f"{self.counter }: Expert mean: "
+                    f"{self.counter}: Expert mean: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -239,9 +240,8 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
         self.dataset_names, self.dataset_name_to_exp = self._build_expert_mapping(
@@ -260,6 +260,18 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             cache=None,
         )
         recursive_replace_all_linear(self.head, replacement_factory)
+
+        # Track merge state for single-dataset inference
+        self.merged_on_dataset = None
+        self.non_merged_dataset_names: list[str] = []
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     @staticmethod
     def _build_expert_mapping(
@@ -287,8 +299,62 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         }
         return sorted_names, name_to_exp
 
+    def merge_MOLE_model(self, data):
+        """
+        Merge MOLE layers into single Linear for single-dataset inference.
+
+        Sets one-hot expert coefficients and replaces all MOLE→Linear.
+        """
+        self.merged_on_dataset = data.dataset[0]
+        expert_idx = self.dataset_name_to_exp[self.merged_on_dataset]
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            1,
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter_(1, torch.tensor([[expert_idx]], device=data.pos.device), 1.0)
+
+        def replace_mole(module):
+            for name, child in list(module.named_children()):
+                if isinstance(child, MOLE):
+                    setattr(module, name, child.merged_linear_layer())
+                else:
+                    replace_mole(child)
+
+        replace_mole(self.head)
+
+        self.non_merged_dataset_names = [
+            n for n in self.dataset_names if n != self.merged_on_dataset
+        ]
+        return self
+
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare head for inference. Handles MOLE merging if needed.
+        """
+        if settings.merge_mole:
+            return self.merge_MOLE_model(data)
+        return self
+
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        # Fast path for merged model - skip MOLE routing overhead
+        if self.merged_on_dataset is not None:
+            head_output = self.head(data, emb)
+            full_output = {}
+            for key in head_output:
+                full_output[f"{self.merged_on_dataset}_{key}"] = (
+                    {key: head_output[key]} if self.wrap_property else head_output[key]
+                )
+                nan_tensor = head_output[key].new_full(
+                    head_output[key].shape, float("nan")
+                )
+                for dataset in self.non_merged_dataset_names:
+                    full_output[f"{dataset}_{key}"] = (
+                        {key: nan_tensor} if self.wrap_property else nan_tensor
+                    )
+            return full_output
+
         self.global_mole_tensors.mole_sizes = torch.zeros(
             data.natoms.shape[0], dtype=torch.int, device=emb["batch"].device
         ).scatter(0, emb["batch"], 1, reduce="add")  # data.natoms.cpu()
@@ -296,23 +362,21 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         data_batch_full = data.batch_full.cpu()
 
         # generate a one hot mask based on dataset , one for each system
-        self.global_mole_tensors.expert_mixing_coefficients = (
-            torch.zeros(
-                data.natoms.shape[0],
-                len(self.dataset_name_to_exp),
-                dtype=data.pos.dtype,
-            )
-            .scatter(
-                1,
-                torch.tensor(
-                    [
-                        self.dataset_name_to_exp[dataset_name]
-                        for dataset_name in data.dataset
-                    ],
-                ).unsqueeze(1),
-                1.0,
-            )
-            .to(data.pos.device)
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            data.natoms.shape[0],
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter(
+            1,
+            torch.tensor(
+                [
+                    self.dataset_name_to_exp[dataset_name]
+                    for dataset_name in data.dataset
+                ],
+                device=data.pos.device,
+            ).unsqueeze(1),
+            1.0,
         )
 
         # run the internal head
@@ -350,9 +414,8 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
@@ -360,6 +423,14 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]

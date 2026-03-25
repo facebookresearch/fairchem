@@ -145,15 +145,18 @@ class TestSO2_Conv1_WithRadialBlock(unittest.TestCase):
     def test_output_is_always_tuple(self):
         """Conv1 always returns (output, gating) -- no conditional."""
         x = torch.randn(self.edges, self.sum_ls, self.sphere_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
-        out, gating = self.conv1_block(x, x_edge)
+        x_edge_raw = torch.randn(self.edges, self.edge_channels_list[0])
+        # SO2_Conv1_WithRadialBlock expects pre-computed radial embeddings
+        x_edge_radial = self.conv1_block.rad_func(x_edge_raw)
+        out, gating = self.conv1_block(x, x_edge_radial)
         assert isinstance(out, torch.Tensor)
         assert isinstance(gating, torch.Tensor)
 
     def test_output_shapes(self):
         x = torch.randn(self.edges, self.sum_ls, self.sphere_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
-        out, gating = self.conv1_block(x, x_edge)
+        x_edge_raw = torch.randn(self.edges, self.edge_channels_list[0])
+        x_edge_radial = self.conv1_block.rad_func(x_edge_raw)
+        out, gating = self.conv1_block(x, x_edge_radial)
         assert out.shape == (
             self.edges,
             self.sum_ls,
@@ -180,10 +183,13 @@ class TestSO2_Conv1_WithRadialBlock(unittest.TestCase):
         self.conv1_block.load_state_dict(ref.state_dict())
 
         x = torch.randn(self.edges, self.sum_ls, self.sphere_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
+        x_edge_raw = torch.randn(self.edges, self.edge_channels_list[0])
 
-        ref_out, ref_gating = ref(x, x_edge)
-        blk_out, blk_gating = self.conv1_block(x, x_edge)
+        # ref computes radial internally
+        ref_out, ref_gating = ref(x, x_edge_raw)
+        # block expects pre-computed radial embeddings
+        x_edge_radial = self.conv1_block.rad_func(x_edge_raw)
+        blk_out, blk_gating = self.conv1_block(x, x_edge_radial)
         torch.testing.assert_close(blk_out, ref_out)
         torch.testing.assert_close(blk_gating, ref_gating)
 
@@ -247,10 +253,9 @@ class TestSO2_Conv2_InternalBlock(unittest.TestCase):
         self.conv2_block.load_state_dict(ref.state_dict())
 
         x = torch.randn(self.edges, self.sum_ls, self.m_output_channels)
-        x_edge = torch.randn(self.edges, 10)
 
-        ref_out = ref(x, x_edge)
-        blk_out = self.conv2_block(x, x_edge)
+        ref_out = ref(x)
+        blk_out = self.conv2_block(x)
         torch.testing.assert_close(blk_out, ref_out)
 
     def test_uses_so2_m_conv_block_internally(self):
@@ -306,10 +311,13 @@ class TestConvertSO2Conv(unittest.TestCase):
         new = convert_so2_conv1(old)
 
         x = torch.randn(self.edges, self.sum_ls, self.sphere_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
+        x_edge_raw = torch.randn(self.edges, self.edge_channels_list[0])
 
-        old_out, old_gating = old(x, x_edge)
-        new_out, new_gating = new(x, x_edge)
+        # old computes radial internally
+        old_out, old_gating = old(x, x_edge_raw)
+        # new expects pre-computed radial embeddings
+        x_edge_radial = new.rad_func(x_edge_raw)
+        new_out, new_gating = new(x, x_edge_radial)
         torch.testing.assert_close(new_out, old_out)
         torch.testing.assert_close(new_gating, old_gating)
 
@@ -356,10 +364,9 @@ class TestConvertSO2Conv(unittest.TestCase):
         new = convert_so2_conv2(old)
 
         x = torch.randn(self.edges, self.sum_ls, self.hidden_channels)
-        x_edge = torch.randn(self.edges, 10)
 
-        old_out = old(x, x_edge)
-        new_out = new(x, x_edge)
+        old_out = old(x)
+        new_out = new(x)
         torch.testing.assert_close(new_out, old_out)
 
     def test_convert_so2_conv2_w_block_prebuilt(self):
@@ -432,8 +439,7 @@ class TestSO2_Convolution(unittest.TestCase):
 
     def test_function_domain_and_codomain_2(self):
         x_message = torch.randn(self.edges, self.sum_ls, self.m_output_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
-        x_message_pp = self.so2_conv_2(x_message, x_edge)
+        x_message_pp = self.so2_conv_2(x_message)
         assert isinstance(x_message_pp, torch.Tensor)
 
     def test_output_shape_1(self):
@@ -445,6 +451,5 @@ class TestSO2_Convolution(unittest.TestCase):
 
     def test_output_shape_2(self):
         x_message = torch.randn(self.edges, self.sum_ls, self.m_output_channels)
-        x_edge = torch.randn(self.edges, self.edge_channels_list[0])
-        x_message_pp = self.so2_conv_2(x_message, x_edge)
+        x_message_pp = self.so2_conv_2(x_message)
         assert x_message_pp.shape == (self.edges, self.sum_ls, self.sphere_channels)

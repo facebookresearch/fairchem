@@ -48,7 +48,7 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            name_or_path="uma-s-1p1",
+            name_or_path="uma-s-1p2",
             task_name="omat",
         ),
     },

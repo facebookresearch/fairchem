@@ -17,7 +17,7 @@ kernelspec:
 :::{note} Learning Objectives
 By the end of this tutorial, you will be able to:
 - Set up and configure UMA models with HuggingFace authentication
-- Use the FAIRChemCalculator with different task names (omol, oc20, omat)
+- Use the FAIRChemCalculator with different task names (omol, oc20, oc22, oc25, omat, odac, omc)
 - Perform molecular energy calculations including spin states
 - Run adsorbate relaxations on catalyst surfaces
 - Execute bulk relaxations with cell optimization
@@ -87,7 +87,7 @@ These should just run, and are here to show some basic uses.
 :::{tip} Critical Points
 When using UMA, remember these key steps:
 1. Create a calculator using `pretrained_mlip.get_predict_unit()`
-2. Specify the appropriate **task_name** for your system (omol, oc20, omat, odac, omc)
+2. Specify the appropriate **task_name** for your system (omol, oc20, oc22, oc25, omat, odac, omc)
 3. Use the calculator like any other ASE calculator
 :::
 

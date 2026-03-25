@@ -192,7 +192,9 @@ class FixExternalCallback:
         # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
         if box_change:
             # stress is defined as -virial/volume in lammps
-            assert "stress" in results, "stress must be in results to compute virial"
+            assert (
+                "stress" in results
+            ), f"stress must be in results to compute virial. Predictios can be enabled by setting `predict_untrained_stress=set('{lmp._task_name}')` "
             volume = torch.det(cell).abs().item()
             v = (-results["stress"].detach().cpu() * volume)[0].tolist()
             # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd

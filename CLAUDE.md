@@ -1,5 +1,4 @@
 # CLAUDE.md
-
 FAIRChem is Meta FAIR Chemistry's ML framework for atomistic simulations. Core abstractions: foundation models (UMA) with backbone+heads architecture, ASE calculator integration, Hydra-based config, and multi-task training via TorchTNT.
 
 ## Development Commands
@@ -14,8 +13,6 @@ pytest tests/core/models/test_uma.py -vv
 pytest tests/core -m "not gpu"
 
 # Lint & format — REQUIRED for every modified file before committing
-ruff check path/to/modified_file.py --fix
-ruff format path/to/modified_file.py
 pre-commit run --files path/to/modified_file.py
 
 # CLI
@@ -24,7 +21,7 @@ fairchem -c config.yaml [overrides...]
 
 ## Code Style
 
-**IMPORTANT: You MUST run `ruff check --fix` and `ruff format` on every file you modify, before considering the task complete. No exceptions.**
+**IMPORTANT: You MUST run `pre-commit run --files /path/to/modified_file.py` on every file you modify, before considering the task complete. No exceptions.**
 
 **Every file must start with:**
 ```python
@@ -244,3 +241,10 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `hydra-core` + `omegaconf` - Configuration management
 - `lmdb` - Dataset storage format
 - `ray[serve]>=2.53.0` - Distributed computing
+
+Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
+
+This includes:
+- Gotchas that are not obvious
+- Subtle bugs that manifest under specific conditions
+- Repeat corrections I make to the output of coding agents

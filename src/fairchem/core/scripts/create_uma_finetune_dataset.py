@@ -100,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--base-model",
         type=str,
-        default="uma-s-1",
+        default="uma-s-1p1",
         help="Name of base uma model",
     )
     parser.add_argument(

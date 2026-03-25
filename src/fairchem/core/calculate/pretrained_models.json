@@ -1,6 +1,6 @@
-{
-    "uma-s-1": {
-        "filename": "uma-s-1.pt",
+{    
+    "uma-s-1p2": {
+        "filename": "uma-s-1p2.pt",
         "repo_id": "facebook/UMA",
         "subfolder": "checkpoints",
         "atom_refs": {

@@ -63,7 +63,7 @@ A pre-trained model can be loaded using `FAIRChemCalculator`. In this example, w
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 calc = FAIRChemCalculator(predictor, task_name="odac")
 ```
 
