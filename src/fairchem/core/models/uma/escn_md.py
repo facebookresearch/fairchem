@@ -841,6 +841,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
         if settings.execution_mode is not None:
             overrides["execution_mode"] = settings.execution_mode
+        if settings.mole_layer_type is not None:
+            overrides["moe_layer_type"] = settings.mole_layer_type
 
         return overrides
 

@@ -21,6 +21,16 @@ with suppress(ModuleNotFoundError):
 
     fairchem_cpp_found = True
 
+# Optional cuBLAS grouped GEMM support
+_cublas_available = False
+try:
+    import numpy as np
+    import nvmath.bindings.cublas as cublas
+
+    _cublas_available = True
+except ImportError:
+    np = None
+
 
 def interval_intersection(interval1, interval2):
     """
@@ -68,6 +78,41 @@ class MOLEGlobals:
     # the MolE interface to maintain functional equivalence to the Linear layer interface, this extra info
     # needs to be added here instead. (TODO: is there a cleaner way to do this?)
     ac_start_idx: int = 0
+    # cuBLAS handle for grouped GEMM (created once, reused)
+    _cublas_handle: int | None = None
+    # Keep numpy arrays alive across a full forward+backward pass to prevent
+    # GC while cuBLAS async kernels may still be reading from host buffers.
+    # Cleared at each new batch via invalidate_pad_cache.
+    _cublas_keepalive: list | None = None
+
+    def get_cublas_keepalive(self):
+        """Get or create the keepalive list for cuBLAS numpy arrays.
+
+        Numpy arrays passed to cuBLAS sgemm_grouped_batched are read
+        asynchronously. We must keep them alive until the next batch
+        boundary (when invalidate_pad_cache is called).
+        """
+        if self._cublas_keepalive is None:
+            self._cublas_keepalive = []
+        return self._cublas_keepalive
+
+    def get_cublas_handle(self):
+        """Get or create a cuBLAS handle for grouped GEMM.
+
+        Sets TF32 math mode to match PyTorch's float32_matmul_precision('high').
+        """
+        if self._cublas_handle is None and _cublas_available:
+            self._cublas_handle = cublas.create()
+            cublas.set_stream(
+                self._cublas_handle,
+                torch.cuda.current_stream().cuda_stream,
+            )
+            # Match PyTorch TF32 behavior
+            cublas.set_math_mode(
+                self._cublas_handle,
+                cublas.Math.TF32_TENSOR_OP_MATH,
+            )
+        return self._cublas_handle
 
 
 def init_linear(num_experts, use_bias, out_features, in_features):
@@ -118,6 +163,197 @@ class MOLEDGL(torch.nn.Module):
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_mole_tensors.mole_sizes * x_shape[1],
+            ).reshape(*x_shape[:-1], -1)
+        else:
+            raise ValueError("x.ndim not in (2,3) not allowed")
+        if self.bias is not None:
+            r += self.bias
+        return r
+
+
+def _cublas_grouped_gemm(handle, x, weights, sizes, keepalive_list=None):
+    """Raw cuBLAS grouped GEMM: C[s:s+m] = X[s:s+m] @ W[i] for each segment.
+
+    x must be contiguous (total_rows, K). weights must be contiguous (num_seg, K, N).
+    Returns C (total_rows, N), NOT connected to autograd.
+
+    keepalive_list: if provided, numpy arrays are appended to this list to prevent
+    GC while async cuBLAS kernels may still be reading them. The caller is
+    responsible for clearing this list after synchronization (e.g., at the start
+    of each new batch via MOLEGlobals.invalidate_pad_cache).
+    """
+    num_seg = len(sizes)
+    K = x.shape[1]
+    N = weights.shape[2]
+
+    C = torch.empty(x.shape[0], N, device=x.device, dtype=x.dtype)
+
+    transa = np.zeros(num_seg, dtype=np.int32)
+    transb = np.zeros(num_seg, dtype=np.int32)
+    m_arr = np.full(num_seg, N, dtype=np.int32)
+    n_arr = np.array(sizes, dtype=np.int32)
+    k_arr = np.full(num_seg, K, dtype=np.int32)
+    alpha_arr = np.full(num_seg, 1.0, dtype=np.float32)
+    beta_arr = np.full(num_seg, 0.0, dtype=np.float32)
+    lda_arr = np.full(num_seg, N, dtype=np.int32)
+    ldb_arr = np.full(num_seg, K, dtype=np.int32)
+    ldc_arr = np.full(num_seg, N, dtype=np.int32)
+    group_size = np.ones(num_seg, dtype=np.int32)
+    a_ptrs = np.empty(num_seg, dtype=np.int64)
+    b_ptrs = np.empty(num_seg, dtype=np.int64)
+    c_ptrs = np.empty(num_seg, dtype=np.int64)
+
+    start = 0
+    for i in range(num_seg):
+        mi = sizes[i]
+        a_ptrs[i] = weights[i].data_ptr()
+        b_ptrs[i] = x[start].data_ptr()
+        c_ptrs[i] = C[start].data_ptr()
+        start += mi
+
+    # cuBLAS sgemm_grouped_batched reads host arrays asynchronously — if Python
+    # garbage-collects them before the kernel finishes, we get illegal memory
+    # access. Append to the caller's keepalive list so they survive until the
+    # next batch boundary (when invalidate_pad_cache clears the list).
+    arrays = (
+        transa,
+        transb,
+        m_arr,
+        n_arr,
+        k_arr,
+        alpha_arr,
+        beta_arr,
+        lda_arr,
+        ldb_arr,
+        ldc_arr,
+        group_size,
+        a_ptrs,
+        b_ptrs,
+        c_ptrs,
+    )
+    if keepalive_list is not None:
+        keepalive_list.append(arrays)
+
+    cublas.sgemm_grouped_batched(
+        handle,
+        transa.ctypes.data,
+        transb.ctypes.data,
+        m_arr.ctypes.data,
+        n_arr.ctypes.data,
+        k_arr.ctypes.data,
+        alpha_arr.ctypes.data,
+        a_ptrs.ctypes.data,
+        lda_arr.ctypes.data,
+        b_ptrs.ctypes.data,
+        ldb_arr.ctypes.data,
+        beta_arr.ctypes.data,
+        c_ptrs.ctypes.data,
+        ldc_arr.ctypes.data,
+        num_seg,
+        group_size.ctypes.data,
+    )
+    return C
+
+
+class _SegmentMMGroupedFn(torch.autograd.Function):
+    """Autograd-compatible segment_mm via cuBLAS grouped GEMM.
+
+    Forward: C[s:s+m] = X[s:s+m] @ W[i]  (grouped GEMM, single kernel)
+    Backward: dX[s:s+m] = dC[s:s+m] @ W[i]^T  (also grouped GEMM)
+    """
+
+    @staticmethod
+    def forward(ctx, x, weights, sizes_list, handle, keepalive_list):
+        # Ensure contiguous for cuBLAS
+        x_c = x.contiguous() if not x.is_contiguous() else x
+        w_c = weights.contiguous() if not weights.is_contiguous() else weights
+
+        cublas.set_stream(handle, torch.cuda.current_stream().cuda_stream)
+        C = _cublas_grouped_gemm(handle, x_c, w_c, sizes_list, keepalive_list)
+
+        ctx.save_for_backward(x_c, w_c)
+        ctx.sizes_list = sizes_list
+        ctx.handle = handle
+        ctx.keepalive_list = keepalive_list
+        return C
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x_c, w_c = ctx.saved_tensors
+        sizes_list = ctx.sizes_list
+        handle = ctx.handle
+        keepalive_list = ctx.keepalive_list
+
+        grad_output = (
+            grad_output.contiguous() if not grad_output.is_contiguous() else grad_output
+        )
+
+        # dX[s:s+m] = dC[s:s+m] @ W[i]^T
+        # W[i] is (K, N), W[i]^T is (N, K)
+        w_t = w_c.transpose(1, 2).contiguous()  # (num_seg, N, K)
+
+        cublas.set_stream(handle, torch.cuda.current_stream().cuda_stream)
+        grad_x = _cublas_grouped_gemm(
+            handle, grad_output, w_t, sizes_list, keepalive_list
+        )
+
+        # grad_weights not needed for inference-only (forces only need grad w.r.t. x)
+        return grad_x, None, None, None, None
+
+
+class MOLEGroupedGemm(torch.nn.Module):
+    """MOLE using cuBLAS sgemm_grouped_batched — zero padding waste, single kernel.
+
+    Uses nvmath.bindings.cublas grouped GEMM to dispatch all variable-size
+    segment GEMMs in a single kernel launch. No padding, no C++ extension needed.
+    Wrapped in torch.autograd.Function for correct force computation.
+
+    Advantages over DGL: pure Python (no C++ build), uses cuBLAS grouped API.
+    Advantages over padded: zero padding waste at any size variance.
+    """
+
+    def __init__(
+        self,
+        num_experts,
+        in_features,
+        out_features,
+        global_mole_tensors,
+        bias: bool,
+    ):
+        super().__init__()
+        assert global_mole_tensors is not None
+        assert _cublas_available, "nvmath.bindings.cublas required for grouped_gemm"
+        self.num_experts = num_experts
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weights, self.bias = init_linear(
+            num_experts, bias, out_features, in_features
+        )
+        self.global_mole_tensors = global_mole_tensors
+
+    def forward(self, x):
+        with torch.autocast(device_type=self.weights.device.type, enabled=False):
+            weights = torch.einsum(
+                "eoi, be->bio",
+                self.weights,
+                self.global_mole_tensors.expert_mixing_coefficients,
+            )
+        x_shape = x.shape
+        sizes = self.global_mole_tensors.mole_sizes
+        handle = self.global_mole_tensors.get_cublas_handle()
+        keepalive = self.global_mole_tensors.get_cublas_keepalive()
+
+        if x.ndim == 2:
+            sizes_list = [int(s) for s in sizes.tolist()]
+            r = _SegmentMMGroupedFn.apply(x, weights, sizes_list, handle, keepalive)
+        elif x.ndim == 3:
+            sizes_list = [int(s) for s in (sizes * x_shape[1]).tolist()]
+            r = _SegmentMMGroupedFn.apply(
+                x.reshape(-1, x_shape[-1]),
+                weights,
+                sizes_list,
+                handle,
+                keepalive,
             ).reshape(*x_shape[:-1], -1)
         else:
             raise ValueError("x.ndim not in (2,3) not allowed")

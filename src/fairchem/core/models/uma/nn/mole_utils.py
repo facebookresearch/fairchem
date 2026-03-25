@@ -17,6 +17,7 @@ from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEDGL,
     MOLEGlobals,
+    MOLEGroupedGemm,
     norm_str_to_fn,
 )
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
@@ -158,8 +159,18 @@ def replace_linear_with_MOLE(
             out_features=existing_linear_module.out_features,
             bias=existing_linear_module.bias is not None,
         )
+    elif mole_layer_type == "grouped_gemm":
+        layer = MOLEGroupedGemm(
+            num_experts=num_experts,
+            global_mole_tensors=global_mole_tensors,
+            in_features=existing_linear_module.in_features,
+            out_features=existing_linear_module.out_features,
+            bias=existing_linear_module.bias is not None,
+        )
     else:
-        raise ValueError("mole_layer_type must be pytorch")
+        raise ValueError(
+            f"mole_layer_type must be one of: pytorch, dgl, grouped_gemm. Got: {mole_layer_type}"
+        )
     if cache is not None:
         cache[layer_identifier] = layer
     return layer

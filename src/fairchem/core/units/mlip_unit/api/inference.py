@@ -101,6 +101,12 @@ class InferenceSettings:
     # to enable block-diagonal SO2 GEMM conversion for faster inference.
     execution_mode: str | None = None
 
+    # MOLE layer implementation for batched inference (when merge_mole=False).
+    # Options: "pytorch" (loop), "dgl" (fairchem_cpp C++ kernel),
+    # "grouped_gemm" (nvmath cuBLAS grouped GEMM).
+    # If None, uses the checkpoint default ("pytorch").
+    mole_layer_type: str | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
