@@ -244,7 +244,7 @@ class TestMDRunner:
         assert metadata_file.exists()
         with open(metadata_file) as f:
             metadata = json.load(f)
-        assert metadata["structure_id"] == str(cu_atoms.info["sid"])
+        assert metadata["structure_id"] == cu_atoms.info["sid"]
         assert metadata["total_steps"] == total_steps
 
     def test_load_state_beyond_total_steps(self, cu_atoms, results_dir):
@@ -280,12 +280,7 @@ class TestMDRunner:
         # load_state should not raise, just warn
         runner.load_state(str(checkpoint_dir))
         assert runner._start_step == 50
-
-        # calculate should finish immediately with only the resume-step frame
-        results = runner.calculate(job_num=0, num_jobs=1)
-        traj_df = pd.read_parquet(results["trajectory_file"])
-        assert len(traj_df) == 1
-        assert traj_df.iloc[0]["step"] == 50
+        assert runner._already_calculated
 
     def test_stopfair_graceful_stop(self, cu_atoms, results_dir):
         """

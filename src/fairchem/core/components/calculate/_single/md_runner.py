@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar
 import ase.io
 import ase.units
 from ase.md import MDLogger
+from monty.json import jsanitize
 from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
@@ -130,7 +131,7 @@ class MDRunner(CalculateRunner):
         )
 
         results_dir = Path(self.job_config.metadata.results_dir)
-        sid = str(self._atoms.info.get("sid", f"{job_num}_{num_jobs}"))
+        sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
 
         trajectory_file = results_dir / "trajectory.parquet"
         log_file = results_dir / "thermo.log"
@@ -235,8 +236,8 @@ class MDRunner(CalculateRunner):
                 self._trajectory_writer.close()
 
         return {
-            "trajectory_file": str(trajectory_file),
-            "log_file": str(log_file),
+            "trajectory_file": trajectory_file,
+            "log_file": log_file,
             "total_steps": self.steps,
             "start_step": self._start_step,
             "structure_id": sid,
@@ -271,16 +272,18 @@ class MDRunner(CalculateRunner):
         if not log_file.exists():
             return
 
-        metadata = {
-            "trajectory_file": str(trajectory_file),
-            "log_file": str(log_file),
-            "total_steps": results["total_steps"],
-            "trajectory_interval": self.trajectory_interval,
-            "log_interval": self.log_interval,
-            "thermostat_class": type(self.thermostat).__name__,
-            "structure_id": results["structure_id"],
-            "elapsed_time_s": results["elapsed_time_s"],
-        }
+        metadata = jsanitize(
+            {
+                "trajectory_file": trajectory_file,
+                "log_file": log_file,
+                "total_steps": results["total_steps"],
+                "trajectory_interval": self.trajectory_interval,
+                "log_interval": self.log_interval,
+                "thermostat_class": type(self.thermostat).__name__,
+                "structure_id": results["structure_id"],
+                "elapsed_time_s": results["elapsed_time_s"],
+            }
+        )
 
         metadata_file = Path(results_dir) / "metadata.json"
         with open(metadata_file, "w") as f:
