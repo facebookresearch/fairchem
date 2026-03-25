@@ -38,3 +38,28 @@ exclude_nodes: []
 start_inference_server: false
 # Log level for Ray Serve inference server (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 serve_log_level: WARNING
+
+# Deployment configuration for Ray Serve
+# These settings are passed directly to @serve.deployment()
+# max_replicas is set automatically from num_workers
+# max_ongoing_requests and logging_config are computed at runtime
+deployment_config:
+  autoscaling_config:
+    target_ongoing_requests: 3
+    downscale_delay_s: 300
+    upscale_delay_s: 5
+    max_replicas: 1.0 # max number of replicas, or if float the multiplier for num_workers to get max_replicas
+    min_replicas: 1.0 # min number of replicas, or if float the fraction of max_replicas to use as minimum
+  num_replicas: "auto"
+  max_ongoing_requests: 327680 # 5*max_batch_size*max_concurrent_batches
+  ray_actor_options:
+    num_gpus: 1
+    num_cpus: 2
+  graceful_shutdown_timeout_s: 60
+
+# Batch configuration for inference
+# Controls how inference requests are batched together
+batch_config:
+  max_batch_size: 8192  # Max atoms in a batch
+  batch_wait_timeout_s: 0.1  # Max time to wait for batch to fill
+  max_concurrent_batches: 8  # Max concurrent batches per replica

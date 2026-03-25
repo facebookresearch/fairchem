@@ -270,19 +270,6 @@ class FAIRChemInferenceServer:
         return await self.predict_batch(request)
 
 
-# Create the deployment
-# app = FAIRChemInferenceServer.bind()
-
-
-def _find_free_port() -> int:
-    """Find an available port on localhost."""
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        s.listen(1)
-        return s.getsockname()[1]
-
-
 def start_serve(
     http_port: int | None = None,
     route_prefix: str = "/inference",
