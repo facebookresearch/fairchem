@@ -265,14 +265,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.merged_on_dataset = None
         self.non_merged_dataset_names: list[str] = []
 
-    @property
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
-
     @staticmethod
     def _build_expert_mapping(
         dataset_names: list[str] | None,
@@ -423,14 +415,6 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
-
-    @property
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]
