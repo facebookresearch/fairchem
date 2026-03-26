@@ -28,6 +28,10 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
 )
 from p_tqdm import p_map
 
+from fairchem.core.components.calculate.recipes.csp import (
+    match_structures_to_references_pymatgen,
+)
+
 
 def get_eval_config_and_method(
     config: Optional[dict[str, Any]] = None,
@@ -311,8 +315,11 @@ else:
 
 
 def _match_pymatgen(row, target_xtals, ltol=0.2, stol=0.3, angle_tol=5, ignore_H=True):
-    """Pymatgen-specific matching logic."""
-    from pymatgen.analysis.structure_matcher import StructureMatcher
+    """
+    Pymatgen-specific matching logic.
+
+    Delegates to match_structures_to_references_pymatgen from fairchem.core.
+    """
     from pymatgen.core.structure import Structure
 
     logger = get_central_logger()
@@ -323,33 +330,21 @@ def _match_pymatgen(row, target_xtals, ltol=0.2, stol=0.3, angle_tol=5, ignore_H
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
 
-    if ignore_H:
-        matcher = StructureMatcher(
-            ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
-        )
-    else:
-        matcher = StructureMatcher(ltol=ltol, stol=stol, angle_tol=angle_tol)
-    best_match_refcode = None
-    best_rmsd = float("inf")
+    best_refcode, best_rmsd = match_structures_to_references_pymatgen(
+        pred_structure,
+        target_xtals,
+        ltol=ltol,
+        stol=stol,
+        angle_tol=angle_tol,
+        ignore_h=ignore_H,
+    )
 
-    for refcode, target_xtal in target_xtals.items():
-        try:
-            if matcher.fit(pred_structure, target_xtal):
-                rms_dist = matcher.get_rms_dist(pred_structure, target_xtal)[0]
-                if rms_dist < best_rmsd:
-                    best_match_refcode = refcode
-                    best_rmsd = rms_dist
-        except Exception as e:
-            logger.warning(f"Error matching {row.structure_id} against {refcode}: {e}")
-            continue
-
-    if best_match_refcode is not None:
+    if best_refcode is not None:
         logger.info(
-            f"Pymatgen Match: {row.structure_id} | {best_match_refcode}: {best_rmsd:.4f}"
+            f"Pymatgen Match: {row.structure_id} | {best_refcode}: {best_rmsd:.4f}"
         )
-        return best_match_refcode, best_rmsd
 
-    return None, None
+    return best_refcode, best_rmsd
 
 
 def match_structures(row, target_structures, eval_method="csd", **kwargs):
@@ -445,9 +440,7 @@ def load_target_structures(
                         continue
 
                 try:
-                    structure = _load_single_structure(
-                        cif_path, eval_method, **kwargs
-                    )
+                    structure = _load_single_structure(cif_path, eval_method, **kwargs)
                     target_structures[refcode] = structure
                     logger.debug(f"Loaded structure for {refcode} from {cif_path}")
                 except Exception as e:
@@ -470,7 +463,9 @@ def load_target_structures(
                         continue
 
                     try:
-                        structure = _load_single_structure(cif_file, eval_method, **kwargs)
+                        structure = _load_single_structure(
+                            cif_file, eval_method, **kwargs
+                        )
                         target_structures[refcode] = structure
                         logger.debug(f"Loaded structure for {refcode} from {cif_file}")
                     except Exception as e:

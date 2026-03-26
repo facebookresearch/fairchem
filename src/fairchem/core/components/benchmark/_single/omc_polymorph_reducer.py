@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from fairchem.core.components.benchmark import JsonDFReducer
 from fairchem.core.components.calculate import RelaxationRunner, SinglePointRunner
-from fairchem.core.components.calculate.recipes.local_env import construct_bond_matrix
+from fairchem.core.components.calculate.recipes.csp import match_and_compute_rmsd
 
 try:
     from scipy.stats import kendalltau, spearmanr
@@ -148,33 +148,14 @@ class OMCPolymorphReducer(JsonDFReducer):
                         MSONAtoms.from_dict(entry["atoms_relaxed_target"])
                     )
 
-                    # not clean but call this directly to avoid rematching (rms, max_dist, mask, cost, mapping)
-                    reference_structure, relaxed_structure, _, _ = (
-                        self._structure_matcher._preprocess(
-                            reference_structure, relaxed_structure, niggli=True
-                        )
+                    rmsd = match_and_compute_rmsd(
+                        reference_structure,
+                        relaxed_structure,
+                        structure_matcher=self._structure_matcher,
+                        nn_finder=self._jmolnn,
                     )
-                    match = self._structure_matcher._match(
-                        reference_structure, relaxed_structure, fu=1, use_rms=True
-                    )
-                    if match is not None:
-                        reference_matrix = construct_bond_matrix(
-                            reference_structure, nn_finder=self._jmolnn
-                        )
-                        relaxed_matrix = construct_bond_matrix(
-                            relaxed_structure,
-                            nn_finder=self._jmolnn,
-                            site_permutations=match[4],
-                        )
-                        if np.array_equal(relaxed_matrix, reference_matrix) is True:
-                            # rmsd from pmg structure matcher is normalized by (V/nsites)^(1/3)
-                            avg_vol = (
-                                relaxed_structure.volume + reference_structure.volume
-                            ) / 2
-                            rmsd = match[0] * (avg_vol / len(reference_structure)) ** (
-                                1 / 3
-                            )
-                            _rmsds.append(rmsd)
+                    if rmsd is not None:
+                        _rmsds.append(rmsd)
 
                 metrics.update(
                     {
