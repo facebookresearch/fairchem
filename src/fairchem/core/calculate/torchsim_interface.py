@@ -10,34 +10,141 @@ from __future__ import annotations
 import os
 import typing
 from pathlib import Path
+from typing import Any, Literal
 
 import torch
 
 from fairchem.core import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import UMATask
 from fairchem.core.common.utils import setup_imports, setup_logging
-from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.atomic_data import AtomicData
 
 try:
     import torch_sim as ts
     from torch_sim.models.interface import ModelInterface
+    from torch_sim.transforms import pbc_wrap_batched
 except ImportError:
-    ts = None
-    ModelInterface = None
+    ts = None  # type: ignore[assignment]
+    ModelInterface = None  # type: ignore[assignment]
+    pbc_wrap_batched = None  # type: ignore[assignment]
 
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Callable
-
     from torch_sim import SimState
-    from torch_sim.typing import StateDict
 
 # Use object as fallback base class if ModelInterface is not available
 # The __init__ method will raise ImportError if torch-sim is not installed
 _TSModelInterface = ModelInterface if ModelInterface is not None else object
 
 
-class FairChemModel(_TSModelInterface):  # type: ignore[misc]
+def _simstate_to_atomicdata_batch(
+    sim_state: ts.SimState,
+    task_name: UMATask | str | None,
+    target_dtype: torch.dtype = torch.float32,
+) -> AtomicData:
+    """Convert a batched SimState directly to a batched AtomicData in a single vectorized operation.
+
+    Args:
+        sim_state: A SimState containing one or more systems
+        task_name: Task name for UMA models
+        target_dtype: Target dtype for tensors
+
+    Returns:
+        Batched AtomicData object
+    """
+    positions = sim_state.positions.to(target_dtype)
+    atomic_numbers = sim_state.atomic_numbers.long()
+
+    n_atoms_per_system = torch.bincount(sim_state.system_idx)
+    n_systems = sim_state.n_systems
+
+    if sim_state.cell is not None:
+        cell = sim_state.row_vector_cell.to(target_dtype)  # (n_systems, 3, 3)
+    else:
+        # Create identity cells for molecules
+        cell = (
+            torch.eye(3, dtype=target_dtype, device=positions.device)
+            .unsqueeze(0)
+            .expand(n_systems, -1, -1)
+        )
+
+    pbc = sim_state.pbc.bool()  # Already a tensor, shape (3,)
+    pbc = pbc.unsqueeze(0).expand(n_systems, 3)  # (n_systems, 3)
+
+    if torch.any(pbc):
+        cell_col = cell.transpose(-2, -1)  # (n_systems, 3, 3) column vectors
+        pbc_single = pbc[0] if pbc.ndim > 0 else pbc  # (3,) or bool
+        positions = pbc_wrap_batched(
+            positions, cell_col, sim_state.system_idx, pbc_single
+        )
+
+    natoms = n_atoms_per_system  # (n_systems,)
+
+    edge_index = torch.empty((2, 0), dtype=torch.long, device=positions.device)
+    cell_offsets = torch.empty((0, 3), dtype=target_dtype, device=positions.device)
+    nedges = torch.zeros(n_systems, dtype=torch.long, device=positions.device)
+
+    charge = sim_state.charge.long()  # (n_systems,)
+    spin = sim_state.spin.long()  # (n_systems,)
+
+    fixed = torch.zeros_like(atomic_numbers, dtype=torch.long)
+    tags = torch.zeros_like(atomic_numbers, dtype=torch.long)
+
+    batch_indices = sim_state.system_idx.long()
+
+    batched_dict = {
+        "pos": positions,
+        "atomic_numbers": atomic_numbers,
+        "cell": cell,
+        "pbc": pbc,
+        "natoms": natoms,
+        "edge_index": edge_index,
+        "cell_offsets": cell_offsets,
+        "nedges": nedges,
+        "charge": charge,
+        "spin": spin,
+        "fixed": fixed,
+        "tags": tags,
+        "batch": batch_indices,
+        "sid": [""] * n_systems,  # Empty string IDs for each system
+    }
+
+    if task_name is not None:
+        task_name_str = task_name if isinstance(task_name, str) else task_name.value
+        batched_dict["dataset"] = [task_name_str] * n_systems
+
+    atomic_data_batch = AtomicData.from_dict(batched_dict)
+
+    natoms_list = n_atoms_per_system.tolist()
+    n_atoms_cumsum = torch.cumsum(n_atoms_per_system, dim=0).tolist()
+
+    slices = {}
+    cumsum = {}
+    cat_dims = {}
+
+    for key, value in batched_dict.items():
+        if key == "batch" or not isinstance(value, torch.Tensor):
+            continue
+
+        cat_dims[key] = atomic_data_batch.__cat_dim__(key, value) or 0
+
+        is_edge_key = "index" in key or key == "cell_offsets"
+        if is_edge_key:
+            slices[key] = [0] * (n_systems + 1)
+            cumsum[key] = [0] + n_atoms_cumsum
+        elif key in ("cell", "pbc", "charge", "spin", "natoms", "nedges"):
+            slices[key] = list(range(n_systems + 1))
+            cumsum[key] = [0] * (n_systems + 1)
+        else:
+            slices[key] = [0] + n_atoms_cumsum
+            cumsum[key] = [0] * (n_systems + 1)
+
+    atomic_data_batch.assign_batch_stats(slices, cumsum, cat_dims, natoms_list)
+
+    return atomic_data_batch.contiguous()
+
+
+class FairChemModel(_TSModelInterface):
     """FairChem model wrapper for computing atomistic properties.
 
     Wraps FairChem models to compute energies, forces, and stresses. Can be
@@ -61,13 +168,13 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
     def __init__(
         self,
         model: str | Path,
-        neighbor_list_fn: Callable | None = None,
         *,  # force remaining arguments to be keyword-only
         model_cache_dir: str | Path | None = None,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         compute_stress: bool = False,
         task_name: UMATask | str | None = None,
+        retain_graph: bool = False,
     ) -> None:
         """Initialize the FairChem model.
 
@@ -84,6 +191,8 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
             compute_stress (bool): Whether to compute stress tensor
             task_name (UMATask | str | None): Task type for UMA models (optional,
                 only needed for UMA models)
+            retain_graph (bool): Whether to retain the computation graph for
+                backpropagation. Defaults to False, which detaches output tensors.
 
         Raises:
             ImportError: If torch-sim is not installed
@@ -103,16 +212,16 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         self._dtype = dtype or torch.float32
         self._compute_stress = compute_stress
         self._compute_forces = True
-        self._memory_scales_with = "n_atoms"
-
-        if neighbor_list_fn is not None:
-            raise NotImplementedError(
-                "Custom neighbor list is not supported for FairChemModel."
-            )
+        self._memory_scales_with = "n_atoms"  # TODO: this does vary with model type
+        self.retain_graph = retain_graph
 
         # Convert Path to string for consistency
-        if isinstance(model, Path):
-            model = str(model)
+        model = str(model) if isinstance(model, Path) else model
+        model_cache_dir = (
+            str(model_cache_dir)
+            if isinstance(model_cache_dir, Path)
+            else model_cache_dir
+        )
 
         # Convert task_name to UMATask if it's a string (only for UMA models)
         if isinstance(task_name, str):
@@ -122,12 +231,14 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         self._device = device or torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        device_str = str(self._device)
+        device_str: Literal["cuda", "cpu"] = (
+            self._device.type
+        )  # ty:ignore[invalid-assignment]
         self.task_name = task_name
 
         # Create efficient batch predictor for fast inference
         if model in pretrained_mlip.available_models:
-            if model_cache_dir and model_cache_dir.exists():
+            if model_cache_dir and os.path.exists(model_cache_dir):
                 self.predictor = pretrained_mlip.get_predict_unit(
                     model, device=device_str, cache_dir=model_cache_dir
                 )
@@ -143,9 +254,6 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
                 f"Available pretrained models are: {pretrained_mlip.available_models}"
             )
 
-        # Determine implemented properties
-        # This is a simplified approach - in practice you might want to
-        # inspect the model configuration more carefully
         self.implemented_properties = ["energy", "forces"]
         if compute_stress:
             self.implemented_properties.append("stress")
@@ -160,7 +268,7 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         """Return the device where the model is located."""
         return self._device
 
-    def forward(self, state: SimState | StateDict | dict) -> dict:
+    def forward(self, state: SimState, **kwargs: Any) -> dict[str, torch.Tensor]:
         """Compute energies, forces, and other properties.
 
         Args:
@@ -174,61 +282,15 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
                 - forces (torch.Tensor): Forces with shape [n_atoms, 3]
                 - stress (torch.Tensor): Stress tensor with shape [batch_size, 3, 3]
         """
-        sim_state = (
-            state
-            if isinstance(state, ts.SimState)
-            else ts.SimState(**state, masses=torch.ones_like(state["positions"]))
+        if state.device != self._device:
+            state = state.to(self._device)
+
+        # Convert SimState to batched AtomicData in a single vectorized operation
+        batch = _simstate_to_atomicdata_batch(
+            sim_state=state,
+            task_name=self.task_name,
+            target_dtype=self._dtype,
         )
-
-        if sim_state.device != self._device:
-            sim_state = sim_state.to(self._device)
-
-        # Ensure system_idx has integer dtype (SimState guarantees presence)
-        if sim_state.system_idx.dtype != torch.int64:
-            sim_state.system_idx = sim_state.system_idx.to(dtype=torch.int64)
-
-        # Convert SimState to AtomicData objects for efficient batch processing
-        from ase import Atoms
-
-        n_atoms = torch.bincount(sim_state.system_idx)
-        atomic_data_list = []
-
-        for idx, (n, c) in enumerate(
-            zip(n_atoms, torch.cumsum(n_atoms, dim=0), strict=False)
-        ):
-            # Extract system data
-            positions = sim_state.positions[c - n : c].cpu().numpy()
-            atomic_nums = sim_state.atomic_numbers[c - n : c].cpu().numpy()
-            pbc = sim_state.pbc.cpu().numpy()
-            cell = (
-                sim_state.row_vector_cell[idx].cpu().numpy()
-                if sim_state.row_vector_cell is not None
-                else None
-            )
-
-            # Create ASE Atoms object first
-            atoms = Atoms(
-                numbers=atomic_nums,
-                positions=positions,
-                cell=cell,
-                pbc=pbc if cell is not None else False,
-            )
-
-            atoms.info["charge"] = sim_state.charge[idx].item()
-            atoms.info["spin"] = sim_state.spin[idx].item()
-
-            # Convert ASE Atoms to AtomicData (task_name only applies to UMA models)
-            # r_data_keys must be passed for charge/spin to be read from atoms.info
-            if self.task_name is None:
-                atomic_data = AtomicData.from_ase(atoms, r_data_keys=["charge", "spin"])
-            else:
-                atomic_data = AtomicData.from_ase(
-                    atoms, task_name=self.task_name, r_data_keys=["charge", "spin"]
-                )
-            atomic_data_list.append(atomic_data)
-
-        # Create batch for efficient inference
-        batch = atomicdata_list_to_batch(atomic_data_list)
         batch = batch.to(self._device)
 
         # Run efficient batch prediction
@@ -243,8 +305,10 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         if self._compute_stress and "stress" in predictions:
             stress = predictions["stress"].to(dtype=self._dtype)
             # Ensure stress has correct shape [batch_size, 3, 3]
-            if stress.dim() == 2 and stress.shape[0] == len(atomic_data_list):
+            if stress.dim() == 2 and stress.shape[0] == batch.num_graphs:
                 stress = stress.view(-1, 3, 3)
             results["stress"] = stress
 
+        if not self.retain_graph:
+            return {k: v.detach() for k, v in results.items()}
         return results
