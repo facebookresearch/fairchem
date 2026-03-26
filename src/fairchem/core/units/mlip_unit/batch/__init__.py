@@ -7,39 +7,24 @@ LICENSE file in the root directory of this source tree.
 Batch inference utilities for FAIRChem models via Ray Serve.
 
 This package provides:
-- BatchPredictServer: Simple batched inference for a single model
-- FAIRChemInferenceServer: Multiplexed server with model caching
-- FAIRChemInferenceClient: Client for submitting inference requests
-- RayServeMLIPUnit: MLIPPredictUnit-compatible wrapper for Ray Serve
+- BatchPredictServer: Batched inference server deployment
+- setup_batch_predict_server: Helper to deploy the server
+- wait_for_serve_ready: Wait for the deployment to be ready
+- get_ray_connection_info: Read connection info from head.json
 """
+
 from __future__ import annotations
 
 from fairchem.core.units.mlip_unit.batch.batch_predict_server import (
     BatchPredictServer,
-    setup_batch_predict_server,
-)
-from fairchem.core.units.mlip_unit.batch.inference_client import (
-    FAIRChemInferenceClient,
-    get_inference_client,
-)
-from fairchem.core.units.mlip_unit.batch.inference_server import (
-    FAIRChemInferenceServer,
-    start_serve,
-    wait_for_serve_ready,
-)
-from fairchem.core.units.mlip_unit.batch.rayserve_mlip_unit import (
-    RayServeMLIPUnit,
     get_ray_connection_info,
+    setup_batch_predict_server,
+    wait_for_serve_ready,
 )
 
 __all__ = [
     "BatchPredictServer",
     "setup_batch_predict_server",
-    "FAIRChemInferenceServer",
-    "start_serve",
     "wait_for_serve_ready",
-    "FAIRChemInferenceClient",
-    "get_inference_client",
-    "RayServeMLIPUnit",
     "get_ray_connection_info",
 ]

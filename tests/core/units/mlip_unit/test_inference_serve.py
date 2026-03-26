@@ -26,6 +26,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
 
 ATOL = 5e-4
+DEPLOYMENT_NAME = "predict-server"
 
 
 @pytest.fixture(scope="module")
@@ -45,18 +46,19 @@ def uma_predict_unit():
 
 
 @pytest.fixture(scope="module")
-def local_ray_cluster_with_inference():
+def local_ray_cluster_with_inference(uma_predict_unit):
     """Set up a local Ray cluster with the FAIRChem inference server."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
 
     from fairchem.core.launchers.cluster.ray_cluster_utils import get_local_ray_cluster
 
-    # Use context manager to start local cluster with inference server
     with get_local_ray_cluster(
         num_cpus=8,
         num_gpus=1 if torch.cuda.is_available() else 0,
         start_inference_server=True,
+        predict_unit=uma_predict_unit,
         log_level="WARNING",
+        deployment_name=DEPLOYMENT_NAME,
     ) as head_file:
         yield head_file
 
@@ -72,28 +74,20 @@ def local_ray_cluster_with_inference():
 def test_rayserve_remote_task_single_system(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
-    """Test RayServeMLIPUnit via Ray remote task - single system."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
+    """Test BatchServerPredictUnit via Ray remote task - single system."""
 
     @ray.remote
-    def compute_energy_forces(model_name: str, atoms_dict: dict):
+    def compute_energy_forces(dep_name: str, atoms_dict: dict):
         """Ray remote task that uses the inference server."""
         from ase import Atoms
 
         from fairchem.core import FAIRChemCalculator
-        from fairchem.core.units.mlip_unit.batch import RayServeMLIPUnit
+        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-        # Reconstruct atoms from dict
         atoms = Atoms.fromdict(atoms_dict)
 
-        # Create RayServeMLIPUnit - connects to inference server automatically
-        rayserve_unit = RayServeMLIPUnit(
-            model_id=model_name,
-            inference_settings="default",
-        )
-
-        atoms.calc = FAIRChemCalculator(rayserve_unit, task_name="omat")
+        unit = BatchServerPredictUnit.from_deployment(deployment_name=dep_name)
+        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
 
         return {
             "energy": atoms.get_potential_energy(),
@@ -101,12 +95,10 @@ def test_rayserve_remote_task_single_system(
             "stress": atoms.get_stress(voigt=False),
         }
 
-    # Create test atoms and serialize
     atoms = bulk("Cu")
     atoms_dict = atoms.todict()
 
-    # Submit as remote task
-    result = ray.get(compute_energy_forces.remote(model_name, atoms_dict))
+    result = ray.get(compute_energy_forces.remote(DEPLOYMENT_NAME, atoms_dict))
 
     # Compare with local prediction
     atoms_local = bulk("Cu")
@@ -123,75 +115,58 @@ def test_rayserve_remote_task_single_system(
 @pytest.mark.gpu()
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
     """Test multiple concurrent Ray remote tasks hitting the inference server."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
 
     @ray.remote
-    def compute_energy(model_name: str, atoms_dict: dict):
+    def compute_energy(dep_name: str, atoms_dict: dict):
         """Ray remote task that computes energy via inference server."""
         from ase import Atoms
 
         from fairchem.core import FAIRChemCalculator
-        from fairchem.core.units.mlip_unit.batch import RayServeMLIPUnit
+        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
         atoms = Atoms.fromdict(atoms_dict)
 
-        rayserve_unit = RayServeMLIPUnit(
-            model_id=model_name,
-            inference_settings="default",
-        )
-        atoms.calc = FAIRChemCalculator(rayserve_unit, task_name="omat")
+        unit = BatchServerPredictUnit.from_deployment(deployment_name=dep_name)
+        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
 
         return atoms.get_potential_energy()
 
-    # Create multiple systems
     systems = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
     atoms_dicts = [atoms.todict() for atoms in systems]
 
-    # Submit all tasks concurrently
-    futures = [compute_energy.remote(model_name, d) for d in atoms_dicts]
+    futures = [compute_energy.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
     results = ray.get(futures)
 
-    # Verify all completed with valid energies
     assert len(results) == len(systems)
     for energy in results:
         assert isinstance(energy, float)
-        assert not (energy != energy)  # Check not NaN
+        assert energy == energy  # Check not NaN
 
 
 @pytest.mark.gpu()
 def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
     """Test that concurrent requests are batched by the inference server."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
 
     @ray.remote
-    def compute_via_client(model_name: str, atoms_dict: dict):
-        """Ray remote task using FAIRChemInferenceClient directly."""
+    def compute_via_handle(dep_name: str, atoms_dict: dict):
+        """Ray remote task using BatchServerPredictUnit directly."""
         from ase import Atoms
 
         from fairchem.core.datasets.atomic_data import AtomicData
-        from fairchem.core.units.mlip_unit.batch import FAIRChemInferenceClient
+        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
         atoms = Atoms.fromdict(atoms_dict)
-
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
-        client = FAIRChemInferenceClient()
 
-        return client.predict_from_atomic_data(
-            model_key=f"{model_name}:default",
-            atomic_data=atomic_data,
-            undo_element_references=True,
-        )
+        unit = BatchServerPredictUnit.from_deployment(deployment_name=dep_name)
+        return unit.predict(atomic_data, undo_element_references=True)
 
-    # Submit many concurrent requests to trigger batching
     systems = [bulk("Cu") for _ in range(10)]
     atoms_dicts = [atoms.todict() for atoms in systems]
 
-    futures = [compute_via_client.remote(model_name, d) for d in atoms_dicts]
+    futures = [compute_via_handle.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
     results = ray.get(futures)
 
-    # Verify all completed
     assert len(results) == len(systems)
     for result in results:
         assert "energy" in result
@@ -207,28 +182,16 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
 
 @pytest.mark.gpu()
 def test_rayserve_external_client_single(local_ray_cluster_with_inference):
-    """Test FAIRChemInferenceClient from outside Ray cluster."""
-    from fairchem.core.units.mlip_unit.batch import FAIRChemInferenceClient
+    """Test BatchServerPredictUnit.from_deployment from outside Ray cluster."""
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
-    model_key = f"{model_name}:default"
+    unit = BatchServerPredictUnit.from_deployment(deployment_name=DEPLOYMENT_NAME)
 
-    # Get the inference client (connects to running server)
-    client = FAIRChemInferenceClient()
-
-    # Create test atoms
     atoms = bulk("Cu")
     atomic_data = AtomicData.from_ase(atoms, task_name="omat")
 
-    # Submit prediction
-    result = client.predict_from_atomic_data(
-        model_key=model_key,
-        atomic_data=atomic_data,
-        undo_element_references=True,
-    )
+    result = unit.predict(atomic_data, undo_element_references=True)
 
-    # Verify result has expected keys
     assert "energy" in result, "Result missing 'energy' key"
     assert "forces" in result, "Result missing 'forces' key"
     assert "stress" in result, "Result missing 'stress' key"
@@ -237,24 +200,17 @@ def test_rayserve_external_client_single(local_ray_cluster_with_inference):
 
 @pytest.mark.gpu()
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
-    """Test RayServeMLIPUnit from outside Ray with multiple systems."""
-    from fairchem.core.units.mlip_unit.batch import (
-        RayServeMLIPUnit,
-        get_ray_connection_info,
-    )
-
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
+    """Test BatchServerPredictUnit from outside Ray with multiple systems."""
+    from fairchem.core.units.mlip_unit.batch import get_ray_connection_info
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
     conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
-    rayserve_unit = RayServeMLIPUnit(
+    unit = BatchServerPredictUnit.from_deployment(
+        deployment_name=DEPLOYMENT_NAME,
         ray_address=conn_info["ray_address"],
-        namespace_serve_fairchem=conn_info["namespace_serve_fairchem"],
-        model_id=model_name,
-        inference_settings="default",
+        namespace=conn_info["namespace_serve_fairchem"],
     )
 
-    # Test with multiple different systems
     systems = [
         bulk("Cu"),
         bulk("Al"),
@@ -264,102 +220,78 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
     ]
 
     for atoms in systems:
-        atoms.calc = FAIRChemCalculator(rayserve_unit, task_name="omat")
+        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
         energy = atoms.get_potential_energy()
         forces = atoms.get_forces()
         stress = atoms.get_stress(voigt=False)
 
-        # Basic sanity checks
         assert isinstance(energy, float), f"Energy should be float, got {type(energy)}"
-        assert forces.shape == (len(atoms), 3), f"Forces shape mismatch for {atoms.get_chemical_formula()}"
-        assert stress.shape == (3, 3), f"Stress shape mismatch for {atoms.get_chemical_formula()}"
+        assert forces.shape == (
+            len(atoms),
+            3,
+        ), f"Forces shape mismatch for {atoms.get_chemical_formula()}"
+        assert stress.shape == (
+            3,
+            3,
+        ), f"Stress shape mismatch for {atoms.get_chemical_formula()}"
 
 
 @pytest.mark.gpu()
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
-    """Test that RayServeMLIPUnit correctly fetches model metadata."""
-    from fairchem.core.units.mlip_unit.batch import (
-        RayServeMLIPUnit,
-        get_ray_connection_info,
-    )
+    """Test that BatchServerPredictUnit correctly fetches model metadata."""
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
+    unit = BatchServerPredictUnit.from_deployment(deployment_name=DEPLOYMENT_NAME)
 
-    conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
-    rayserve_unit = RayServeMLIPUnit(
-        ray_address=conn_info["ray_address"],
-        namespace_serve_fairchem=conn_info["namespace_serve_fairchem"],
-        model_id=model_name,
-        inference_settings="default",
-    )
+    dataset_to_tasks = unit.dataset_to_tasks
 
-    # Access dataset_to_tasks - this triggers metadata fetch
-    dataset_to_tasks = rayserve_unit.dataset_to_tasks
-
-    # Verify we got valid metadata
     assert dataset_to_tasks is not None, "dataset_to_tasks should not be None"
     assert len(dataset_to_tasks) > 0, "dataset_to_tasks should not be empty"
-
-    # UMA models should support 'omat' task
-    assert "omat" in dataset_to_tasks, f"Expected 'omat' in tasks, got: {list(dataset_to_tasks.keys())}"
+    assert (
+        "omat" in dataset_to_tasks
+    ), f"Expected 'omat' in tasks, got: {list(dataset_to_tasks.keys())}"
 
 
 @pytest.mark.gpu()
 def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
-    """Compare RayServeMLIPUnit predictions with local predict unit."""
-    from fairchem.core.units.mlip_unit.batch import (
-        RayServeMLIPUnit,
-        get_ray_connection_info,
-    )
+    """Compare BatchServerPredictUnit predictions with local predict unit."""
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    model_name = uma_models[0]
-
-    conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
-    rayserve_unit = RayServeMLIPUnit(
-        ray_address=conn_info["ray_address"],
-        namespace_serve_fairchem=conn_info["namespace_serve_fairchem"],
-        model_id=model_name,
-        inference_settings="default",
-    )
+    unit = BatchServerPredictUnit.from_deployment(deployment_name=DEPLOYMENT_NAME)
 
     # Test with the served calculator
     atoms_served = bulk("Cu")
-    atoms_served.calc = FAIRChemCalculator(rayserve_unit, task_name="omat")
+    atoms_served.calc = FAIRChemCalculator(unit, task_name="omat")
 
     # Test with local predict unit for comparison
     atoms_local = bulk("Cu")
     atoms_local.calc = FAIRChemCalculator(uma_predict_unit, task_name="omat")
 
-    # Get predictions from served calculator
     energy_served = atoms_served.get_potential_energy()
     forces_served = atoms_served.get_forces()
     stress_served = atoms_served.get_stress(voigt=False)
 
-    # Get predictions from local calculator
     energy_local = atoms_local.get_potential_energy()
     forces_local = atoms_local.get_forces()
     stress_local = atoms_local.get_stress(voigt=False)
 
-    # Verify results match
     npt.assert_allclose(
         energy_served,
         energy_local,
         atol=ATOL,
-        err_msg="Energy mismatch between RayServeMLIPUnit and local predict unit",
+        err_msg="Energy mismatch between BatchServerPredictUnit and local predict unit",
     )
     npt.assert_allclose(
         forces_served,
         forces_local,
         atol=ATOL,
-        err_msg="Forces mismatch between RayServeMLIPUnit and local predict unit",
+        err_msg="Forces mismatch between BatchServerPredictUnit and local predict unit",
     )
     npt.assert_allclose(
         stress_served,
         stress_local,
         atol=ATOL,
-        err_msg="Stress mismatch between RayServeMLIPUnit and local predict unit",
+        err_msg="Stress mismatch between BatchServerPredictUnit and local predict unit",
     )

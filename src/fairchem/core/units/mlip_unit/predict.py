@@ -15,8 +15,8 @@ import random
 import sys
 from collections import defaultdict
 from contextlib import nullcontext
-from functools import wraps
-from typing import TYPE_CHECKING, Protocol
+from functools import cached_property, wraps
+from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import hydra
 import numpy as np
@@ -52,6 +52,7 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from ase import Atoms
+    from ray.serve.handle import DeploymentHandle
 
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
@@ -785,21 +786,57 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     This provides a clean interface compatible with MLIPPredictUnitProtocol
     while leveraging Ray Serve's batching capabilities under the hood.
+
+    Can be constructed directly with a server handle, or via
+    ``from_deployment`` to connect to an already-running deployment.
     """
 
-    def __init__(
-        self,
-        server_handle,
-        predict_unit: MLIPPredictUnit,
-    ):
+    _handle_cache: ClassVar[dict[str, DeploymentHandle]] = {}
+
+    def __init__(self, server_handle: DeploymentHandle):
         """
         Args:
             server_handle: Ray Serve deployment handle for BatchPredictServer
-            predict_unit: Local MLIPPredictUnit used for input validation.
-                Validation must run locally because it mutates atoms.info.
         """
         self.server_handle = server_handle
-        self._predict_unit = predict_unit
+
+    @classmethod
+    def from_deployment(
+        cls,
+        deployment_name: str = "fairchem-inference",
+        ray_address: str | None = None,
+        namespace: str | None = None,
+    ) -> BatchServerPredictUnit:
+        """
+        Connect to an already-running BatchPredictServer by deployment name.
+
+        Args:
+            deployment_name: Name of the Ray Serve application.
+            ray_address: Ray client address (e.g. ``ray://host:10001``).
+                Falls back to ``RAY_ADDRESS`` env var. If *None* and env var
+                is unset, assumes Ray is already initialised locally.
+            namespace: Ray namespace. Falls back to
+                ``RAY_NAMESPACE_SERVE_FAIRCHEM`` env var.
+
+        Returns:
+            A ``BatchServerPredictUnit`` connected to the remote deployment.
+        """
+        if ray_address is None:
+            ray_address = os.environ.get("RAY_ADDRESS")
+        if namespace is None:
+            namespace = os.environ.get("RAY_NAMESPACE_SERVE_FAIRCHEM")
+
+        cache_key = f"{ray_address}|{namespace}|{deployment_name}"
+        if cache_key not in cls._handle_cache:
+            if ray_address and not ray.is_initialized():
+                ray.init(ray_address, namespace=namespace)
+
+            from ray import serve
+
+            handle = serve.get_app_handle(deployment_name)
+            cls._handle_cache[cache_key] = handle
+
+        return cls(cls._handle_cache[cache_key])
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -815,28 +852,37 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         ).result()
         return result
 
+    # TODO this should not be hard-coded, find a way to delegate to the underlying MLIPPredictUnit
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
 
-        Runs locally (not via Ray Serve) because validation mutates atoms.info.
+        Uses the shared UMA validation logic.
         """
-        self._predict_unit.validate_atoms_data(atoms, task_name)
+        from fairchem.core.units.mlip_unit.api.inference import validate_uma_atoms_data
 
-    @property
+        validate_uma_atoms_data(atoms, task_name)
+
+    @cached_property
     def dataset_to_tasks(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
             "dataset_to_tasks"
         ).result()
 
-    @property
+    @cached_property
     def atom_refs(self) -> dict | None:
         return self.server_handle.get_predict_unit_attribute.remote(
             "atom_refs"
         ).result()
 
-    @property
+    @cached_property
     def inference_settings(self) -> InferenceSettings:
         return self.server_handle.get_predict_unit_attribute.remote(
             "inference_settings"
+        ).result()
+
+    @cached_property
+    def form_elem_refs(self) -> dict:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "form_elem_refs"
         ).result()

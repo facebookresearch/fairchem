@@ -7,7 +7,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from collections import deque
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
@@ -190,7 +192,7 @@ def setup_batch_predict_server(
     split_oom_batch: bool = True,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
-    deployment_name: str = "predict-server",
+    deployment_name: str = "fairchem-inference",
     route_prefix: str = "/predict",
     autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
@@ -254,7 +256,7 @@ def setup_batch_predict_server(
 
     # Configure deployment options
     deployment_options = {"ray_actor_options": ray_actor_options}
-    
+
     if autoscaling_config is not None:
         # Use autoscaling - num_replicas is ignored
         deployment_options["autoscaling_config"] = autoscaling_config
@@ -280,3 +282,120 @@ def setup_batch_predict_server(
     )
 
     return handle
+
+
+def wait_for_serve_ready(
+    app_name: str = "fairchem-inference",
+    poll_interval_seconds: float = 2,
+) -> bool:
+    """
+    Wait for Ray Serve to be fully ready to accept requests.
+
+    Blocks until the Ray Serve controller is running and the specified
+    application reaches RUNNING status.
+
+    Args:
+        app_name: Name of the Ray Serve application to wait for.
+        poll_interval_seconds: How often to check status.
+
+    Returns:
+        True if server is ready.
+
+    Raises:
+        RuntimeError: If server fails to deploy.
+    """
+    from ray.serve.schema import ApplicationStatus
+
+    # Phase 1: Wait for Ray Serve controller
+    logging.info("Waiting for Ray Serve controller to start...")
+    while True:
+        try:
+            status = serve.status()
+            logging.info("Ray Serve controller is running")
+            break
+        except Exception as e:
+            error_msg = str(e)
+            if (
+                "SERVE_CONTROLLER_ACTOR" in error_msg
+                or "Failed to look up actor" in error_msg
+            ):
+                logging.debug(f"Ray Serve controller not ready yet: {error_msg}")
+                time.sleep(poll_interval_seconds)
+            else:
+                raise
+
+    # Phase 2: Wait for the application to be deployed and running
+    logging.info(f"Waiting for application '{app_name}' to be ready...")
+    while True:
+        try:
+            status = serve.status()
+
+            if app_name not in status.applications:
+                logging.debug(f"Application '{app_name}' not found yet, waiting...")
+                time.sleep(poll_interval_seconds)
+                continue
+
+            app_status = status.applications[app_name]
+
+            if app_status.status == ApplicationStatus.RUNNING:
+                logging.info(f"Application '{app_name}' is RUNNING and ready")
+                return True
+            elif app_status.status == ApplicationStatus.DEPLOYING:
+                logging.debug(f"Application '{app_name}' is still deploying...")
+                time.sleep(poll_interval_seconds)
+            elif app_status.status in (
+                ApplicationStatus.DEPLOY_FAILED,
+                ApplicationStatus.UNHEALTHY,
+            ):
+                raise RuntimeError(
+                    f"Application '{app_name}' failed to deploy. "
+                    f"Status: {app_status.status}, Message: {app_status.message}"
+                )
+            else:
+                logging.debug(f"Application '{app_name}' status: {app_status.status}")
+                time.sleep(poll_interval_seconds)
+
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logging.warning(f"Error checking serve status: {e}")
+            time.sleep(poll_interval_seconds)
+
+
+def get_ray_connection_info(head_file: str) -> dict[str, str | None]:
+    """
+    Read Ray connection info from a head.json file.
+
+    Args:
+        head_file: Path to head.json file from a Ray cluster.
+
+    Returns:
+        Dictionary with ``ray_address``, ``namespace_serve_fairchem``, and
+        ``local`` keys. For local clusters ``ray_address`` is *None*.
+    """
+    with open(head_file) as f:
+        head_info = json.load(f)
+
+    namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
+    is_local = head_info.get("local", False)
+
+    if is_local:
+        return {
+            "ray_address": None,
+            "namespace_serve_fairchem": namespace_serve_fairchem,
+            "local": True,
+        }
+
+    hostname = head_info.get("hostname")
+    client_port = head_info.get("client_port")
+
+    if not hostname or not client_port:
+        raise ValueError(
+            f"Invalid head.json: missing hostname or client_port in {head_file}"
+        )
+
+    return {
+        "ray_address": f"ray://{hostname}:{client_port}",
+        "namespace_serve_fairchem": namespace_serve_fairchem,
+        "local": False,
+    }

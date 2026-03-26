@@ -10,6 +10,7 @@ This module provides context managers for starting and managing Ray clusters:
 - get_slurm_ray_cluster: Start a Ray cluster on SLURM with automatic cleanup
 - get_local_ray_cluster: Start a local Ray cluster for testing/development
 """
+
 from __future__ import annotations
 
 import json
@@ -20,12 +21,9 @@ import time
 import uuid
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import yaml
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +35,11 @@ def recursive_dict_merge(*dicts: dict) -> dict:
         if d is None:
             continue
         for key, value in d.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
                 result[key] = recursive_dict_merge(result[key], value)
             else:
                 result[key] = value
@@ -93,7 +95,9 @@ def load_update_config(
         head_file = Path.home() / ".fairray" / cluster_id / "head.json"
     auto_overrides["head_file"] = str(head_file)
 
-    return recursive_dict_merge(default_config, auto_overrides, cluster_config_overrides)
+    return recursive_dict_merge(
+        default_config, auto_overrides, cluster_config_overrides
+    )
 
 
 def _build_cluster_config(
@@ -182,7 +186,9 @@ def _build_cluster_config(
         explicit_overrides["serve_log_level"] = serve_log_level
 
     # Merge explicit overrides with cluster_config_overrides
-    merged_overrides = recursive_dict_merge(explicit_overrides, cluster_config_overrides)
+    merged_overrides = recursive_dict_merge(
+        explicit_overrides, cluster_config_overrides
+    )
 
     # Load and merge all config
     return load_update_config(
@@ -254,7 +260,9 @@ def _start_ray_cluster_internal(
     """
     from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
-    log_dir = Path(os.environ.get("RAY_PREFECT_LOG_DIR", Path.home() / "ray_prefect_logs"))
+    log_dir = Path(
+        os.environ.get("RAY_PREFECT_LOG_DIR", Path.home() / "ray_prefect_logs")
+    )
 
     requirements = _build_slurm_requirements(config)
 
@@ -308,7 +316,9 @@ def get_slurm_ray_cluster(
     slurm_constraint: str | None = None,
     slurm_additional_parameters: dict[str, Any] | None = None,
     start_inference_server: bool = False,
+    predict_unit: Any = None,
     serve_log_level: str | None = None,
+    deployment_name: str = "predict-server",
     cluster_config_overrides: dict[str, Any] | None = None,
 ):
     """
@@ -356,9 +366,14 @@ def get_slurm_ray_cluster(
     slurm_additional_parameters : dict, optional
         Additional SLURM parameters passed to submitit (for future flexibility)
     start_inference_server : bool
-        If True, start FAIRChem inference server on cluster startup
+        If True, start FAIRChem inference server on cluster startup.
+        Requires ``predict_unit`` to be provided.
+    predict_unit : MLIPPredictUnit, optional
+        Predict unit to serve. Required when ``start_inference_server=True``.
     serve_log_level : str, optional
         Log level for Ray Serve inference server (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    deployment_name : str
+        Ray Serve application name. Default: ``"predict-server"``.
     cluster_config_overrides : dict, optional
         Additional config overrides
 
@@ -396,7 +411,9 @@ def get_slurm_ray_cluster(
         )
 
         # Start cluster using shared helper with cluster reference for shutdown
-        head_file, cluster = _start_ray_cluster_internal(cluster_config, return_cluster=True)
+        head_file, cluster = _start_ray_cluster_internal(
+            cluster_config, return_cluster=True
+        )
 
         # Read namespace from head.json for inference server startup
         with open(head_file) as f:
@@ -405,33 +422,43 @@ def get_slurm_ray_cluster(
         logger.info(f"Ray cluster started with namespace: {namespace_serve_fairchem}")
 
         if cluster_config.get("start_inference_server", False):
+            if predict_unit is None:
+                raise ValueError(
+                    "predict_unit is required when start_inference_server=True"
+                )
+
             import ray
 
             client_address = f"ray://{head_info['hostname']}:{head_info['client_port']}"
-            logger.info(f"Connecting to Ray cluster at {client_address} to start inference server...")
+            logger.info(
+                f"Connecting to Ray cluster at {client_address} to start inference server..."
+            )
             ray.init(client_address, namespace=namespace_serve_fairchem)
 
-            serve_log_level_val = cluster_config.get("serve_log_level", "WARNING")
-            batch_config = cluster_config.get("batch_config")
-            deployment_config = cluster_config.get("deployment_config")
-
             @ray.remote
-            def _start_serve_remote(num_workers: int, log_level: str, batch_config: dict | None, deployment_config: dict | None):
-                from fairchem.core.units.mlip_unit.batch import start_serve
-                start_serve(num_workers=num_workers, log_level=log_level, batch_config=batch_config, deployment_config=deployment_config)
+            def _setup_serve_remote(predict_unit_ref, dep_name):
+                from fairchem.core.units.mlip_unit.batch import (
+                    setup_batch_predict_server,
+                )
+
+                pu = ray.get(predict_unit_ref)
+                setup_batch_predict_server(
+                    pu,
+                    deployment_name=dep_name,
+                )
                 return True
 
             @ray.remote
-            def _wait_for_serve_ready_remote():
+            def _wait_for_serve_ready_remote(dep_name):
                 from fairchem.core.units.mlip_unit.batch import wait_for_serve_ready
-                return wait_for_serve_ready()
 
-            num_workers_config = cluster_config.get("num_workers", 1)
+                return wait_for_serve_ready(app_name=dep_name)
+
+            predict_unit_ref = ray.put(predict_unit)
             logger.info("Initializing FAIRChem inference server deployment...")
-            logger.info(f"Deploying inference server to Ray Serve with {num_workers_config} max replicas (log_level={serve_log_level_val})...")
-            ray.get(_start_serve_remote.remote(num_workers_config, serve_log_level_val, batch_config, deployment_config))
+            ray.get(_setup_serve_remote.remote(predict_unit_ref, deployment_name))
             logger.info("Inference server deployment complete, verifying readiness...")
-            ray.get(_wait_for_serve_ready_remote.remote())
+            ray.get(_wait_for_serve_ready_remote.remote(deployment_name))
             logger.info("Inference server ready and accepting requests")
 
     try:
@@ -453,9 +480,9 @@ def get_local_ray_cluster(
     num_cpus: int | None = None,
     num_gpus: int | None = None,
     start_inference_server: bool = True,
+    predict_unit: Any = None,
     log_level: str = "WARNING",
-    batch_config: dict | None = None,
-    deployment_config: dict | None = None,
+    deployment_name: str = "predict-server",
 ):
     """
     Context manager that starts a local Ray cluster with optional inference server.
@@ -487,12 +514,13 @@ def get_local_ray_cluster(
         Number of GPUs for Ray. If None, auto-detects via torch.cuda.
     start_inference_server : bool
         If True (default), start FAIRChem Ray Serve inference server.
+        Requires ``predict_unit`` to be provided.
+    predict_unit : MLIPPredictUnit, optional
+        Predict unit to serve. Required when ``start_inference_server=True``.
     log_level : str
         Ray logging level. Default: "WARNING"
-    batch_config : dict, optional
-        Batch configuration for inference server. See start_serve().
-    deployment_config : dict, optional
-        Deployment configuration for inference server. See start_serve().
+    deployment_name : str
+        Ray Serve application name. Default: ``"predict-server"``.
 
     Yields
     ------
@@ -517,6 +545,7 @@ def get_local_ray_cluster(
     if num_gpus is None:
         try:
             import torch
+
             num_gpus = torch.cuda.device_count()
         except ImportError:
             num_gpus = 0
@@ -548,9 +577,13 @@ def get_local_ray_cluster(
 
             if num_gpus > 0:
                 init_kwargs["num_gpus"] = num_gpus
-                logger.info(f"Starting local Ray cluster with {num_cpus} CPUs and {num_gpus} GPUs (namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})")
+                logger.info(
+                    f"Starting local Ray cluster with {num_cpus} CPUs and {num_gpus} GPUs (namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})"
+                )
             else:
-                logger.info(f"Starting local Ray cluster with {num_cpus} CPUs (no GPUs, namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})")
+                logger.info(
+                    f"Starting local Ray cluster with {num_cpus} CPUs (no GPUs, namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})"
+                )
 
             ray.init(**init_kwargs)
             logger.info("Ray initialized")
@@ -559,47 +592,41 @@ def get_local_ray_cluster(
 
         # Start Ray Serve if inference server requested
         if start_inference_server:
-            try:
-                serve.status()
-                logger.info("Ray Serve already running")
-            except Exception:
-                logger.info("Starting Ray Serve...")
-                serve.start(detached=True)
-                logger.info("Ray Serve started")
+            if predict_unit is None:
+                raise ValueError(
+                    "predict_unit is required when start_inference_server=True"
+                )
 
-            # Apply default batch_config if not provided
-            if batch_config is None:
-                batch_config = {
-                    "max_batch_size": 8192,  # Max atoms in a batch
-                    "batch_wait_timeout_s": 0.1,  # Max time to wait for batch to fill
-                    "max_concurrent_batches": 8,  # Max concurrent batches per replica
-                }
+            from fairchem.core.units.mlip_unit.batch import (
+                setup_batch_predict_server,
+                wait_for_serve_ready,
+            )
 
-            # Start the FAIRChem inference server deployment
             logger.info("Initializing FAIRChem inference server deployment...")
-            from fairchem.core.units.mlip_unit.batch import start_serve as start_fairchem_serve
-            # For local clusters, use num_gpus as num_workers (1 replica per GPU)
-            local_num_workers = num_gpus if num_gpus > 0 else 1
-            logger.info(f"Deploying inference server to Ray Serve with {local_num_workers} max replicas (log_level={log_level})...")
-            start_fairchem_serve(num_workers=local_num_workers, log_level=log_level, batch_config=batch_config, deployment_config=deployment_config)
+            setup_batch_predict_server(
+                predict_unit,
+                deployment_name=deployment_name,
+            )
 
-            # Wait for the server to be fully ready
             logger.info("Inference server deployment complete, verifying readiness...")
-            from fairchem.core.units.mlip_unit.batch import wait_for_serve_ready
-            wait_for_serve_ready()
+            wait_for_serve_ready(app_name=deployment_name)
             logger.info("Inference server ready and accepting requests")
 
         # Write head file for compatibility with code expecting RAY_HEAD_FILE
         # Note: For local clusters, there's no Ray client port - use "local" flag instead
         head_file_path.parent.mkdir(parents=True, exist_ok=True)
-        head_file_path.write_text(json.dumps({
-            "hostname": "localhost",
-            "dashboard_port": dashboard_port,
-            "local": True,
-            "num_cpus": num_cpus,
-            "num_gpus": num_gpus,
-            "namespace_serve_fairchem": namespace_serve_fairchem,
-        }))
+        head_file_path.write_text(
+            json.dumps(
+                {
+                    "hostname": "localhost",
+                    "dashboard_port": dashboard_port,
+                    "local": True,
+                    "num_cpus": num_cpus,
+                    "num_gpus": num_gpus,
+                    "namespace_serve_fairchem": namespace_serve_fairchem,
+                }
+            )
+        )
 
         yield str(head_file_path)
 

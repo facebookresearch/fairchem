@@ -119,7 +119,6 @@ class InferenceBatcher:
     def batch_predict_unit(self) -> BatchServerPredictUnit:
         return BatchServerPredictUnit(
             server_handle=self.predict_server_handle,
-            predict_unit=self.predict_unit,
         )
 
     def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:
@@ -129,6 +128,7 @@ class InferenceBatcher:
             new_predict_unit: A new MLIPPredictUnit instance with the updated checkpoint
         """
         import ray
+
         # Store the new predict unit in Ray's object store
         predict_unit_ref = ray.put(new_predict_unit)
         # Update all replicas with the new predict unit
@@ -140,7 +140,10 @@ class InferenceBatcher:
         This allows the InferenceBatcher to be removed while keeping Ray running
         for other batchers or applications.
         """
-        if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
+        if (
+            hasattr(self, "predict_server_handle")
+            and self.predict_server_handle is not None
+        ):
             import ray
             from ray import serve
 
