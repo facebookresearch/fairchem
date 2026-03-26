@@ -29,18 +29,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import (
     get_filter_slurm_config,
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
     cif_to_atoms,
     cif_to_structure,
 )
 from p_tqdm import p_map
+
+from fairchem.core.components.calculate.recipes.csp import (
+    check_no_changes_in_covalent_matrix,
+    deduplicate_structures,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

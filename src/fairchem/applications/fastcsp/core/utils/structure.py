@@ -4,11 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Structure Conversion, Manipulation, and Validation Utilities for FastCSP
-
-This module provides essential utilities for handling crystal structures throughout
-the FastCSP workflow. Core evaluation functions (structure hashing, bond validation)
-are imported from fairchem.core.components.calculate.recipes.csp.
+Structure Conversion and Manipulation Utilities for FastCSP
 """
 
 from __future__ import annotations
@@ -19,20 +15,13 @@ from typing import TYPE_CHECKING
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 
-from fairchem.core.components.calculate.recipes.csp import (
-    check_no_changes_in_covalent_matrix,
-    get_structure_hash,
-)
-
 if TYPE_CHECKING:
     from ase import Atoms
 
 __all__ = [
     "cif_to_atoms",
     "cif_to_structure",
-    "check_no_changes_in_covalent_matrix",
     "get_partition_id",
-    "get_structure_hash",
 ]
 
 

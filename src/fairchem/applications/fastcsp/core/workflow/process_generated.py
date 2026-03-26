@@ -32,7 +32,6 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from ase.io.jsonio import decode
-from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import (
     get_process_slurm_config,
@@ -41,6 +40,8 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
 from fairchem.applications.fastcsp.core.utils.structure import get_partition_id
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
+
+from fairchem.core.components.calculate.recipes.csp import deduplicate_structures
 
 if TYPE_CHECKING:
     from pathlib import Path

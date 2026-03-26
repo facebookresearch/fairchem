@@ -35,14 +35,14 @@ from ase.optimize import BFGS, FIRE, LBFGS
 from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
-from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
-)
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core.components.calculate.recipes.csp import (
+    check_no_changes_in_covalent_matrix,
+)
 from fairchem.core.units import mlip_unit
 
 EV_TO_KJ_PER_MOL = eV / (kJ / mol)
