@@ -25,6 +25,12 @@ from typing import Any
 
 import yaml
 
+from fairchem.core.launchers.cluster.ray_cluster import RayCluster
+from fairchem.core.units.mlip_unit.batch import (
+    setup_batch_predict_server,
+    wait_for_serve_ready,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -258,7 +264,6 @@ def _start_ray_cluster_internal(
     str or tuple
         Path to head.json file, or (head_file, RayCluster) if return_cluster=True
     """
-    from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
     log_dir = Path(
         os.environ.get("RAY_PREFECT_LOG_DIR", Path.home() / "ray_prefect_logs")
@@ -437,10 +442,6 @@ def get_slurm_ray_cluster(
 
             @ray.remote
             def _setup_serve_remote(predict_unit_ref, dep_name):
-                from fairchem.core.units.mlip_unit.batch import (
-                    setup_batch_predict_server,
-                )
-
                 pu = ray.get(predict_unit_ref)
                 setup_batch_predict_server(
                     pu,
@@ -450,8 +451,6 @@ def get_slurm_ray_cluster(
 
             @ray.remote
             def _wait_for_serve_ready_remote(dep_name):
-                from fairchem.core.units.mlip_unit.batch import wait_for_serve_ready
-
                 return wait_for_serve_ready(app_name=dep_name)
 
             predict_unit_ref = ray.put(predict_unit)
@@ -596,11 +595,6 @@ def get_local_ray_cluster(
                 raise ValueError(
                     "predict_unit is required when start_inference_server=True"
                 )
-
-            from fairchem.core.units.mlip_unit.batch import (
-                setup_batch_predict_server,
-                wait_for_serve_ready,
-            )
 
             logger.info("Initializing FAIRChem inference server deployment...")
             setup_batch_predict_server(

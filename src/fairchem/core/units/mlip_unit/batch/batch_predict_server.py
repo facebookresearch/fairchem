@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import ray
 import torch
 from ray import serve
+from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 
@@ -304,7 +305,6 @@ def wait_for_serve_ready(
     Raises:
         RuntimeError: If server fails to deploy.
     """
-    from ray.serve.schema import ApplicationStatus
 
     # Phase 1: Wait for Ray Serve controller
     logging.info("Waiting for Ray Serve controller to start...")
