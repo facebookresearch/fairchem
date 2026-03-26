@@ -514,14 +514,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @property  # deprecate this
     def direct_forces(self) -> bool:
+        logging.warning("direct_forces is deprecated, use regress_config.direct_forces")
         return self.regress_config.direct_forces
 
     @property  # deprecate this
     def regress_forces(self) -> bool:
+        logging.warning("regress_forces is deprecated, use regress_config.forces")
         return self.regress_config.forces
 
     @property  # deprecate this
     def regress_stress(self) -> bool:
+        logging.warning("regress_stress is deprecated, use regress_config.stress")
         return self.regress_config.stress
 
     def balance_channels(
