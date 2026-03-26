@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -16,14 +17,61 @@ from ase.md.bussi import Bussi
 from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.verlet import VelocityVerlet
+from monty.json import jsanitize
 
 if TYPE_CHECKING:
     from ase import Atoms
     from ase.md.md import MolecularDynamics
 
 
+class Thermostat(ABC):
+    """
+    Abstract base class defining the interface for MD thermostats.
+
+    All thermostats must implement three methods:
+        - build: construct an ASE MolecularDynamics integrator
+        - save_state: serialize thermostat-specific state for checkpointing
+        - restore_state: restore thermostat state from a checkpoint
+    """
+
+    @abstractmethod
+    def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
+        """
+        Build and return an ASE MolecularDynamics integrator.
+
+        Args:
+            atoms: The atomic system to simulate.
+            timestep_fs: Integration timestep in femtoseconds.
+
+        Returns:
+            An ASE MolecularDynamics object.
+        """
+
+    @abstractmethod
+    def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
+        """
+        Save thermostat-specific state for checkpointing.
+
+        Args:
+            dyn: The active MolecularDynamics integrator.
+
+        Returns:
+            A JSON-serializable dict of thermostat state.
+        """
+
+    @abstractmethod
+    def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
+        """
+        Restore thermostat state from a checkpoint.
+
+        Args:
+            dyn: The active MolecularDynamics integrator.
+            state: The state dict previously returned by save_state.
+        """
+
+
 @dataclass
-class VelocityVerletThermostat:
+class VelocityVerletThermostat(Thermostat):
     """
     NVE dynamics (no thermostat).
     """
@@ -39,13 +87,13 @@ class VelocityVerletThermostat:
 
 
 @dataclass
-class NoseHooverNVT:
+class NoseHooverNVT(Thermostat):
     """
     Nose-Hoover chain NVT thermostat.
     """
 
-    temperature_K: float
-    tdamp_fs: float
+    temperature_K: float  # Kelvin
+    tdamp_fs: float  # femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return NoseHooverChainNVT(
@@ -57,11 +105,13 @@ class NoseHooverNVT:
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         thermostat = dyn._thermostat
-        return {
-            "class_name": "NoseHooverNVT",
-            "eta": thermostat._eta.tolist(),
-            "p_eta": thermostat._p_eta.tolist(),
-        }
+        return jsanitize(
+            {
+                "class_name": "NoseHooverNVT",
+                "eta": thermostat._eta,
+                "p_eta": thermostat._p_eta,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         thermostat = dyn._thermostat
@@ -70,13 +120,13 @@ class NoseHooverNVT:
 
 
 @dataclass
-class BussiThermostat:
+class BussiThermostat(Thermostat):
     """
     Bussi stochastic velocity rescaling thermostat.
     """
 
-    temperature_K: float
-    taut_fs: float
+    temperature_K: float  # Kelvin
+    taut_fs: float  # femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return Bussi(
@@ -88,17 +138,19 @@ class BussiThermostat:
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "BussiThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-            "transferred_energy": float(dyn.transferred_energy),
-        }
+        return jsanitize(
+            {
+                "class_name": "BussiThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+                "transferred_energy": dyn.transferred_energy,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
@@ -116,13 +168,13 @@ class BussiThermostat:
 
 
 @dataclass
-class LangevinThermostat:
+class LangevinThermostat(Thermostat):
     """
     Langevin stochastic dynamics thermostat.
     """
 
-    temperature_K: float
-    friction_per_fs: float
+    temperature_K: float  # Kelvin
+    friction_per_fs: float  # 1/femtoseconds
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
         return Langevin(
@@ -134,16 +186,18 @@ class LangevinThermostat:
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "LangevinThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-        }
+        return jsanitize(
+            {
+                "class_name": "LangevinThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
