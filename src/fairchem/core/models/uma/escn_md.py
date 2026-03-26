@@ -1264,8 +1264,8 @@ class MLP_Energy_Head(MLP_EFS_Head):
             backbone.regress_config.direct_forces is True
             or backbone.regress_config.direct_stress is True
         ), (
-            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
-            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
+            "regress_forces and regress_stress must be False or direct_forces must be True to use an MLP_Energy_Head. "
+            "Use an MLP_EFS_Head if you want to predict gradient forces and stress."
         )
 
 
