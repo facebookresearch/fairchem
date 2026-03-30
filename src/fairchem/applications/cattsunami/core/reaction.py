@@ -4,10 +4,12 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
-import pickle
 import random
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 
 class Reaction:
@@ -24,8 +26,8 @@ class Reaction:
         reaction_type: str | None = None,
     ):
         self.reaction_db_path = reaction_db_path
-        reaction_db = pickle.load(open(reaction_db_path, "rb"))
-        adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
+        reaction_db = safe_pickle_load(reaction_db_path)
+        adsorbate_db = safe_pickle_load(adsorbate_db_path)
 
         if reaction_id_from_db is not None:
             self.reaction_id_from_db = reaction_id_from_db

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 import os
-import pickle
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -23,6 +22,8 @@ from pymatgen.core.surface import (
 )
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 if TYPE_CHECKING:
     import ase
@@ -180,7 +181,7 @@ class Slab:
         assert os.path.exists(precomputed_slabs_pkl)
 
         with open(precomputed_slabs_pkl, "rb") as fp:
-            slabs = pickle.load(fp)
+            slabs = safe_pickle_load(fp)
 
         is_slab_obj = np.all([isinstance(s, Slab) for s in slabs])
         if is_slab_obj:
