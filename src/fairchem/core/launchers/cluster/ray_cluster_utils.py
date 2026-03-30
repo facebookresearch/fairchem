@@ -276,6 +276,7 @@ def _start_ray_cluster_internal(
         log_dir=log_dir,
         cluster_id=config.get("cluster_id"),
         worker_wait_timeout_seconds=config.get("worker_wait_timeout_seconds", 300),
+        temp_dir_template=config.get("temp_dir_template"),
     )
 
     # Start head node - uses native _ray_head_script which writes head.json
