@@ -19,11 +19,20 @@ import numpy.testing as npt
 import pytest
 import ray
 import torch
+from ase import Atoms
 from ase.build import bulk
+from ray import serve
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.launchers.cluster.ray_cluster_utils import get_local_ray_cluster
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.batch_server import (
+    get_ray_connection_info,
+    setup_multiplexed_batch_predict_server,
+    wait_for_serve_ready,
+)
+from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
@@ -49,9 +58,6 @@ def uma_predict_unit():
 @pytest.fixture(scope="module")
 def local_ray_cluster_with_inference(uma_predict_unit):
     """Set up a local Ray cluster with the FAIRChem inference server."""
-    pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-
-    from fairchem.core.launchers.cluster.ray_cluster_utils import get_local_ray_cluster
 
     with get_local_ray_cluster(
         num_cpus=8,
@@ -80,11 +86,6 @@ def test_rayserve_remote_task_single_system(
     @ray.remote
     def compute_energy_forces(dep_name: str, atoms_dict: dict):
         """Ray remote task that uses the inference server."""
-        from ase import Atoms
-
-        from fairchem.core import FAIRChemCalculator
-        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
         atoms = Atoms.fromdict(atoms_dict)
 
         unit = BatchServerPredictUnit.from_deployment_connection_info(
@@ -122,11 +123,6 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
     @ray.remote
     def compute_energy(dep_name: str, atoms_dict: dict):
         """Ray remote task that computes energy via inference server."""
-        from ase import Atoms
-
-        from fairchem.core import FAIRChemCalculator
-        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
         atoms = Atoms.fromdict(atoms_dict)
 
         unit = BatchServerPredictUnit.from_deployment_connection_info(
@@ -155,11 +151,6 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
     @ray.remote
     def compute_via_handle(dep_name: str, atoms_dict: dict):
         """Ray remote task using BatchServerPredictUnit directly."""
-        from ase import Atoms
-
-        from fairchem.core.datasets.atomic_data import AtomicData
-        from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
         atoms = Atoms.fromdict(atoms_dict)
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
 
@@ -190,7 +181,6 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
 @pytest.mark.gpu()
 def test_rayserve_external_client_single(local_ray_cluster_with_inference):
     """Test BatchServerPredictUnit.from_deployment_connection_info from outside Ray cluster."""
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME
@@ -210,9 +200,6 @@ def test_rayserve_external_client_single(local_ray_cluster_with_inference):
 @pytest.mark.gpu()
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
-    from fairchem.core.units.mlip_unit.batch_server import get_ray_connection_info
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
     conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME,
@@ -248,7 +235,6 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
 @pytest.mark.gpu()
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     """Test that BatchServerPredictUnit correctly fetches model metadata."""
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME
@@ -268,8 +254,6 @@ def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
     """Compare BatchServerPredictUnit predictions with local predict unit."""
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME
     )
@@ -329,12 +313,6 @@ def uma_multiplexed_model_id():
 @pytest.fixture(scope="module")
 def local_multiplexed_cluster():
     """Set up a local Ray cluster with a multiplexed inference server."""
-    pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-
-    from fairchem.core.units.mlip_unit.batch_server import (
-        setup_multiplexed_batch_predict_server,
-        wait_for_serve_ready,
-    )
 
     if not ray.is_initialized():
         ray.init(
@@ -350,8 +328,6 @@ def local_multiplexed_cluster():
     )
     wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)
     yield
-    from ray import serve
-
     serve.delete(MULTIPLEXED_DEPLOYMENT_NAME)
 
 
@@ -360,10 +336,6 @@ def test_multiplexed_single_model(
     local_multiplexed_cluster, uma_multiplexed_model_id, uma_predict_unit
 ):
     """Test loading a single model via the multiplexed server."""
-    from fairchem.core.units.mlip_unit.predict import (
-        BatchServerPredictUnit,
-    )
-
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         multiplexed_model_id=uma_multiplexed_model_id,
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
@@ -393,10 +365,6 @@ def test_multiplexed_switch_models(local_multiplexed_cluster):
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
-
-    from fairchem.core.units.mlip_unit.predict import (
-        BatchServerPredictUnit,
-    )
 
     key_a = f"{uma_models[0]}:default"
     key_b = f"{uma_models[1]}:default"
@@ -432,12 +400,6 @@ def test_multiplexed_concurrent_requests(
     @ray.remote
     def compute_energy_mux(dep_name: str, multiplexed_model_id: str, atoms_dict: dict):
         """Ray remote task using BatchServerPredictUnit."""
-        from ase import Atoms
-
-        from fairchem.core import FAIRChemCalculator
-        from fairchem.core.units.mlip_unit.predict import (
-            BatchServerPredictUnit,
-        )
 
         atoms = Atoms.fromdict(atoms_dict)
         unit = BatchServerPredictUnit.from_deployment_connection_info(
