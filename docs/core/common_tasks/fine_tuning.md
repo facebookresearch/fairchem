@@ -15,6 +15,10 @@ kernelspec:
 
 This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and fine-tuning uses the exact same tooling and infrastructure as our standard training (see Training section). Training in the fairchem repo uses the fairchem CLI tool and configs are in [Hydra yaml](https://hydra.cc/) format.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 :::{note}
 Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
