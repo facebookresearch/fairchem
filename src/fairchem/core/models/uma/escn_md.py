@@ -512,15 +512,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
-    @property
+    @property  # deprecate this
     def direct_forces(self) -> bool:
         return self.regress_config.direct_forces
 
-    @property
+    @property  # deprecate this
     def regress_forces(self) -> bool:
         return self.regress_config.forces
 
-    @property
+    @property  # deprecate this
     def regress_stress(self) -> bool:
         return self.regress_config.stress
 
@@ -1255,10 +1255,14 @@ class MLP_Energy_Head(MLP_EFS_Head):
     ) -> None:
         super().__init__(backbone, reduce, prefix, wrap_property)
         assert (
-            backbone.regress_forces is False and backbone.regress_stress is False
-        ) or (backbone.direct_forces is True or backbone.direct_stress is True), (
-            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
-            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
+            backbone.regress_config.forces is False
+            and backbone.regress_config.stress is False
+        ) or (
+            backbone.regress_config.direct_forces is True
+            or backbone.regress_config.direct_stress is True
+        ), (
+            "regress_forces and regress_stress must be False or direct_forces must be True to use an MLP_Energy_Head. "
+            "Use an MLP_EFS_Head if you want to predict gradient forces and stress."
         )
 
 
