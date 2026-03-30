@@ -17,14 +17,18 @@ from __future__ import annotations
 
 from fairchem.core.units.mlip_unit.batch.batch_predict_server import (
     BatchPredictServer,
+    MultiplexedBatchPredictServer,
     get_ray_connection_info,
     setup_batch_predict_server,
+    setup_multiplexed_batch_predict_server,
     wait_for_serve_ready,
 )
 
 __all__ = [
     "BatchPredictServer",
+    "MultiplexedBatchPredictServer",
     "setup_batch_predict_server",
+    "setup_multiplexed_batch_predict_server",
     "wait_for_serve_ready",
     "get_ray_connection_info",
 ]

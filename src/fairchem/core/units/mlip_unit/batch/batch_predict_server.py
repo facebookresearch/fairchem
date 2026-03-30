@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from collections import deque
 from multiprocessing import cpu_count
@@ -67,7 +68,7 @@ class BatchPredictServer:
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
 
-    def get_predict_unit_attribute(self, attribute_name: str) -> Any:
+    def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         return getattr(self.predict_unit, attribute_name)
 
     def update_predict_unit(self, predict_unit_ref) -> None:
@@ -186,6 +187,158 @@ class BatchPredictServer:
         return split_preds
 
 
+@serve.deployment(
+    logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    max_ongoing_requests=300,
+)
+class MultiplexedBatchPredictServer(BatchPredictServer):
+    """
+    Ray Serve deployment that supports multiplexed model loading.
+
+    Unlike ``BatchPredictServer`` which serves a single pre-loaded model,
+    this deployment loads models on demand using ``@serve.multiplexed``.
+    Different clients can request different models by passing a ``model_id``
+    and an LRU cache keeps up to ``max_num_models_per_replica`` models
+    resident on each replica.
+    """
+
+    def __init__(
+        self,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
+        split_oom_batch: bool = True,
+    ):
+        """
+        Initialize the multiplexed predict server.
+
+        Args:
+            max_batch_size: Maximum number of atoms in a batch.
+            batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
+            split_oom_batch: If true will split batch if an OOM error is raised.
+        """
+        # Skip BatchPredictServer.__init__ — no predict_unit_ref needed.
+        self.split_oom_batch = split_oom_batch
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        logging.info("MultiplexedBatchPredictServer initialized")
+
+    @serve.multiplexed(max_num_models_per_replica=3)
+    async def get_model(self, model_id: str):
+        """
+        Load (or retrieve from cache) a predict unit by model key.
+
+        Args:
+            model_id: Key in the format ``"checkpoint_name_or_path:settings"``
+                where ``settings`` is one of the recognized inference setting
+                names (e.g. ``"default"``, ``"turbo"``) or an empty string for
+                the default settings.
+        """
+        parts = model_id.split(":", 1)
+        checkpoint = parts[0]
+        settings_name = parts[1] if len(parts) > 1 and parts[1] else "default"
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if os.path.isfile(checkpoint):
+            from fairchem.core.units.mlip_unit import load_predict_unit
+
+            predict_unit = load_predict_unit(
+                checkpoint,
+                inference_settings=settings_name,
+                device=device,
+            )
+        else:
+            from fairchem.core.calculate import pretrained_mlip
+
+            predict_unit = pretrained_mlip.get_predict_unit(
+                checkpoint,
+                inference_settings=settings_name,
+                device=device,
+            )
+
+        self.predict_unit = predict_unit
+        logging.info(f"MultiplexedBatchPredictServer loaded model_id={model_id!r}")
+
+    async def get_predict_unit_attribute(
+        self, attribute_name: str, model_id: str | None = None
+    ) -> Any:
+        """
+        Get an attribute from a loaded predict unit.
+
+        Uses the ``multiplexed_model_id`` set on the request by the caller
+        to resolve the correct model first.
+        """
+        model_id = model_id or serve.get_multiplexed_model_id()
+        await self.get_model(model_id)
+        return getattr(self.predict_unit, attribute_name)
+
+    async def __call__(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict:
+        """
+        Main entry point for multiplexed inference requests.
+
+        The ``multiplexed_model_id`` is read from the Ray Serve request
+        context (set by the caller via ``handle.options(multiplexed_model_id=...)``).
+
+        Args:
+            data: Single AtomicData object.
+            undo_element_references: Whether to undo element references.
+
+        Returns:
+            Prediction dictionary for this system.
+        """
+        model_id = serve.get_multiplexed_model_id()
+        await self.get_model(model_id)
+        predictions = await self.predict(data, undo_element_references)
+        return predictions
+
+
+def _init_ray_and_serve(
+    ray_actor_options: dict,
+    num_replicas: int,
+) -> None:
+    """
+    Ensure Ray and Ray Serve are initialised.
+    """
+    cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
+    ray_actor_options["num_cpus"] = cpus_per_actor
+
+    if not ray.is_initialized():
+        ray.init(
+            log_to_driver=False,
+            logging_config=ray.LoggingConfig(log_level="WARNING"),
+            num_cpus=cpus_per_actor * num_replicas,
+        )
+        logging.info("Ray initialized")
+
+    try:
+        serve.status()
+        logging.info("Ray Serve already running")
+    except Exception:
+        serve.start(
+            logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+        )
+        logging.info("Ray Serve started")
+
+
+def _build_deployment_options(
+    ray_actor_options: dict,
+    num_replicas: int,
+    autoscaling_config: dict | None,
+) -> dict:
+    """
+    Build the ``deployment_options`` dict for ``Server.options()``.
+    """
+    deployment_options: dict[str, Any] = {
+        "ray_actor_options": ray_actor_options,
+    }
+    if autoscaling_config is not None:
+        deployment_options["autoscaling_config"] = autoscaling_config
+    else:
+        deployment_options["num_replicas"] = num_replicas
+    return deployment_options
+
+
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
     max_batch_size: int = 512,
@@ -198,75 +351,38 @@ def setup_batch_predict_server(
     autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
     """
-    Set up and deploy a BatchPredictServer for batched inference.
+    Deploy a ``BatchPredictServer`` that serves a single pre-loaded model.
 
     Args:
-        predict_unit: An MLIPPredictUnit instance to use for batched inference
+        predict_unit: An MLIPPredictUnit instance to use for inference.
         max_batch_size: Maximum number of atoms in a batch.
-            The actual number of atoms will likely be larger than this as batches
-            are split when num atoms exceeds this value.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
         split_oom_batch: Whether to split batches that cause OOM errors.
-        num_replicas: Number of deployment replicas for scaling. Ignored if autoscaling_config is provided.
-        ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
+        num_replicas: Number of deployment replicas. Ignored if
+            *autoscaling_config* is provided.
+        ray_actor_options: Additional Ray actor options
+            (e.g., ``{"num_gpus": 1, "num_cpus": 4}``).
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
-        autoscaling_config: Optional autoscaling configuration dict. If provided, enables
-            autoscaling and num_replicas is ignored. Example:
-            {
-                "min_replicas": 0,  # Scale to zero when idle
-                "max_replicas": 4,
-                "target_ongoing_requests": 2,
-                "downscale_delay_s": 60,  # Wait 60s before scaling down
-                "upscale_delay_s": 5,  # Scale up quickly
-            }
+        autoscaling_config: Optional autoscaling configuration dict.
 
     Returns:
-        Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
+        Ray Serve deployment handle.
     """
     if ray_actor_options is None:
         ray_actor_options = {}
 
-    cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
-    ray_actor_options["num_cpus"] = cpus_per_actor
-
     if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
-        # assign 1 GPU per replica by default if using GPU device
         ray_actor_options["num_gpus"] = 1
 
-    if not ray.is_initialized():
-        ray.init(
-            log_to_driver=False,
-            logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=cpus_per_actor * num_replicas,
-        )
-        logging.info("Ray initialized by setup_batch_predict_server")
-
-    # Start Ray Serve if not already started
-    try:
-        serve.status()
-        logging.info("Ray Serve already running")
-    except Exception:
-        serve.start(
-            logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-        )
-        logging.info("Ray Serve started by setup_batch_predict_server")
+    _init_ray_and_serve(ray_actor_options, num_replicas)
 
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
 
-    # Configure deployment options
-    deployment_options = {"ray_actor_options": ray_actor_options}
-
-    if autoscaling_config is not None:
-        # Use autoscaling - num_replicas is ignored
-        deployment_options["autoscaling_config"] = autoscaling_config
-        replicas_info = f"autoscaling (min={autoscaling_config.get('min_replicas', 1)}, max={autoscaling_config.get('max_replicas', 1)})"
-    else:
-        # Fixed number of replicas
-        deployment_options["num_replicas"] = num_replicas
-        replicas_info = f"num_replicas={num_replicas}"
-
+    deployment_options = _build_deployment_options(
+        ray_actor_options, num_replicas, autoscaling_config
+    )
     deployment = BatchPredictServer.options(**deployment_options).bind(
         predict_unit_ref,
         max_batch_size=max_batch_size,
@@ -275,13 +391,60 @@ def setup_batch_predict_server(
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
+    logging.info(f"BatchPredictServer deployed: name={deployment_name}")
+    return handle
 
-    logging.info(
-        f"BatchPredictServer deployed with max_batch_size={max_batch_size}, "
-        f"batch_wait_timeout_s={batch_wait_timeout_s}, {replicas_info}, "
-        f"name={deployment_name}"
+
+def setup_multiplexed_batch_predict_server(
+    max_batch_size: int = 512,
+    batch_wait_timeout_s: float = 0.1,
+    split_oom_batch: bool = True,
+    num_replicas: int = 1,
+    ray_actor_options: dict | None = None,
+    deployment_name: str = "fairchem-inference",
+    route_prefix: str = "/predict",
+    autoscaling_config: dict | None = None,
+) -> serve.handle.DeploymentHandle:
+    """
+    Deploy a ``MultiplexedBatchPredictServer`` that loads models on demand.
+
+    Models are loaded lazily when a request arrives with a
+    ``multiplexed_model_id`` set on the handle.
+
+    Args:
+        max_batch_size: Maximum number of atoms in a batch.
+        batch_wait_timeout_s: Maximum wait time before processing partial batch.
+        split_oom_batch: Whether to split batches that cause OOM errors.
+        num_replicas: Number of deployment replicas. Ignored if
+            *autoscaling_config* is provided.
+        ray_actor_options: Additional Ray actor options
+            (e.g., ``{"num_gpus": 1, "num_cpus": 4}``).
+        deployment_name: Name for the Ray Serve deployment.
+        route_prefix: HTTP route prefix for the deployment.
+        autoscaling_config: Optional autoscaling configuration dict.
+
+    Returns:
+        Ray Serve deployment handle.
+    """
+    if ray_actor_options is None:
+        ray_actor_options = {}
+
+    if torch.cuda.is_available() and "num_gpus" not in ray_actor_options:
+        ray_actor_options["num_gpus"] = 1
+
+    _init_ray_and_serve(ray_actor_options, num_replicas)
+
+    deployment_options = _build_deployment_options(
+        ray_actor_options, num_replicas, autoscaling_config
+    )
+    deployment = MultiplexedBatchPredictServer.options(**deployment_options).bind(
+        max_batch_size=max_batch_size,
+        batch_wait_timeout_s=batch_wait_timeout_s,
+        split_oom_batch=split_oom_batch,
     )
 
+    handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
+    logging.info(f"MultiplexedBatchPredictServer deployed: name={deployment_name}")
     return handle
 
 

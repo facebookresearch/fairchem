@@ -23,7 +23,7 @@ import numpy as np
 import ray
 import torch
 import torch.distributed as dist
-from ray import remote
+from ray import remote, serve
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
@@ -787,28 +787,68 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     This provides a clean interface compatible with MLIPPredictUnitProtocol
     while leveraging Ray Serve's batching capabilities under the hood.
 
+    Works with both ``BatchPredictServer`` (single model) and
+    ``MultiplexedBatchPredictServer`` (on-demand model loading). For
+    multiplexed deployments, pass ``multiplexed_model_id`` to ``from_deployment_connection_info``
+    which binds the Ray Serve ``multiplexed_model_id`` to the handle so
+    that all requests are transparently routed to the correct model.
+
     Can be constructed directly with a server handle, or via
-    ``from_deployment`` to connect to an already-running deployment.
+    ``from_deployment_connection_info`` to connect to an already-running deployment.
     """
 
     _handle_cache: ClassVar[dict[str, DeploymentHandle]] = {}
 
-    def __init__(self, server_handle: DeploymentHandle):
+    def __init__(
+        self,
+        server_handle: DeploymentHandle,
+        multiplexed_model_id: str | None = None,
+    ):
         """
         Args:
-            server_handle: Ray Serve deployment handle for BatchPredictServer
+            server_handle: Ray Serve deployment handle for a
+                ``BatchPredictServer`` or ``MultiplexedBatchPredictServer``.
+            multiplexed_model_id: Optional model identifier for multiplexed
+                deployments in the format
+                ``"checkpoint_name_or_path:settings"``. When provided, the
+                handle is configured with Ray Serve's
+                ``multiplexed_model_id`` so that all calls are routed to
+                the correct model on the server.
         """
+        if multiplexed_model_id is not None:
+            if not server_handle.is_multiplexed.remote().result():
+                raise ValueError(
+                    f"multiplexed_model_id={multiplexed_model_id!r} was "
+                    "provided but the deployment is not a multiplexed "
+                    "server. Use MultiplexedBatchPredictServer or remove "
+                    "the multiplexed_model_id argument."
+                )
+            server_handle = server_handle.options(
+                multiplexed_model_id=multiplexed_model_id
+            )
         self.server_handle = server_handle
+        self._multiplexed_model_id = multiplexed_model_id
+
+    @property
+    def multiplexed_model_id(self) -> str | None:
+        """
+        The multiplexed model ID bound to this unit's server handle.
+
+        Read-only — changing this after construction would have no effect
+        on the already-configured handle.
+        """
+        return self._multiplexed_model_id
 
     @classmethod
-    def from_deployment(
+    def from_deployment_connection_info(
         cls,
         deployment_name: str = "fairchem-inference",
         ray_address: str | None = None,
         namespace: str | None = None,
+        multiplexed_model_id: str | None = None,
     ) -> BatchServerPredictUnit:
         """
-        Connect to an already-running BatchPredictServer by deployment name.
+        Connect to an already-running server by deployment name.
 
         Args:
             deployment_name: Name of the Ray Serve application.
@@ -817,6 +857,9 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
                 is unset, assumes Ray is already initialised locally.
             namespace: Ray namespace. Falls back to
                 ``RAY_NAMESPACE_SERVE_FAIRCHEM`` env var.
+            multiplexed_model_id: Optional model identifier for multiplexed
+                deployments in the format
+                ``"checkpoint_name_or_path:settings"``.
 
         Returns:
             A ``BatchServerPredictUnit`` connected to the remote deployment.
@@ -831,12 +874,13 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             if ray_address and not ray.is_initialized():
                 ray.init(ray_address, namespace=namespace)
 
-            from ray import serve
-
             handle = serve.get_app_handle(deployment_name)
             cls._handle_cache[cache_key] = handle
 
-        return cls(cls._handle_cache[cache_key])
+        return cls(
+            cls._handle_cache[cache_key],
+            multiplexed_model_id=multiplexed_model_id,
+        )
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -847,9 +891,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.predict.remote(
-            data, undo_element_references
-        ).result()
+        result = self.server_handle.remote(data, undo_element_references).result()
         return result
 
     # TODO this should not be hard-coded, find a way to delegate to the underlying MLIPPredictUnit
