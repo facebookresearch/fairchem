@@ -12,7 +12,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, ListConfig
@@ -63,12 +62,6 @@ from fairchem.core.models.uma.outputs import (
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.units.mlip_unit.api.inference import (
-    CHARGE_RANGE,
-    DEFAULT_CHARGE,
-    DEFAULT_SPIN,
-    DEFAULT_SPIN_OMOL,
-    SPIN_RANGE,
-    UMATask,
     validate_uma_atoms_data,
 )
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
