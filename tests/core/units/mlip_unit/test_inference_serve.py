@@ -210,7 +210,7 @@ def test_rayserve_external_client_single(local_ray_cluster_with_inference):
 @pytest.mark.gpu()
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
-    from fairchem.core.units.mlip_unit.batch import get_ray_connection_info
+    from fairchem.core.units.mlip_unit.batch_server import get_ray_connection_info
     from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
     conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
@@ -331,7 +331,7 @@ def local_multiplexed_cluster():
     """Set up a local Ray cluster with a multiplexed inference server."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
 
-    from fairchem.core.units.mlip_unit.batch import (
+    from fairchem.core.units.mlip_unit.batch_server import (
         setup_multiplexed_batch_predict_server,
         wait_for_serve_ready,
     )

@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from fairchem.core.launchers.cluster.ray_cluster import RayCluster
-from fairchem.core.units.mlip_unit.batch import (
+from fairchem.core.units.mlip_unit.batch_server import (
     setup_batch_predict_server,
     wait_for_serve_ready,
 )
