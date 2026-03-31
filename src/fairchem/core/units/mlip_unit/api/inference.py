@@ -45,6 +45,7 @@ def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
         logger: Optional logger for warnings. If None, uses Python logging module.
     """
     import logging as log_module
+
     import numpy as np
 
     _logger = logger if logger is not None else log_module
