@@ -974,19 +974,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         self._inference_settings = settings
         self._merged_composition = None
-
-        # Validate settings against backend requirements (fail early)
         self.backend.validate(self.lmax, self.mmax, settings)
 
         if settings.merge_mole:
-            assert (
-                data.natoms.numel() == 1
-            ), "Cannot merge model with multiple systems in batch"
-            # Store composition we merged on
-            self._merged_composition = self._get_composition_info(data)
-            # Merge the model - returns new merged backbone
+            self._merged_composition = self._get_merged_mole_consistency_info(data)
             new_backbone = self.merge_MOLE_model(data)
-            # Transfer inference state to new backbone
             new_backbone._inference_settings = settings
             new_backbone._merged_composition = self._merged_composition
             self.backend.prepare_model_for_inference(new_backbone)
@@ -1003,31 +995,95 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             return  # Not initialized yet
 
         if self._inference_settings.merge_mole and self._merged_composition is not None:
-            assert (
-                data.natoms.numel() == 1
-            ), "Cannot run merged model on batch with multiple systems"
-            current = self._get_composition_info(data)
-            self._assert_composition_matches(current)
+            current = self._get_merged_mole_consistency_info(data)
+            self._assert_merged_mole_consistency(current)
 
-    def _get_composition_info(self, data) -> tuple:
+    def _assert_all_mole_info_consistent(self, data) -> None:
+        """
+        Assert all systems in the batch have the same reduced composition,
+        charge, spin, and dataset.
+
+        Reduced composition is the composition vector divided by the number
+        of atoms, so e.g. H2O and H4O2 have the same reduced composition.
+        """
+        num_systems = data.natoms.numel()
+        if num_systems <= 1:
+            return
+
+        # Per-system compositions: [num_systems, max_num_elements]
+        compositions = data.atomic_numbers.new_zeros(
+            num_systems, self.max_num_elements, dtype=torch.float
+        )
+        compositions.index_put_(
+            (data.batch, data.atomic_numbers.long()),
+            torch.ones(
+                len(data.atomic_numbers),
+                device=compositions.device,
+                dtype=compositions.dtype,
+            ),
+            accumulate=True,
+        )
+
+        # Normalize to reduced compositions
+        reduced = compositions / compositions.sum(dim=1, keepdim=True)
+        assert reduced.isclose(reduced[0:1].expand_as(reduced), rtol=1e-5).all(), (
+            "All systems in batch must have the same reduced composition "
+            "when using merge_mole"
+        )
+
+        # Check charge, spin, dataset are the same across systems
+        charge = getattr(data, "charge", None)
+        if isinstance(charge, torch.Tensor) and charge.numel() > 1:
+            assert (charge == charge[0]).all(), (
+                f"All systems must have the same charge for merge_mole, "
+                f"got {charge}"
+            )
+
+        spin = getattr(data, "spin", None)
+        if isinstance(spin, torch.Tensor) and spin.numel() > 1:
+            assert (spin == spin[0]).all(), (
+                f"All systems must have the same spin for merge_mole, " f"got {spin}"
+            )
+
+        dataset = getattr(data, "dataset", None)
+        if isinstance(dataset, torch.Tensor) and dataset.numel() > 1:
+            assert (dataset == dataset[0]).all(), (
+                f"All systems must have the same dataset for merge_mole, "
+                f"got {dataset}"
+            )
+
+    def _get_merged_mole_consistency_info(self, data) -> tuple:
         """
         Get composition info for MOLE consistency checking.
+
+        Extracts composition from the first system in the batch.
+        Validates that all systems have the same reduced composition.
         """
+        self._assert_all_mole_info_consistent(data)
+        # Get atoms belonging to the first system
+        first_system_mask = data.batch == 0
+        first_atomic_numbers = data.atomic_numbers[first_system_mask]
+
         composition = data.atomic_numbers.new_zeros(
             self.max_num_elements, dtype=torch.int
         ).index_add(
             0,
-            data.atomic_numbers.to(torch.int),
-            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int),
-        )
-        return (
-            composition,
-            getattr(data, "charge", None),
-            getattr(data, "spin", None),
-            getattr(data, "dataset", [None]),
+            first_atomic_numbers.to(torch.int),
+            first_atomic_numbers.new_ones(len(first_atomic_numbers), dtype=torch.int),
         )
 
-    def _assert_composition_matches(self, current: tuple) -> None:
+        charge = getattr(data, "charge", None)
+        spin = getattr(data, "spin", None)
+        dataset = getattr(data, "dataset", [None])
+
+        return (
+            composition,
+            charge[0:1] if isinstance(charge, torch.Tensor) else charge,
+            spin[0:1] if isinstance(spin, torch.Tensor) else spin,
+            dataset[0:1] if isinstance(dataset, (list, torch.Tensor)) else dataset,
+        )
+
+    def _assert_merged_mole_consistency(self, current: tuple) -> None:
         """
         Assert current composition matches what model was merged on.
         """
