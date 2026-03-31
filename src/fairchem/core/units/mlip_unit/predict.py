@@ -894,16 +894,19 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         result = self.server_handle.remote(data, undo_element_references).result()
         return result
 
-    # TODO this should not be hard-coded, find a way to delegate to the underlying MLIPPredictUnit
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
 
-        Uses the shared UMA validation logic.
+        Delegates to the server's predict unit so that validation is
+        model-specific rather than hardcoded.  The server runs
+        ``predict_unit.validate_atoms_data`` on a stub ``Atoms`` and
+        returns the mutated ``atoms.info`` dict which is applied locally.
         """
-        from fairchem.core.units.mlip_unit.api.inference import validate_uma_atoms_data
-
-        validate_uma_atoms_data(atoms, task_name)
+        updated_info = self.server_handle.validate_atoms_data.remote(
+            dict(atoms.info), task_name
+        ).result()
+        atoms.info.update(updated_info)
 
     @cached_property
     def dataset_to_tasks(self) -> dict:

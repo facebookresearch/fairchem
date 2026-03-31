@@ -71,6 +71,31 @@ class BatchPredictServer:
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         return getattr(self.predict_unit, attribute_name)
 
+    def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
+        """
+        Run the predict unit's validation and return the (possibly mutated) atoms.info.
+
+        Validation may set defaults (e.g. charge, spin) on ``atoms.info``.
+        Because the caller needs those mutations applied locally, this method
+        accepts and returns the ``atoms.info`` dict rather than a full
+        ``Atoms`` object.
+
+        Args:
+            atoms_info: Copy of ``atoms.info`` from the caller's Atoms object.
+            task_name: Task name passed through to the predict unit.
+
+        Returns:
+            The mutated ``atoms.info`` dict with any defaults applied.
+        """
+        from ase import Atoms
+
+        # Build a minimal Atoms stub just for validation — only atoms.info
+        # is read/mutated by validate_atoms_data implementations.
+        stub = Atoms()
+        stub.info = atoms_info
+        self.predict_unit.validate_atoms_data(stub, task_name)
+        return stub.info
+
     def update_predict_unit(self, predict_unit_ref) -> None:
         """Update the predict unit with a new checkpoint.
 
@@ -270,6 +295,14 @@ class MultiplexedBatchPredictServer(BatchPredictServer):
         model_id = model_id or serve.get_multiplexed_model_id()
         await self.get_model(model_id)
         return getattr(self.predict_unit, attribute_name)
+
+    async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
+        """
+        Run model-specific validation after loading the correct model.
+        """
+        model_id = serve.get_multiplexed_model_id()
+        await self.get_model(model_id)
+        return super().validate_atoms_data(self, atoms_info, task_name)
 
     async def __call__(
         self, data: AtomicData, undo_element_references: bool = True
