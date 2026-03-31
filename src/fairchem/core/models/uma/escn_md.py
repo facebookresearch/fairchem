@@ -1032,20 +1032,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         # Check charge, spin, dataset are the same across systems
-        charge = getattr(data, "charge", None)
-        if isinstance(charge, torch.Tensor) and charge.numel() > 1:
+        charge = data.charge
+        if isinstance(charge, torch.Tensor):
             assert (charge == charge[0]).all(), (
                 f"All systems must have the same charge for merge_mole, "
                 f"got {charge}"
             )
 
-        spin = getattr(data, "spin", None)
-        if isinstance(spin, torch.Tensor) and spin.numel() > 1:
+        spin = data.spin
+        if isinstance(spin, torch.Tensor):
             assert (spin == spin[0]).all(), (
                 f"All systems must have the same spin for merge_mole, " f"got {spin}"
             )
 
-        dataset = getattr(data, "dataset", None)
+        dataset = data.dataset
         if isinstance(dataset, torch.Tensor) and dataset.numel() > 1:
             assert (dataset == dataset[0]).all(), (
                 f"All systems must have the same dataset for merge_mole, "
