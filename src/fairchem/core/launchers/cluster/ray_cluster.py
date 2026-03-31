@@ -51,7 +51,7 @@ def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
                 return preferred
         except OSError:
             pass
-    
+
     # Try random ports in the ephemeral range (49152-65535)
     for _ in range(num_random_attempts):
         port = random.randint(49152, 65535)
@@ -62,7 +62,7 @@ def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
                 return port
         except OSError:
             continue
-    
+
     # Fall back to letting the OS pick
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
@@ -275,7 +275,7 @@ def _ray_head_script(
     **kwargs,
 ):
     """Start the head node of the Ray cluster on slurm.
-    
+
     Args:
         cluster_state: State object for cluster coordination
         worker_wait_timeout_seconds: Timeout for workers to connect
@@ -340,22 +340,23 @@ def _ray_head_script(
         assert (
             started
         ), "couldn't find head address in stdout. Check head.err for details"
-        
+
         # Read the actual address from ray_current_cluster file
         current_cluster_file = Path(temp_dir) / "ray_current_cluster"
-        assert current_cluster_file.exists(), f"ray_current_cluster file not found at {current_cluster_file}"
+        assert (
+            current_cluster_file.exists()
+        ), f"ray_current_cluster file not found at {current_cluster_file}"
         address = current_cluster_file.read_text().strip()
         # Address format is "hostname:port"
         head_hostname, port_str = address.rsplit(":", 1)
         port = int(port_str)
-        
+
         head_env["RAY_ADDRESS"] = address
         logger.info(f"host {address}")
         print(f"Head started, ip: {address} ({cluster_state.cluster_id})")
         # Dashboard port can be read from ray status if needed, but for now just note it's auto-assigned
         print(f"Ray dashboard running (auto-assigned port)")
 
-        
         info = HeadInfo(
             hostname=head_hostname,
             port=port,
@@ -383,7 +384,7 @@ def worker_script(
     temp_dir_template: Optional[str] = None,
 ):
     """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first.
-    
+
     Args:
         cluster_state: State object for cluster coordination
         worker_wait_timeout_seconds: Timeout for workers to connect
@@ -400,7 +401,7 @@ def worker_script(
         time.sleep(5)
 
     logger.info("Head node found.")
-    
+
     head_info = cluster_state.head_info()
     assert head_info is not None, "something went wrong getting head information."
     worker_env = os.environ.copy()
@@ -410,7 +411,7 @@ def worker_script(
     )
     worker_env["RAY_raylet_start_wait_time_s"] = str(start_wait_time_seconds)
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
-    num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)    
+    num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
     # Use specified temp directory with environment variable expansion, or system temp
     if temp_dir_template is None:
