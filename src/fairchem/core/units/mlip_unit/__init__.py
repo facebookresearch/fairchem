@@ -30,6 +30,7 @@ def load_predict_unit(
     atom_refs: dict | None = None,
     form_elem_refs: dict | None = None,
     workers: int = 1,
+    seed: int = 41,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -44,6 +45,8 @@ def load_predict_unit(
         form_elem_refs: Optional dictionary of element reference energies for formation energy calculations.
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
+        seed: Optional random seed for reproducibility. If provided, will set the random seed for
+            Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -65,6 +68,7 @@ def load_predict_unit(
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
             num_workers=workers,
+            seed=seed,
         )
     else:
         return MLIPPredictUnit(
@@ -74,4 +78,5 @@ def load_predict_unit(
             overrides=overrides,
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
+            seed=seed,
         )
