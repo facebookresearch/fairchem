@@ -27,38 +27,15 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
-@serve.deployment(
-    logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-    max_ongoing_requests=300,
-)
-class BatchPredictServer:
+class BatchPredictServerMixin:
     """
-    Ray Serve deployment that batches incoming inference requests.
+    Shared batched-inference logic mixed into Ray Serve deployment classes.
+
+    This mixin is **not** decorated with ``@serve.deployment`` so that it
+    can be used as a regular base class.  The concrete subclasses
+    ``BatchPredictServer`` and ``MultiplexedBatchPredictServer`` apply the
+    decorator themselves.
     """
-
-    def __init__(
-        self,
-        predict_unit_ref,
-        max_batch_size: int,
-        batch_wait_timeout_s: float,
-        split_oom_batch: bool = True,
-    ):
-        """
-        Initialize with a Ray object reference to a PredictUnit.
-
-        Args:
-            predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
-            max_batch_size: Maximum number of atoms in a batch.
-                The actual number of atoms will likely be larger than this as batches
-                are split when num atoms exceeds this value.
-            batch_wait_timeout_s: Timeout in seconds to wait for a prediction
-            split_oom_batch: If true will split batch if an OOM error is raised
-        """
-        self.predict_unit = ray.get(predict_unit_ref)
-        self.split_oom_batch = split_oom_batch
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
-
-        logging.info("BatchedPredictor initialized with predict_unit from object store")
 
     def configure_batching(
         self,
@@ -97,13 +74,14 @@ class BatchPredictServer:
         return stub.info
 
     def update_predict_unit(self, predict_unit_ref) -> None:
-        """Update the predict unit with a new checkpoint.
+        """
+        Update the predict unit with a new checkpoint.
 
         Args:
             predict_unit_ref: Ray object reference to a new MLIPPredictUnit instance
         """
         self.predict_unit = ray.get(predict_unit_ref)
-        logging.info("BatchPredictServer predict_unit updated from object store")
+        logging.info("predict_unit updated from object store")
 
     @serve.batch(
         batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
@@ -216,7 +194,44 @@ class BatchPredictServer:
     logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
     max_ongoing_requests=300,
 )
-class MultiplexedBatchPredictServer(BatchPredictServer):
+class BatchPredictServer(BatchPredictServerMixin):
+    """
+    Ray Serve deployment that batches incoming inference requests
+    for a single pre-loaded model.
+    """
+
+    def __init__(
+        self,
+        predict_unit_ref,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
+        split_oom_batch: bool = True,
+    ):
+        """
+        Initialize with a Ray object reference to a PredictUnit.
+
+        Args:
+            predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
+            max_batch_size: Maximum number of atoms in a batch.
+                The actual number of atoms will likely be larger than this as batches
+                are split when num atoms exceeds this value.
+            batch_wait_timeout_s: Timeout in seconds to wait for a prediction
+            split_oom_batch: If true will split batch if an OOM error is raised
+        """
+        self.predict_unit = ray.get(predict_unit_ref)
+        self.split_oom_batch = split_oom_batch
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+
+        logging.info(
+            "BatchPredictServer initialized with predict_unit from object store"
+        )
+
+
+@serve.deployment(
+    logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    max_ongoing_requests=300,
+)
+class MultiplexedBatchPredictServer(BatchPredictServerMixin):
     """
     Ray Serve deployment that supports multiplexed model loading.
 
@@ -241,7 +256,6 @@ class MultiplexedBatchPredictServer(BatchPredictServer):
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
             split_oom_batch: If true will split batch if an OOM error is raised.
         """
-        # Skip BatchPredictServer.__init__ — no predict_unit_ref needed.
         self.split_oom_batch = split_oom_batch
         self.configure_batching(max_batch_size, batch_wait_timeout_s)
         logging.info("MultiplexedBatchPredictServer initialized")
@@ -302,7 +316,7 @@ class MultiplexedBatchPredictServer(BatchPredictServer):
         """
         model_id = serve.get_multiplexed_model_id()
         await self.get_model(model_id)
-        return super().validate_atoms_data(self, atoms_info, task_name)
+        return super().validate_atoms_data(atoms_info, task_name)
 
     async def __call__(
         self, data: AtomicData, undo_element_references: bool = True
