@@ -106,7 +106,7 @@ jobs:
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
           files: ./coverage.xml,./gpu-coverage.xml
