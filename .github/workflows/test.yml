@@ -195,7 +195,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
