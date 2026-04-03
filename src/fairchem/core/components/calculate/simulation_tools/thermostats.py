@@ -17,6 +17,7 @@ from ase.md.bussi import Bussi
 from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.verlet import VelocityVerlet
+from monty.json import jsanitize
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -104,11 +105,13 @@ class NoseHooverNVT(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         thermostat = dyn._thermostat
-        return {
-            "class_name": "NoseHooverNVT",
-            "eta": thermostat._eta.tolist(),
-            "p_eta": thermostat._p_eta.tolist(),
-        }
+        return jsanitize(
+            {
+                "class_name": "NoseHooverNVT",
+                "eta": thermostat._eta,
+                "p_eta": thermostat._p_eta,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         thermostat = dyn._thermostat
@@ -135,17 +138,19 @@ class BussiThermostat(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "BussiThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-            "transferred_energy": float(dyn.transferred_energy),
-        }
+        return jsanitize(
+            {
+                "class_name": "BussiThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+                "transferred_energy": dyn.transferred_energy,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
@@ -181,16 +186,18 @@ class LangevinThermostat(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "LangevinThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-        }
+        return jsanitize(
+            {
+                "class_name": "LangevinThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
