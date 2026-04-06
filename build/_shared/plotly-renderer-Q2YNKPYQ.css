@@ -1,0 +1,17 @@
+/* css-side-effects-plugin-ns:../../node_modules/jupyterlab-plotly/style/index.css */
+:root {
+  --jp-icon-plotly: url(/myst_assets_folder/_assets/plotly-6TYK7N2P.svg);
+}
+.jp-RenderedPlotly {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+.jp-MimeDocument .jp-RenderedPlotly {
+  overflow: hidden;
+}
+.jp-PlotlyIcon {
+  background-image: var(--jp-icon-plotly);
+}
+/*# sourceMappingURL=/myst_assets_folder/_shared/plotly-renderer-Q2YNKPYQ.css.map */
