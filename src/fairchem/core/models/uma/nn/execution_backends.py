@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -15,7 +16,9 @@ import torch
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    from fairchem.core.units.mlip_unit.api.inference import (
+        InferenceSettings,
+    )
 
 __all__ = [
     "ExecutionMode",
@@ -23,6 +26,7 @@ __all__ = [
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
     "get_execution_backend",
+    "maybe_update_settings_backend",
 ]
 
 # Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
@@ -58,18 +62,19 @@ class ExecutionBackend:
 
     @staticmethod
     def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
     ) -> None:
         """
-        Validate that model and settings are compatible with this backend.
+        Validate that model parameters and settings are compatible with this backend.
 
-        Called during model construction (settings=None) and before
-        first inference (settings provided).
+        Called before first inference.
 
         Args:
-            model: The backbone model to validate.
-            settings: Inference settings, or None at construction time.
+            lmax: Maximum degree of spherical harmonics.
+            mmax: Maximum order of spherical harmonics.
+            settings: Inference settings.
 
         Raises:
             ValueError: If incompatible with this backend.
@@ -265,17 +270,13 @@ class UMASFastPytorchBackend(ExecutionBackend):
 
     @staticmethod
     def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
     ) -> None:
         """
         Validate that settings are compatible with fast pytorch mode.
         """
-        # Check activation_checkpointing from model (chunk_size is None when disabled)
-        if model.edge_degree_embedding.activation_checkpoint_chunk_size is not None:
-            raise ValueError(
-                "UMASFastPytorchBackend requires activation_checkpointing=False"
-            )
         # Also reject if user tries to enable it via inference settings
         if settings is not None and settings.activation_checkpointing:
             raise ValueError(
@@ -338,15 +339,16 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
 
     @staticmethod
     def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
     ) -> None:
-        UMASFastPytorchBackend.validate(model, settings)
+        UMASFastPytorchBackend.validate(lmax, mmax, settings)
         if not torch.cuda.is_available():
             raise ValueError("umas_fast_gpu requires CUDA")
-        if model.lmax != 2 or model.mmax != 2:
+        if lmax != 2 or mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
-        if settings is not None and not settings.merge_mole:
+        if not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
 
     @staticmethod
@@ -446,3 +448,33 @@ def get_execution_backend(
         available = [m.value for m in _EXECUTION_BACKENDS]
         raise ValueError(f"Unknown execution mode: {mode}. Available: {available}")
     return _EXECUTION_BACKENDS[mode]()
+
+
+def maybe_update_settings_backend(
+    settings: InferenceSettings,
+    model_config: dict,
+) -> InferenceSettings:
+    """
+    Update inference settings to use UMAS_FAST_GPU if conditions are met.
+
+    Sets execution_mode to UMAS_FAST_GPU if:
+    - execution_mode is not already set
+    - UMASFastGPUBackend.validate passes for the model and settings
+
+    Args:
+        settings: Current inference settings.
+        model_config: The model configuration dictionary to validate.
+
+    Returns:
+        Updated inference settings with the appropriate execution mode.
+    """
+    if settings.execution_mode is not None:
+        return settings
+
+    try:
+        lmax = model_config["backbone"]["lmax"]
+        mmax = model_config["backbone"]["mmax"]
+        UMASFastGPUBackend.validate(lmax, mmax, settings)
+        return replace(settings, execution_mode=ExecutionMode.UMAS_FAST_GPU)
+    except (ValueError, KeyError):
+        return settings

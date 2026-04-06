@@ -7,12 +7,13 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import pickle
 import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 if TYPE_CHECKING:
     import ase
@@ -75,7 +76,7 @@ class Adsorbate:
         else:
             if adsorbate_db is None:
                 with open(adsorbate_db_path, "rb") as fp:
-                    adsorbate_db = pickle.load(fp)
+                    adsorbate_db = safe_pickle_load(fp)
 
             if adsorbate_id_from_db is not None:
                 self._load_adsorbate(adsorbate_db[adsorbate_id_from_db])

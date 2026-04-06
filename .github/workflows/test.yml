@@ -75,6 +75,11 @@ jobs:
             packages/fairchem-demo-ocpapi[dev] \
             -r tests/requirements.txt # pin test packages
 
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
       - name: Install additional dependencies
         run: |
           wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
@@ -101,7 +106,7 @@ jobs:
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
           files: ./coverage.xml,./gpu-coverage.xml
@@ -160,6 +165,11 @@ jobs:
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
 
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -185,7 +195,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
