@@ -781,6 +781,96 @@ def test_merge_mole_supercell_energy_forces_consistency(uma_merge_mole_predict_u
     npt.assert_allclose(energy_3x / energy1, 27.0, rtol=0.01)
 
 
+@pytest.mark.gpu()
+def test_merge_mole_consistent_batch():
+    """Test that merge_mole works for batch_size > 1 when all systems have identical composition."""
+    atoms = bulk("MgO", "rocksalt", a=4.213)
+    n_systems = 3
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings
+    )
+
+    atomic_data_list = [
+        AtomicData.from_ase(atoms, task_name="omat") for _ in range(n_systems)
+    ]
+    batch = atomicdata_list_to_batch(atomic_data_list)
+    preds = predict_unit.predict(batch)
+
+    assert preds["energy"].shape == (n_systems,)
+    assert preds["forces"].shape == (n_systems * len(atoms), 3)
+    assert torch.isfinite(preds["energy"]).all()
+    assert torch.isfinite(preds["forces"]).all()
+
+
+@pytest.mark.gpu()
+def test_merge_mole_inconsistent_batch():
+    """Test that merge_mole raises AssertionError when batch contains systems with different compositions."""
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings
+    )
+
+    atomic_data_list = [
+        AtomicData.from_ase(bulk("MgO", "rocksalt", a=4.213), task_name="omat"),
+        AtomicData.from_ase(bulk("Cu", "fcc", a=3.6), task_name="omat"),
+    ]
+    batch = atomicdata_list_to_batch(atomic_data_list)
+
+    with pytest.raises(AssertionError, match="same reduced composition"):
+        predict_unit.predict(batch)
+
+
+@pytest.mark.gpu()
+def test_merge_mole_batch_predict_matches_single():
+    """Test that merging on a multi-system batch gives consistent single-system predictions.
+
+    Merging MOLE on a batch of N identical systems should yield the same inference
+    results as merging on a single system when predicting on that same single system.
+    """
+    atoms = bulk("MgO", "rocksalt", a=4.213)
+    atoms_supercell = make_supercell(atoms, 2 * np.eye(3))
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings
+    )
+
+    batch_of_two = atomicdata_list_to_batch(
+        [AtomicData.from_ase(a, task_name="omat") for a in (atoms, atoms_supercell)]
+    )
+    preds_batch = predict_unit.predict(batch_of_two)
+
+    batch_single = atomicdata_list_to_batch(
+        [AtomicData.from_ase(atoms, task_name="omat")]
+    )
+    preds_single = predict_unit.predict(batch_single)
+
+    n_atoms = len(atoms)
+    npt.assert_allclose(
+        preds_batch["energy"][0].item(),
+        preds_single["energy"][0].item(),
+        atol=ATOL,
+        err_msg="Energy for first batch system differs from single system prediction",
+    )
+    npt.assert_allclose(
+        preds_batch["forces"][:n_atoms].cpu().numpy(),
+        preds_single["forces"].cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces for first batch system differ from single system prediction",
+    )
+
+    batch_single = atomicdata_list_to_batch(
+        [AtomicData.from_ase(atoms_supercell, task_name="omat")]
+    )
+    preds_single = predict_unit.predict(batch_single)
+    npt.assert_allclose(
+        preds_batch["energy"][1].item(),
+        preds_single["energy"][0].item(),
+        atol=ATOL,
+        err_msg="Energy for second batch system differs from single system prediction",
+    )
+
+
 @pytest.fixture()
 def batch_server_handle(uma_predict_unit):
     """Set up a batch server for testing."""

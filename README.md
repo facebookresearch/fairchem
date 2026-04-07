@@ -141,7 +141,8 @@ opt = FIRE(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
-#### Run molecular MD,
+#### Run Molecular Dynamics (MD)
+Note: `pretrained_mlip.get_predict_unit()` currently uses a seed to set the global state of the numpy RNG. In order to obtain different trajectories for different runs of the following code, we have to set a random seed as shown below:
 ```python
 from ase import units
 from ase.io import Trajectory
@@ -149,7 +150,8 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda", seed=seed)
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -200,8 +202,9 @@ import time
 
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
+seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=8
+    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=8, seed=seed,
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
