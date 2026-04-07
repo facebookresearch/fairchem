@@ -12,12 +12,15 @@ from fairchem.core.components.benchmark.training import (
     run_training_benchmark,
 )
 
+TRAINING_CONFIG = "configs/uma/benchmark/toolkit/training_inner.yaml"
+
 
 def test_training_benchmark_smoke():
     result = run_training_benchmark(
         device="cpu",
         bf16=False,
         throughput_steps=2,
+        training_config=TRAINING_CONFIG,
     )
     assert isinstance(result, TrainingBenchmarkResult)
     assert result.steps_per_second > 0

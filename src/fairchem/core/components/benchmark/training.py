@@ -25,11 +25,6 @@ from fairchem.core.components.runner import Runner
 
 logger = logging.getLogger(__name__)
 
-TRAINING_CONFIG = os.path.join(
-    os.path.dirname(__file__),
-    "../../../../../configs/uma/benchmark/toolkit/training_inner.yaml",
-)
-
 
 @dataclass
 class TrainingBenchmarkResult:
@@ -137,31 +132,28 @@ def _run_single(
 
 
 def run_training_benchmark(
+    training_config: str,
     data_root_dir: str | None = None,
     device: str = "cpu",
     bf16: bool = True,
     throughput_steps: int = 10,
     seed: int = 42,
-    training_config: str | None = None,
 ) -> TrainingBenchmarkResult:
     """
     Run a training benchmark comparing fp32 baseline against candidate settings.
 
     Args:
+        training_config: Path to the training YAML config.
         data_root_dir: Path to the dataset root directory.
             If None, generates fake benchmark datasets automatically.
         device: Device to run on ("cpu" or "cuda").
         bf16: Whether to enable bf16 for the candidate run.
         throughput_steps: Number of training steps for each run.
         seed: Random seed for reproducibility.
-        training_config: Path to the training YAML config. Uses default if None.
 
     Returns:
         TrainingBenchmarkResult with fidelity and throughput metrics.
     """
-    if training_config is None:
-        training_config = os.path.normpath(TRAINING_CONFIG)
-
     if data_root_dir is None:
         from fairchem.core.components.benchmark.fake_dataset import (
             create_fake_benchmark_dataset,
@@ -302,17 +294,17 @@ class TrainingBenchmarkRunner(Runner):
 
     def __init__(
         self,
+        training_config: str,
         device: str = "cuda",
         bf16: bool = True,
         throughput_steps: int = 10,
         seed: int = 42,
-        training_config: str | None = None,
     ):
+        self.training_config = training_config
         self.device = device
         self.bf16 = bf16
         self.throughput_steps = throughput_steps
         self.seed = seed
-        self.training_config = training_config
 
     def run(self) -> dict[str, Any]:
         """

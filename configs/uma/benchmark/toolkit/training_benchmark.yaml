@@ -22,6 +22,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.benchmark.training.TrainingBenchmarkRunner
+  training_config: configs/uma/benchmark/toolkit/training_inner.yaml
   device: "cuda"
   bf16: False
   throughput_steps: 50
