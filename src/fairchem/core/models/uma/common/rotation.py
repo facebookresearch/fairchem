@@ -113,7 +113,9 @@ def eulers_to_wigner(
     alpha, beta, gamma = eulers
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
-    wigner = torch.zeros(len(alpha), size, size, device=alpha.device, dtype=alpha.dtype)
+    wigner = torch.zeros(
+        alpha.shape[0], size, size, device=alpha.device, dtype=alpha.dtype
+    )
     start = 0
     for lmax in range(start_lmax, end_lmax + 1):
         block = wigner_D(lmax, alpha, beta, gamma, Jd)

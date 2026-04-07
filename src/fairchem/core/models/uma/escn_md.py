@@ -595,6 +595,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             if self.use_dataset_embedding:
                 assert dataset is not None
                 dataset_emb = self.dataset_embedding(dataset)
+                dataset_emb = torch.broadcast_to(dataset_emb, chg_emb.shape)
                 return torch.nn.SiLU()(
                     self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
                 )
@@ -654,7 +655,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
-                    data_dict["nedges"], dim=0
+                    data_dict["nedges"], dim=0, output_size=data_dict["edge_index"].shape[1]
                 )
                 shifts = torch.einsum(
                     "ij,ijk->ik",

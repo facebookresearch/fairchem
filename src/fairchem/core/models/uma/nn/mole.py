@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from contextlib import suppress
 from dataclasses import dataclass
+from itertools import pairwise
 
 import torch
 import torch.nn as nn
@@ -166,40 +167,30 @@ class MOLE(torch.nn.Module):
                 linear.bias.copy_(self.bias)
         return linear
 
+    def ragged_dot(self, lhs: torch.Tensor, rhs: torch.Tensor, group_sizes: torch.Tensor):
+        start_idxs = [0] + torch.cumsum(group_sizes, dim=0).tolist()
+        out = []
+        for n, (start, end) in enumerate(pairwise(start_idxs)):
+            if end > start:
+                out.append(F.linear(lhs[start:end], rhs[n]))
+        return torch.concatenate(out, dim=0)
+
     def forward(self, x):
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
             weights = torch.einsum(
-                "eoi, be->boi",
+                "eoi,be->boi",
                 self.weights,
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
 
-        out = []
+        assert self.global_mole_tensors.mole_sizes.shape[0] > 0
         ac_start_idx = self.global_mole_tensors.ac_start_idx
-        assert len(self.global_mole_tensors.mole_sizes) > 0
-        # TODO: precompute these if needed but they should be small and on cpu
-        start_idxs = [0] + torch.cumsum(
-            self.global_mole_tensors.mole_sizes, dim=0
-        ).tolist()
-        mole_intervals = list(zip(start_idxs, start_idxs[1:]))
-
-        # Because activation checkpointing can chunk the inputs, we need to only compute
-        # the mole_size intervals that overlap with the current chunks
-        # for example if mole_sizes = [10,10,15]
-        # start_idxs -> [0,10,20,35]
-        # mole_intervals -> [(0,10),(10,20),(20,35)]
-        # if the input segment is (5,15) then we compute the following 2 segments
-        # (5,10),(10,15)
-        input_segment = (ac_start_idx, ac_start_idx + x.shape[0])
-
-        for n, mole_segment in enumerate(mole_intervals):
-            interval_overlap = interval_intersection(input_segment, mole_segment)
-            if interval_overlap is not None:
-                start = interval_overlap[0] - ac_start_idx
-                end = interval_overlap[1] - ac_start_idx
-                out.append(F.linear(x[start:end], weights[n], bias=self.bias))
-
-        result = torch.concatenate(out, dim=0)
+        cs = self.global_mole_tensors.mole_sizes.cumsum(0)
+        cs = cs.clamp(min=ac_start_idx, max=ac_start_idx + x.shape[0]) - ac_start_idx
+        group_sizes = torch.diff(cs, prepend=cs.new_zeros(1))
+        result = self.ragged_dot(x, weights, group_sizes)
+        if self.bias is not None:
+            result += self.bias
         assert (
             result.shape[0] == x.shape[0]
         ), f"result shape {result.shape}, does not match input shape {x.shape} at dim 0"

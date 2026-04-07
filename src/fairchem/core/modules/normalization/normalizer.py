@@ -56,7 +56,9 @@ class Normalizer(nn.Module):
     @torch.autocast(device_type="cuda", enabled=False)
     @torch.autocast(device_type="cpu", enabled=False)
     def denorm(self, normed_tensor: torch.Tensor) -> torch.Tensor:
-        return normed_tensor * self.rmsd + self.mean
+        return normed_tensor * self.rmsd.to(normed_tensor.device) + self.mean.to(
+            normed_tensor.device
+        )
 
     def forward(self, normed_tensor: torch.Tensor) -> torch.Tensor:
         return self.denorm(normed_tensor)

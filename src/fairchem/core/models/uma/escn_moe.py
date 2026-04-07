@@ -671,14 +671,29 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
                     head_output_tensor.shape
                 )  # float('inf'))
                 if dataset_mask.any():
-                    if output_tensor.shape[0] == dataset_mask.shape[0]:
-                        output_tensor[dataset_mask] = head_output_tensor[dataset_mask]
+                    if output_tensor.shape[0] == data.natoms.shape[0]:
+                        output_tensor = torch.where(
+                            torch.tensor(
+                                dataset_mask[
+                                    :, *([None] * (head_output_tensor.ndim - 1))
+                                ],
+                                device=output_tensor.device,
+                            ),
+                            head_output_tensor,
+                            output_tensor,
+                        )
                     else:  # assume atoms are the first dimension
                         atoms_mask = torch.isin(
                             data_batch_full,
                             torch.where(torch.from_numpy(dataset_mask))[0],
                         )
-                        output_tensor[atoms_mask] = head_output_tensor[atoms_mask]
+                        output_tensor = torch.where(
+                            atoms_mask[:, *([None] * (head_output_tensor.ndim - 1))].to(
+                                output_tensor.device
+                            ),
+                            head_output_tensor,
+                            output_tensor,
+                        )
                 full_output[f"{dataset_name}_{key}"] = (
                     {key: output_tensor} if self.wrap_property else output_tensor
                 )
