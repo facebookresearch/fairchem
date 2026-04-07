@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -63,7 +64,12 @@ def test_runner_catches_oom(tmp_path):
 
     from omegaconf import OmegaConf
 
-    job_config = OmegaConf.create({"metadata": {"results_dir": str(tmp_path)}})
+    job_config = OmegaConf.create(
+        {
+            "metadata": {"results_dir": str(tmp_path)},
+            "run_dir": str(tmp_path),
+        }
+    )
     runner.job_config = job_config
 
     call_count = {"n": 0}
@@ -87,6 +93,10 @@ def test_runner_catches_oom(tmp_path):
 
     # Non-OOM errors should propagate
     call_count["n"] = 0
+    # Remove cached baselines so the next run recomputes them
+    cache_file = os.path.join(str(tmp_path), "baseline_cache.json")
+    if os.path.exists(cache_file):
+        os.remove(cache_file)
 
     def mock_run_bad(checkpoint, system, inference_settings, **kw):
         call_count["n"] += 1

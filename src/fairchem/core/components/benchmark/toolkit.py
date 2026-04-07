@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import gc
+import hashlib
 import json
 import logging
 import os
@@ -42,6 +43,88 @@ BASELINE_SETTINGS = InferenceSettings(
     execution_mode="general",
     base_precision_dtype=torch.float64,
 )
+
+BASELINE_CACHE_FILE = "baseline_cache.json"
+
+
+def _baseline_cache_key(
+    checkpoint: str,
+    systems: list[BenchmarkSystem],
+    device: str,
+    seed: int,
+) -> str:
+    """
+    Produce a deterministic hash from the inputs that affect baseline results.
+    """
+    key_data = {
+        "checkpoint": checkpoint,
+        "systems": [{"name": s.name, "num_atoms": len(s.atoms)} for s in systems],
+        "device": device,
+        "seed": seed,
+        "baseline_settings": str(BASELINE_SETTINGS),
+    }
+    key_json = json.dumps(key_data, sort_keys=True)
+    return hashlib.sha256(key_json.encode()).hexdigest()
+
+
+def _save_baseline_cache(
+    cache_path: str,
+    cache_key: str,
+    baselines: dict[str, InferenceResult],
+) -> None:
+    """
+    Save baseline InferenceResult dicts to a JSON cache file.
+    """
+    serialized: dict[str, Any] = {}
+    for name, result in baselines.items():
+        entry: dict[str, Any] = {
+            "energy": result.energy,
+            "forces": result.forces.tolist(),
+        }
+        if result.stress is not None:
+            entry["stress"] = result.stress.tolist()
+        serialized[name] = entry
+
+    with open(cache_path, "w") as f:
+        json.dump(
+            {"cache_key": cache_key, "baselines": serialized},
+            f,
+            indent=2,
+        )
+
+
+def _load_baseline_cache(
+    cache_path: str,
+    expected_key: str,
+) -> dict[str, InferenceResult] | None:
+    """
+    Load cached baselines if the cache file exists and the key matches.
+
+    Returns None on missing file or key mismatch.
+    """
+    if not os.path.exists(cache_path):
+        return None
+
+    try:
+        with open(cache_path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    if data.get("cache_key") != expected_key:
+        return None
+
+    baselines: dict[str, InferenceResult] = {}
+    for name, entry in data["baselines"].items():
+        stress = None
+        if "stress" in entry:
+            stress = np.array(entry["stress"], dtype=np.float64)
+        baselines[name] = InferenceResult(
+            energy=float(entry["energy"]),
+            forces=np.array(entry["forces"], dtype=np.float64),
+            stress=stress,
+        )
+    return baselines
 
 
 @dataclass
@@ -279,17 +362,38 @@ class BenchmarkToolkitRunner(Runner):
         os.makedirs(output_dir, exist_ok=True)
 
         # Step 1: Run baseline (fp64, no optimizations) on each system
-        logger.info("Running baseline inference (fp64)...")
-        baselines: dict[str, InferenceResult] = {}
-        for system in self.systems:
-            logger.info("  Baseline: %s (%d atoms)", system.name, len(system.atoms))
-            baselines[system.name] = run_inference(
-                checkpoint=self.checkpoint,
-                system=system,
-                inference_settings=BASELINE_SETTINGS,
-                device=self.device,
-                seed=self.seed,
+        # Cache lives in run_dir (stable across runs), not results_dir (per-run)
+        cache_dir = self.job_config.run_dir
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_path = os.path.join(cache_dir, BASELINE_CACHE_FILE)
+        cache_key = _baseline_cache_key(
+            self.checkpoint, self.systems, self.device, self.seed
+        )
+        baselines = _load_baseline_cache(cache_path, cache_key)
+
+        if baselines is not None:
+            logger.warning(
+                "Using cached baseline results from %s. "
+                "Delete this file to force recomputation.",
+                cache_path,
             )
+        else:
+            logger.info("Running baseline inference (fp64)...")
+            baselines = {}
+            for system in self.systems:
+                logger.info(
+                    "  Baseline: %s (%d atoms)",
+                    system.name,
+                    len(system.atoms),
+                )
+                baselines[system.name] = run_inference(
+                    checkpoint=self.checkpoint,
+                    system=system,
+                    inference_settings=BASELINE_SETTINGS,
+                    device=self.device,
+                    seed=self.seed,
+                )
+            _save_baseline_cache(cache_path, cache_key, baselines)
 
         baseline_summary = {
             name: {
