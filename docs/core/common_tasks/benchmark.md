@@ -2,6 +2,10 @@
 
 Model benchmarks involve evaluating a model on downstream property predictions involving several model evaluations to calculate a single or set of related properties. For example, calculating structure relaxations, elastic tensors, phonons, or adsorption energy.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 ## Available Benchmark Configurations
 
 To benchmark UMA models on standard datasets, you can find benchmark configuration files in `configs/uma/benchmark`. Example files include:
@@ -56,6 +60,7 @@ It is straightforward to write your own calculations in a `CalculateRunner`. Alt
 def calculate(self, job_num: int = 0, num_jobs: int = 1) -> R:
     """Implement your calculations here by iterating over the self.input_data attribute"""
 
+
 def write_results(
     self, results: R, results_dir: str, job_num: int = 0, num_jobs: int = 1
 ) -> None:
@@ -79,14 +84,18 @@ If you want to implement your own benchmark metric calculation you can write a `
 def join_results(self, results_dir: str, glob_pattern: str) -> R:
     """Join your results from multiple files into a single result object."""
 
+
 def save_results(self, results: R, results_dir: str) -> None:
     """Save joined results to a single file"""
+
 
 def compute_metrics(self, results: R, run_name: str) -> M:
     """Compute metrics using the joined results and target data in your BenchmarkReducer."""
 
+
 def save_metrics(self, metrics: M, results_dir: str) -> None:
     """Save the computed metrics to a file."""
+
 
 def log_metrics(self, metrics: M, run_name: str):
     """Log metrics to the configured logger."""

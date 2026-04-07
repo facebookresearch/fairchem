@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 """
 AdsorbML evaluation script. This script expects the results-file to be
 organized in a very specific structure in order to evaluate successfully.
@@ -76,10 +77,11 @@ e.g.
 from __future__ import annotations
 
 import argparse
-import pickle
 from collections import defaultdict
 
 import numpy as np
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 SUCCESS_THRESHOLD = 0.1
 
@@ -318,8 +320,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    targets = pickle.load(open(args.dft_targets, "rb"))
-    gt_dft_counts = pickle.load(open(args.dft_compute, "rb"))
+    targets = safe_pickle_load(args.dft_targets)
+    gt_dft_counts = safe_pickle_load(args.dft_compute)
 
     ###### Process DFT Data ######
     dft_data = get_dft_data(targets)
@@ -328,7 +330,7 @@ if __name__ == "__main__":
     )
 
     ###### Process ML Data ######
-    ml_data = pickle.load(open(args.results_file, "rb"))
+    ml_data = safe_pickle_load(args.results_file)
     ml_data = filter_ml_data(ml_data, dft_data)
 
     ###### Compute Metrics ######

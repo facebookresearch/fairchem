@@ -13,22 +13,28 @@ import pytest
 import torch
 from ase.build import bulk, molecule
 
-from fairchem.core.calculate.torchsim_interface import (
-    FairChemModel,
-    _simstate_to_atomicdata_batch,
-)
-from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
 pytest.importorskip(
     "torch_sim",
     reason="torch_sim not installed. Install with: pip install fairchem-core[torchsim]",
 )
-
 import torch_sim as ts  # noqa: E402
-from torch_sim.models.interface import validate_model_outputs  # noqa: E402
+from torch_sim.models.interface import (  # noqa: E402
+    ModelInterface,
+    validate_model_outputs,
+)
+
+from fairchem.core.calculate.torchsim_interface import (  # noqa: E402
+    FairChemModel,
+    _simstate_to_atomicdata_batch,
+)
+from fairchem.core.datasets.atomic_data import (  # noqa: E402
+    AtomicData,
+    atomicdata_list_to_batch,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 DTYPE = torch.float32
 DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -284,9 +290,16 @@ def test_charge_spin_handling(direct_checkpoint, charge: float, spin: float) -> 
     assert torch.isfinite(result["forces"]).all()
 
 
-def test_model_output_validation(torchsim_model_oc20: FairChemModel) -> None:
-    """Test that the model implementation follows the ModelInterface contract."""
-    validate_model_outputs(torchsim_model_oc20, DEVICE, DTYPE)
+@pytest.mark.parametrize(
+    "model_fixture_name",
+    ["torchsim_model_oc20", "torchsim_model_omol"],
+)
+def test_model_output_validation(
+    request: pytest.FixtureRequest, model_fixture_name: str
+) -> None:
+    """Test that a model implementation follows the ModelInterface contract."""
+    model: ModelInterface = request.getfixturevalue(model_fixture_name)
+    validate_model_outputs(model, DEVICE, DTYPE)
 
 
 def test_model_output_validation_with_stress(conserving_mole_checkpoint) -> None:
