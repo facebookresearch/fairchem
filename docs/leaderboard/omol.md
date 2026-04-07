@@ -1,11 +1,7 @@
 # OMol25 Leaderboard
 
-:::{tip} Community Leaderboard
-Submit your model predictions for evaluation on the [fairchem_leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard) hosted on HuggingFace.
-:::
-
-As part of the OMol25 release, we present a community leaderboard for researchers to submit their predictions for evaluation - [fairchem_leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
-Below we outline the steps to generate predictions and submit them to the leaderboard.
+This leaderboard evaluates performance on the **Open Molecules 2025 (OMol25)** dataset - a diverse, high-quality collection that uniquely combines elemental, chemical, and structural diversity.
+See the [OMol25 paper](https://arxiv.org/pdf/2505.08762) for more details.
 
 The leaderboard is broken into two different sections - "S2EF" and "Evaluations".
 Structure to Energy and Forces (S2EF) is the most straightforward evaluation for MLIPs - given a structure, how well can you predict the total energy and per-atom forces.
@@ -28,12 +24,12 @@ pip install "fairchem-data-omol>=0.1.1"
 ```
 
 ## S2EF
-The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. Validation labels are already accessible in the released dataset for local benchmarking and debugging, so we highly encourage users to make Test submissions to fairly and accurately compare models. The size of each split is as follows:
+The leaderboard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. Validation labels are already accessible in the released dataset for local benchmarking and debugging, so we highly encourage users to make Test submissions to fairly and accurately compare models. The size of each split is as follows:
 
-| Split | Size | 
+| Split | Size |
 |----------|----------|
 | Val   | 2,762,021 |
-| Test    | 2,805,046     | 
+| Test    | 2,805,046     |
 
 Predictions must be saved as ".npz" files and shall contain the following information:
 ```

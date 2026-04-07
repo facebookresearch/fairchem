@@ -47,6 +47,9 @@ class MockBackbone(nn.Module):
     def on_predict_check(self, data):
         self._checked = True
 
+    def get_default_untrained_tasks(self, checkpoint_tasks, inference_settings):
+        return []
+
 
 class MockBackboneWithReplacement(MockBackbone):
     """Mock backbone that returns a new backbone on prepare_for_inference."""

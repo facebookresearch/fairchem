@@ -53,7 +53,7 @@ atomic_data_list = [
 ]
 batch = atomicdata_list_to_batch(atomic_data_list)
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 preds = predictor.predict(batch)
 ```
 
@@ -81,7 +81,7 @@ dataset = AseDBDataset(
     config=dict(src="path/to/your/dataset.aselmdb", a2g_args=dict(task_name="omol"))
 )
 loader = DataLoader(dataset, batch_size=200, collate_fn=atomicdata_list_to_batch)
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 
 for batch in loader:
     preds = predictor.predict(batch)
