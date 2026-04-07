@@ -2,6 +2,10 @@
 
 FAIRChem v2 provides a number of methods used to benchmark and evaluate the UMA models that will be helpful for apples-to-apples comparisons with the paper results.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 ## Running Model Evaluations
 
 To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate UMA models are stored in `configs/uma/evaluate`.
