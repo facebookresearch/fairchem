@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -8,10 +15,10 @@ from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import IsotropicMTKNPT
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
+from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
-from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 
 def run_ase_langevin():
