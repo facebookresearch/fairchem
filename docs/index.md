@@ -233,4 +233,4 @@ Access pretrained UMA checkpoints
 :::
 ::::
 
-[Terms of Use](https://opensource.fb.com/legal/terms) | [Privacy Policy](https://opensource.fb.com/legal/privacy)
+Copyright © Meta Platforms, Inc | [Terms of Use](https://opensource.fb.com/legal/terms) | [Privacy Policy](https://opensource.fb.com/legal/privacy)
