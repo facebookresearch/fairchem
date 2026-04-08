@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import traceback
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -26,22 +24,21 @@ from fairchem.core.components.calculate.recipes.relax import (
 from fairchem.core.components.calculate.recipes.utils import (
     get_property_dict_from_atoms,
 )
+from fairchem.core.components.preemptable_runner import (
+    PreemptableRunner,
+    StopfairDetected,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from ase.calculators.calculator import Calculator
 
     from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
-class _StopfairDetected(Exception):
-    """
-    Raised by the STOPFAIR observer to exit the current relaxation.
-    """
-
-
-class RelaxationRunner(CalculateRunner):
+class RelaxationRunner(CalculateRunner, PreemptableRunner):
     """Relax a sequence of several structures/molecules.
 
     This class handles the relaxation of atomic structures using a specified calculator,
@@ -121,16 +118,12 @@ class RelaxationRunner(CalculateRunner):
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
 
         # Build STOPFAIR observer if heartbeat_interval is configured
-        stopfair_path = None
         stopfair_observers = None
         if self.heartbeat_interval is not None and self.heartbeat_interval > 0:
-            stopfair_path = (
-                Path(self.job_config.metadata.checkpoint_dir).parent / "STOPFAIR"
-            )
 
             def check_stopfair():
-                if stopfair_path.exists():
-                    raise _StopfairDetected
+                if self.check_stopfair():
+                    raise StopfairDetected
 
             stopfair_observers = [(check_stopfair, self.heartbeat_interval)]
 
@@ -183,7 +176,7 @@ class RelaxationRunner(CalculateRunner):
                         }
                     )
 
-                except _StopfairDetected:
+                except StopfairDetected:
                     # Current structure is incomplete — do NOT append it.
                     save_path = self.job_config.metadata.preemption_checkpoint_dir
                     logging.info(
@@ -191,9 +184,8 @@ class RelaxationRunner(CalculateRunner):
                         f"{len(self._current_results)} completed results to {save_path}"
                     )
                     self.save_state(save_path, is_preemption=True)
-                    if stopfair_path is not None and stopfair_path.exists():
-                        stopfair_path.unlink()
-                    raise  # propagate to outer except _StopfairDetected
+                    self.stopfair_path.unlink(missing_ok=True)
+                    raise  # propagate to outer except StopfairDetected
 
                 except Exception as ex:  # TODO too broad-figure out which to catch
                     results.update(dict.fromkeys(self._calculate_properties, np.nan))
@@ -217,7 +209,7 @@ class RelaxationRunner(CalculateRunner):
                     is_preemption=False,
                 )
 
-        except _StopfairDetected:
+        except StopfairDetected:
             self._stopped_by_stopfair = True
 
         return self._current_results
@@ -247,62 +239,44 @@ class RelaxationRunner(CalculateRunner):
             os.path.join(results_dir, f"relaxation_{num_jobs}-{job_num}.json.gz")
         )
 
-    def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
-        """Save the current relaxation progress to a checkpoint.
-
-        Uses an atomic write pattern (temp dir then rename) to avoid corrupt
-        checkpoints on crash mid-write.
+    def save_simulation_state(self, checkpoint_dir: Path, is_preemption: bool) -> None:
+        """Save the current relaxation progress into checkpoint_dir.
 
         The progress file name uses underscores (``relaxation_checkpoint_N_M.json.gz``)
         so it does not match ``result_glob_pattern`` (``relaxation_*-*.json.gz``).
 
         Args:
-            checkpoint_location: Directory to save the checkpoint
-            is_preemption: Whether this save is due to preemption
-
-        Returns:
-            bool: True if state was successfully saved, False otherwise
+            checkpoint_dir: Directory to write state files into.
+            is_preemption: Whether this save is due to preemption.
         """
-        checkpoint_dir = Path(checkpoint_location)
-        tmp_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".tmp")
-
-        try:
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-
-            progress_file = (
-                tmp_dir
-                / f"relaxation_checkpoint_{self._current_num_jobs}_{self._current_job_num}.json.gz"
-            )
-            pd.DataFrame(self._current_results).to_json(progress_file)
-
-            if checkpoint_dir.exists():
-                shutil.rmtree(checkpoint_dir, ignore_errors=True)
-            tmp_dir.rename(checkpoint_dir)
-            return True
-
-        except Exception as e:
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            logging.exception(f"Failed to save checkpoint: {e}")
-            return False
+        progress_file = (
+            checkpoint_dir
+            / f"relaxation_checkpoint_{self._current_num_jobs}_{self._current_job_num}.json.gz"
+        )
+        pd.DataFrame(self._current_results).to_json(progress_file)
 
     def load_state(self, checkpoint_location: str | None) -> None:
         """Load a previously saved relaxation state from a checkpoint.
 
-        Calls the base class first to handle fully-completed runs (which copies
-        the result file and sets ``_already_calculated``). Then looks for a
-        partial-progress file to resume from.
+        Calls the CalculateRunner base first to handle fully-completed runs
+        (which copies the result file and sets ``_already_calculated``). Then
+        delegates to PreemptableRunner to load partial progress via
+        load_simulation_state.
 
         Args:
             checkpoint_location: Directory containing the checkpoint, or None
         """
-        super().load_state(checkpoint_location)
+        CalculateRunner.load_state(self, checkpoint_location)
         if self._already_calculated or checkpoint_location is None:
             return
+        PreemptableRunner.load_state(self, checkpoint_location)
 
-        checkpoint_dir = Path(checkpoint_location)
+    def load_simulation_state(self, checkpoint_dir: Path) -> None:
+        """Load partial relaxation progress from checkpoint_dir.
+
+        Args:
+            checkpoint_dir: Directory containing checkpoint files.
+        """
         if not checkpoint_dir.exists():
             return
 
