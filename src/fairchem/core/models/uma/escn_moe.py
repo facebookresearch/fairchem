@@ -584,7 +584,13 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
                             data_batch_full,
                             torch.where(torch.from_numpy(dataset_mask))[0],
                         )
-                        output_tensor[atoms_mask] = mole_output_tensor[atoms_mask]
+                        output_tensor = torch.where(
+                            atoms_mask[:, *([None] * (mole_output_tensor.ndim - 1))].to(
+                                output_tensor.device
+                            ),
+                            mole_output_tensor,
+                            output_tensor,
+                        )
                 full_output[f"{dataset_name}_{key}"] = (
                     {key: output_tensor} if self.wrap_property else output_tensor
                 )
