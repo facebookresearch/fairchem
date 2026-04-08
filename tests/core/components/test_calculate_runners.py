@@ -153,7 +153,8 @@ def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
     relaxation_runner = RelaxationRunner(
         calculator, input_data=AtomsDatasetSequence(dummy_binary_dataset)
     )
-    relaxation_runner._job_config = _make_job_config(tmp_path)
+    job_config = _make_job_config(tmp_path)
+    relaxation_runner._job_config = job_config
 
     # Test with default parameters
     results = relaxation_runner.calculate()
@@ -178,6 +179,8 @@ def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
         fmax=0.1,  # relax_kwargs
         steps=5,  # relax_kwargs
     )
+    relaxation_runner_custom._job_config = job_config
+
     results_custom = relaxation_runner_custom.calculate()
     assert len(results_custom) == len(dummy_binary_dataset)
     assert "energy" in results_custom[0]
