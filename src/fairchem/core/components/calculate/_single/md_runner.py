@@ -23,8 +23,8 @@ from fairchem.core.components.calculate.simulation_tools.trajectory import (
     ParquetTrajectoryWriter,
     TrajectoryFrame,
 )
-from fairchem.core.components.preemptable_runner import (
-    PreemptableRunner,
+from fairchem.core.components.runner import (
+    PreemptableMixin,
     StopfairDetected,
 )
 
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     )
 
 
-class MDRunner(CalculateRunner, PreemptableRunner):
+class MDRunner(PreemptableMixin, CalculateRunner):
     """
     General-purpose molecular dynamics runner for single structures.
 
@@ -326,7 +326,7 @@ class MDRunner(CalculateRunner, PreemptableRunner):
         Args:
             checkpoint_location: Directory containing checkpoint files, or None.
         """
-        PreemptableRunner.load_state(self, checkpoint_location)
+        PreemptableMixin.load_state(self, checkpoint_location)
 
     def load_simulation_state(self, checkpoint_dir: Path) -> None:
         """

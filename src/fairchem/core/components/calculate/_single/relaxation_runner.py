@@ -24,8 +24,8 @@ from fairchem.core.components.calculate.recipes.relax import (
 from fairchem.core.components.calculate.recipes.utils import (
     get_property_dict_from_atoms,
 )
-from fairchem.core.components.preemptable_runner import (
-    PreemptableRunner,
+from fairchem.core.components.runner import (
+    PreemptableMixin,
     StopfairDetected,
 )
 
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
-class RelaxationRunner(CalculateRunner, PreemptableRunner):
+class RelaxationRunner(PreemptableMixin, CalculateRunner):
     """Relax a sequence of several structures/molecules.
 
     This class handles the relaxation of atomic structures using a specified calculator,
@@ -269,7 +269,7 @@ class RelaxationRunner(CalculateRunner, PreemptableRunner):
         CalculateRunner.load_state(self, checkpoint_location)
         if self._already_calculated or checkpoint_location is None:
             return
-        PreemptableRunner.load_state(self, checkpoint_location)
+        PreemptableMixin.load_state(self, checkpoint_location)
 
     def load_simulation_state(self, checkpoint_dir: Path) -> None:
         """Load partial relaxation progress from checkpoint_dir.
