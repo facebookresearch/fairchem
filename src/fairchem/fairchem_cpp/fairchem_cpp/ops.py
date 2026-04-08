@@ -14,33 +14,33 @@ __all__ = [ "segment_mm"]
 # https://github.com/dmlc/dgl
 class SEGMENTMM(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, A, B, seglen_A):
+    def forward(ctx, A, B, seglen_A, use_grouped_gemm):
         A=A.contiguous()
         B=B.contiguous()
         seglen_A=seglen_A.contiguous()
         if B.dim() != 3:
             raise ValueError("segment_mm expects B to be a 3D tensor.")
         C = torch.empty((A.shape[0], B.shape[2]), device=A.device, dtype=A.dtype)
-        torch.ops.fairchem_cpp.segment_mm(A, B, C, seglen_A, False)
-        ctx.backward_cache = A, B, seglen_A
+        torch.ops.fairchem_cpp.segment_mm(A, B, C, seglen_A, False, use_grouped_gemm)
+        ctx.backward_cache = A, B, seglen_A, use_grouped_gemm
         return C
-    
+
     @staticmethod
     def backward(ctx, dZ):
         dZ=dZ.contiguous()
-        A, B, seglen_A = ctx.backward_cache
+        A, B, seglen_A, use_grouped_gemm = ctx.backward_cache
         A_grad = B_grad = None
         if ctx.needs_input_grad[0]:
             #  Compute A_grad = Out_grad * B^T
             A_grad = torch.empty(A.shape, device=A.device, dtype=A.dtype)
-            torch.ops.fairchem_cpp.segment_mm(dZ, B, A_grad, seglen_A, True)
+            torch.ops.fairchem_cpp.segment_mm(dZ, B, A_grad, seglen_A, True, use_grouped_gemm)
         if ctx.needs_input_grad[1]:
             #  Compute B_grad = A^T * Out_grad
             B_grad = torch.empty(B.shape, device=B.device, dtype=B.dtype)
-            torch.ops.fairchem_cpp.segment_mm_backward(A, dZ, B_grad, seglen_A)
-        return A_grad, B_grad, None
-    
-def segment_mm(A, B, seglen_A):
+            torch.ops.fairchem_cpp.segment_mm_backward(A, dZ, B_grad, seglen_A, use_grouped_gemm)
+        return A_grad, B_grad, None, None
+
+def segment_mm(A, B, seglen_A, use_grouped_gemm=True):
     if A.device.type == "cpu":
         C = []
         off = 0
@@ -51,4 +51,4 @@ def segment_mm(A, B, seglen_A):
     else:
         #if autocasting make sure weights are same type
         B=B.to(A.dtype)
-        return SEGMENTMM.apply(A,B,seglen_A)
+        return SEGMENTMM.apply(A, B, seglen_A, bool(use_grouped_gemm))

@@ -20,7 +20,7 @@ extern "C" {
 
 // Defines the operators
 TORCH_LIBRARY(fairchem_cpp, m) {
-  m.def("segment_mm(Tensor A, Tensor B, Tensor C, Tensor seglen, bool b_trans) -> ()");
-  m.def("segment_mm_backward(Tensor A, Tensor dC, Tensor dB, Tensor seglen) -> ()");
+  m.def("segment_mm(Tensor A, Tensor B, Tensor C, Tensor seglen, bool b_trans, bool use_grouped_gemm) -> ()");
+  m.def("segment_mm_backward(Tensor A, Tensor dC, Tensor dB, Tensor seglen, bool use_grouped_gemm) -> ()");
 }
 

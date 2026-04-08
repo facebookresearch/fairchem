@@ -23,8 +23,6 @@ namespace fairchem_cpp {
     TORCH_CHECK(status == CUBLAS_STATUS_SUCCESS, "cuBLAS error: ", status); \
   } while (0)
 
-constexpr bool use_grouped_gemm = true;
-
 // Ensures that the pointer mode is set to HOST, which is required for cublasGemmGroupedBatchedEx
 class CublasPointerModeGuard {
  public:
@@ -456,7 +454,13 @@ void SegmentMMBackwardB(
     }
 }
 
-void segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, at::Tensor& C, const at::Tensor& seglen, bool b_trans) {
+void segment_mm_dispatch(
+    const at::Tensor& A,
+    const at::Tensor& B,
+    at::Tensor& C,
+    const at::Tensor& seglen,
+    bool b_trans,
+    bool use_grouped_gemm) {
     TORCH_CHECK(seglen.dtype() == at::kInt);
     TORCH_CHECK(A.dtype() == B.dtype())
     TORCH_CHECK(A.dtype() == C.dtype())
@@ -489,7 +493,12 @@ void segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, at::Tensor& C
     }
 }
 
-void segment_mm_backward_dispatch(const at::Tensor& A, const at::Tensor& dC, at::Tensor& dB, const at::Tensor& seglen) {
+void segment_mm_backward_dispatch(
+    const at::Tensor& A,
+    const at::Tensor& dC,
+    at::Tensor& dB,
+    const at::Tensor& seglen,
+    bool use_grouped_gemm) {
     TORCH_CHECK(seglen.dtype() == at::kInt);
     TORCH_CHECK(A.dtype() == dC.dtype())
     TORCH_CHECK(A.dtype() == dB.dtype())
