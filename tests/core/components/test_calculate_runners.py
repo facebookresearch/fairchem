@@ -153,6 +153,7 @@ def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
     relaxation_runner = RelaxationRunner(
         calculator, input_data=AtomsDatasetSequence(dummy_binary_dataset)
     )
+    relaxation_runner._job_config = _make_job_config(tmp_path)
 
     # Test with default parameters
     results = relaxation_runner.calculate()
