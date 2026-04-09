@@ -177,7 +177,7 @@ def balance_channels_batched(
     which provides correct gradients in both forward and backward passes.
     """
     out_emb = emb.clone()
-    num_systems = len(natoms)
+    num_systems = natoms.shape[0]
     n_channels = end_idx - start_idx
 
     # Batched extraction: [num_atoms, n_channels]
@@ -647,7 +647,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ), "otf_graph is false, need to provide edge_index as input!"
 
             # Compute shifts from cell offsets
-            if len(data_dict["natoms"]) == 1:
+            if data_dict["natoms"].shape[0] == 1:
                 # Single system: use matmul (compile-friendly, no data-dependent ops)
                 shifts = data_dict["cell_offsets"].to(
                     data_dict["cell"].dtype
@@ -1090,7 +1090,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             emb,
             self.energy_block,
             data["batch"],
-            len(data["natoms"]),
+            data["natoms"].shape[0],
             natoms=data["natoms"],
             reduce=self.reduce,
         )

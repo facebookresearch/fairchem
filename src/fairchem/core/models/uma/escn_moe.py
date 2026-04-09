@@ -577,17 +577,22 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
                     mole_output_tensor.shape
                 )  # float('inf'))
                 if dataset_mask.any():
-                    if output_tensor.shape[0] == dataset_mask.shape[0]:
-                        output_tensor[dataset_mask] = mole_output_tensor[dataset_mask]
-                    else:  # assume atoms are the first dimension
+                    if output_tensor.shape[0] == head_output["embeddings"].shape[0]:
                         atoms_mask = torch.isin(
                             data_batch_full,
                             torch.where(torch.from_numpy(dataset_mask))[0],
-                        )
+                        ).to(output_tensor.device)
                         output_tensor = torch.where(
-                            atoms_mask[:, *([None] * (mole_output_tensor.ndim - 1))].to(
-                                output_tensor.device
-                            ),
+                            atoms_mask[:, *([None] * (mole_output_tensor.ndim - 1))],
+                            mole_output_tensor,
+                            output_tensor,
+                        )
+                    else:
+                        brdcast_mask = torch.broadcast_to(
+                            torch.from_numpy(dataset_mask), (output_tensor.shape[0],)
+                        ).to(output_tensor.device)
+                        output_tensor = torch.where(
+                            brdcast_mask[:, *([None] * (mole_output_tensor.ndim - 1))],
                             mole_output_tensor,
                             output_tensor,
                         )
