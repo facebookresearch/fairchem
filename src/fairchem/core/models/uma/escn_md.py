@@ -512,18 +512,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
-    @property  # deprecate this
-    def direct_forces(self) -> bool:
-        return self.regress_config.direct_forces
-
-    @property  # deprecate this
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property  # deprecate this
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
-
     def balance_channels(
         self,
         x_message_prime: torch.Tensor,
@@ -903,7 +891,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         stress computation requires energy-conserving force computation.
         """
         # Direct force models can't compute stress via autograd
-        if self.direct_forces:
+        if self.regress_config.direct_forces:
             return []
 
         tasks = []
@@ -1064,14 +1052,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         backbone.energy_block = None
         backbone.force_block = None
         self.regress_config = backbone.regress_config
-
-    @property
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
 
     @conditional_grad(torch.enable_grad())
     def forward(
