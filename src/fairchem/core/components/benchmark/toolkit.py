@@ -174,6 +174,13 @@ def run_inference(
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+    if not os.path.exists(checkpoint):
+        from fairchem.core.calculate.pretrained_mlip import (
+            pretrained_checkpoint_path_from_name,
+        )
+
+        checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
+
     predictor = MLIPPredictUnit(
         checkpoint, device, inference_settings=inference_settings
     )
