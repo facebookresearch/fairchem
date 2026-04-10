@@ -25,6 +25,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastCPUBackend",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
@@ -41,6 +42,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FAST_CPU = "umas_fast_cpu"
 
 
 class ExecutionBackend:
@@ -422,10 +424,175 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class _EdgeDegreeScatterFunction(torch.autograd.Function):
+    """
+    Custom autograd for edge_degree_scatter to reduce backward overhead.
+
+    Fuses: W_m0 @ radial / rescale + scatter into a single autograd node
+    instead of separate bmm -> to -> div -> index_add nodes.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        radial: torch.Tensor,
+        wigner_inv_m0: torch.Tensor,
+        edge_index_1: torch.Tensor,
+        rescale_factor: float,
+    ) -> torch.Tensor:
+        x_edge = torch.bmm(wigner_inv_m0, radial)
+        x_edge = x_edge.to(x.dtype)
+        inv_rescale = 1.0 / rescale_factor
+        result = x.index_add(0, edge_index_1, x_edge * inv_rescale)
+        ctx.save_for_backward(radial, wigner_inv_m0, edge_index_1)
+        ctx.inv_rescale = inv_rescale
+        ctx.num_nodes = x.shape[0]
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        radial, wigner_inv_m0, edge_index_1 = ctx.saved_tensors
+        inv_rescale = ctx.inv_rescale
+
+        # grad of index_add w.r.t. x is identity
+        grad_x = grad_out
+
+        # grad of index_add w.r.t. src is gather
+        grad_edge = grad_out[edge_index_1] * inv_rescale  # [E, 9, C]
+        grad_edge = grad_edge.to(radial.dtype)
+
+        # grad_radial = W_m0^T @ grad_edge  -> [E, m0, C]
+        grad_radial = torch.bmm(
+            wigner_inv_m0.transpose(1, 2), grad_edge
+        )
+
+        # grad_wigner_m0 = grad_edge @ radial^T -> [E, 9, m0]
+        grad_wigner_m0 = torch.bmm(
+            grad_edge, radial.transpose(1, 2)
+        )
+
+        return grad_x, grad_radial, grad_wigner_m0, None, None
+
+
+class UMASFastCPUBackend(UMASFastPytorchBackend):
+    """
+    CPU-optimized backend: C++ Wigner kernels + SO2 block conversion.
+
+    Extends UMASFastPytorchBackend with CPU-optimized
+    node_to_edge_wigner_permute and permute_wigner_inv_edge_to_node
+    that use C++ fused kernels with block-diagonal Wigner structure.
+
+    Requires lmax==2, mmax==2, and merge_mole=True.
+    """
+
+    _threads_configured = False
+
+    @staticmethod
+    def validate(
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
+    ) -> None:
+        UMASFastPytorchBackend.validate(lmax, mmax, settings)
+        if lmax != 2 or mmax != 2:
+            raise ValueError("umas_fast_cpu requires lmax==2 and mmax==2")
+        if settings is not None and not settings.merge_mole:
+            raise ValueError("umas_fast_cpu requires merge_mole=True")
+        # Set optimal thread count early (before first inference)
+        if not UMASFastCPUBackend._threads_configured:
+            import os
+
+            if "OMP_NUM_THREADS" not in os.environ:
+                import multiprocessing
+
+                cores = multiprocessing.cpu_count()
+                optimal = max(1, cores // 2)
+                os.environ["OMP_NUM_THREADS"] = str(optimal)
+                torch.set_num_threads(optimal)
+            UMASFastCPUBackend._threads_configured = True
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Passthrough — CPU kernels handle L-to-M internally
+        return wigner, wigner_inv
+
+    @staticmethod
+    def node_to_edge_wigner_permute(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.cpu import (
+            CPUNodeToEdgeWignerPermuteFunction,
+        )
+
+        return CPUNodeToEdgeWignerPermuteFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+    @staticmethod
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.cpu import (
+            CPUPermuteWignerInvEdgeToNodeFunction,
+        )
+
+        # Rotate M->L using CPU kernel
+        x_rotated = CPUPermuteWignerInvEdgeToNodeFunction.apply(
+            x_message, wigner_inv
+        )
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(
+            0, edge_index[1] - node_offset, x_rotated
+        )
+        return new_embedding
+
+    @staticmethod
+    def edge_degree_scatter(
+        x: torch.Tensor,
+        radial_output: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        m_0_num_coefficients: int,
+        sphere_channels: int,
+        rescale_factor: float,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        radial = radial_output.reshape(
+            -1, m_0_num_coefficients, sphere_channels
+        )
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+
+        return _EdgeDegreeScatterFunction.apply(
+            x,
+            radial,
+            wigner_inv_m0,
+            edge_index[1] - node_offset,
+            rescale_factor,
+        )
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FAST_CPU: UMASFastCPUBackend,
 }
 
 
@@ -455,11 +622,10 @@ def maybe_update_settings_backend(
     model_config: dict,
 ) -> InferenceSettings:
     """
-    Update inference settings to use UMAS_FAST_GPU if conditions are met.
+    Update inference settings to use the best available fast backend.
 
-    Sets execution_mode to UMAS_FAST_GPU if:
-    - execution_mode is not already set
-    - UMASFastGPUBackend.validate passes for the model and settings
+    Sets execution_mode to UMAS_FAST_GPU if CUDA is available and
+    conditions are met, otherwise tries UMAS_FAST_CPU.
 
     Args:
         settings: Current inference settings.
@@ -477,4 +643,16 @@ def maybe_update_settings_backend(
         UMASFastGPUBackend.validate(lmax, mmax, settings)
         return replace(settings, execution_mode=ExecutionMode.UMAS_FAST_GPU)
     except (ValueError, KeyError):
-        return settings
+        pass
+
+    try:
+        lmax = model_config["backbone"]["lmax"]
+        mmax = model_config["backbone"]["mmax"]
+        UMASFastCPUBackend.validate(lmax, mmax, settings)
+        return replace(
+            settings, execution_mode=ExecutionMode.UMAS_FAST_CPU
+        )
+    except (ValueError, KeyError):
+        pass
+
+    return settings
