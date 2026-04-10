@@ -77,6 +77,7 @@ convention = "google"
 "src/fairchem/core/common/*" = ["PLW0603"]  # Using the global statement to update [] is discouraged
 "src/fairchem/core/scripts/*" = ["PLW0603"]  # Using the global statement to update [] is discouraged
 "src/fairchem/core/models/*" = ["PERF401"]  # Use a list comprehension to create a transformed list
+"src/fairchem/core/models/uma/cpu/*" = ["PLW0603"]  # Global statement for lazy kernel loading
 "src/fairchem/core/models/gemnet*" = ["B023"]  # Function definition does not bind loop variable `first_sph`
 # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
 "src/fairchem/data/oc/core/__init__.py" = ["F401"]
