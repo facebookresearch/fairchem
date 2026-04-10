@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -8,18 +9,85 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import math
-from contextlib import suppress
 from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-fairchem_cpp_found = False
-with suppress(ModuleNotFoundError):
-    import fairchem_cpp  # try to use DGL if available
+from fairchem.core.common import segmentmm as nvmath_segmentmm
 
-    fairchem_cpp_found = True
+# Backend switch flag:
+# - False: use the new nvmath-backed Python implementation
+# - True:  use the original fairchem_cpp torch op implementation
+USE_CPP_SEGMENT_MM = False
+# GEMM switch flag for MOLEDGL path:
+# - True:  grouped GEMM
+# - False: looped GEMM
+USE_GROUPED_GEMM = True
+_CPP_SEGMENT_MM_READY = False
+_FAIRCHEM_CPP_MODULE = None
+
+
+def _cpp_segment_mm_available() -> bool:
+    return hasattr(torch.ops, "fairchem_cpp") and hasattr(
+        torch.ops.fairchem_cpp, "segment_mm"
+    )
+
+
+def _ensure_cpp_segment_mm_ready() -> None:
+    global _CPP_SEGMENT_MM_READY, _FAIRCHEM_CPP_MODULE
+    # Re-validate availability even if we were previously marked ready.
+    if _CPP_SEGMENT_MM_READY and _cpp_segment_mm_available():
+        return
+    _CPP_SEGMENT_MM_READY = False
+    try:
+        import fairchem_cpp
+
+        _FAIRCHEM_CPP_MODULE = fairchem_cpp
+    except Exception as exc:
+        raise RuntimeError(
+            "USE_CPP_SEGMENT_MM=True, but importing fairchem_cpp failed. "
+            "Install/rebuild fairchem_cpp or set USE_CPP_SEGMENT_MM=False. "
+            f"Original import error: {exc}"
+        ) from exc
+    if not _cpp_segment_mm_available():
+        raise RuntimeError(
+            "USE_CPP_SEGMENT_MM=True, but torch.ops.fairchem_cpp.segment_mm is not "
+            "available. Install/rebuild fairchem_cpp or set USE_CPP_SEGMENT_MM=False."
+        )
+    _CPP_SEGMENT_MM_READY = True
+
+
+def _segment_mm_dispatch(
+    x: torch.Tensor,
+    weights: torch.Tensor,
+    seglen: torch.Tensor,
+    *,
+    use_grouped_gemm: bool,
+):
+    if USE_CPP_SEGMENT_MM:
+        _ensure_cpp_segment_mm_ready()
+        try:
+            return _FAIRCHEM_CPP_MODULE.ops.segment_mm(
+                x,
+                weights,
+                seglen,
+                use_grouped_gemm=use_grouped_gemm,
+            )
+        except (AttributeError, TypeError) as exc:
+            raise RuntimeError(
+                "USE_CPP_SEGMENT_MM=True, but fairchem_cpp.ops.segment_mm is not "
+                "callable with runtime grouped control. Rebuild/reinstall fairchem_cpp "
+                "or set "
+                "USE_CPP_SEGMENT_MM=False."
+            ) from exc
+    return nvmath_segmentmm.segment_mm(
+        x,
+        weights,
+        seglen,
+        use_grouped_gemm=use_grouped_gemm,
+    )
 
 
 def interval_intersection(interval1, interval2):
@@ -101,23 +169,30 @@ class MOLEDGL(torch.nn.Module):
 
         self.global_mole_tensors = global_mole_tensors
 
-    def forward(self, x):
+    def forward(self, x, use_grouped_gemm: bool | None = None):
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
             weights = torch.einsum(
                 "eoi, be->bio",
                 self.weights,
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
+        if use_grouped_gemm is None:
+            use_grouped_gemm = USE_GROUPED_GEMM
+        use_grouped_gemm = bool(use_grouped_gemm)
         x_shape = x.shape
         if x.ndim == 2:
-            r = fairchem_cpp.ops.segment_mm(
-                x, weights, self.global_mole_tensors.mole_sizes
+            r = _segment_mm_dispatch(
+                x,
+                weights,
+                self.global_mole_tensors.mole_sizes,
+                use_grouped_gemm=use_grouped_gemm,
             )
         elif x.ndim == 3:
-            r = fairchem_cpp.ops.segment_mm(
+            r = _segment_mm_dispatch(
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_mole_tensors.mole_sizes * x_shape[1],
+                use_grouped_gemm=use_grouped_gemm,
             ).reshape(*x_shape[:-1], -1)
         else:
             raise ValueError("x.ndim not in (2,3) not allowed")
