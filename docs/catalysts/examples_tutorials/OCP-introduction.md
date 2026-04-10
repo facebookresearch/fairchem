@@ -108,7 +108,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 

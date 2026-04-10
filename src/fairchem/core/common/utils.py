@@ -75,7 +75,13 @@ def conditional_grad(dec):
         @wraps(func)
         def cls_method(self, *args, **kwargs):
             f = func
-            if self.regress_forces and not getattr(self, "direct_forces", 0):
+            if hasattr(self, "regress_config"):
+                regress_forces = self.regress_config.forces
+                direct_forces = self.regress_config.direct_forces
+            else:
+                regress_forces = self.regress_forces
+                direct_forces = getattr(self, "direct_forces", 0)
+            if regress_forces and not direct_forces:
                 f = dec(func)
             return f(self, *args, **kwargs)
 
@@ -101,7 +107,13 @@ def _import_local_file(path: Path, *, project_root: Path) -> None:
         path.absolute().relative_to(project_root.absolute()).with_suffix("").parts
     )
     logging.debug(f"Resolved module name of {path} to {module_name}")
-    importlib.import_module(module_name)
+    try:
+        importlib.import_module(module_name)
+    except (ImportError, ModuleNotFoundError) as e:
+        # Skip modules that have missing optional dependencies (e.g., triton on macOS ARM64)
+        logging.debug(
+            f"Skipping import of {module_name} due to missing dependency: {e}"
+        )
 
 
 def setup_experimental_imports(project_root: Path) -> None:

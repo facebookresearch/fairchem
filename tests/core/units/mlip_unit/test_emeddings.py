@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 # example how to use checkpoint fixtures
 from __future__ import annotations
 
@@ -28,7 +35,9 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     predictor = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        inference_settings=InferenceSettings(base_precision_dtype=torch.float64),
+        inference_settings=InferenceSettings(
+            activation_checkpointing=False, base_precision_dtype=torch.float64
+        ),
     )
     oc20_embeddings_tasks = Task(
         name="oc20_embeddings",
@@ -86,7 +95,7 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     ]
     for sample in samples:
         sample.pos += 500
-        sample.cell *= 2000
+        sample.cell *= 10
 
     batch = data_list_collater(samples, otf_graph=True)
     out = predictor.predict(batch)

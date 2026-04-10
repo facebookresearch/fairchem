@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -207,6 +214,7 @@ class SlurmSPMDProgram(Checkpointable):
         def graceful_shutdown(signum, frame):
             signal_name = signal.Signals(signum).name
             save_path = self.config.job.metadata.preemption_checkpoint_dir
+            os.makedirs(save_path, exist_ok=True)
             logging.info(f"Signal {signal_name} received, saving state to {save_path}")
             if self.runner is not None and self.runner.save_state(
                 save_path, is_preemption=True
@@ -251,7 +259,17 @@ class SlurmSPMDProgram(Checkpointable):
         return DelayedSubmission(SlurmSPMDProgram(), cfg_copy)
 
 
-def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
+def slurm_launch(cfg: DictConfig, log_dir: str) -> list:
+    """
+    Launch a job on SLURM using submitit.
+
+    Args:
+        cfg: Configuration with job and scheduler settings
+        log_dir: Directory for logs and submitit files
+
+    Returns:
+        List of submitit job futures
+    """
     scheduler_cfg = cfg.job.scheduler
     executor = AutoExecutor(folder=log_dir, slurm_max_num_timeout=3)
     executor.update_parameters(
@@ -298,7 +316,10 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
                 "kill-on-invalid-dep": "yes"
             },  # kill the reducer if run fails
         )
-        executor.submit(SlurmSPMDProgram(), cfg, RunType.REDUCE)
+        reducer_job = executor.submit(SlurmSPMDProgram(), cfg, RunType.REDUCE)
+        jobs.append(reducer_job)
+
+    return jobs
 
 
 def local_launch(cfg: DictConfig, log_dir: str):

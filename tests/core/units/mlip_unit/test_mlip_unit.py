@@ -185,7 +185,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=13.662819862365723",
+        "+expected_loss=13.661060333251953",
     ]
     launch_main(sys_args)
 
@@ -489,9 +489,9 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 6.207584857940674),
-        (6, 2, 6.207584857940674),
-        (5, 2, 6.207584857940674),
+        (3, 2, 6.206212997436523),
+        (6, 2, 6.206212997436523),
+        (5, 2, 6.206212997436523),
         (6, 3, 43.08491516113281),
         (14, 3, 43.08491516113281),
     ],

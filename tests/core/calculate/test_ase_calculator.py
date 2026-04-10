@@ -1,5 +1,5 @@
 """
-Copyright (c) Facebook, Inc. and its affiliates.
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -194,14 +194,23 @@ def test_calculator_setup(all_calculators):
         datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
-        if not calc.predictor.direct_forces and (
+        if not calc.predictor.model.module.backbone.regress_config.direct_forces and (
             len(datasets) > 1 or (calc.task_name != "omol" and calc.task_name != "odac")
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
 
+        # TOOD: UMA-S-1.2 does not have stress implemented, for some tasks, skip
+        remove_properties_from_checks = set()
+        if (
+            calc.predictor.model.module.model_id == "UMA-S-1.2"
+            and calc.task_name not in ["omc", "omat"]
+        ):
+            remove_properties_from_checks = {"stress"}
+
         assert all(
-            prop in calc.implemented_properties for prop in implemented_properties
+            prop in calc.implemented_properties
+            for prop in set(implemented_properties) - remove_properties_from_checks
         )
 
 
@@ -422,7 +431,7 @@ def test_random_seed_final_energy(single_mlip_predict_unit):
 def test_external_graph_generation_molecular_system():
     inference_settings = InferenceSettings(external_graph_gen=True)
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings
     )
 
     calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
@@ -449,12 +458,12 @@ def test_external_graph_gen_vs_internal():
 
     inference_settings_external = InferenceSettings(external_graph_gen=True)
     predict_unit_external = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings_external
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings_external
     )
 
     inference_settings_internal = InferenceSettings(external_graph_gen=False)
     predict_unit_internal = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings_internal
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings_internal
     )
 
     calc_external = FAIRChemCalculator(predict_unit_external, task_name="omat")
@@ -647,7 +656,7 @@ def test_formation_energy_calculator_different_task_types(single_mlip_predict_un
 def test_formation_energy_calculator_predictions_against_known_values(
     atoms_with_formation_energy,
 ):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1")
     base_calc = FAIRChemCalculator(predict_unit, task_name="omat")
     formation_calc = FormationEnergyCalculator(base_calc)
 

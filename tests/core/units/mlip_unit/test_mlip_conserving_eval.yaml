@@ -6,7 +6,7 @@ defaults:
 
 max_neighbors: 20
 regress_stress: True
-direct_forces: True
+direct_forces: False
 num_experts: 0
 moe_layer_type: pytorch
 act_type: s2

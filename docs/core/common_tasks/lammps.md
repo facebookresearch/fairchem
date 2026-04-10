@@ -15,6 +15,10 @@ kernelspec:
 
 We provide an integration with the [LAMMPS](https://www.lammps.org) Molecular Simulator through the [`fix external`](https://docs.lammps.org/fix_external.html) command. This simple integration hands control of the neighborlist (graph) generation, parallelism, energy, force, and stress calculations all to UMA.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 :::{tip}
 The main advantage is that we can optimize UMA for distributed parallel inference directly without modifying LAMMPS. The user would also not need to deal with building LAMMPS from source (see conda install option below) nor [Kokkos](https://docs.lammps.org/Speed_kokkos.html), which is notoriously difficult to build correctly.
 :::
@@ -49,7 +53,7 @@ We separate the LAMMPS integration code into a standalone package (`fairchem-lam
 :::
 
 ```bash
-# first install conda and lammps following the instructions above
+# first install conda and lammps following the instructions above, ie: conda install lammps
 # then activate the environment and install fairchem
 conda activate lammps-env
 pip install fairchem-core[extras]
@@ -60,7 +64,7 @@ Assuming you have a classic LAMMPS .in script, make the following changes:
 
 1. Remove all other forces from your LAMMPS script (e.g., pair_style, etc.)
 2. Make sure the units are in "metal"
-3. Make sure there is only 1 run command at the bottom of the script
+3. Make sure there is only 1 run command at the bottom of the script, if you have multiple run segments, ie: NVT followed by NPT, you can separate them into separate scripts
 
 To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps_fc.py script](https://github.com/facebookresearch/fairchem/pull/1454)):
 

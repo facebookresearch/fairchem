@@ -1,4 +1,4 @@
-workers: 4
+workers: 64
 
 # job:
 #   device_type: CUDA
@@ -12,15 +12,15 @@ workers: 4
 job:
   device_type: CUDA
   run_dir: /checkpoint/ocp/rgao/test/
-  run_name: test_uma_md
+  run_name: test_uma_md_v2
   scheduler:
     use_ray: true
     mode: SLURM
-    num_nodes: 1
-    ranks_per_node: 4
+    num_nodes: 8
+    ranks_per_node: 8
     slurm:
       account: ocp
-      qos: h200_alignment_shared
+      qos: h200_ocp_high
       mem_gb: 0
   graph_parallel_group_size: ${workers}
 
@@ -28,8 +28,8 @@ runner:
   _target_: fairchem.core.components.dynamics.ase_md_runner.ASELangevinUMARunner
   workers: ${workers}
   atoms_list:
-    - _target_: fairchem.core.datasets.common_structures.get_copper_fcc
-      n_cells: 2
+    - _target_: fairchem.core.datasets.common_structures.get_fcc_crystal_by_num_atoms
+      num_atoms: 64000
   model_name: uma-s-1p1
   settings:
     _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
@@ -39,4 +39,5 @@ runner:
     compile: True
     external_graph_gen: False
     internal_graph_gen_version: 2
+    edge_chunk_size: 32
   steps_total: 100

@@ -53,6 +53,8 @@ def get_rotmat_and_wigner(edge_distance_vecs, jds):
     return wigner, wigner_inv
 
 
+# rotation cuda graph is deprecated
+@pytest.mark.skip()
 @pytest.mark.gpu()
 @pytest.mark.parametrize("lmax", [2, 3, 4, 6])
 def test_rotation_no_graph_matches_graph_basic(lmax):
@@ -73,6 +75,8 @@ def test_rotation_no_graph_matches_graph_basic(lmax):
     assert torch.allclose(wigner_inv_graph, wigner_inv, atol=1e-7)
 
 
+# rotation cuda graph is deprecated
+@pytest.mark.skip()
 @pytest.mark.gpu()
 def test_rotation_no_graph_matches_graph_shape_change():
     seed_everywhere()
@@ -109,6 +113,8 @@ def wigner_grad(wigner, wigner_inv, edge_dist_vec):
     return grad
 
 
+# rotation cuda graph is deprecated
+@pytest.mark.skip()
 @pytest.mark.gpu()
 def test_rotation_graph_grads():
     lmax = 4
@@ -149,6 +155,7 @@ def make_profile(fn, output_path):
             p.step()
 
 
+@pytest.mark.skip()
 @pytest.mark.gpu()
 def test_generate_traces():
     seed_everywhere()

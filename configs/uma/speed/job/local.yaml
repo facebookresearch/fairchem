@@ -1,0 +1,5 @@
+device_type: CUDA
+scheduler:
+  mode: LOCAL
+  ranks_per_node: 1
+run_dir: /checkpoint/ocp/rgao/speed

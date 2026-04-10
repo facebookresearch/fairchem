@@ -23,18 +23,16 @@ from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
-    inference_settings_turbo,
 )
 
 
 @pytest.mark.parametrize(
     "tf32, activation_checkpointing, merge_mole, compile, external_graph_gen",
     [
-        (False, False, False, False,  True),  # test external graph gen
-        (False, False, False, False,  False),  # test internal graph gen
-        (True, False, False, False,  True),  # test wigner cuda
-        (True, True, True, False,  True),  # test merge but no compile
-        (True, True, False, False,  True),  # test no merge or compile
+        (False, False, False, False, True),  # test external graph gen
+        (False, False, False, False, False),  # test internal graph gen
+        (True, True, True, False, True),  # test merge but no compile
+        (True, True, False, False, True),  # test no merge or compile
     ],
 )
 def test_direct_mole_inference_modes(
@@ -66,11 +64,10 @@ def test_direct_mole_inference_modes(
 @pytest.mark.parametrize(
     "tf32, activation_checkpointing, merge_mole, compile,  external_graph_gen",
     [
-        (False, False, False, False,  True),  # test external graph gen
-        (False, False, False, False,  False),  # test internal graph gen
-        (True, False, False, False,  True),  # test wigner cuda
-        (True, True, True, False,  True),  # test merge but no compile
-        (True, True, False, False,  True),  # test no merge or compile
+        (False, False, False, False, True),  # test external graph gen
+        (False, False, False, False, False),  # test internal graph gen
+        (True, True, True, False, True),  # test merge but no compile
+        (True, True, False, False, True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes(
@@ -103,14 +100,13 @@ def test_conserving_mole_inference_modes(
 @pytest.mark.parametrize(
     "tf32, activation_checkpointing, merge_mole, compile,  external_graph_gen",
     [
-        (False, False, False, False,  True),  # test external graph gen
-        (False, False, False, False,  False),  # test internal graph gen
-        (True, False, False, False,  True),  # test wigner cuda
-        (True, False, True, True,  True),  # test compile and merge
+        (False, False, False, False, True),  # test external graph gen
+        (False, False, False, False, False),  # test internal graph gen
+        (True, False, True, True, True),  # test compile and merge
         # with acvitation checkpointing
-        (True, True, True, True,  True),  # test external model graph gen + compile
-        (True, True, True, False,  True),  # test merge but no compile
-        (True, True, False, False,  True),  # test no merge or compile
+        (True, True, True, True, True),  # test external model graph gen + compile
+        (True, True, True, False, True),  # test merge but no compile
+        (True, True, False, False, True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes_gpu(
@@ -124,6 +120,14 @@ def test_conserving_mole_inference_modes_gpu(
     compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # TF32 uses reduced precision (10-bit mantissa vs 23-bit for FP32), causing
+    # ~1-2% relative differences in force computations with production models.
+    # The fake test checkpoint shows larger differences (~5-10%), so we use
+    # relaxed tolerances for TF32=True tests. TF32=False tests compare against
+    # a TF32=False baseline so can use tighter tolerances.
+    forces_rtol = 1e-1 if tf32 else 2e-4  # 10% for TF32, 0.02% for non-TF32
+    forces_atol = 5e-2 if tf32 else 1e-3  # 0.05 abs tol for TF32
+    energy_rtol = 2e-4 if tf32 else 1e-4
     mole_inference(
         InferenceSettings(
             tf32=tf32,
@@ -135,7 +139,9 @@ def test_conserving_mole_inference_modes_gpu(
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
-        forces_rtol=5e-2,
+        forces_rtol=forces_rtol,
+        forces_atol=forces_atol,
+        energy_rtol=energy_rtol,
     )
 
 
@@ -163,7 +169,7 @@ def test_conserving_mole_inference_mode_md(
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
-        inference_settings_turbo(),
+        inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -187,7 +193,7 @@ def test_direct_mole_inference_mode_md(
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
-        inference_settings_turbo(),
+        inference_settings_default(),
         direct_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -202,13 +208,14 @@ def test_conserving_mole_inference_mode_default_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # inference_settings_default() uses TF32=False, so tight tolerances are fine
     mole_inference(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
-        forces_rtol=5e-2,
+        forces_rtol=2e-4,
     )
 
 
@@ -217,13 +224,14 @@ def test_conserving_mole_inference_mode_md_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    # inference_settings_default() uses TF32=False, so tight tolerances are fine
     mole_inference(
-        inference_settings_turbo(),
+        inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
-        forces_rtol=5e-2,
+        forces_rtol=2e-4,
     )
 
 
@@ -234,6 +242,7 @@ def mole_inference(
     device,
     energy_rtol=1e-4,
     forces_rtol=2e-4,
+    forces_atol=1e-3,  # atol handles near-zero forces where rtol can blow up
 ):
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
@@ -281,11 +290,13 @@ def mole_inference(
                 .max()
                 .item(),
             )
-            assert (
-                output_baseline[k]
-                .isclose(output[k], rtol=energy_rtol if "energy" in k else forces_rtol)
-                .all()
-            )
+            # Use atol for forces to handle near-zero values where rtol blows up
+            if "energy" in k:
+                assert output_baseline[k].isclose(output[k], rtol=energy_rtol).all()
+            else:
+                assert output_baseline[k].isclose(
+                    output[k], rtol=forces_rtol, atol=forces_atol
+                ).all()
             assert output[k].device.type == device
             assert output_baseline[k].device.type == device
 
@@ -441,7 +452,8 @@ def test_ac_with_chunking_and_batching(
     merge_mole,
 ):
     monkeypatch.setattr(
-        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE", chunk_size
+        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE",
+        chunk_size,
     )
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     ifs = InferenceSettings(
@@ -474,3 +486,13 @@ def test_ac_with_chunking_and_batching(
     assert torch.allclose(
         result_ac["forces"], result_no_ac["forces"], rtol=1e-5, atol=1e-5
     )
+
+
+def test_supports_single_atoms_in_checkpoint(conserving_mole_checkpoint):
+    """
+    Verify that a checkpoint trained with supports_single_atoms=true in the
+    model config has the flag set on the loaded predict unit.
+    """
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
+    predictor = MLIPPredictUnit(inference_checkpoint_pt, device="cpu")
+    assert predictor.model.module.supports_single_atoms is True

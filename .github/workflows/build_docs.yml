@@ -90,7 +90,7 @@ jobs:
         cd docs && jupyter-book build --html --execute --execute-parallel 1
 
     - name: Upload documentation artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: docs-html
         path: docs/_build/html/*

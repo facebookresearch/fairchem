@@ -15,6 +15,10 @@ kernelspec:
 
 This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and fine-tuning uses the exact same tooling and infrastructure as our standard training (see Training section). Training in the fairchem repo uses the fairchem CLI tool and configs are in [Hydra yaml](https://hydra.cc/) format.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 :::{note}
 Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
@@ -44,7 +48,7 @@ os.chdir('../../../../fairchem')
 ```
 
 :::{warning}
-**Task Selection:** The `uma-task` can be one of: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in a multi-task fashion, we ONLY support fine-tuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on GitHub if you have a special use-case for multi-task fine-tuning, or refer to the training configs in `/training_release` to mimic the original UMA training configs.
+**Task Selection:** The `uma-task` can be one of: `omol`, `odac`, `oc20`, `oc22`, `oc25`, `omat`, `omc`. While UMA was trained in a multi-task fashion, we ONLY support fine-tuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on GitHub if you have a special use-case for multi-task fine-tuning, or refer to the training configs in `/training_release` to mimic the original UMA training configs.
 :::
 
 :::{admonition} Regression Task Options
@@ -106,7 +110,7 @@ job:
     project: uma_finetune
 
 
-base_model_name: uma-s-1p1
+base_model_name: uma-s-1p2
 max_neighbors: 300
 epochs: 1
 steps: null
