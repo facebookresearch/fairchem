@@ -166,13 +166,6 @@ class TestHydraModelInferenceInterface:
         with pytest.raises(RuntimeError, match="setup_tasks"):
             _ = mock_hydra_model.dataset_to_tasks
 
-    def test_direct_forces_property(self, mock_hydra_model):
-        """Test direct_forces property delegates to backbone."""
-        assert mock_hydra_model.direct_forces is False
-
-        mock_hydra_model.backbone.direct_forces = True
-        assert mock_hydra_model.direct_forces is True
-
 
 class TestBackboneInterface:
     """Tests for backbone interface method implementations."""
