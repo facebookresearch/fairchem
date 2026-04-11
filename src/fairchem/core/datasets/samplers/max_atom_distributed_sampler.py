@@ -10,16 +10,19 @@ from __future__ import annotations
 import logging
 import math
 import time
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 import numba as nb
 import numpy as np
 import torch
+import torch.distributed as dist
 from torch.utils.data import Sampler
 
-from fairchem.core.common import gp_utils
+from fairchem.core.common import distutils, gp_utils
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from fairchem.core.datasets.base_dataset import BaseDataset
 
 
@@ -134,8 +137,54 @@ class MaxAtomDistributedBatchSampler(Sampler[list[int]]):
         self.epoch = 0
         self.start_iter = 0
 
-        # we pre-create the batches here and can only do this once, otherwise everytime we get this iterator we might get a different number of batches
-        self.all_batches = self._prepare_batches()
+        # Prepare batches with broadcast optimization for distributed training
+        # Only rank 0 prepares batches, then broadcasts to all other ranks
+        is_distributed = (
+            dist.is_available() and dist.is_initialized() and self.num_replicas > 1
+        )
+
+        if is_distributed:
+            # Distributed mode: only rank 0 prepares batches
+            if self.rank == 0:
+                logging.info(
+                    f"Rank 0: Preparing batches for {len(self.dataset)} samples"
+                )
+                all_batches = self._prepare_batches()
+                logging.info(
+                    f"Rank 0: Prepared {len(all_batches)} batches, ready to broadcast"
+                )
+            else:
+                all_batches = None
+
+            # Synchronize all ranks before broadcast to ensure rank 0 is ready
+            # This prevents other ranks from waiting on a broadcast while rank 0 is still preparing
+            logging.info(f"Rank {self.rank}: Synchronizing before broadcast")
+            dist.barrier()
+
+            if self.rank != 0:
+                logging.info(f"Rank {self.rank}: Waiting for broadcast from rank 0")
+
+            # Broadcast from rank 0 to all ranks
+            batch_list = [all_batches]
+            distutils.broadcast_object_list(batch_list, src=0)
+            all_batches = batch_list[0]
+
+            # Verify broadcast succeeded
+            if all_batches is None:
+                raise RuntimeError(
+                    f"Rank {self.rank}: Broadcast failed - received None"
+                )
+
+            if self.rank != 0:
+                logging.info(
+                    f"Rank {self.rank}: Received {len(all_batches)} batches via broadcast"
+                )
+        else:
+            # Non-distributed mode: each rank prepares its own batches
+            logging.info(f"Rank {self.rank}: Preparing batches (non-distributed mode)")
+            all_batches = self._prepare_batches()
+
+        self.all_batches = all_batches
         # If the dataset length is evenly divisible by # of replicas, then there
         # is no need to drop any data, since the dataset will be split equally.
         if self.drop_last and len(self.all_batches) % self.num_replicas != 0:

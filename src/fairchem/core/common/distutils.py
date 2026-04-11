@@ -27,6 +27,8 @@ T = TypeVar("T")
 DISTRIBUTED_PORT = 13356
 CURRENT_DEVICE_TYPE_STR = "CURRRENT_DEVICE_TYPE"
 
+os.environ["TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC"] = "1800"
+
 
 def os_environ_get_or_throw(x: str) -> str:
     if x not in os.environ:
