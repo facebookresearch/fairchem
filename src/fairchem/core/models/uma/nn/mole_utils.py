@@ -15,7 +15,7 @@ import torch.nn as nn
 
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
-    MOLEDGL,
+    MOLEFairchemCpp,
     MOLEGlobals,
     norm_str_to_fn,
 )
@@ -139,11 +139,11 @@ def replace_linear_with_MOLE(
     if cache is not None and layer_identifier in cache:
         return cache[layer_identifier]
 
-    if mole_layer_type == "dgl":
+    if mole_layer_type == "fairchem_cpp":
         assert (
             fairchem_cpp_found
-        ), "Cannot use DGL layer type if fairchem_cpp package is not available"
-        layer = MOLEDGL(
+        ), "Cannot use fairchem_cpp layer type if fairchem_cpp package is not available"
+        layer = MOLEFairchemCpp(
             num_experts=num_experts,
             global_mole_tensors=global_mole_tensors,
             in_features=existing_linear_module.in_features,

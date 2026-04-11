@@ -287,11 +287,11 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
 #         (True, 0.05),
 #     ],
 # )
-# def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_gpu(bf16,tol,fake_uma_dataset):
-#     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_uma_dataset)
+# def test_grad_train_from_cli_aselmdb_no_lr_mole_fairchem_cpp_vs_pytorch_gpu(bf16,tol,fake_uma_dataset):
+#     grad_train_from_cli_aselmdb_no_lr_mole_fairchem_cpp_vs_pytorch(bf16,tol,"CUDA",fake_uma_dataset)
 
 
-@pytest.mark.dgl()
+@pytest.mark.fairchem_cpp()
 @pytest.mark.parametrize(
     "bf16, tol",
     [
@@ -299,16 +299,16 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
         (True, 0.05),
     ],
 )
-def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_cpu(
+def test_grad_train_from_cli_aselmdb_no_lr_mole_fairchem_cpp_vs_pytorch_cpu(
     bf16, tol, fake_uma_dataset, torch_deterministic
 ):
-    grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
+    grad_train_from_cli_aselmdb_no_lr_mole_fairchem_cpp_vs_pytorch(
         bf16, tol, "CPU", fake_uma_dataset
     )
 
 
-@pytest.mark.dgl()
-def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
+@pytest.mark.fairchem_cpp()
+def grad_train_from_cli_aselmdb_no_lr_mole_fairchem_cpp_vs_pytorch(
     bf16, tol, device, dataset_root_dir
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -333,10 +333,10 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
         pytorch_sys_args.append(f"optimizer.save_path={run1_path}")
         launch_main(pytorch_sys_args)
 
-        dgl_sys_args = sys_args.copy()
-        dgl_sys_args.append("moe_layer_type=dgl")
-        dgl_sys_args.append(f"optimizer.save_path={run2_path}")
-        launch_main(dgl_sys_args)
+        fairchem_cpp_sys_args = sys_args.copy()
+        fairchem_cpp_sys_args.append("moe_layer_type=fairchem_cpp")
+        fairchem_cpp_sys_args.append(f"optimizer.save_path={run2_path}")
+        launch_main(fairchem_cpp_sys_args)
 
         for step in range(3):
             run1_params_and_grads = torch.load(
@@ -571,16 +571,18 @@ def test_train_and_resume_max_steps(
 
 
 # @pytest.mark.gpu()
-# def test_train_and_resume_mole_on_dgl_gpu(fake_uma_dataset):
-#     train_and_resume_mole_on_dgl("CUDA",fake_uma_dataset)
+# def test_train_and_resume_mole_on_fairchem_cpp_gpu(fake_uma_dataset):
+#     train_and_resume_mole_on_fairchem_cpp("CUDA",fake_uma_dataset)
 
 
-@pytest.mark.dgl()
-def test_train_and_resume_mole_on_dgl_cpu(fake_uma_dataset, torch_deterministic):
-    train_and_resume_mole_on_dgl("CPU", fake_uma_dataset)
+@pytest.mark.fairchem_cpp()
+def test_train_and_resume_mole_on_fairchem_cpp_cpu(
+    fake_uma_dataset, torch_deterministic
+):
+    train_and_resume_mole_on_fairchem_cpp("CPU", fake_uma_dataset)
 
 
-def train_and_resume_mole_on_dgl(device, data_root_dir):
+def train_and_resume_mole_on_fairchem_cpp(device, data_root_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
@@ -614,7 +616,115 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
     sys_args = [
         "--config",
         checkpoint_state_yaml,
-        "runner.train_eval_unit.model.backbone.moe_layer_type=dgl",
+        "runner.train_eval_unit.model.backbone.moe_layer_type=fairchem_cpp",
+    ]
+    launch_main(sys_args)
+    shutil.rmtree(temp_dir)
+
+
+@pytest.mark.gpu()
+@pytest.mark.fairchem_cpp()
+def test_grad_conserving_train_fairchem_cpp_vs_pytorch_gpu(
+    fake_uma_dataset, torch_deterministic
+):
+    grad_conserving_train_fairchem_cpp_vs_pytorch("CUDA", fake_uma_dataset)
+
+
+def grad_conserving_train_fairchem_cpp_vs_pytorch(device, dataset_root_dir):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        run1_path = os.path.join(tmpdirname, "run1")
+        run2_path = os.path.join(tmpdirname, "run2")
+        os.makedirs(run1_path, exist_ok=True)
+        os.makedirs(run2_path, exist_ok=True)
+
+        sys_args = [
+            "--config",
+            "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+            "num_experts=8",
+            "checkpoint_every=10000",
+            "datasets=aselmdb_conserving",
+            f"datasets.data_root_dir={dataset_root_dir}",
+            "optimizer=savegrad",
+            f"job.device_type={device}",
+        ]
+
+        pytorch_sys_args = sys_args.copy()
+        pytorch_sys_args.append(f"optimizer.save_path={run1_path}")
+        launch_main(pytorch_sys_args)
+
+        fairchem_cpp_sys_args = sys_args.copy()
+        fairchem_cpp_sys_args.append("moe_layer_type=fairchem_cpp")
+        fairchem_cpp_sys_args.append(f"optimizer.save_path={run2_path}")
+        launch_main(fairchem_cpp_sys_args)
+
+        for step in range(3):
+            run1_params_and_grads = torch.load(
+                os.path.join(run1_path, f"ddp1.0_gp0.0_step{step}.pt")
+            )
+            run2_params_and_grads = torch.load(
+                os.path.join(run2_path, f"ddp1.0_gp0.0_step{step}.pt")
+            )
+            relative_diffs = [
+                (
+                    run1_params_and_grads["grad"][idx]
+                    - run2_params_and_grads["grad"][idx]
+                ).abs()
+                / torch.tensor(
+                    [
+                        run1_params_and_grads["grad"][idx].abs().max(),
+                        run2_params_and_grads["grad"][idx].abs().max(),
+                        1e-7,
+                    ]
+                ).max()
+                for idx in range(len(run1_params_and_grads["grad"]))
+            ]
+
+            percent_within_tolerance = (
+                (torch.tensor([x.mean() for x in relative_diffs]) < 0.0001)
+                .to(float)
+                .mean()
+            )
+            assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
+
+
+@pytest.mark.gpu()
+@pytest.mark.fairchem_cpp()
+def test_train_and_resume_conserving_mole_on_fairchem_cpp_gpu(
+    fake_uma_dataset, torch_deterministic
+):
+    train_and_resume_conserving_mole_on_fairchem_cpp("CUDA", fake_uma_dataset)
+
+
+def train_and_resume_conserving_mole_on_fairchem_cpp(device, data_root_dir):
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+        "num_experts=8",
+        "checkpoint_every=10000",
+        "datasets=aselmdb_conserving",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={data_root_dir}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+    ]
+    launch_main(sys_args)
+
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    sys_args = ["--config", checkpoint_state_yaml]
+    launch_main(sys_args)
+    sys_args = [
+        "--config",
+        checkpoint_state_yaml,
+        "runner.train_eval_unit.model.backbone.moe_layer_type=fairchem_cpp",
     ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)

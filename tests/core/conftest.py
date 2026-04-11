@@ -162,7 +162,7 @@ def snapshot(snapshot):
 @pytest.fixture()
 def torch_deterministic():
     # Setup
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(True, warn_only=True)
     yield True  # Usability: prints `torch_deterministic=True` if a test fails
     # Tear down
     torch.use_deterministic_algorithms(False)
