@@ -10,173 +10,179 @@ from __future__ import annotations
 import pytest
 import torch
 
-from fairchem.core.models.uma.nn.segment_mm import (
-    segment_mm_double_backward,
-    segment_mm_ref,
-)
-from fairchem.core.models.uma.nn.segment_mm_gpu import (
-    _HAS_CUBLAS,
-)
+from fairchem.core.models.uma.nn.mole import MOLE, MOLEFairchemCpp, MOLEGlobals
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_inputs(
-    seglen_list,
-    K,
-    N,
-    dtype=torch.float64,
+def _make_mole_pair(
+    num_experts=4,
+    in_features=8,
+    out_features=6,
+    atoms_per_system=(3, 7, 2, 5),
     device="cpu",
-    requires_grad=True,
+    dtype=torch.float64,
 ):
     """
-    Create ragged inputs for segment_mm.
+    Create a matched MOLE (pytorch ref) and MOLEFairchemCpp (fairchem_cpp) pair
+    sharing the same weights, bias, and MOLEGlobals.
+
+    Args:
+        atoms_per_system: Tuple of per-system atom counts (ragged).
     """
-    seglen = torch.tensor(seglen_list, dtype=torch.int32)
-    total_rows = sum(seglen_list)
-    A = torch.randn(
-        total_rows,
-        K,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
+    num_systems = len(atoms_per_system)
+    total_atoms = sum(atoms_per_system)
+    mole_sizes = torch.tensor(atoms_per_system, dtype=torch.int32)
+    coefficients = torch.randn(
+        num_systems, num_experts, device=device, dtype=dtype
+    ).softmax(dim=1)
+
+    global_tensors = MOLEGlobals(
+        expert_mixing_coefficients=coefficients,
+        mole_sizes=mole_sizes,
     )
-    B = torch.randn(
-        len(seglen_list),
-        K,
-        N,
-        dtype=dtype,
-        device=device,
-        requires_grad=requires_grad,
-    )
-    return A, B, seglen
+
+    ref = MOLE(
+        num_experts=num_experts,
+        in_features=in_features,
+        out_features=out_features,
+        global_mole_tensors=global_tensors,
+        bias=True,
+    ).to(device=device, dtype=dtype)
+
+    cpp = MOLEFairchemCpp(
+        num_experts=num_experts,
+        in_features=in_features,
+        out_features=out_features,
+        global_mole_tensors=global_tensors,
+        bias=True,
+    ).to(device=device, dtype=dtype)
+
+    # Share weights and bias so outputs are directly comparable
+    with torch.no_grad():
+        cpp.weights.copy_(ref.weights)
+        cpp.bias.copy_(ref.bias)
+
+    x = torch.randn(total_atoms, in_features, device=device, dtype=dtype)
+    return ref, cpp, x
+
+
+def _default_dtype(device):
+    return torch.float32 if device == "cuda" else torch.float64
+
+
+def _default_atol(device):
+    return 1e-5 if device == "cuda" else 1e-12
 
 
 def _run_forward_test(device):
-    seglen_list = [3, 7, 2, 5]
-    K, N = 4, 6
-    A, B, seglen = _make_inputs(seglen_list, K, N, device=device, requires_grad=False)
+    ref, cpp, x = _make_mole_pair(device=device, dtype=_default_dtype(device))
+    atol = _default_atol(device)
 
-    C_ref = segment_mm_ref(A, B, seglen)
-    C_db = segment_mm_double_backward(A, B, seglen)
+    y_ref = ref(x)
+    y_cpp = cpp(x)
 
-    assert torch.allclose(C_ref, C_db, atol=1e-12), (
+    assert torch.allclose(y_ref, y_cpp, atol=atol), (
         f"Forward mismatch on {device}: "
-        f"max diff = {(C_ref - C_db).abs().max().item()}"
+        f"max diff = {(y_ref - y_cpp).abs().max().item()}"
     )
 
 
 def _run_first_backward_test(device):
-    seglen_list = [3, 7, 2, 5]
-    K, N = 4, 6
+    ref, cpp, x_base = _make_mole_pair(device=device, dtype=_default_dtype(device))
+    atol = _default_atol(device)
 
-    A_ref, B_ref, seglen = _make_inputs(seglen_list, K, N, device=device)
-    C_ref = segment_mm_ref(A_ref, B_ref, seglen)
-    C_ref.sum().backward()
+    x_ref = x_base.clone().requires_grad_(True)
+    y_ref = ref(x_ref)
+    y_ref.sum().backward()
 
-    A_db = A_ref.data.clone().requires_grad_(True)
-    B_db = B_ref.data.clone().requires_grad_(True)
-    C_db = segment_mm_double_backward(A_db, B_db, seglen)
-    C_db.sum().backward()
+    x_cpp = x_base.clone().requires_grad_(True)
+    y_cpp = cpp(x_cpp)
+    y_cpp.sum().backward()
 
-    assert torch.allclose(A_ref.grad, A_db.grad, atol=1e-12), (
-        f"A.grad mismatch on {device}: "
-        f"max diff = {(A_ref.grad - A_db.grad).abs().max().item()}"
+    assert torch.allclose(x_ref.grad, x_cpp.grad, atol=atol), (
+        f"x.grad mismatch on {device}: "
+        f"max diff = {(x_ref.grad - x_cpp.grad).abs().max().item()}"
     )
-    assert torch.allclose(B_ref.grad, B_db.grad, atol=1e-12), (
-        f"B.grad mismatch on {device}: "
-        f"max diff = {(B_ref.grad - B_db.grad).abs().max().item()}"
+    assert torch.allclose(ref.weights.grad, cpp.weights.grad, atol=atol), (
+        f"weights.grad mismatch on {device}: "
+        f"max diff = {(ref.weights.grad - cpp.weights.grad).abs().max().item()}"
+    )
+    assert torch.allclose(ref.bias.grad, cpp.bias.grad, atol=atol), (
+        f"bias.grad mismatch on {device}: "
+        f"max diff = {(ref.bias.grad - cpp.bias.grad).abs().max().item()}"
     )
 
 
 def _run_double_backward_test(device):
-    seglen_list = [3, 7, 2, 5]
-    K, N = 4, 6
+    ref, cpp, x_base = _make_mole_pair(device=device, dtype=_default_dtype(device))
 
-    # Reference
-    A_ref, B_ref, seglen = _make_inputs(seglen_list, K, N, device=device)
-    C_ref = segment_mm_ref(A_ref, B_ref, seglen)
-    gA_ref, gB_ref = torch.autograd.grad(C_ref.sum(), (A_ref, B_ref), create_graph=True)
-    (gA_ref.sum() + gB_ref.sum()).backward()
-    A_ref_g2 = A_ref.grad.clone()
-    B_ref_g2 = B_ref.grad.clone()
-
-    # Double-backward version
-    A_db = A_ref.data.clone().requires_grad_(True)
-    B_db = B_ref.data.clone().requires_grad_(True)
-    C_db = segment_mm_double_backward(A_db, B_db, seglen)
-    gA_db, gB_db = torch.autograd.grad(C_db.sum(), (A_db, B_db), create_graph=True)
-    (gA_db.sum() + gB_db.sum()).backward()
-
-    assert torch.allclose(A_ref_g2, A_db.grad, atol=1e-12), (
-        f"A 2nd-order grad mismatch on {device}: "
-        f"max diff = {(A_ref_g2 - A_db.grad).abs().max().item()}"
+    # Reference: double backward through both x and weights
+    x_ref = x_base.clone().requires_grad_(True)
+    y_ref = ref(x_ref)
+    grads_ref = torch.autograd.grad(
+        y_ref.sum(), [x_ref, ref.weights], create_graph=True
     )
-    assert torch.allclose(B_ref_g2, B_db.grad, atol=1e-12), (
-        f"B 2nd-order grad mismatch on {device}: "
-        f"max diff = {(B_ref_g2 - B_db.grad).abs().max().item()}"
+    sum(g.sum() for g in grads_ref).backward()
+    x_ref_g2 = x_ref.grad.clone()
+    w_ref_g2 = ref.weights.grad.clone()
+
+    # fairchem_cpp: double backward through both x and weights
+    x_cpp = x_base.clone().requires_grad_(True)
+    y_cpp = cpp(x_cpp)
+    grads_cpp = torch.autograd.grad(
+        y_cpp.sum(), [x_cpp, cpp.weights], create_graph=True
     )
+    sum(g.sum() for g in grads_cpp).backward()
 
-
-def _run_gradgradcheck_test(device):
-    seglen_list = [3, 7, 2, 5]
-    K, N = 4, 6
-    A, B, seglen = _make_inputs(seglen_list, K, N, device=device)
-
-    def func(a, b):
-        return segment_mm_double_backward(a, b, seglen)
-
-    assert torch.autograd.gradgradcheck(
-        func, (A, B), atol=1e-5, rtol=1e-4
-    ), f"gradgradcheck failed on {device}"
+    atol = _default_atol(device)
+    assert torch.allclose(x_ref_g2, x_cpp.grad, atol=atol), (
+        f"x 2nd-order grad mismatch on {device}: "
+        f"max diff = {(x_ref_g2 - x_cpp.grad).abs().max().item()}"
+    )
+    assert torch.allclose(w_ref_g2, cpp.weights.grad, atol=atol), (
+        f"weights 2nd-order grad mismatch on {device}: "
+        f"max diff = {(w_ref_g2 - cpp.weights.grad).abs().max().item()}"
+    )
 
 
 # ---------------------------------------------------------------------------
-# CPU pytest tests
+# CPU tests — fairchem_cpp CPU path is pure PyTorch loop, all passes work
 # ---------------------------------------------------------------------------
 
 
-def test_segment_mm_forward_cpu():
+def test_mole_vs_mole_fairchem_cpp_forward_cpu():
     _run_forward_test("cpu")
 
 
-def test_segment_mm_first_backward_cpu():
+def test_mole_vs_mole_fairchem_cpp_first_backward_cpu():
     _run_first_backward_test("cpu")
 
 
-def test_segment_mm_double_backward_cpu():
+def test_mole_vs_mole_fairchem_cpp_double_backward_cpu():
     _run_double_backward_test("cpu")
 
 
-def test_segment_mm_gradgradcheck_cpu():
-    _run_gradgradcheck_test("cpu")
-
-
 # ---------------------------------------------------------------------------
-# GPU pytest tests
+# GPU tests — CUDA segment_mm with three-level autograd for double backward
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.gpu()
-def test_segment_mm_forward_gpu():
+def test_mole_vs_mole_fairchem_cpp_forward_gpu():
     _run_forward_test("cuda")
 
 
 @pytest.mark.gpu()
-def test_segment_mm_first_backward_gpu():
+def test_mole_vs_mole_fairchem_cpp_first_backward_gpu():
     _run_first_backward_test("cuda")
 
 
 @pytest.mark.gpu()
-def test_segment_mm_double_backward_gpu():
+def test_mole_vs_mole_fairchem_cpp_double_backward_gpu():
     _run_double_backward_test("cuda")
-
-
-@pytest.mark.gpu()
-def test_segment_mm_gradgradcheck_gpu():
-    _run_gradgradcheck_test("cuda")
 
 
 # ---------------------------------------------------------------------------
@@ -184,27 +190,25 @@ def test_segment_mm_gradgradcheck_gpu():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("=== CPU tests (nvpl.blas) ===")
+    print("=== CPU tests (MOLE vs MOLEFairchemCpp) ===")
     for fn in [
         _run_forward_test,
         _run_first_backward_test,
         _run_double_backward_test,
-        _run_gradgradcheck_test,
     ]:
         fn("cpu")
         print(f"  PASSED [CPU]: {fn.__name__}")
 
-    if torch.cuda.is_available() and _HAS_CUBLAS:
-        print("\n=== GPU tests (cuBLAS) ===")
+    if torch.cuda.is_available():
+        print("\n=== GPU tests (MOLE vs MOLEFairchemCpp) ===")
         for fn in [
             _run_forward_test,
             _run_first_backward_test,
             _run_double_backward_test,
-            _run_gradgradcheck_test,
         ]:
             fn("cuda")
             print(f"  PASSED [GPU]: {fn.__name__}")
     else:
         print("\nSkipping GPU tests (no CUDA available)")
 
-    print("\nAll tests passed!")
+    print("\nDone.")

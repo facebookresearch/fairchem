@@ -17,7 +17,7 @@ from torch.nn import functional as F
 
 fairchem_cpp_found = False
 with suppress(ModuleNotFoundError):
-    import fairchem_cpp  # try to use DGL if available
+    import fairchem_cpp  # try to use fairchem_cpp if available
 
     fairchem_cpp_found = True
 
@@ -79,7 +79,7 @@ def init_linear(num_experts, use_bias, out_features, in_features):
     return weights, bias
 
 
-class MOLEDGL(torch.nn.Module):
+class MOLEFairchemCpp(torch.nn.Module):
     def __init__(
         self,
         num_experts,

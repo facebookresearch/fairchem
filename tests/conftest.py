@@ -64,8 +64,8 @@ def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
     if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
-    if "dgl" in item.keywords:
-        # check dgl is installed
+    if "fairchem_cpp" in item.keywords:
+        # check fairchem_cpp is installed
         fairchem_cpp_found = False
         with suppress(ModuleNotFoundError):
             import fairchem_cpp
@@ -76,7 +76,7 @@ def pytest_runtest_setup(item):
             fairchem_cpp_found = True
         if not fairchem_cpp_found:
             pytest.skip(
-                "fairchem_cpp not found, skipping DGL tests! please install fairchem if you want to run these"
+                "fairchem_cpp not found, skipping fairchem_cpp tests! please install fairchem_cpp if you want to run these"
             )
 
 
