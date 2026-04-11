@@ -36,7 +36,9 @@ class TrainingBenchmarkResult:
     loss_rel_error: float
     grad_norm_rel_error: float
     steps_per_second: float
+    baseline_steps_per_second: float
     peak_memory_mb: float
+    baseline_peak_memory_mb: float
     baseline_loss: float
     candidate_loss: float
     baseline_final_loss: float
@@ -95,6 +97,7 @@ def _run_single(
     max_steps: int,
     results_path: str,
     seed: int,
+    extra_overrides: list[str] | None = None,
 ) -> dict:
     """
     Run a single training session and return the pickled results.
@@ -124,6 +127,8 @@ def _run_single(
         f"max_steps={max_steps}",
         f"runner.callbacks.0.benchmark_results_path={results_path}",
     ]
+    if extra_overrides:
+        override_args.extend(extra_overrides)
 
     main(args=args, override_args=override_args)
 
@@ -138,6 +143,7 @@ def run_training_benchmark(
     bf16: bool = True,
     throughput_steps: int = 10,
     seed: int = 42,
+    candidate_overrides: list[str] | None = None,
 ) -> TrainingBenchmarkResult:
     """
     Run a training benchmark comparing fp32 baseline against candidate settings.
@@ -150,6 +156,8 @@ def run_training_benchmark(
         bf16: Whether to enable bf16 for the candidate run.
         throughput_steps: Number of training steps for each run.
         seed: Random seed for reproducibility.
+        candidate_overrides: Extra Hydra overrides applied only to the
+            candidate run (e.g. ["moe_layer_type=cpu_blas"]).
 
     Returns:
         TrainingBenchmarkResult with fidelity and throughput metrics.
@@ -215,6 +223,7 @@ def run_training_benchmark(
                 max_steps=throughput_steps,
                 results_path=candidate_path,
                 seed=seed,
+                extra_overrides=candidate_overrides,
             )
         except Exception as e:
             raise RuntimeError(f"Candidate training run failed: {e}") from e
@@ -239,6 +248,12 @@ def run_training_benchmark(
         grad_norm_rel_error = 0.0
 
     # Throughput: discard warmup step (step 0)
+    baseline_step_times = baseline["step_times"][1:]
+    if baseline_step_times:
+        baseline_steps_per_second = len(baseline_step_times) / sum(baseline_step_times)
+    else:
+        baseline_steps_per_second = 0.0
+
     candidate_step_times = candidate["step_times"][1:]
     if candidate_step_times:
         steps_per_second = len(candidate_step_times) / sum(candidate_step_times)
@@ -246,13 +261,16 @@ def run_training_benchmark(
         steps_per_second = 0.0
 
     peak_memory_mb = candidate["peak_memory_mb"]
+    baseline_peak_memory_mb = baseline["peak_memory_mb"]
 
     result = TrainingBenchmarkResult(
         loss_abs_error=loss_abs_error,
         loss_rel_error=loss_rel_error,
         grad_norm_rel_error=grad_norm_rel_error,
         steps_per_second=steps_per_second,
+        baseline_steps_per_second=baseline_steps_per_second,
         peak_memory_mb=peak_memory_mb,
+        baseline_peak_memory_mb=baseline_peak_memory_mb,
         baseline_loss=baseline_loss,
         candidate_loss=candidate_loss,
         baseline_final_loss=baseline_final_loss,
@@ -261,17 +279,35 @@ def run_training_benchmark(
         candidate_grad_norm=candidate_grad_norm,
     )
 
+    speedup = (
+        steps_per_second / baseline_steps_per_second
+        if baseline_steps_per_second > 0
+        else float("nan")
+    )
+    baseline_gn = (
+        f"{baseline_grad_norm:.4f}" if baseline_grad_norm is not None else "N/A"
+    )
+    candidate_gn = (
+        f"{candidate_grad_norm:.4f}" if candidate_grad_norm is not None else "N/A"
+    )
+
+    sep = "-" * 62
+    header = f"{'Metric':<28} {'Baseline':>15} {'Candidate':>15}"
     logger.info(
-        "Training Benchmark Report:\n"
-        f"  Baseline loss (step 0):      {baseline_loss:.6f}\n"
-        f"  Candidate loss (step 0):     {candidate_loss:.6f}\n"
-        f"  Baseline loss (final step):  {baseline_final_loss:.6f}\n"
-        f"  Candidate loss (final step): {candidate_final_loss:.6f}\n"
-        f"  Loss abs error (step 0):     {loss_abs_error:.6e}\n"
-        f"  Loss rel error (step 0):     {loss_rel_error:.6e}\n"
-        f"  Grad norm rel error:         {grad_norm_rel_error:.6e}\n"
-        f"  Steps/second:                {steps_per_second:.2f}\n"
-        f"  Peak memory (MB):            {peak_memory_mb:.1f}"
+        "Training Benchmark Results:\n"
+        f"  {sep}\n"
+        f"  {header}\n"
+        f"  {sep}\n"
+        f"  {'Loss (step 0)':<28} {baseline_loss:>15.6f} {candidate_loss:>15.6f}\n"
+        f"  {'Loss (final step)':<28} {baseline_final_loss:>15.6f} {candidate_final_loss:>15.6f}\n"
+        f"  {'Grad norm (step 0)':<28} {baseline_gn:>15} {candidate_gn:>15}\n"
+        f"  {'Steps/second':<28} {baseline_steps_per_second:>15.2f} {steps_per_second:>15.2f}\n"
+        f"  {'Peak memory (MB)':<28} {baseline_peak_memory_mb:>15.1f} {peak_memory_mb:>15.1f}\n"
+        f"  {sep}\n"
+        f"  {'Loss abs error (step 0)':<28} {loss_abs_error:.6e}\n"
+        f"  {'Loss rel error (step 0)':<28} {loss_rel_error:.6e}\n"
+        f"  {'Grad norm rel error':<28} {grad_norm_rel_error:.6e}\n"
+        f"  {'Speedup (candidate/base)':<28} {speedup:.2f}x"
     )
 
     return result
@@ -299,12 +335,14 @@ class TrainingBenchmarkRunner(Runner):
         bf16: bool = True,
         throughput_steps: int = 10,
         seed: int = 42,
+        candidate_overrides: list[str] | None = None,
     ):
         self.training_config = training_config
         self.device = device
         self.bf16 = bf16
         self.throughput_steps = throughput_steps
         self.seed = seed
+        self.candidate_overrides = candidate_overrides
 
     def run(self) -> dict[str, Any]:
         """
@@ -316,19 +354,33 @@ class TrainingBenchmarkRunner(Runner):
         output_dir = self.job_config.metadata.results_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        result = run_training_benchmark(
-            device=self.device,
-            bf16=self.bf16,
-            throughput_steps=self.throughput_steps,
-            seed=self.seed,
-            training_config=self.training_config,
+        log_path = os.path.join(output_dir, "training_benchmark.log")
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
+        logging.getLogger().addHandler(file_handler)
 
-        report = asdict(result)
-        report_path = os.path.join(output_dir, "training_benchmark_report.json")
-        with open(report_path, "w") as f:
-            json.dump(report, f, indent=2)
-        logger.info("Training benchmark report saved to %s", report_path)
+        try:
+            result = run_training_benchmark(
+                device=self.device,
+                bf16=self.bf16,
+                throughput_steps=self.throughput_steps,
+                seed=self.seed,
+                training_config=self.training_config,
+                candidate_overrides=self.candidate_overrides,
+            )
+
+            report = asdict(result)
+            report_path = os.path.join(output_dir, "training_benchmark_report.json")
+            with open(report_path, "w") as f:
+                json.dump(report, f, indent=2)
+            logger.info("Training benchmark report saved to %s", report_path)
+            logger.info("Training benchmark log saved to %s", log_path)
+        finally:
+            logging.getLogger().removeHandler(file_handler)
+            file_handler.close()
 
         return report
 

@@ -27,3 +27,4 @@ runner:
   bf16: False
   throughput_steps: 50
   seed: 42
+  candidate_overrides: null

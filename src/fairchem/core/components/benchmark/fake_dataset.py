@@ -178,35 +178,40 @@ def create_fake_dataset(config: FakeDatasetConfig):
 
 BENCHMARK_DATASET_SPECS = {
     "oc20": {
-        "system_size_range": [40, 200],
+        "system_size_range": [4, 140],
+        "n_train": 35,
         "pbc": True,
         "energy_std": 24.9,
         "forces_std": 1.2,
         "seed": 0,
     },
     "omol": {
-        "system_size_range": [5, 80],
+        "system_size_range": [1, 110],
+        "n_train": 27,
         "pbc": False,
         "energy_std": 1.84,
         "forces_std": 1.08,
         "seed": 1,
     },
     "omat": {
-        "system_size_range": [20, 150],
+        "system_size_range": [1, 40],
+        "n_train": 18,
         "pbc": True,
         "energy_std": 15.0,
         "forces_std": 1.5,
         "seed": 2,
     },
     "odac": {
-        "system_size_range": [30, 180],
+        "system_size_range": [13, 340],
+        "n_train": 10,
         "pbc": True,
         "energy_std": 20.0,
         "forces_std": 1.3,
         "seed": 3,
     },
     "omc": {
-        "system_size_range": [20, 120],
+        "system_size_range": [12, 250],
+        "n_train": 9,
         "pbc": True,
         "energy_std": 10.0,
         "forces_std": 1.0,
@@ -215,11 +220,13 @@ BENCHMARK_DATASET_SPECS = {
 }
 
 
-def create_fake_benchmark_dataset(
-    tmpdirname: str, train_size: int = 20, val_size: int = 5
-):
+def create_fake_benchmark_dataset(tmpdirname: str, val_size: int = 5):
     """
     Generate all 5 UMA benchmark datasets with production-like system sizes.
+
+    Per-dataset train sizes are set in BENCHMARK_DATASET_SPECS to match
+    production sampling distributions (accounting for explicit sampling
+    ratios in the training config).
 
     Skips generation if all expected files already exist (cached from a
     previous run).
@@ -232,14 +239,13 @@ def create_fake_benchmark_dataset(
     if all_exist:
         return tmpdirname
 
-    systems_per_dataset = {"train": train_size, "val": val_size}
-
     for name, spec in BENCHMARK_DATASET_SPECS.items():
         for split in ("train", "val"):
+            n_systems = spec["n_train"] if split == "train" else val_size
             config = FakeDatasetConfig(
                 name=name,
                 split=split,
-                n_systems=systems_per_dataset[split],
+                n_systems=n_systems,
                 system_size_range=spec["system_size_range"],
                 energy_std=spec["energy_std"],
                 forces_std=spec["forces_std"],

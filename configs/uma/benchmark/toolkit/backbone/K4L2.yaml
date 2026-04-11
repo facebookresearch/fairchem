@@ -15,7 +15,7 @@ max_neighbors: ${max_neighbors}
 use_pbc: True
 use_pbc_single: True
 
-cutoff: 12.0
+cutoff: ${cutoff_radius}
 edge_channels: 128
 distance_function: gaussian
 num_distance_basis: 64

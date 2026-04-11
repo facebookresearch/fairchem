@@ -1,9 +1,9 @@
-# Training benchmark config — UMA-S conservative setup with MOLE
-# Uses BenchmarkTrainCallback to capture metrics.
-# Mirrors uma_sm_conserve_finetune.yaml: direct_forces=False, regress_stress=True, MLP_EFS_Head
+# Training benchmark config — 2x systems per batch variant
+# Same architecture as production but sampling ratios adjusted to pack
+# ~11 systems per batch (2x production) by upweighting small-atom datasets.
 
 defaults:
-  - datasets: aselmdb_conserving_all
+  - datasets: aselmdb_conserving_all_2x
   - tasks: oc20_omol_conserving_all
   - backbone: K4L2
   - optimizer: adamw
