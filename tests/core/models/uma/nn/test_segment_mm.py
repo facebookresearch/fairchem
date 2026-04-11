@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from fairchem.core.models.uma.nn.segment_mm import (
@@ -18,7 +19,7 @@ from fairchem.core.models.uma.nn.segment_mm_gpu import (
 )
 
 # ---------------------------------------------------------------------------
-# Tests
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -132,25 +133,77 @@ def _run_gradgradcheck_test(device):
     ), f"gradgradcheck failed on {device}"
 
 
-def _run_all_tests(device):
-    label = device.upper()
-    _run_forward_test(device)
-    print(f"  PASSED [{label}]: forward matches ref")
-    _run_first_backward_test(device)
-    print(f"  PASSED [{label}]: first backward matches ref")
-    _run_double_backward_test(device)
-    print(f"  PASSED [{label}]: double backward matches ref")
-    _run_gradgradcheck_test(device)
-    print(f"  PASSED [{label}]: gradgradcheck")
+# ---------------------------------------------------------------------------
+# CPU pytest tests
+# ---------------------------------------------------------------------------
 
+
+def test_segment_mm_forward_cpu():
+    _run_forward_test("cpu")
+
+
+def test_segment_mm_first_backward_cpu():
+    _run_first_backward_test("cpu")
+
+
+def test_segment_mm_double_backward_cpu():
+    _run_double_backward_test("cpu")
+
+
+def test_segment_mm_gradgradcheck_cpu():
+    _run_gradgradcheck_test("cpu")
+
+
+# ---------------------------------------------------------------------------
+# GPU pytest tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.gpu()
+def test_segment_mm_forward_gpu():
+    _run_forward_test("cuda")
+
+
+@pytest.mark.gpu()
+def test_segment_mm_first_backward_gpu():
+    _run_first_backward_test("cuda")
+
+
+@pytest.mark.gpu()
+def test_segment_mm_double_backward_gpu():
+    _run_double_backward_test("cuda")
+
+
+@pytest.mark.gpu()
+def test_segment_mm_gradgradcheck_gpu():
+    _run_gradgradcheck_test("cuda")
+
+
+# ---------------------------------------------------------------------------
+# Standalone runner
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("=== CPU tests (nvpl.blas) ===")
-    _run_all_tests("cpu")
+    for fn in [
+        _run_forward_test,
+        _run_first_backward_test,
+        _run_double_backward_test,
+        _run_gradgradcheck_test,
+    ]:
+        fn("cpu")
+        print(f"  PASSED [CPU]: {fn.__name__}")
 
     if torch.cuda.is_available() and _HAS_CUBLAS:
         print("\n=== GPU tests (cuBLAS) ===")
-        _run_all_tests("cuda")
+        for fn in [
+            _run_forward_test,
+            _run_first_backward_test,
+            _run_double_backward_test,
+            _run_gradgradcheck_test,
+        ]:
+            fn("cuda")
+            print(f"  PASSED [GPU]: {fn.__name__}")
     else:
         print("\nSkipping GPU tests (no CUDA available)")
 
