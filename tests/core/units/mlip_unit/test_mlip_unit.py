@@ -279,19 +279,6 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
-# @pytest.mark.gpu()
-# @pytest.mark.parametrize(
-#     "bf16, tol",
-#     [
-#         (False, 0.0001),
-#         (True, 0.05),
-#     ],
-# )
-# def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_gpu(bf16,tol,fake_uma_dataset):
-#     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_uma_dataset)
-
-
-@pytest.mark.dgl()
 @pytest.mark.parametrize(
     "bf16, tol",
     [
@@ -299,16 +286,15 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
         (True, 0.05),
     ],
 )
-def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_cpu(
+def test_grad_train_from_cli_aselmdb_no_lr_mole_cpu_blas_vs_pytorch_cpu(
     bf16, tol, fake_uma_dataset, torch_deterministic
 ):
-    grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
+    grad_train_from_cli_aselmdb_no_lr_mole_cpu_blas_vs_pytorch(
         bf16, tol, "CPU", fake_uma_dataset
     )
 
 
-@pytest.mark.dgl()
-def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
+def grad_train_from_cli_aselmdb_no_lr_mole_cpu_blas_vs_pytorch(
     bf16, tol, device, dataset_root_dir
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -334,7 +320,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
         launch_main(pytorch_sys_args)
 
         dgl_sys_args = sys_args.copy()
-        dgl_sys_args.append("moe_layer_type=dgl")
+        dgl_sys_args.append("moe_layer_type=cpu_blas")
         dgl_sys_args.append(f"optimizer.save_path={run2_path}")
         launch_main(dgl_sys_args)
 
@@ -570,17 +556,11 @@ def test_train_and_resume_max_steps(
     shutil.rmtree(temp_dir)
 
 
-# @pytest.mark.gpu()
-# def test_train_and_resume_mole_on_dgl_gpu(fake_uma_dataset):
-#     train_and_resume_mole_on_dgl("CUDA",fake_uma_dataset)
+def test_train_and_resume_mole_on_cpu_blas_cpu(fake_uma_dataset, torch_deterministic):
+    train_and_resume_mole_on_cpu_blas("CPU", fake_uma_dataset)
 
 
-@pytest.mark.dgl()
-def test_train_and_resume_mole_on_dgl_cpu(fake_uma_dataset, torch_deterministic):
-    train_and_resume_mole_on_dgl("CPU", fake_uma_dataset)
-
-
-def train_and_resume_mole_on_dgl(device, data_root_dir):
+def train_and_resume_mole_on_cpu_blas(device, data_root_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
@@ -614,7 +594,7 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
     sys_args = [
         "--config",
         checkpoint_state_yaml,
-        "runner.train_eval_unit.model.backbone.moe_layer_type=dgl",
+        "runner.train_eval_unit.model.backbone.moe_layer_type=cpu_blas",
     ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)

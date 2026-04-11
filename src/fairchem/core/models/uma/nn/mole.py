@@ -15,79 +15,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from fairchem.core.common import segmentmm as nvmath_segmentmm
-
-# Backend switch flag:
-# - False: use the new nvmath-backed Python implementation
-# - True:  use the original fairchem_cpp torch op implementation
-USE_CPP_SEGMENT_MM = False
-# GEMM switch flag for MOLEDGL path:
-# - True:  grouped GEMM
-# - False: looped GEMM
-USE_GROUPED_GEMM = True
-_CPP_SEGMENT_MM_READY = False
-_FAIRCHEM_CPP_MODULE = None
-
-
-def _cpp_segment_mm_available() -> bool:
-    return hasattr(torch.ops, "fairchem_cpp") and hasattr(
-        torch.ops.fairchem_cpp, "segment_mm"
-    )
-
-
-def _ensure_cpp_segment_mm_ready() -> None:
-    global _CPP_SEGMENT_MM_READY, _FAIRCHEM_CPP_MODULE
-    # Re-validate availability even if we were previously marked ready.
-    if _CPP_SEGMENT_MM_READY and _cpp_segment_mm_available():
-        return
-    _CPP_SEGMENT_MM_READY = False
-    try:
-        import fairchem_cpp
-
-        _FAIRCHEM_CPP_MODULE = fairchem_cpp
-    except Exception as exc:
-        raise RuntimeError(
-            "USE_CPP_SEGMENT_MM=True, but importing fairchem_cpp failed. "
-            "Install/rebuild fairchem_cpp or set USE_CPP_SEGMENT_MM=False. "
-            f"Original import error: {exc}"
-        ) from exc
-    if not _cpp_segment_mm_available():
-        raise RuntimeError(
-            "USE_CPP_SEGMENT_MM=True, but torch.ops.fairchem_cpp.segment_mm is not "
-            "available. Install/rebuild fairchem_cpp or set USE_CPP_SEGMENT_MM=False."
-        )
-    _CPP_SEGMENT_MM_READY = True
-
-
-def _segment_mm_dispatch(
-    x: torch.Tensor,
-    weights: torch.Tensor,
-    seglen: torch.Tensor,
-    *,
-    use_grouped_gemm: bool,
-):
-    if USE_CPP_SEGMENT_MM:
-        _ensure_cpp_segment_mm_ready()
-        try:
-            return _FAIRCHEM_CPP_MODULE.ops.segment_mm(
-                x,
-                weights,
-                seglen,
-                use_grouped_gemm=use_grouped_gemm,
-            )
-        except (AttributeError, TypeError) as exc:
-            raise RuntimeError(
-                "USE_CPP_SEGMENT_MM=True, but fairchem_cpp.ops.segment_mm is not "
-                "callable with runtime grouped control. Rebuild/reinstall fairchem_cpp "
-                "or set "
-                "USE_CPP_SEGMENT_MM=False."
-            ) from exc
-    return nvmath_segmentmm.segment_mm(
-        x,
-        weights,
-        seglen,
-        use_grouped_gemm=use_grouped_gemm,
-    )
+from fairchem.core.models.uma.nn.segment_mm import (
+    segment_mm_double_backward,
+)
 
 
 def interval_intersection(interval1, interval2):
@@ -128,13 +58,13 @@ def norm_str_to_fn(act):
 class MOLEGlobals:
     # the linear coefficient for each expert
     expert_mixing_coefficients: torch.Tensor
-    # if the input contains N separate systems, then the sizes represent the number of atoms in each system
-    # this is used to for the MoLE to assign the correct parameters for each system
+    # if the input contains N separate systems, then the sizes represent
+    # the number of atoms in each system; this is used for the MoLE to
+    # assign the correct parameters for each system
     mole_sizes: torch.Tensor
-    # when using activation checkpointing, the inputs are chunked and given piecemeal so the start idx must be
-    # updated each time the chunked operation happens. It's better to make this an input but in order for
-    # the MolE interface to maintain functional equivalence to the Linear layer interface, this extra info
-    # needs to be added here instead. (TODO: is there a cleaner way to do this?)
+    # when using activation checkpointing, the inputs are chunked and
+    # given piecemeal so the start idx must be updated each time the
+    # chunked operation happens.
     ac_start_idx: int = 0
 
 
@@ -169,30 +99,25 @@ class MOLEDGL(torch.nn.Module):
 
         self.global_mole_tensors = global_mole_tensors
 
-    def forward(self, x, use_grouped_gemm: bool | None = None):
+    def forward(self, x):
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
             weights = torch.einsum(
                 "eoi, be->bio",
                 self.weights,
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
-        if use_grouped_gemm is None:
-            use_grouped_gemm = USE_GROUPED_GEMM
-        use_grouped_gemm = bool(use_grouped_gemm)
         x_shape = x.shape
         if x.ndim == 2:
-            r = _segment_mm_dispatch(
+            r = segment_mm_double_backward(
                 x,
                 weights,
                 self.global_mole_tensors.mole_sizes,
-                use_grouped_gemm=use_grouped_gemm,
             )
         elif x.ndim == 3:
-            r = _segment_mm_dispatch(
+            r = segment_mm_double_backward(
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_mole_tensors.mole_sizes * x_shape[1],
-                use_grouped_gemm=use_grouped_gemm,
             ).reshape(*x_shape[:-1], -1)
         else:
             raise ValueError("x.ndim not in (2,3) not allowed")
@@ -252,19 +177,11 @@ class MOLE(torch.nn.Module):
         out = []
         ac_start_idx = self.global_mole_tensors.ac_start_idx
         assert len(self.global_mole_tensors.mole_sizes) > 0
-        # TODO: precompute these if needed but they should be small and on cpu
         start_idxs = [0] + torch.cumsum(
             self.global_mole_tensors.mole_sizes, dim=0
         ).tolist()
         mole_intervals = list(zip(start_idxs, start_idxs[1:]))
 
-        # Because activation checkpointing can chunk the inputs, we need to only compute
-        # the mole_size intervals that overlap with the current chunks
-        # for example if mole_sizes = [10,10,15]
-        # start_idxs -> [0,10,20,35]
-        # mole_intervals -> [(0,10),(10,20),(20,35)]
-        # if the input segment is (5,15) then we compute the following 2 segments
-        # (5,10),(10,15)
         input_segment = (ac_start_idx, ac_start_idx + x.shape[0])
 
         for n, mole_segment in enumerate(mole_intervals):

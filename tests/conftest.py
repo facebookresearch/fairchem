@@ -9,7 +9,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import random
-from contextlib import suppress
 
 import numpy as np
 import pytest
@@ -64,20 +63,6 @@ def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
     if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
-    if "dgl" in item.keywords:
-        # check dgl is installed
-        fairchem_cpp_found = False
-        with suppress(ModuleNotFoundError):
-            import fairchem_cpp
-
-            unused = (  # noqa: F841
-                fairchem_cpp.__file__
-            )  # prevent the linter from deleting the import
-            fairchem_cpp_found = True
-        if not fairchem_cpp_found:
-            pytest.skip(
-                "fairchem_cpp not found, skipping DGL tests! please install fairchem if you want to run these"
-            )
 
 
 def pytest_collection_modifyitems(config, items):
