@@ -196,15 +196,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.assert_on_nans = assert_on_nans
         self._warned_upcast = False
 
-        if self.model.module.direct_forces:
+        if self.model.module.backbone.regress_config.direct_forces:
             logging.warning(
                 "This is a direct-force model. Direct force predictions may lead to "
                 "discontinuities in the potential energy surface and energy conservation errors."
             )
-
-    @property
-    def direct_forces(self) -> bool:
-        return self.model.module.direct_forces
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -478,7 +474,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         Execute model inference.
         """
-        inference_context = torch.no_grad() if self.direct_forces else nullcontext()
+        inference_context = (
+            torch.no_grad()
+            if self.model.module.backbone.regress_config.direct_forces
+            else nullcontext()
+        )
         tf32_context = (
             tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
