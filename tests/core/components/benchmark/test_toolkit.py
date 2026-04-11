@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -148,6 +148,8 @@ def test_benchmark_runner_end_to_end(tmp_path):
     """
     Full pipeline: baseline -> evaluate -> compare -> JSON report.
     """
+    from omegaconf import OmegaConf
+
     runner = BenchmarkToolkitRunner(
         checkpoint="uma-s-1p2",
         device="cuda",
@@ -155,8 +157,7 @@ def test_benchmark_runner_end_to_end(tmp_path):
         timed_iters=3,
         inference_settings=InferenceSettings(tf32=True, compile=False),
     )
-    runner.job_config = MagicMock()
-    runner.job_config.metadata.results_dir = str(tmp_path)
+    runner.job_config = OmegaConf.create({"metadata": {"results_dir": str(tmp_path)}})
 
     result = runner.run()
 
