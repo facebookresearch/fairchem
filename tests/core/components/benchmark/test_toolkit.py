@@ -157,7 +157,12 @@ def test_benchmark_runner_end_to_end(tmp_path):
         timed_iters=3,
         inference_settings=InferenceSettings(tf32=True, compile=False),
     )
-    runner.job_config = OmegaConf.create({"metadata": {"results_dir": str(tmp_path)}})
+    runner.job_config = OmegaConf.create(
+        {
+            "metadata": {"results_dir": str(tmp_path)},
+            "run_dir": str(tmp_path),
+        }
+    )
 
     result = runner.run()
 
