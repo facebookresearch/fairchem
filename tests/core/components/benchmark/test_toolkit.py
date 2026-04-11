@@ -116,6 +116,7 @@ def test_runner_catches_oom(tmp_path):
         runner.run()
 
 
+@pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
 def test_run_inference_predictions_and_perf():
     """
@@ -143,6 +144,7 @@ def test_run_inference_predictions_and_perf():
     assert abs(baseline.energy - result.energy) < 0.01
 
 
+@pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
 def test_benchmark_runner_end_to_end(tmp_path):
     """
