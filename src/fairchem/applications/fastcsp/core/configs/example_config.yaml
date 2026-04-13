@@ -48,7 +48,6 @@ relax:
 post_relaxation_filter:       # After ML relaxation
   energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
   density_cutoff: 10           # Density cutoff in g/cm³
-  assign_groups: true          # Assign groups to structures
   ltol: 0.2
   stol: 0.3
   angle_tol: 5
