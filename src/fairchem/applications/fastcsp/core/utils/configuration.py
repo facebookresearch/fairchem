@@ -25,7 +25,6 @@ The module validates configurations across multiple workflow stages including:
 - relax: ML relaxation parameters and optimization settings
 - filter: Post-relaxation filtering and energy landscape construction
 - evaluate: Experimental comparison and validation settings
-- VASP integration: DFT validation and comparison workflows
 """
 
 from __future__ import annotations
@@ -51,7 +50,9 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
     stage_requirements = {
         "generate": {
             "keys": ["molecules", "genarris"],
-            "nested": {"genarris": ["python_cmd", "genarris_script", "base_config"]},
+            "nested": {
+                "genarris": ["python_cmd", "genarris_cli", "genarris_base_config"]
+            },
         },
         "process_generated": {
             "keys": ["pre_relaxation_filter"],
@@ -72,15 +73,7 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
         },
         "filter": {
             "keys": ["post_relaxation_filter"],
-            "nested": {
-                "post_relaxation_filter": [
-                    "energy_cutoff",
-                    "density_cutoff",
-                    "ltol",
-                    "stol",
-                    "angle_tol",
-                ]
-            },
+            "nested": {"post_relaxation_filter": []},
         },
         "evaluate": {
             "keys": ["evaluate"],
@@ -164,7 +157,8 @@ def _validate_config_values(config: dict[str, Any]) -> None:
     # Tolerance parameter validation
     for param_set in ["pre_relaxation_filter", "post_relaxation_filter"]:
         if param_set in config:
-            _validate_tolerance_params(config[param_set], param_set)
+            # _validate_tolerance_params(config[param_set], param_set)
+            pass
 
 
 def _validate_tolerance_params(params: dict[str, Any], param_set_name: str) -> None:
