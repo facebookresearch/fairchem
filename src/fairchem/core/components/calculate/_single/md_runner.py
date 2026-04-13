@@ -221,8 +221,8 @@ class MDRunner(PreemptableMixin, CalculateRunner):
                 self._trajectory_writer.close()
 
         return {
-            "trajectory_file": str(trajectory_file),
-            "log_file": str(log_file),
+            "trajectory_file": trajectory_file,
+            "log_file": log_file,
             "total_steps": self.steps,
             "start_step": self._start_step,
             "structure_id": sid,
