@@ -12,6 +12,7 @@ import os
 import shutil
 from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
+import torch
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.fit import fit
 
@@ -20,7 +21,6 @@ from fairchem.core.common.utils import get_subdirectories_sorted_by_time
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
-    import torch
     from torchtnt.framework import EvalUnit, TrainUnit
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TTrainUnit
@@ -129,6 +129,7 @@ class TrainEvalRunner(Runner):
         max_epochs: int | None = 1,
         evaluate_every_n_steps: Optional[int] = None,
         max_steps: int | None = None,
+        cuda_prefetch: bool = False,
     ):
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
@@ -137,6 +138,7 @@ class TrainEvalRunner(Runner):
         self.max_epochs = max_epochs
         self.max_steps = max_steps
         self.evaluate_every_n_steps = evaluate_every_n_steps
+        self.cuda_prefetch = cuda_prefetch
 
         checkpoint_callbacks = [
             c for c in callbacks if isinstance(c, TrainCheckpointCallback)
@@ -156,10 +158,21 @@ class TrainEvalRunner(Runner):
                 self.job_config.metadata.checkpoint_dir,
             )
 
+        train_dl = self.train_dataloader
+        eval_dl = self.eval_dataloader
+        if self.cuda_prefetch and torch.cuda.is_available():
+            from fairchem.core.components.common.cuda_prefetcher import (
+                CUDAPrefetcher,
+            )
+
+            device = torch.device(f"cuda:{torch.cuda.current_device()}")
+            train_dl = CUDAPrefetcher(train_dl, device)
+            eval_dl = CUDAPrefetcher(eval_dl, device)
+
         fit(
             self.train_eval_unit,
-            train_dataloader=self.train_dataloader,
-            eval_dataloader=self.eval_dataloader,
+            train_dataloader=train_dl,
+            eval_dataloader=eval_dl,
             max_epochs=self.max_epochs,
             max_steps=self.max_steps,
             callbacks=self.callbacks,

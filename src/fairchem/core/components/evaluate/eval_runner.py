@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import torch
 from torchtnt.framework.evaluate import evaluate
 
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
-    import torch
     from torchtnt.framework import EvalUnit
     from torchtnt.framework.callback import Callback
 
@@ -26,16 +26,27 @@ class EvalRunner(Runner):
         eval_unit: EvalUnit,
         callbacks: list[Callback] | None = None,
         max_steps_per_epoch: int | None = None,
+        cuda_prefetch: bool = False,
     ):
         self.dataloader = dataloader
         self.eval_unit = eval_unit
         self.callbacks = callbacks if callbacks is not None else []
         self.max_steps_per_epoch = max_steps_per_epoch
+        self.cuda_prefetch = cuda_prefetch
 
     def run(self) -> None:
+        eval_dl = self.dataloader
+        if self.cuda_prefetch and torch.cuda.is_available():
+            from fairchem.core.components.common.cuda_prefetcher import (
+                CUDAPrefetcher,
+            )
+
+            device = torch.device(f"cuda:{torch.cuda.current_device()}")
+            eval_dl = CUDAPrefetcher(eval_dl, device)
+
         evaluate(
             self.eval_unit,
-            eval_dataloader=self.dataloader,
+            eval_dataloader=eval_dl,
             max_steps_per_epoch=self.max_steps_per_epoch,
             callbacks=self.callbacks,
         )

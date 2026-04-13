@@ -687,7 +687,9 @@ class MLIPTrainEvalUnit(
     def train_step(self, state: State, data: AtomicData) -> None:
         try:
             device = get_device_for_local_rank()
-            batch_on_device = data.to(device)
+            batch_on_device = (
+                data if data.pos.device.type == device else data.to(device)
+            )
             step = self.train_progress.num_steps_completed
             epoch = (
                 self.train_progress.num_epochs_completed
@@ -971,7 +973,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
     def eval_step(self, state: State, data: AtomicData) -> None:
         """Evaluates the model on a batch of data."""
         device = get_device_for_local_rank()
-        data = data.to(device)
+        data = data if data.pos.device.type == device else data.to(device)
         self.total_atoms += data.natoms.sum().item()
 
         if (time.time() - self.last_report) > self.report_every:
