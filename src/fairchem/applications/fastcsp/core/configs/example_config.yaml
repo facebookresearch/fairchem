@@ -7,10 +7,10 @@ molecules: configs/example_systems.csv # File containing list of target molecule
 # Genarris configuration for structure generation
 genarris:
   # Execution environment
-  python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
-  genarris_script: /path/to/genarris_master.py        # Path to Genarris master script
   mpi_launcher: /path/to/mpirun                       # MPI launcher: mpirun, srun, or custom path
-  base_config: configs/gnrs_base.conf                 # Base Genarris configuration template
+  python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
+  genarris_cli: /path/to/genarris_cli.py              # Path to Genarris cli script
+  genarris_base_config: configs/gnrs_base.conf        # Base Genarris configuration template
   # Structure generation parameters
   vars:
     Z: [1, 2, 3, 4, 6, 8] # [1] by default
