@@ -162,13 +162,6 @@ class HydraInterfaceMixin:
         return self._tasks
 
     @property
-    def direct_forces(self) -> bool:
-        """
-        Whether this model uses direct force prediction.
-        """
-        return getattr(self.backbone, "direct_forces", False)
-
-    @property
     def dataset_to_tasks(self) -> dict[str, list]:
         """
         Mapping from dataset names to their associated tasks.
@@ -191,8 +184,10 @@ class HydraInterfaceMixin:
         """
         derivative_properties = ("forces", "stress", "hessian")
 
+        backbone_regress_config = getattr(self.backbone, "regress_config", None)
         if (
-            self.direct_forces
+            backbone_regress_config is not None
+            and backbone_regress_config.direct_forces
             and task.inference_only
             and task.property in derivative_properties
         ):
