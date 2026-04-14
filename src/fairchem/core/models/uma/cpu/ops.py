@@ -47,9 +47,7 @@ def _get_cpp_kernels():
         )
         log.info("C++ CPU kernels compiled successfully")
     except Exception as e:
-        log.warning(
-            "Failed to compile C++ kernels, using PyTorch fallback: %s", e
-        )
+        log.warning("Failed to compile C++ kernels, using PyTorch fallback: %s", e)
         _cpp_kernels = False  # sentinel to avoid retrying
 
     return _cpp_kernels
@@ -133,12 +131,8 @@ class CPUPermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             kernels = _get_cpp_kernels()
 
             grad_out = grad_out.contiguous()
-            grad_x = kernels.permute_wigner_inv_bwd_dx(
-                grad_out, wigner_inv
-            )
-            grad_wigner = kernels.permute_wigner_inv_bwd_dw(
-                grad_out, x_m
-            )
+            grad_x = kernels.permute_wigner_inv_bwd_dx(grad_out, wigner_inv)
+            grad_wigner = kernels.permute_wigner_inv_bwd_dw(grad_out, x_m)
 
             return grad_x, grad_wigner
         else:
@@ -163,12 +157,8 @@ def _pytorch_node_to_edge_fwd(ctx, x, edge_index, wigner):
     W = wigner.reshape(E, 9, 9)
     rotated = torch.empty_like(x_cat)
     rotated[:, 0:1, :] = W[:, 0:1, 0:1] * x_cat[:, 0:1, :]
-    rotated[:, 1:4, :] = torch.bmm(
-        W[:, 1:4, 1:4], x_cat[:, 1:4, :]
-    )
-    rotated[:, 4:9, :] = torch.bmm(
-        W[:, 4:9, 4:9], x_cat[:, 4:9, :]
-    )
+    rotated[:, 1:4, :] = torch.bmm(W[:, 1:4, 1:4], x_cat[:, 1:4, :])
+    rotated[:, 4:9, :] = torch.bmm(W[:, 4:9, 4:9], x_cat[:, 4:9, :])
 
     out = rotated[:, L_TO_M_GATHER_IDX, :]
 
@@ -188,12 +178,8 @@ def _pytorch_node_to_edge_bwd(ctx, grad_out):
 
     grad_cat = torch.empty_like(grad_l)
     grad_cat[:, 0:1, :] = W[:, 0:1, 0:1] * grad_l[:, 0:1, :]
-    grad_cat[:, 1:4, :] = torch.bmm(
-        W[:, 1:4, 1:4].transpose(1, 2), grad_l[:, 1:4, :]
-    )
-    grad_cat[:, 4:9, :] = torch.bmm(
-        W[:, 4:9, 4:9].transpose(1, 2), grad_l[:, 4:9, :]
-    )
+    grad_cat[:, 1:4, :] = torch.bmm(W[:, 1:4, 1:4].transpose(1, 2), grad_l[:, 1:4, :])
+    grad_cat[:, 4:9, :] = torch.bmm(W[:, 4:9, 4:9].transpose(1, 2), grad_l[:, 4:9, :])
 
     grad_src = grad_cat[:, :, :C]
     grad_tgt = grad_cat[:, :, C:]
@@ -210,9 +196,7 @@ def _pytorch_node_to_edge_bwd(ctx, grad_out):
     x_target = x[edge_index[1]]
     x_cat = torch.cat((x_source, x_target), dim=2)
 
-    grad_wigner = torch.zeros(
-        E, 9, 9, dtype=wigner.dtype, device=wigner.device
-    )
+    grad_wigner = torch.zeros(E, 9, 9, dtype=wigner.dtype, device=wigner.device)
     grad_wigner[:, 0:1, 0:1] = torch.bmm(
         grad_l[:, 0:1, :], x_cat[:, 0:1, :].transpose(1, 2)
     )
@@ -248,19 +232,13 @@ def _pytorch_permute_wigner_inv_bwd(ctx, grad_out):
 
     grad_x_l = torch.empty_like(grad_out)
     grad_x_l[:, 0:1, :] = W[:, 0:1, 0:1] * grad_out[:, 0:1, :]
-    grad_x_l[:, 1:4, :] = torch.bmm(
-        W[:, 1:4, 1:4].transpose(1, 2), grad_out[:, 1:4, :]
-    )
-    grad_x_l[:, 4:9, :] = torch.bmm(
-        W[:, 4:9, 4:9].transpose(1, 2), grad_out[:, 4:9, :]
-    )
+    grad_x_l[:, 1:4, :] = torch.bmm(W[:, 1:4, 1:4].transpose(1, 2), grad_out[:, 1:4, :])
+    grad_x_l[:, 4:9, :] = torch.bmm(W[:, 4:9, 4:9].transpose(1, 2), grad_out[:, 4:9, :])
 
     grad_x = grad_x_l[:, L_TO_M_GATHER_IDX, :]
 
     x_l = x_m[:, M_TO_L_GATHER_IDX, :]
-    grad_wigner = torch.zeros(
-        E, 9, 9, dtype=wigner_inv.dtype, device=wigner_inv.device
-    )
+    grad_wigner = torch.zeros(E, 9, 9, dtype=wigner_inv.dtype, device=wigner_inv.device)
     grad_wigner[:, 0:1, 0:1] = torch.bmm(
         grad_out[:, 0:1, :], x_l[:, 0:1, :].transpose(1, 2)
     )

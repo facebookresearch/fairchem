@@ -29,9 +29,7 @@ def _get_kernels():
 
 
 @custom_op("fairchem_cpu::node_to_edge_wigner_permute_fwd", mutates_args=())
-def _n2e_fwd(
-    x: Tensor, edge_index: Tensor, wigner: Tensor
-) -> Tensor:
+def _n2e_fwd(x: Tensor, edge_index: Tensor, wigner: Tensor) -> Tensor:
     kernels = _get_kernels()
     return kernels.node_to_edge_wigner_permute_fwd(
         x, edge_index.to(torch.int64), wigner
@@ -39,17 +37,13 @@ def _n2e_fwd(
 
 
 @_n2e_fwd.register_fake
-def _n2e_fwd_fake(
-    x: Tensor, edge_index: Tensor, wigner: Tensor
-) -> Tensor:
+def _n2e_fwd_fake(x: Tensor, edge_index: Tensor, wigner: Tensor) -> Tensor:
     E = edge_index.shape[1]
     C = x.shape[2]
     return torch.empty(E, 9, C * 2, dtype=x.dtype, device=x.device)
 
 
-@custom_op(
-    "fairchem_cpu::node_to_edge_wigner_permute_bwd_dx", mutates_args=()
-)
+@custom_op("fairchem_cpu::node_to_edge_wigner_permute_bwd_dx", mutates_args=())
 def _n2e_bwd_dx(
     grad_out: Tensor,
     wigner: Tensor,
@@ -70,31 +64,19 @@ def _n2e_bwd_dx_fake(
     num_nodes: int,
 ) -> Tensor:
     C = grad_out.shape[2] // 2
-    return torch.empty(
-        num_nodes, 9, C, dtype=grad_out.dtype, device=grad_out.device
-    )
+    return torch.empty(num_nodes, 9, C, dtype=grad_out.dtype, device=grad_out.device)
 
 
-@custom_op(
-    "fairchem_cpu::node_to_edge_wigner_permute_bwd_dw", mutates_args=()
-)
-def _n2e_bwd_dw(
-    grad_out: Tensor, x: Tensor, edge_index: Tensor
-) -> Tensor:
+@custom_op("fairchem_cpu::node_to_edge_wigner_permute_bwd_dw", mutates_args=())
+def _n2e_bwd_dw(grad_out: Tensor, x: Tensor, edge_index: Tensor) -> Tensor:
     kernels = _get_kernels()
-    return kernels.node_to_edge_wigner_permute_bwd_dw(
-        grad_out, x, edge_index
-    )
+    return kernels.node_to_edge_wigner_permute_bwd_dw(grad_out, x, edge_index)
 
 
 @_n2e_bwd_dw.register_fake
-def _n2e_bwd_dw_fake(
-    grad_out: Tensor, x: Tensor, edge_index: Tensor
-) -> Tensor:
+def _n2e_bwd_dw_fake(grad_out: Tensor, x: Tensor, edge_index: Tensor) -> Tensor:
     E = edge_index.shape[1]
-    return torch.empty(
-        E, 9, 9, dtype=grad_out.dtype, device=grad_out.device
-    )
+    return torch.empty(E, 9, 9, dtype=grad_out.dtype, device=grad_out.device)
 
 
 @custom_op("fairchem_cpu::permute_wigner_inv_fwd", mutates_args=())
@@ -128,6 +110,4 @@ def _pwi_bwd_dw(grad_out: Tensor, x_m: Tensor) -> Tensor:
 @_pwi_bwd_dw.register_fake
 def _pwi_bwd_dw_fake(grad_out: Tensor, x_m: Tensor) -> Tensor:
     E = grad_out.shape[0]
-    return torch.empty(
-        E, 9, 9, dtype=grad_out.dtype, device=grad_out.device
-    )
+    return torch.empty(E, 9, 9, dtype=grad_out.dtype, device=grad_out.device)

@@ -463,14 +463,10 @@ class _EdgeDegreeScatterFunction(torch.autograd.Function):
         grad_edge = grad_edge.to(radial.dtype)
 
         # grad_radial = W_m0^T @ grad_edge  -> [E, m0, C]
-        grad_radial = torch.bmm(
-            wigner_inv_m0.transpose(1, 2), grad_edge
-        )
+        grad_radial = torch.bmm(wigner_inv_m0.transpose(1, 2), grad_edge)
 
         # grad_wigner_m0 = grad_edge @ radial^T -> [E, 9, m0]
-        grad_wigner_m0 = torch.bmm(
-            grad_edge, radial.transpose(1, 2)
-        )
+        grad_wigner_m0 = torch.bmm(grad_edge, radial.transpose(1, 2))
 
         return grad_x, grad_radial, grad_wigner_m0, None, None
 
@@ -532,9 +528,7 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
             CPUNodeToEdgeWignerPermuteFunction,
         )
 
-        return CPUNodeToEdgeWignerPermuteFunction.apply(
-            x_full, edge_index, wigner
-        )
+        return CPUNodeToEdgeWignerPermuteFunction.apply(x_full, edge_index, wigner)
 
     @staticmethod
     def permute_wigner_inv_edge_to_node(
@@ -549,18 +543,14 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
         )
 
         # Rotate M->L using CPU kernel
-        x_rotated = CPUPermuteWignerInvEdgeToNodeFunction.apply(
-            x_message, wigner_inv
-        )
+        x_rotated = CPUPermuteWignerInvEdgeToNodeFunction.apply(x_message, wigner_inv)
         # Scatter to nodes
         new_embedding = torch.zeros(
             (num_nodes,) + x_rotated.shape[1:],
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(
-            0, edge_index[1] - node_offset, x_rotated
-        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
         return new_embedding
 
     @staticmethod
@@ -574,9 +564,7 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
         rescale_factor: float,
         node_offset: int = 0,
     ) -> torch.Tensor:
-        radial = radial_output.reshape(
-            -1, m_0_num_coefficients, sphere_channels
-        )
+        radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
         wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
 
         return _EdgeDegreeScatterFunction.apply(
@@ -649,9 +637,7 @@ def maybe_update_settings_backend(
         lmax = model_config["backbone"]["lmax"]
         mmax = model_config["backbone"]["mmax"]
         UMASFastCPUBackend.validate(lmax, mmax, settings)
-        return replace(
-            settings, execution_mode=ExecutionMode.UMAS_FAST_CPU
-        )
+        return replace(settings, execution_mode=ExecutionMode.UMAS_FAST_CPU)
     except (ValueError, KeyError):
         pass
 
