@@ -86,6 +86,10 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
             "keys": ["evaluate"],
             "nested": {"evaluate": ["target_xtals_dir", "method"]},
         },
+        "compute_free_energy": {
+            "keys": ["free_energy"],
+            "nested": {},
+        },
     }
 
     # Check base required keys
@@ -195,7 +199,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "relax",
         "filter",
         "evaluate",
-        "free_energy",
+        "compute_free_energy",
     ]
 
     from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
