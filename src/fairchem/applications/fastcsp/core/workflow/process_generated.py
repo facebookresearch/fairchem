@@ -143,6 +143,9 @@ def structure_to_row(
 def process_genarris_outputs_single(
     input_dir: Path,
     output_dir: Path,
+    mol_id: str,
+    conf_id: str,
+    z_val: int,
     remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
@@ -151,78 +154,44 @@ def process_genarris_outputs_single(
     num_cpus: int = 70,
 ):
     """
-    Process Genarris output files from a single molecular conformer directory.
+    Process Genarris output files from a single (mol_id, conf_id, z_val) directory.
 
     Converts raw Genarris JSON structure files into standardized parquet format
-    with structure deduplication and metadata extraction. This function handles
-    the complex directory structure of Genarris outputs and transforms them into
-    a format suitable for downstream ML processing.
+    with structure deduplication and metadata extraction.
 
     Args:
-        input_dir: Root directory containing Genarris output structure
-                 Expected structure: mol_id/conf_id/z_val/symm_rigid_press/structures.json
+        input_dir: Directory for a single Z-value containing structures.json
+                 Expected: z_val/symm_rigid_press/structures.json or z_val/structures.json
         output_dir: Directory where processed parquet files will be saved
-        npartitions: Number of partitions for distributed processing (default: 1000)
+        mol_id: Molecule identifier
+        conf_id: Conformer identifier
+        z_val: Number of formula units per unit cell
         remove_duplicates: Whether to perform deduplication (default: False)
         ltol: Lattice parameter tolerance for structure deduplication (default: 0.2)
         stol: Site tolerance for structure deduplication (default: 0.3)
         angle_tol: Angle tolerance for structure deduplication (default: 5°)
-
-    Processing Workflow:
-        1. Scan directory structure for structures.json files
-        2. Extract mol_id and Z values from directory hierarchy
-        3. Parse JSON structure data and convert to standardized format
-        4. Apply deduplication using pymatgen
-        5. Save results in partitioned parquet format for efficient access
-
-    Output Format:
-        Creates parquet files partitioned by partition_id containing:
-        - structure_id: Unique identifier for each structure
-        - mol_id: Original molecule identifier
-        - z: Number of formula units per unit cell
-        - formula: Reduced chemical formula
-        - n_atoms: Total atoms in unit cell
-        - volume: Unit cell volume
-        - cif: Structure in CIF format
-        - group_index: Deduplication group assignment
+        npartitions: Number of partitions for distributed processing (default: 1000)
+        num_cpus: Number of CPUs for parallel processing (default: 70)
     """
     logger = get_central_logger()
     logger.info(f"Processing {input_dir}")
     json_files = list(input_dir.glob("**/symm_rigid_press/structures.json"))
-    generation_method = "genarris"
-    # in case Genarris version is different
-    # or other structure generation method is used
     if not json_files:
         json_files = list(input_dir.rglob("structures.json"))
-        generation_method = "other"
     logger.info(f"Found {len(json_files)} files / {input_dir}")
+
     # Collect all structure items across JSON files for parallel processing
     all_items = []
     for file_path in tqdm(json_files, desc="Processing files"):
-        try:
-            json_file_parents = list(file_path.parents)
-            if generation_method == "genarris":
-                mol_id = json_file_parents[4].name
-                conf_id = json_file_parents[3].name
-                z_val = int(json_file_parents[2].name)
-            else:
-                # based on expected directory structure
-                # mol_id/conf_id/z_val/structures.json
-                # adjust indices accordingly
-                mol_id = json_file_parents[2].name
-                conf_id = json_file_parents[1].name
-                z_val = int(json_file_parents[0].name)
-        except Exception as e:
-            logger.warning(
-                f"Failed to extract mol_id, conf_id, or z from path {file_path}: {e}"
-            )
-            continue
-
         with file_path.open("r") as f:
             struct_data = json.load(f)
 
         for hash_id, struct_dict in struct_data.items():
             all_items.append((hash_id, struct_dict, mol_id, conf_id, z_val))
+
+    if not all_items:
+        logger.warning(f"No structures found in {input_dir}")
+        return
 
     # Convert structures to rows in parallel
     def _convert_item(item):
@@ -262,6 +231,7 @@ def process_genarris_outputs(
 
     Args:
         input_dir: Root directory containing multiple molecule directories
+                 Expected structure: input_dir/mol_id/conf_id/z_val/
         output_dir: Output directory where processed results will be saved
         pre_relax_config: Configuration dictionary containing SLURM and processing parameters
         remove_duplicates: Whether to perform deduplication (default: False)
@@ -277,37 +247,57 @@ def process_genarris_outputs(
 
     # Get SLURM configuration
     slurm_params = get_process_slurm_config(pre_relax_config)
+    num_cpus = slurm_params.get("cpus_per_task", 1)
 
     job_args = []
     for mol_dir in input_dir.iterdir():
+        if not mol_dir.is_dir():
+            continue
         for conf_dir in mol_dir.iterdir():
-            processed_dir = output_dir / mol_dir.name / conf_dir.name
-
-            if (
-                processed_dir.exists()
-                and len(list(processed_dir.glob("*/*.parquet"))) > 0
-            ):
-                logger.info(
-                    f"Skipping {conf_dir} because {processed_dir} already exists"
-                )
+            if not conf_dir.is_dir():
                 continue
+            for z_dir in conf_dir.iterdir():
+                if not z_dir.is_dir():
+                    continue
 
-            job_args.append(
-                (
-                    process_genarris_outputs_single,
+                processed_dir = output_dir / mol_dir.name / conf_dir.name / z_dir.name
+
+                if (
+                    processed_dir.exists()
+                    and len(list(processed_dir.glob("*/*.parquet"))) > 0
+                ):
+                    logger.info(
+                        f"Skipping {z_dir} because {processed_dir} already exists"
+                    )
+                    continue
+
+                try:
+                    z_val = int(z_dir.name)
+                except ValueError:
+                    logger.warning(
+                        f"Skipping {z_dir}: directory name is not a valid Z value"
+                    )
+                    continue
+
+                job_args.append(
                     (
-                        conf_dir,
-                        processed_dir,
-                        remove_duplicates,
-                        ltol,
-                        stol,
-                        angle_tol,
-                        npartitions,
-                        slurm_params.get("cpus_per_task", 70),
-                    ),
-                    {},
+                        process_genarris_outputs_single,
+                        (
+                            z_dir,
+                            processed_dir,
+                            mol_dir.name,
+                            conf_dir.name,
+                            z_val,
+                            remove_duplicates,
+                            ltol,
+                            stol,
+                            angle_tol,
+                            npartitions,
+                            num_cpus,
+                        ),
+                        {},
+                    )
                 )
-            )
 
     return submit_slurm_jobs(
         job_args,
