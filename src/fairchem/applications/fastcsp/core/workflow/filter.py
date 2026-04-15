@@ -85,6 +85,7 @@ def filter_and_deduplicate_structures_single(
     angle_tol: float = 5,
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
+    num_cpus: int = 70,
 ):
     """
     Apply filtering to a single dataset.
@@ -139,7 +140,7 @@ def filter_and_deduplicate_structures_single(
             check_no_changes_in_covalent_matrix,
             initial_atoms,
             final_atoms,
-            num_cpus=70,  # Parallel processing for connectivity validation
+            num_cpus=num_cpus,
         )
 
         # Save intermediate results with connectivity validation flags
@@ -180,8 +181,10 @@ def filter_and_deduplicate_structures_single(
         logger.info(f"After filtering by energy: {structures_df_filtered.shape}")
 
     # Convert CIF strings to pymatgen Structures for deduplication
-    structures_df_filtered["structure"] = structures_df_filtered["relaxed_cif"].apply(
-        cif_to_structure
+    structures_df_filtered["structure"] = p_map(
+        cif_to_structure,
+        structures_df_filtered["relaxed_cif"].tolist(),
+        num_cpus=num_cpus,
     )
 
     # Apply deduplication without hash-based pre-filtering
@@ -289,6 +292,7 @@ def filter_and_deduplicate_structures(
                     angle_tol,
                     remove_duplicates,
                     unrelaxed_path,
+                    slurm_params.get("cpus_per_task", 1),
                 ),
                 {},
             )

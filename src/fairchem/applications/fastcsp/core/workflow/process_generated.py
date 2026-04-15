@@ -39,6 +39,7 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import get_partition_id
+from p_tqdm import p_map
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
@@ -147,6 +148,7 @@ def process_genarris_outputs_single(
     stol: float = 0.3,
     angle_tol: float = 5,
     npartitions: int = 1000,
+    num_cpus: int = 70,
 ):
     """
     Process Genarris output files from a single molecular conformer directory.
@@ -194,7 +196,8 @@ def process_genarris_outputs_single(
         json_files = list(input_dir.rglob("structures.json"))
         generation_method = "other"
     logger.info(f"Found {len(json_files)} files / {input_dir}")
-    all_rows = []
+    # Collect all structure items across JSON files for parallel processing
+    all_items = []
     for file_path in tqdm(json_files, desc="Processing files"):
         try:
             json_file_parents = list(file_path.parents)
@@ -218,20 +221,14 @@ def process_genarris_outputs_single(
         with file_path.open("r") as f:
             struct_data = json.load(f)
 
-        for hash_id, struct_dict in tqdm(
-            struct_data.items(),
-            desc="Processing structures",
-            total=len(struct_data),
-        ):
-            try:
-                row = structure_to_row(
-                    hash_id, struct_dict, mol_id, conf_id, z_val, npartitions
-                )
-                all_rows.append(row)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to parse structure {hash_id} in {file_path}: {e}"
-                )
+        for hash_id, struct_dict in struct_data.items():
+            all_items.append((hash_id, struct_dict, mol_id, conf_id, z_val))
+
+    # Convert structures to rows in parallel
+    def _convert_item(item):
+        return structure_to_row(*item, npartitions=npartitions)
+
+    all_rows = p_map(_convert_item, all_items, num_cpus=num_cpus)
 
     structures_df = pd.DataFrame(all_rows)
     structures_df = deduplicate_structures(
@@ -306,6 +303,7 @@ def process_genarris_outputs(
                         stol,
                         angle_tol,
                         npartitions,
+                        slurm_params.get("cpus_per_task", 70),
                     ),
                     {},
                 )
