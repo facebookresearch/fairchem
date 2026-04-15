@@ -164,8 +164,8 @@ def get_slurm_config(
         },
         "evaluate": {
             "job-name": "eval",
-            "cpus_per_task": 1,
-            "mem_gb": 10,
+            "cpus_per_task": 16,
+            "mem_gb": 64,
             "time": 1000,
         },
     }

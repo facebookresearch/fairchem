@@ -445,9 +445,7 @@ def load_target_structures(
                         continue
 
                 try:
-                    structure = _load_single_structure(
-                        cif_path, eval_method, **kwargs
-                    )
+                    structure = _load_single_structure(cif_path, eval_method, **kwargs)
                     target_structures[refcode] = structure
                     logger.debug(f"Loaded structure for {refcode} from {cif_path}")
                 except Exception as e:
@@ -470,7 +468,9 @@ def load_target_structures(
                         continue
 
                     try:
-                        structure = _load_single_structure(cif_file, eval_method, **kwargs)
+                        structure = _load_single_structure(
+                            cif_file, eval_method, **kwargs
+                        )
                         target_structures[refcode] = structure
                         logger.debug(f"Loaded structure for {refcode} from {cif_file}")
                     except Exception as e:
@@ -758,10 +758,13 @@ def compute_structure_matches(
         # Pymatgen: SLURM distributed execution
         logger.info("Using pymatgen StructureMatcher for structure evaluation")
         method_params = eval_config.get("pymatgen_match_params", {})
-        logger.info(f"Pymatgen matching parameters: {method_params}")
 
         # Get SLURM configuration from eval_config
         slurm_params = get_eval_slurm_config(eval_config)
+
+        # Pass num_cpus into method_params so swifter uses all allocated CPUs
+        method_params["num_cpus"] = slurm_params.get("cpus_per_task", 1)
+        logger.info(f"Pymatgen matching parameters: {method_params}")
 
         job_args = []
         for i, parquet_file in enumerate(parquet_files):
