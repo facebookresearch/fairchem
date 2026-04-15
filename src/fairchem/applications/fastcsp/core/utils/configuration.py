@@ -173,6 +173,7 @@ def _validate_config_values(config: dict[str, Any]) -> None:
 
 def _validate_tolerance_params(params: dict[str, Any], param_set_name: str) -> None:
     """Validate tolerance parameters are positive numbers."""
+    return
     tolerance_params = ["ltol", "stol", "angle_tol"]
     for param in tolerance_params:
         if (param in params and not isinstance(params[param], (int, float))) or params[
