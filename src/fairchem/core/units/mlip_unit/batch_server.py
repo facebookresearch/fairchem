@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from collections import deque
+from collections import defaultdict, deque
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
 
@@ -233,13 +233,23 @@ class BatchPredictServer(BatchPredictServerMixin):
 )
 class MultiplexedBatchPredictServer(BatchPredictServerMixin):
     """
-    Ray Serve deployment that supports multiplexed model loading.
+    Ray Serve deployment that supports multiplexed model loading with batching.
 
     Unlike ``BatchPredictServer`` which serves a single pre-loaded model,
     this deployment loads models on demand using ``@serve.multiplexed``.
     Different clients can request different models by passing a ``model_id``
     and an LRU cache keeps up to ``max_num_models_per_replica`` models
     resident on each replica.
+
+    **Batching with per-model routing.**  ``@serve.batch`` collects requests
+    from concurrent ``__call__`` invocations.  Because
+    ``serve.get_multiplexed_model_id()`` is only reliable in per-request
+    context (``__call__``), each request captures its ``model_id`` there and
+    passes it explicitly as a second positional argument to ``predict()``.
+    Inside the batch function, requests are grouped by ``model_id``, each
+    group is processed with the correct cached ``predict_unit`` via
+    ``await self.get_model(model_id)`` (LRU cache hit), and results are
+    reassembled in original request order.
     """
 
     def __init__(
@@ -260,16 +270,111 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         self.configure_batching(max_batch_size, batch_wait_timeout_s)
         logging.info("MultiplexedBatchPredictServer initialized")
 
+    @serve.batch(
+        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
+    )
+    async def predict(
+        self,
+        data_list: list[AtomicData],
+        model_id_list: list[str],
+        undo_element_references: bool = True,
+    ) -> list[dict]:
+        """
+        Process a batch of AtomicData objects, grouped by model_id.
+
+        Requests for different models accumulate in the same ``@serve.batch``
+        window and are then dispatched in sequential per-model groups.  The
+        ``model_id`` for each request is passed explicitly from ``__call__``
+        (where ``serve.get_multiplexed_model_id()`` is still valid) rather than
+        being read inside this function (where only one request context is
+        active).
+
+        Args:
+            data_list: List of AtomicData objects (automatically batched by
+                Ray Serve).
+            model_id_list: Corresponding model IDs, one per request.
+            undo_element_references: Whether to undo element references.
+                Ray Serve batches this into a list; the first value is used.
+
+        Returns:
+            List of prediction dictionaries, one per input, in original order.
+        """
+        # @serve.batch batches all positional args; take first value for scalar
+        undo_refs = (
+            undo_element_references[0]
+            if isinstance(undo_element_references, list)
+            else undo_element_references
+        )
+
+        # Group (original_index, data) pairs by model_id
+        groups: dict[str, list[tuple[int, AtomicData]]] = defaultdict(list)
+        for i, (data, model_id) in enumerate(zip(data_list, model_id_list)):
+            groups[model_id].append((i, data))
+
+        results: list[dict | None] = [None] * len(data_list)
+
+        for model_id, indexed_items in groups.items():
+            indices, group_data = zip(*indexed_items)
+            predict_unit = await self.get_model(model_id)  # LRU cache hit
+
+            data_deque: deque[list[AtomicData]] = deque([list(group_data)])
+            group_results: list[dict] = []
+
+            while data_deque:
+                oom = False
+                current = data_deque.popleft()
+                batch = atomicdata_list_to_batch(current)
+
+                try:
+                    preds = predict_unit.predict(
+                        batch, undo_element_references=undo_refs
+                    )
+                    group_results.extend(self._split_predictions(preds, batch))
+                except torch.OutOfMemoryError as err:
+                    if not self.split_oom_batch:
+                        raise torch.OutOfMemoryError(
+                            "Reduce max_batch_size or set split_oom_batch=True "
+                            "to automatically split OOM batches."
+                        ) from err
+                    if len(current) == 1:
+                        raise torch.OutOfMemoryError(
+                            "Out of memory for a single system left in batch."
+                        ) from err
+                    logging.warning(
+                        "Caught out of memory error. Splitting batch and retrying."
+                    )
+                    oom = True
+                    torch.cuda.empty_cache()
+
+                if oom:
+                    mid = len(current) // 2
+                    data_deque.appendleft(current[mid:])
+                    data_deque.appendleft(current[:mid])
+
+            for orig_idx, pred in zip(indices, group_results):
+                results[orig_idx] = pred
+
+        return results
+
     @serve.multiplexed(max_num_models_per_replica=3)
     async def get_model(self, model_id: str):
         """
         Load (or retrieve from cache) a predict unit by model key.
+
+        The ``@serve.multiplexed`` decorator caches the *return value* of
+        this method in an LRU cache (keyed by ``model_id``).  Returning the
+        ``predict_unit`` directly means the cached object is the unit itself,
+        so subsequent calls for the same ``model_id`` skip the loading code
+        and return the cached unit without touching any instance state.
 
         Args:
             model_id: Key in the format ``"checkpoint_name_or_path:settings"``
                 where ``settings`` is one of the recognized inference setting
                 names (e.g. ``"default"``, ``"turbo"``) or an empty string for
                 the default settings.
+
+        Returns:
+            The loaded ``MLIPPredictUnit`` for this model_id.
         """
         parts = model_id.split(":", 1)
         checkpoint = parts[0]
@@ -294,8 +399,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
                 device=device,
             )
 
-        self.predict_unit = predict_unit
         logging.info(f"MultiplexedBatchPredictServer loaded model_id={model_id!r}")
+        return predict_unit
 
     async def get_predict_unit_attribute(
         self, attribute_name: str, model_id: str | None = None
@@ -307,16 +412,21 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         to resolve the correct model first.
         """
         model_id = model_id or serve.get_multiplexed_model_id()
-        await self.get_model(model_id)
-        return getattr(self.predict_unit, attribute_name)
+        predict_unit = await self.get_model(model_id)
+        return getattr(predict_unit, attribute_name)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
         Run model-specific validation after loading the correct model.
         """
+        from ase import Atoms
+
         model_id = serve.get_multiplexed_model_id()
-        await self.get_model(model_id)
-        return super().validate_atoms_data(atoms_info, task_name)
+        predict_unit = await self.get_model(model_id)
+        stub = Atoms()
+        stub.info = atoms_info
+        predict_unit.validate_atoms_data(stub, task_name)
+        return stub.info
 
     async def __call__(
         self, data: AtomicData, undo_element_references: bool = True
@@ -324,8 +434,10 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         """
         Main entry point for multiplexed inference requests.
 
-        The ``multiplexed_model_id`` is read from the Ray Serve request
-        context (set by the caller via ``handle.options(multiplexed_model_id=...)``).
+        ``serve.get_multiplexed_model_id()`` is called here (per-request
+        context) and forwarded explicitly to ``predict()``.  Inside the
+        ``@serve.batch`` function only one request context is active, so
+        the model ID cannot be reliably read there.
 
         Args:
             data: Single AtomicData object.
@@ -335,8 +447,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             Prediction dictionary for this system.
         """
         model_id = serve.get_multiplexed_model_id()
-        await self.get_model(model_id)
-        predictions = await self.predict(data, undo_element_references)
+        predictions = await self.predict(data, model_id, undo_element_references)
         return predictions
 
 
