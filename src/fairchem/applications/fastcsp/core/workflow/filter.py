@@ -34,6 +34,7 @@ from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import (
     get_filter_slurm_config,
     submit_slurm_jobs,
+    wait_for_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_no_changes_in_covalent_matrix,
@@ -86,14 +87,15 @@ def filter_and_deduplicate_structures_single(
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
     num_cpus: int = 70,
+    z_val: int | None = None,
 ):
     """
-    Apply filtering to a single dataset.
+    Apply filtering and deduplication to a single dataset (typically one Z-value group).
 
     Args:
         input_filename: Path to input parquet file with structure data
         output_filename: Path to output parquet file for filtered results
-        remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
+        remove_problematic: Whether to remove problematic structures
         energy_cutoff: Maximum energy above minimum (kJ/mol)
         density_cutoff: Maximum allowed density (g/cm³) for filtering
         assign_groups: Whether to assign group IDs to similar structures
@@ -102,19 +104,25 @@ def filter_and_deduplicate_structures_single(
         angle_tol: Angle tolerance for structure matching
         remove_duplicates: Whether to enable structure deduplication
         root_unrelaxed: Path to unrelaxed structures for comparison
-
-    Filtering Workflow:
-        1. Validate connectivity preservation during relaxation
-        2. Deal with problematic structures (non-converged or connectivity changed)
-        3. Apply density cutoff to remove unphysical structures
-        4. Energy-based filtering relative to global minimum
-        5. Deduplication with pymatgen StructureMatcher
-        6. Save filtered and deduplicated results
+        num_cpus: Number of CPUs for parallel processing
+        z_val: If provided, filter input data to this Z value before processing.
     """
     logger = get_central_logger()
 
     # Load structure dataset from parquet format
     structures_df = pd.read_parquet(input_filename, engine="pyarrow")
+
+    # Filter to a single Z value if specified
+    if z_val is not None:
+        structures_df = structures_df[structures_df["z"] == z_val].reset_index(
+            drop=True
+        )
+        logger.info(
+            f"Filtered to z={z_val}: {len(structures_df)} structures "
+            f"from {input_filename.name}"
+        )
+        if structures_df.empty:
+            return
 
     # 1. Validate connectivity preservation during ML relaxation
     # This is done only if unrelaxed structures are provided
@@ -220,6 +228,29 @@ def filter_and_deduplicate_structures_single(
     )
 
 
+def _concat_per_z_results(per_z_dir: Path, output_filename: Path) -> None:
+    """
+    Concatenate per-Z filtered parquet files into a single molecule parquet.
+
+    Args:
+        per_z_dir: Directory containing per-Z parquet files (z_*.parquet)
+        output_filename: Path for the final concatenated parquet file
+    """
+    logger = get_central_logger()
+    z_files = sorted(per_z_dir.glob("z_*.parquet"))
+    if not z_files:
+        logger.warning(f"No per-Z results found in {per_z_dir}")
+        return
+
+    dfs = [pd.read_parquet(f, engine="pyarrow") for f in z_files]
+    combined = pd.concat(dfs, ignore_index=True)
+    combined.to_parquet(output_filename, engine="pyarrow", compression="zstd")
+    logger.info(
+        f"Concatenated {len(z_files)} per-Z files "
+        f"({len(combined)} structures) into {output_filename}"
+    )
+
+
 def filter_and_deduplicate_structures(
     input_dir: Path,
     output_dir: Path,
@@ -237,11 +268,16 @@ def filter_and_deduplicate_structures(
     """
     Orchestrate parallel filtering and deduplication across multiple structure datasets.
 
+    Submits one SLURM job per (molecule, Z-value) combination. Structures with different
+    Z values cannot match during deduplication, so per-Z splitting is semantically correct
+    and increases parallelism for molecules with many structures. The global minimum energy
+    is pre-computed across all Z values so the energy cutoff remains correct.
+
     Args:
         input_dir: Root directory containing multiple dataset directories
         output_dir: Base directory for filtered output files
         post_relax_config: Configuration dictionary containing SLURM and filtering parameters
-        remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
+        remove_problematic: Whether to remove problematic structures
         energy_cutoff: Energy threshold above minimum (kJ/mol)
         density_cutoff: Maximum density threshold (g/cm³)
         assign_groups: Whether to assign group indices during deduplication
@@ -258,11 +294,16 @@ def filter_and_deduplicate_structures(
 
     # Get SLURM configuration
     slurm_params = get_filter_slurm_config(post_relax_config)
+    num_cpus = slurm_params.get("cpus_per_task", 70)
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    per_z_dir = output_dir / "_per_z"
+    per_z_dir.mkdir(parents=True, exist_ok=True)
 
-    # Prepare job arguments
+    # Prepare per-Z job arguments
     job_args = []
+    molecules_to_concat = []
+
     for molecule_parquet in list(input_dir.iterdir()):
         output_filename = output_dir / f"{molecule_parquet.name}.parquet"
 
@@ -273,33 +314,81 @@ def filter_and_deduplicate_structures(
             )
             continue
 
+        # Read lightweight columns to determine Z groups and global min energy
+        meta_df = pd.read_parquet(
+            molecule_parquet,
+            engine="pyarrow",
+            columns=[
+                "z",
+                "energy_relaxed_per_molecule",
+                "converged",
+                "connectivity_unchanged",
+            ],
+        )
+        # Compute global min energy across all Z values (from converged structures)
+        converged_mask = meta_df["converged"] & meta_df["connectivity_unchanged"]
+        if converged_mask.any() and energy_cutoff is not None:
+            global_min_energy = float(
+                meta_df.loc[converged_mask, "energy_relaxed_per_molecule"].min()
+            )
+        else:
+            global_min_energy = None
+
+        z_values = meta_df["z"].unique()
+        mol_per_z_dir = per_z_dir / molecule_parquet.name
+        mol_per_z_dir.mkdir(parents=True, exist_ok=True)
+        molecules_to_concat.append((mol_per_z_dir, output_filename))
+
         unrelaxed_path = (
             root_unrelaxed / molecule_parquet.name if root_unrelaxed else None
         )
 
-        job_args.append(
-            (
-                filter_and_deduplicate_structures_single,
-                (
-                    molecule_parquet,
-                    output_filename,
-                    remove_problematic,
-                    energy_cutoff,
-                    density_cutoff,
-                    assign_groups,
-                    ltol,
-                    stol,
-                    angle_tol,
-                    remove_duplicates,
-                    unrelaxed_path,
-                    slurm_params.get("cpus_per_task", 1),
-                ),
-                {},
-            )
-        )
+        for z_val in z_values:
+            per_z_output = mol_per_z_dir / f"z_{z_val}.parquet"
+            if per_z_output.exists():
+                logger.info(f"Skipping z={z_val} for {molecule_parquet.name}")
+                continue
 
-    return submit_slurm_jobs(
+            job_args.append(
+                (
+                    filter_and_deduplicate_structures_single,
+                    (
+                        molecule_parquet,
+                        per_z_output,
+                        remove_problematic,
+                        energy_cutoff,
+                        density_cutoff,
+                        assign_groups,
+                        ltol,
+                        stol,
+                        angle_tol,
+                        remove_duplicates,
+                        unrelaxed_path,
+                        num_cpus,
+                        global_min_energy,
+                        int(z_val),
+                    ),
+                    {},
+                )
+            )
+
+    logger.info(
+        f"Submitting {len(job_args)} per-Z filter jobs "
+        f"for {len(molecules_to_concat)} molecules"
+    )
+
+    # Submit per-Z jobs and wait for completion
+    filter_jobs = submit_slurm_jobs(
         job_args,
         output_dir=output_dir.parent / "slurm",
         **slurm_params,
     )
+    wait_for_jobs(filter_jobs)
+
+    # Concatenate per-Z results into final per-molecule parquet files
+    for mol_dir, out_file in molecules_to_concat:
+        if not out_file.exists():
+            _concat_per_z_results(mol_dir, out_file)
+
+    # Return empty list since all jobs have already completed
+    return []
