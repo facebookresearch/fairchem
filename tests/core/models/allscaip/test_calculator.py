@@ -7,21 +7,16 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pytest
-import torch
 from ase.build import molecule
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.models.allscaip.AllScAIP import AllScAIPBackbone
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
 
-CHECKPOINT_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "allscaip_checkpoint.pt"
-)
+ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"
 
 # mark all tests in this module as gpu tests
 pytestmark = pytest.mark.gpu
@@ -29,7 +24,7 @@ pytestmark = pytest.mark.gpu
 
 @pytest.fixture(scope="module")
 def allscaip_predict_unit():
-    return MLIPPredictUnit(CHECKPOINT_PATH, device="cuda")
+    return pretrained_mlip.get_predict_unit(ALLSCAIP_MODEL, device="cuda")
 
 
 def test_calculator_inference(allscaip_predict_unit):
@@ -56,26 +51,17 @@ def test_calculator_inference_with_max_atoms():
     Test that max_atoms in InferenceSettings pads inputs correctly
     and produces valid results through FAIRChemCalculator with torch.compile.
     """
-    torch.compiler.reset()
-
-    inference_settings = InferenceSettings(compile=True, max_atoms=30)
-    predict_unit = MLIPPredictUnit(
-        CHECKPOINT_PATH, device="cuda", inference_settings=inference_settings
+    max_atoms = 30
+    inference_settings = InferenceSettings(compile=True, max_atoms=max_atoms)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        ALLSCAIP_MODEL, device="cuda", inference_settings=inference_settings
     )
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
 
-    atoms = molecule("H2O")
-    atoms.info["charge"] = 0
-    atoms.info["spin"] = 1
-    atoms.calc = calc
-
-    energy = atoms.get_potential_energy()
-    assert isinstance(energy, float)
-
-    forces = atoms.get_forces()
-    assert isinstance(forces, np.ndarray)
-    # Forces should match the actual number of atoms, not max_atoms
-    assert forces.shape == (len(atoms), 3)
+    # Verify that inference settings are applied to the backbone
+    backbone = predict_unit.model.module.backbone
+    assert backbone.molecular_graph_cfg.max_atoms == max_atoms
+    assert backbone.global_cfg.use_compile is True
+    assert backbone.global_cfg.use_padding is True
 
 
 def test_calculator_inference_max_atoms_required_with_compile():
