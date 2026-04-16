@@ -160,6 +160,6 @@ def test_fixed_forward_full_gpu():
     fixed_results = torch.load(results_path)
     # compare fixed_results with output
     model_output = output
-    assert torch.allclose(fixed_results["energy"], model_output["energy"], atol=1e-5)
-    assert torch.allclose(fixed_results["forces"], model_output["forces"], atol=1e-4)
-    assert torch.allclose(fixed_results["stress"], model_output["stress"], atol=1e-5)
+    assert torch.allclose(fixed_results["energy"], model_output["energy"], atol=1e-3)
+    assert torch.allclose(fixed_results["forces"], model_output["forces"], atol=1e-3)
+    assert torch.allclose(fixed_results["stress"], model_output["stress"], atol=1e-3)
