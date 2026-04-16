@@ -10,8 +10,8 @@ cpus_per_task: 9
 account: null
 qos: gpu
 partition: gpu
-omol_all_path: /data/ishan-amin/OMOL/ALL
-omol_4M_train_path: /data/ishan-amin/OMOL/4M/train_4M
+omol_all_path: /data/OMOL/ALL
+omol_4M_train_path: /data/OMOL/4M/train_4M
 data_root_dir: /data/ericqu
 additional_parameters:
   nodelist: germain

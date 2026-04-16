@@ -19,9 +19,16 @@ allscaip/
 │
 └── utils/
     ├── nn_utils.py                      # Feedforward network construction helpers
-    ├── radius_graph_v2.py               # BiKNN radius graph with soft/hard ranking and envelope
+    ├── allscaip_radius_graph.py         # BiKNN radius graph with soft/hard ranking and envelope
     └── data_preprocess.py               # AtomicData → GraphAttentionData preprocessing pipeline
 ```
+
+## Available Pretrained Models
+
+| Model Name | Description |
+|---|---|
+| `allscaip-md-conserving-all-omol` | Medium conserving (gradient-based forces) |
+| `allscaip-md-direct-all-omol` | Medium direct (predicted forces) |
 
 ## Quick Start
 
@@ -34,12 +41,9 @@ from ase.io import Trajectory
 from ase.md.langevin import Langevin
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-# settings = InferenceSettings(compile=True, max_atoms=3)
-settings = "default"
 calc = FAIRChemCalculator.from_model_checkpoint(
-    "/path/to/your/checkpoint.pt", task_name="omol", inference_settings=settings
+    "allscaip-md-conserving-all-omol", task_name="omol"
 )
 
 atoms = molecule("H2O")
@@ -70,13 +74,13 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 # Without compile (default): works for any system size
 calc = FAIRChemCalculator.from_model_checkpoint(
-    "/path/to/your/checkpoint.pt", task_name="omol"
+    "allscaip-md-conserving-all-omol", task_name="omol"
 )
 
 # With compile: requires max_atoms, best for fixed-size MD simulations
 settings = InferenceSettings(compile=True, max_atoms=200)
 calc = FAIRChemCalculator.from_model_checkpoint(
-    "/path/to/your/checkpoint.pt",
+    "allscaip-md-conserving-all-omol",
     task_name="omol",
     inference_settings=settings,
 )
