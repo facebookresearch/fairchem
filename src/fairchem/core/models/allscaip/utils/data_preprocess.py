@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     )
 
 from fairchem.core.models.allscaip.custom_types import GraphAttentionData
-from fairchem.core.models.allscaip.utils.radius_graph_v2 import (
+from fairchem.core.models.allscaip.utils.allscaip_radius_graph import (
     biknn_radius_graph,
 )
 from fairchem.core.models.escaip.utils.graph_utils import compilable_scatter
