@@ -41,27 +41,31 @@ def warmup_lr_lambda(current_step: int, optim_config):
 class CosineLRLambda:
     def __init__(
         self,
-        warmup_epochs: int,
+        warmup_steps: int,
         warmup_factor: float,
-        epochs: int,
+        total_steps: int,
         lr_min_factor: float,
     ) -> None:
-        self.warmup_epochs = warmup_epochs
+        self.warmup_steps = warmup_steps
         self.lr_warmup_factor = warmup_factor
-        self.max_epochs = epochs
+        self.total_steps = total_steps
         self.lr_min_factor = lr_min_factor
 
     def __call__(self, current_step: int) -> float:
-        # `warmup_epochs` is already multiplied with the num of iterations
-        if current_step <= self.warmup_epochs:
-            alpha = current_step / float(self.warmup_epochs)
+        if self.warmup_steps > 0 and current_step <= self.warmup_steps:
+            alpha = current_step / float(self.warmup_steps)
             return self.lr_warmup_factor * (1.0 - alpha) + alpha
-        else:
-            if current_step >= self.max_epochs:
-                return self.lr_min_factor
-            return self.lr_min_factor + 0.5 * (1 - self.lr_min_factor) * (
-                1 + math.cos(math.pi * (current_step / self.max_epochs))
-            )
+        
+        if current_step >= self.total_steps:
+            return self.lr_min_factor
+        
+        progress = (current_step - self.warmup_steps) / float(
+            self.total_steps - self.warmup_steps
+        )
+
+        return self.lr_min_factor + 0.5 * (1 - self.lr_min_factor) * (
+            1 + math.cos(math.pi * progress)
+        )
 
 
 class LRScheduler:

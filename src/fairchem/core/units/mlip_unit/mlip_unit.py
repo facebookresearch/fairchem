@@ -403,9 +403,10 @@ def mt_collater_adapter(
     return MTCollater(task_config_old, exclude_keys)
 
 
-def _get_consine_lr_scheduler(
+def _get_cosine_lr_scheduler(
     warmup_factor: float,
     warmup_epochs: float,
+    warmup_steps: float,
     lr_min_factor: float,
     n_iters_per_epoch: int,
     optimizer: torch.optim.Optimizer,
@@ -415,14 +416,21 @@ def _get_consine_lr_scheduler(
     assert (epochs is not None) ^ (
         steps is not None
     ), "Exactly one of epochs or steps must be None/Not-None (XOR)"
+    assert not (warmup_epochs is not None and warmup_steps is not None)
+
     scheduler_steps = int(epochs * n_iters_per_epoch) if steps is None else steps
+
+    if warmup_steps is None:
+        if warmup_epochs is None or warmup_epochs <= 0:
+            warmup_steps = 0
+        else:
+            warmup_steps = max(int(warmup_epochs * n_iters_per_epoch), 1)
+
     # fixed function for constructing a LambdaLR scheduler
     lambda_fn = CosineLRLambda(
-        warmup_epochs=max(
-            int(warmup_epochs * n_iters_per_epoch), 1
-        ),  # this cannot be 0
+        warmup_steps=warmup_steps,
         warmup_factor=warmup_factor,
-        epochs=scheduler_steps,
+        total_steps=scheduler_steps,
         lr_min_factor=lr_min_factor,
     )
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda_fn)

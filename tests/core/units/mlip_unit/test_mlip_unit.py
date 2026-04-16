@@ -19,7 +19,10 @@ import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
-from fairchem.core.units.mlip_unit.mlip_unit import UNIT_RESUME_CONFIG
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_RESUME_CONFIG,
+    _get_cosine_lr_scheduler,
+)
 from tests.core.testing_utils import launch_main
 
 if TYPE_CHECKING:
@@ -127,6 +130,50 @@ def pickle_data_loader(pickle_path: str, steps: int):
             yield from self.batches
 
     return _DummyLoader()
+
+
+def test_get_cosine_lr_scheduler_uses_explicit_warmup_steps():
+    model = torch.nn.Linear(2, 1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+
+    scheduler = _get_cosine_lr_scheduler(
+        warmup_factor=0.2,
+        warmup_epochs=None,
+        warmup_steps=4,
+        lr_min_factor=0.01,
+        n_iters_per_epoch=10,
+        optimizer=optimizer,
+        epochs=2,
+    )
+
+    lambda_fn = scheduler.lr_lambdas[0]
+    assert lambda_fn.warmup_steps == 4
+    assert lambda_fn.total_steps == 20
+    assert lambda_fn(0) == pytest.approx(0.2)
+    assert lambda_fn(2) == pytest.approx(0.6)
+    assert lambda_fn(4) == pytest.approx(1.0)
+    assert lambda_fn(20) == pytest.approx(0.01)
+
+
+def test_get_cosine_lr_scheduler_converts_warmup_epochs_to_steps():
+    model = torch.nn.Linear(2, 1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+
+    scheduler = _get_cosine_lr_scheduler(
+        warmup_factor=0.2,
+        warmup_epochs=0.5,
+        warmup_steps=None,
+        lr_min_factor=0.01,
+        n_iters_per_epoch=8,
+        optimizer=optimizer,
+        epochs=1,
+    )
+
+    lambda_fn = scheduler.lr_lambdas[0]
+    assert lambda_fn.warmup_steps == 4
+    assert lambda_fn.total_steps == 8
+    assert lambda_fn(2) == pytest.approx(0.6)
+    assert lambda_fn(4) == pytest.approx(1.0)
 
 
 @pytest.mark.skip()

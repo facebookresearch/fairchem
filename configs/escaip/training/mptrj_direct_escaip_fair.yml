@@ -126,7 +126,7 @@ runner:
       lr: 4e-4
       weight_decay: 1e-3
     cosine_lr_scheduler_fn:
-      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_cosine_lr_scheduler
       _partial_: true
       warmup_factor: 0.2
       warmup_epochs: 2
