@@ -265,12 +265,7 @@ def main(args: argparse.Namespace) -> None:
 
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
         fe_config = get_free_energy_config(config)
-        # Use filtered structures as input (or matched if evaluate ran)
-        if "evaluate" in args.stages:
-            fe_input_dir = relax_output_dir / "matched_structures"
-        else:
-            fe_input_dir = relax_output_dir / "filtered_structures"
-
+        fe_input_dir = relax_output_dir / "matched_structures"
         jobs = compute_free_energies(
             input_dir=fe_input_dir,
             output_dir=relax_output_dir / "free_energy_results",
