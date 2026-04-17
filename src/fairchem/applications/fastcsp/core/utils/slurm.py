@@ -166,7 +166,7 @@ def get_slurm_config(
             "mem_gb": 10,
             "time": 1000,
         },
-        "compute_free_energy": {
+        "free_energy": {
             "job-name": "free_energy",
             "gpus_per_node": 1,
             "cpus_per_task": 10,
