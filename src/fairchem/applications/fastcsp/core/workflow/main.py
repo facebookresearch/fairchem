@@ -256,6 +256,7 @@ def main(args: argparse.Namespace) -> None:
     if "compute_free_energy" in args.stages:
         logging.log_stage_start(logger, "vibrational free energy calculations")
         from fairchem.applications.fastcsp.core.workflow.free_energy import (
+            collect_free_energy_results,
             compute_free_energies,
             get_free_energy_config,
         )
@@ -266,12 +267,17 @@ def main(args: argparse.Namespace) -> None:
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
         fe_config = get_free_energy_config(config)
         fe_input_dir = relax_output_dir / "matched_structures"
+        fe_output_dir = relax_output_dir / "free_energy_results"
         jobs = compute_free_energies(
             input_dir=fe_input_dir,
-            output_dir=relax_output_dir / "free_energy_results",
+            output_dir=fe_output_dir,
             fe_config=fe_config,
         )
         wait_for_jobs(jobs)
+        collect_free_energy_results(
+            jobs=jobs,
+            output_dir=fe_output_dir,
+        )
         logging.log_stage_complete(
             logger, "vibrational free energy calculations", len(jobs)
         )
