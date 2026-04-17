@@ -270,8 +270,7 @@ def filter_and_deduplicate_structures(
 
     Submits one SLURM job per (molecule, Z-value) combination. Structures with different
     Z values cannot match during deduplication, so per-Z splitting is semantically correct
-    and increases parallelism for molecules with many structures. The global minimum energy
-    is pre-computed across all Z values so the energy cutoff remains correct.
+    and increases parallelism for molecules with many structures.
 
     Args:
         input_dir: Root directory containing multiple dataset directories
@@ -314,25 +313,12 @@ def filter_and_deduplicate_structures(
             )
             continue
 
-        # Read lightweight columns to determine Z groups and global min energy
+        # Read lightweight columns to determine Z groups
         meta_df = pd.read_parquet(
             molecule_parquet,
             engine="pyarrow",
-            columns=[
-                "z",
-                "energy_relaxed_per_molecule",
-                "converged",
-                "connectivity_unchanged",
-            ],
+            columns=["z"],
         )
-        # Compute global min energy across all Z values (from converged structures)
-        converged_mask = meta_df["converged"] & meta_df["connectivity_unchanged"]
-        if converged_mask.any() and energy_cutoff is not None:
-            global_min_energy = float(
-                meta_df.loc[converged_mask, "energy_relaxed_per_molecule"].min()
-            )
-        else:
-            global_min_energy = None
 
         z_values = meta_df["z"].unique()
         mol_per_z_dir = per_z_dir / molecule_parquet.name
@@ -365,7 +351,6 @@ def filter_and_deduplicate_structures(
                         remove_duplicates,
                         unrelaxed_path,
                         num_cpus,
-                        global_min_energy,
                         int(z_val),
                     ),
                     {},

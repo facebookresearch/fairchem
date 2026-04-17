@@ -527,6 +527,7 @@ def evaluate_structures_file(
     output_dir: Path,
     target_structures: dict[str, Any],
     eval_method: str = "csd",
+    num_cpus: int = 1,
     **method_params,
 ):
     """
@@ -538,6 +539,7 @@ def evaluate_structures_file(
         output_dir: Directory to save evaluation results
         target_structures: Dictionary mapping refcodes to loaded structure objects
         eval_method: Evaluation method ('csd' or 'pymatgen')
+        num_cpus: Number of CPUs for parallel processing via swifter
         **method_params: Method-specific parameters
     """
     logger = get_central_logger()
@@ -567,7 +569,7 @@ def evaluate_structures_file(
 
     # Set up swifter for parallel processing
     swifter.set_defaults(
-        npartitions=min(len(filtered_df), method_params.get("num_cpus", 1)),
+        npartitions=min(len(filtered_df), num_cpus),
         dask_threshold=1,
         scheduler="processes",
         progress_bar=True,
@@ -695,8 +697,8 @@ def compute_structure_matches(
     # Discover all structure files to evaluate
     parquet_files = [
         path
-        for path in list(input_dir.iterdir())
-        if "bkp" not in path.name or Path(path).suffix == ".parquet"
+        for path in input_dir.iterdir()
+        if path.suffix == ".parquet" and "bkp" not in path.name
     ]
     random.shuffle(parquet_files)
 
@@ -761,9 +763,8 @@ def compute_structure_matches(
 
         # Get SLURM configuration from eval_config
         slurm_params = get_eval_slurm_config(eval_config)
+        num_cpus = slurm_params.get("cpus_per_task", 1)
 
-        # Pass num_cpus into method_params so swifter uses all allocated CPUs
-        method_params["num_cpus"] = slurm_params.get("cpus_per_task", 1)
         logger.info(f"Pymatgen matching parameters: {method_params}")
 
         job_args = []
@@ -777,6 +778,7 @@ def compute_structure_matches(
                         output_dir,
                         target_structures,
                         eval_method,
+                        num_cpus,
                     ),
                     method_params,
                 )
