@@ -190,6 +190,19 @@ class PreemptableMixin(ABC):
         """
         ...
 
+    def _modify_resume_config(self, cfg: DictConfig) -> DictConfig:
+        """
+        Hook for subclasses to modify the config before saving resume/portable configs.
+
+        Override this to strip or adjust runner-specific fields that should not
+        appear in a resumed run (e.g. inline atoms data that will be loaded
+        from the checkpoint instead).
+
+        Args:
+            cfg: The loaded OmegaConf config, already updated with runner_state_path.
+        """
+        return cfg
+
     def _save_preemption_configs(self, tmp_dir: Path, checkpoint_location: str) -> None:
         """
         Save resume_config.yaml and portable_config.yaml.
@@ -203,8 +216,7 @@ class PreemptableMixin(ABC):
 
         cfg = OmegaConf.load(config_path)
         cfg.job.runner_state_path = checkpoint_location
-        if "atoms" in cfg.get("runner", {}):
-            del cfg.runner.atoms
+        cfg = self._modify_resume_config(cfg)
 
         # resume_config: same machine
         OmegaConf.save(cfg, tmp_dir / "resume_config.yaml")

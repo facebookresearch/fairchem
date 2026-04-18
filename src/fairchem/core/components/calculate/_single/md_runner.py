@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
+    from omegaconf import DictConfig
 
     from fairchem.core.components.calculate.simulation_tools.thermostats import (
         Thermostat,
@@ -273,6 +274,11 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         metadata_file = Path(results_dir) / "metadata.json"
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
+
+    def _modify_resume_config(self, cfg: DictConfig) -> DictConfig:
+        if "atoms" in cfg.get("runner", {}):
+            del cfg.runner.atoms
+        return cfg
 
     def save_simulation_state(self, checkpoint_dir: Path, is_preemption: bool) -> None:
         """
