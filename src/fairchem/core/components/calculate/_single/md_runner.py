@@ -260,8 +260,8 @@ class MDRunner(PreemptableMixin, CalculateRunner):
 
         metadata = jsanitize(
             {
-                "trajectory_file": str(trajectory_file),
-                "log_file": str(log_file),
+                "trajectory_file": trajectory_file,
+                "log_file": log_file,
                 "total_steps": results["total_steps"],
                 "trajectory_interval": self.trajectory_interval,
                 "log_interval": self.log_interval,
