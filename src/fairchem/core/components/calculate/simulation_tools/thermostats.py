@@ -220,23 +220,21 @@ class BerendsenNPT(Thermostat):
     """
 
     temperature_K: float
-    pressure_bar: float
-    taut_fs: float = 500.0
-    taup_fs: float = 1000.0
-    compressibility_bar: float | None = None
+    pressure_bar: float = 1.0
+    taut_fs: float = 5.0
+    taup_fs: float = 500.0
+    compressibility_bar: float = 5e-7
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
-        kwargs = {
-            "atoms": atoms,
-            "timestep": timestep_fs * units.fs,
-            "temperature_K": self.temperature_K,
-            "pressure_au": self.pressure_bar * units.bar,
-            "taut": self.taut_fs * units.fs,
-            "taup": self.taup_fs * units.fs,
-        }
-        if self.compressibility_bar is not None:
-            kwargs["compressibility_au"] = self.compressibility_bar / units.bar
-        return NPTBerendsen(**kwargs)
+        return NPTBerendsen(
+            atoms=atoms,
+            timestep=timestep_fs * units.fs,
+            temperature_K=self.temperature_K,
+            pressure_au=self.pressure_bar * units.bar,
+            taut=self.taut_fs * units.fs,
+            taup=self.taup_fs * units.fs,
+            compressibility_au=self.compressibility_bar / units.bar,
+        )
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         return {"class_name": "BerendsenNPT"}

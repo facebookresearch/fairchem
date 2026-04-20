@@ -45,7 +45,7 @@ class TrajectoryFrame:
     stress: np.ndarray | None = None  # (6,) Voigt notation
     temperature: float | None = None  # Kelvin
     kinetic_energy: float | None = None  # eV
-    pressure: float | None = None  # GPa
+    pressure: float | None = None  # bar
     sid: str | int | None = None
 
     def to_dict(self) -> dict:
@@ -124,9 +124,9 @@ class TrajectoryFrame:
         except Exception:
             kinetic_energy = None
 
-        # Pressure from stress: P = -trace(stress)/3, converted to GPa
+        # Pressure from stress: P = -trace(stress)/3, converted to bar
         if stress is not None:
-            pressure = -stress[:3].mean() / ase.units.GPa
+            pressure = -stress[:3].mean() / ase.units.bar
         else:
             pressure = None
 
