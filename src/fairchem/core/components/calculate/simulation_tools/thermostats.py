@@ -16,6 +16,7 @@ from ase import units
 from ase.md.bussi import Bussi
 from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
+from ase.md.nptberendsen import NPTBerendsen
 from ase.md.verlet import VelocityVerlet
 from monty.json import jsanitize
 
@@ -210,3 +211,35 @@ class LangevinThermostat(Thermostat):
                 rng["cached_gaussian"],
             )
         )
+
+
+@dataclass
+class BerendsenNPT(Thermostat):
+    """
+    Berendsen NPT thermostat/barostat for constant pressure simulations.
+    """
+
+    temperature_K: float
+    pressure_au: float
+    taut_fs: float = 500.0
+    taup_fs: float = 1000.0
+    compressibility_au: float | None = None
+
+    def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
+        kwargs = {
+            "atoms": atoms,
+            "timestep": timestep_fs * units.fs,
+            "temperature_K": self.temperature_K,
+            "pressure_au": self.pressure_au,
+            "taut": self.taut_fs * units.fs,
+            "taup": self.taup_fs * units.fs,
+        }
+        if self.compressibility_au is not None:
+            kwargs["compressibility_au"] = self.compressibility_au
+        return NPTBerendsen(**kwargs)
+
+    def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
+        return {"class_name": "BerendsenNPT"}
+
+    def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
+        pass

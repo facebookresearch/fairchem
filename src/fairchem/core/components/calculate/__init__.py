@@ -20,6 +20,7 @@ from ._single.phonon_runner import MDRPhononRunner, get_mdr_phonon_data_list
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
 from .simulation_tools.thermostats import (
+    BerendsenNPT,
     BussiThermostat,
     LangevinThermostat,
     NoseHooverNVT,
@@ -32,6 +33,7 @@ __all__ = [
     "AdsorbMLRunner",
     "AdsorptionRunner",
     "AdsorptionSinglePointRunner",
+    "BerendsenNPT",
     "BussiThermostat",
     "ElasticityRunner",
     "KappaRunner",
