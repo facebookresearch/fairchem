@@ -151,10 +151,10 @@ class TestMDRunner:
             LangevinThermostat(temperature_K=300.0, friction_per_fs=0.01),
             BerendsenNPT(
                 temperature_K=300.0,
-                pressure_au=units.Pascal * 1e5,
+                pressure_bar=1.0,
                 taut_fs=500.0,
                 taup_fs=1000.0,
-                compressibility_au=1.0 / (140 * units.GPa),
+                compressibility_bar=1.0 / 140e9,
             ),
         ],
         ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin", "BerendsenNPT"],
@@ -355,10 +355,10 @@ class TestMDRunner:
         # Use a large pressure to drive a noticeable volume change
         thermostat = BerendsenNPT(
             temperature_K=300.0,
-            pressure_au=units.Pascal * 1e10,
+            pressure_bar=1e5,
             taut_fs=100.0,
             taup_fs=100.0,
-            compressibility_au=1.0 / (140 * units.GPa),
+            compressibility_bar=1.0 / 140e9,
         )
 
         runner = MDRunner(
