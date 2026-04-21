@@ -26,6 +26,7 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 
 from fairchem.core.components.calculate import (
+    BerendsenNPT,
     BussiThermostat,
     LangevinThermostat,
     MDRunner,
@@ -148,8 +149,15 @@ class TestMDRunner:
             NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0),
             BussiThermostat(temperature_K=300.0, taut_fs=25.0),
             LangevinThermostat(temperature_K=300.0, friction_per_fs=0.01),
+            BerendsenNPT(
+                temperature_K=300.0,
+                pressure_bar=1.0,
+                taut_fs=500.0,
+                taup_fs=1000.0,
+                compressibility_bar=1.0 / 140e9,
+            ),
         ],
-        ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin"],
+        ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin", "BerendsenNPT"],
     )
     def test_checkpoint_resume(self, cu_atoms, results_dir, thermostat):
         """
@@ -333,3 +341,38 @@ class TestMDRunner:
 
         traj_df = pd.read_parquet(results["trajectory_file"])
         assert list(traj_df["step"]) == [0, 10, 20]
+
+    def test_npt_cell_changes(self, cu_atoms, results_dir):
+        """
+        Verify that NPT simulation changes the cell volume.
+        """
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        atoms = cu_atoms.copy()
+        initial_volume = atoms.get_volume()
+
+        # Use a large pressure to drive a noticeable volume change
+        thermostat = BerendsenNPT(
+            temperature_K=300.0,
+            pressure_bar=1e5,
+            taut_fs=100.0,
+            taup_fs=100.0,
+            compressibility_bar=1.0 / 140e9,
+        )
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=atoms,
+            thermostat=thermostat,
+            timestep_fs=1.0,
+            steps=200,
+            trajectory_interval=50,
+            log_interval=50,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+        runner.calculate(job_num=0, num_jobs=1)
+
+        final_volume = atoms.get_volume()
+        assert initial_volume != pytest.approx(final_volume, rel=1e-6)
