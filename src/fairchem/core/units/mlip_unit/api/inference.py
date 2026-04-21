@@ -123,6 +123,12 @@ class InferenceSettings:
     # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
     auto_add_default_untrained_tasks: bool = True
 
+    # Maximum number of atoms per system for padding. Required when
+    # compile=True for models that use padding (e.g., AllScAIP).
+    # All inputs will be padded to this size. Larger values consume more
+    # VRAM but allow bigger systems; reduce if you run into OOM errors.
+    max_atoms: int | None = None
+
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)

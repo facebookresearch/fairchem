@@ -7,6 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from fairchem.core.components.runner import (
+    PreemptableMixin,
+    StopfairDetected,
+)
+
 from ._single.adsorbml_runner import AdsorbMLRunner
 from ._single.adsorption_runner import AdsorptionRunner
 from ._single.adsorption_singlepoint_runner import AdsorptionSinglePointRunner
@@ -45,8 +50,10 @@ __all__ = [
     "OMolRunner",
     "PairwiseCountRunner",
     "ParquetTrajectoryWriter",
+    "PreemptableMixin",
     "RelaxationRunner",
     "SinglePointRunner",
+    "StopfairDetected",
     "Thermostat",
     "TrajectoryFrame",
     "VelocityVerletThermostat",
