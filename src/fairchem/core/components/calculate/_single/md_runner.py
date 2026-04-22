@@ -130,6 +130,11 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         results_dir = Path(self.job_config.metadata.results_dir)
         sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
 
+        # Save the initial atoms before MD begins.
+        init_atoms_file = results_dir / "init_atoms.extxyz"
+        if not init_atoms_file.exists():
+            ase.io.write(str(init_atoms_file), self._atoms, format="extxyz")
+
         trajectory_file = results_dir / "trajectory.parquet"
         log_file = results_dir / "thermo.log"
 

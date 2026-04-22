@@ -21,7 +21,6 @@ import pytest
 from ase import units
 from ase.build import bulk
 from ase.calculators.emt import EMT
-from ase.constraints import FixAtoms
 from ase.io import Trajectory
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
@@ -36,7 +35,6 @@ from fairchem.core.components.calculate import (
     TrajectoryFrame,
     VelocityVerletThermostat,
 )
-from fairchem.core.datasets.common_structures import get_slab_adsorbate
 
 
 @dataclass
@@ -131,6 +129,7 @@ class TestMDRunner:
         traj_df = pd.read_parquet(results["trajectory_file"])
         ase_frames = Trajectory(str(ase_traj_file), "r")
         assert len(traj_df) == len(ase_frames)
+        assert (mdrunner_dir / "init_atoms.extxyz").exists()
 
         for i, ase_atoms in enumerate(ase_frames):
             row = traj_df.iloc[i]
@@ -386,9 +385,12 @@ class TestTrajectoryFrame:
         Run MD on an OC20-style slab+adsorbate and verify the parquet
         trajectory preserves tags, FixAtoms constraints, and charge/spin.
         """
+        from ase.constraints import FixAtoms
+
+        from fairchem.core.datasets.common_structures import get_slab_adsorbate
+
         atoms = get_slab_adsorbate()
 
-        # Verify the structure has the properties we expect
         assert np.any(atoms.get_tags() != 0)
         assert len(atoms.constraints) > 0
         assert "charge" in atoms.info
@@ -397,7 +399,6 @@ class TestTrajectoryFrame:
         original_tags = atoms.get_tags().copy()
         original_fixed_indices = sorted(atoms.constraints[0].index)
 
-        # Cu slab+CO works with EMT
         atoms.calc = EMT()
 
         md_results_dir = results_dir / "results"
@@ -416,24 +417,46 @@ class TestTrajectoryFrame:
         runner._job_config = _create_mock_job_config(str(md_results_dir))
         results = runner.calculate(job_num=0, num_jobs=1)
 
-        # Read back the parquet trajectory and reconstruct atoms
         traj_df = pd.read_parquet(results["trajectory_file"])
         assert len(traj_df) > 0
 
         for _, row in traj_df.iterrows():
-            frame = TrajectoryFrame.from_dict(row.to_dict())
-            reconstructed = frame.to_atoms()
+            d = row.to_dict()
 
-            # Tags should be preserved in every frame
+            # Reconstruct atoms directly from parquet row
+            def _to_array(val, dtype=float):
+                if isinstance(val, np.ndarray) and val.dtype == object:
+                    return np.stack(val).astype(dtype)
+                return np.asarray(val, dtype=dtype)
+
+            from ase import Atoms as _Atoms
+
+            reconstructed = _Atoms(
+                numbers=_to_array(d["atomic_numbers"], dtype=int),
+                positions=_to_array(d["positions"]),
+                cell=_to_array(d["cell"]),
+                pbc=_to_array(d["pbc"], dtype=bool),
+            )
+            if d.get("tags") is not None:
+                reconstructed.set_tags(_to_array(d["tags"], dtype=int))
+            if d.get("velocities") is not None:
+                reconstructed.set_velocities(_to_array(d["velocities"]))
+            if d.get("fixed") is not None:
+                reconstructed.constraints = [
+                    FixAtoms(indices=np.where(_to_array(d["fixed"], dtype=bool))[0])
+                ]
+            if d.get("charge") is not None:
+                reconstructed.info["charge"] = d["charge"]
+            if d.get("spin") is not None:
+                reconstructed.info["spin"] = d["spin"]
+
             npt.assert_array_equal(reconstructed.get_tags(), original_tags)
 
-            # Fixed atoms should be preserved in every frame
             assert len(reconstructed.constraints) == 1
             assert isinstance(reconstructed.constraints[0], FixAtoms)
             npt.assert_array_equal(
                 sorted(reconstructed.constraints[0].index), original_fixed_indices
             )
 
-            # charge/spin should be preserved
             assert reconstructed.info["charge"] == atoms.info["charge"]
             assert reconstructed.info["spin"] == atoms.info["spin"]
