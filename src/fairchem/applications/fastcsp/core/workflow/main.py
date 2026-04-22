@@ -267,7 +267,7 @@ def main(args: argparse.Namespace) -> None:
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
         fe_config = get_free_energy_config(config)
         fe_input_dir = relax_output_dir / "matched_structures"
-        fe_output_dir = relax_output_dir / "free_energy_results"
+        fe_output_dir = relax_output_dir / "free_energy"
         jobs = compute_free_energies(
             input_dir=fe_input_dir,
             output_dir=fe_output_dir,

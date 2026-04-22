@@ -43,6 +43,7 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "t_step": fe_config.get("t_step", 10),
         "t_max": fe_config.get("t_max", 500),
         "t_min": fe_config.get("t_min", 0),
+        "structures_per_job": fe_config.get("structures_per_job", 10),
     }
 
 
@@ -119,6 +120,66 @@ def compute_free_energy_single(
     return result
 
 
+def compute_free_energy_batch(
+    work_items: list[tuple[str, int]],
+    fe_config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """
+    Compute vibrational free energies for a batch of structures in one job.
+
+    The calculator is created once and reused across all structures in the
+    batch to avoid repeated model loading overhead.
+
+    Args:
+        work_items: List of (input_file_path, row_index) tuples
+        fe_config: Free energy configuration parameters
+
+    Returns:
+        List of result dictionaries, one per work item.
+    """
+    logger = get_central_logger()
+    calc = create_calculator(fe_config)
+
+    results = []
+    for input_file_str, row_index in work_items:
+        input_file = Path(input_file_str)
+        result = {"source_file": input_file_str, "row_index": row_index}
+
+        structures_df = pd.read_parquet(input_file, engine="pyarrow")
+        row = structures_df.iloc[row_index]
+
+        atoms = cif_to_atoms(row["relaxed_cif"])
+        if atoms is None:
+            logger.warning(
+                f"Skipping structure at index {row_index} in {input_file}: "
+                "could not parse relaxed_cif"
+            )
+            results.append(result)
+            continue
+
+        atoms.calc = calc
+        try:
+            thermo = calculate_vibrational_thermo(
+                atoms,
+                quasiharmonic=fe_config.get("quasiharmonic", False),
+                atom_disp=fe_config.get("atom_disp", 0.01),
+                min_lengths=fe_config.get("min_lengths", 15.0),
+                t_step=fe_config.get("t_step", 10),
+                t_max=fe_config.get("t_max", 500),
+                t_min=fe_config.get("t_min", 0),
+            )
+            result.update(thermo)
+        except Exception:
+            logger.exception(
+                f"Free energy calculation failed for index {row_index} "
+                f"in {input_file}"
+            )
+
+        results.append(result)
+
+    return results
+
+
 def collect_free_energy_results(
     jobs: list,
     output_dir: Path,
@@ -138,9 +199,12 @@ def collect_free_energy_results(
     # Gather all results grouped by source file
     results_by_file: dict[str, list[dict[str, Any]]] = {}
     for job in jobs:
-        result = job.result()
-        source = result.pop("source_file")
-        results_by_file.setdefault(source, []).append(result)
+        batch_results = job.result()
+        if isinstance(batch_results, dict):
+            batch_results = [batch_results]
+        for result in batch_results:
+            source = result.pop("source_file")
+            results_by_file.setdefault(source, []).append(result)
 
     # Write one output parquet per input file
     for source_file_str, results in results_by_file.items():
@@ -173,7 +237,11 @@ def compute_free_energies(
     fe_config: dict[str, Any],
 ) -> list:
     """
-    Submit one free energy job per polymorph across all parquet files.
+    Submit batched free energy jobs across all parquet files.
+
+    Structures are grouped into batches of ``structures_per_job`` (default 10)
+    so that each SLURM job processes multiple structures sequentially, reducing
+    scheduling overhead for short-running calculations.
 
     Args:
         input_dir: Directory containing input parquet files
@@ -185,8 +253,9 @@ def compute_free_energies(
     """
     logger = get_central_logger()
     slurm_params = get_free_energy_slurm_config(fe_config)
+    structures_per_job = fe_config.get("structures_per_job", 10)
 
-    job_args = []
+    work_items: list[tuple[str, int]] = []
     for parquet_file in sorted(input_dir.iterdir()):
         if not parquet_file.name.endswith(".parquet"):
             continue
@@ -196,18 +265,23 @@ def compute_free_energies(
             continue
 
         structures_df = pd.read_parquet(parquet_file, engine="pyarrow")
-        job_args.extend(
-            [
-                (
-                    compute_free_energy_single,
-                    (parquet_file, row_index, fe_config),
-                    {},
-                )
-                for row_index in range(len(structures_df))
-            ]
+        work_items.extend(
+            (str(parquet_file), row_index) for row_index in range(len(structures_df))
         )
 
-    logger.info(f"Submitting {len(job_args)} free energy jobs")
+    batches = [
+        work_items[i : i + structures_per_job]
+        for i in range(0, len(work_items), structures_per_job)
+    ]
+
+    job_args = [
+        (compute_free_energy_batch, (batch, fe_config), {}) for batch in batches
+    ]
+
+    logger.info(
+        f"Submitting {len(job_args)} free energy jobs "
+        f"({len(work_items)} structures, {structures_per_job} per job)"
+    )
     return submit_slurm_jobs(
         job_args,
         output_dir=output_dir.parent / "slurm",
