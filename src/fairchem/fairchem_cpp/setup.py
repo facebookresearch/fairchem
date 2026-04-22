@@ -1,16 +1,17 @@
 # Copyright (c) Meta Platforms, Inc.
 # All rights reserved.
+from __future__ import annotations
 
-import os
 import glob
-import torch
+import os
 
+import torch
 from setuptools import find_packages, setup
 from torch.utils.cpp_extension import (
+    CUDA_HOME,
+    BuildExtension,
     CppExtension,
     CUDAExtension,
-    BuildExtension,
-    CUDA_HOME,
 )
 
 library_name = "fairchem_cpp"
@@ -26,7 +27,28 @@ def get_extensions():
     print("DEBUG:", debug_mode)
     print("USE_CUDA (env):", use_cuda_env)
     use_cuda = use_cuda_env and torch.cuda.is_available() and (CUDA_HOME is not None)
-    print("USE_CUDA (effective):", use_cuda, "| torch.cuda.is_available():", torch.cuda.is_available(), "| CUDA_HOME:", CUDA_HOME)
+    print(
+        "USE_CUDA (effective):",
+        use_cuda,
+        "| torch.cuda.is_available():",
+        torch.cuda.is_available(),
+        "| CUDA_HOME:",
+        CUDA_HOME,
+    )
+
+    # Fail loudly if CUDA was requested but cannot be built. Silent fallback to
+    # CppExtension produces a kernel-less .so (binding.cpp only registers op
+    # schemas; all implementations live in csrc/cuda/*.cu), which imports fine
+    # but raises NotImplementedError the moment any op is called. Callers that
+    # genuinely want a CPU-only build must opt in with USE_CUDA=0.
+    if use_cuda_env and not use_cuda:
+        raise RuntimeError(
+            "USE_CUDA=1 but CUDA is unavailable: "
+            f"torch.cuda.is_available()={torch.cuda.is_available()}, "
+            f"CUDA_HOME={CUDA_HOME}. "
+            "Install a CUDA toolkit (nvcc) reachable via CUDA_HOME and ensure "
+            "torch can see the driver, or set USE_CUDA=0 explicitly."
+        )
 
     extension = CUDAExtension if use_cuda else CppExtension
 
@@ -48,7 +70,8 @@ def get_extensions():
         "-UPy_LIMITED_API",
         "-U_Py_LIMITED_API",
         # PIC for shared objects
-        "-Xcompiler", "-fPIC",
+        "-Xcompiler",
+        "-fPIC",
     ]
 
     extra_compile_args = {"cxx": cxx_flags}
@@ -97,4 +120,3 @@ setup(
     # Do not request a limited-API wheel.
     options={"bdist_wheel": {"py_limited_api": "cp39"}} if False else {},
 )
-
