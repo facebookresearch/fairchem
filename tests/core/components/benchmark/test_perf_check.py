@@ -14,15 +14,15 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from fairchem.core.components.benchmark.systems import make_benchmark_system
-from fairchem.core.components.benchmark.toolkit import (
+from fairchem.core.components.benchmark.perf_check import (
     BASELINE_SETTINGS,
-    BenchmarkToolkitRunner,
     InferenceResult,
+    PerfCheckRunner,
     compare_results,
     format_report_table,
     run_inference,
 )
+from fairchem.core.components.benchmark.systems import make_benchmark_system
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
@@ -60,7 +60,7 @@ def test_runner_catches_oom(tmp_path):
     """
     Verify OOM is caught and non-OOM errors are re-raised.
     """
-    runner = BenchmarkToolkitRunner(checkpoint="x", device="cpu")
+    runner = PerfCheckRunner(checkpoint="x", device="cpu")
 
     from omegaconf import OmegaConf
 
@@ -83,7 +83,7 @@ def test_runner_catches_oom(tmp_path):
         raise RuntimeError("CUDA out of memory")
 
     with patch(
-        "fairchem.core.components.benchmark.toolkit.run_inference",
+        "fairchem.core.components.benchmark.perf_check.run_inference",
         side_effect=mock_run,
     ):
         result = runner.run()
@@ -108,7 +108,7 @@ def test_runner_catches_oom(tmp_path):
 
     with (
         patch(
-            "fairchem.core.components.benchmark.toolkit.run_inference",
+            "fairchem.core.components.benchmark.perf_check.run_inference",
             side_effect=mock_run_bad,
         ),
         pytest.raises(RuntimeError, match="unrelated error"),
@@ -152,7 +152,7 @@ def test_benchmark_runner_end_to_end(tmp_path):
     """
     from omegaconf import OmegaConf
 
-    runner = BenchmarkToolkitRunner(
+    runner = PerfCheckRunner(
         checkpoint="uma-s-1p2",
         device="cuda",
         warmup_iters=2,

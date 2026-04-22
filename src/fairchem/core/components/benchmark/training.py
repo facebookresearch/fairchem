@@ -321,10 +321,10 @@ class TrainingBenchmarkRunner(Runner):
     then compares loss, gradient norms, throughput, and memory usage.
 
     Usage via fairchem CLI:
-        fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml
-        fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
+        fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml
+        fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
             runner.bf16=True
-        fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
+        fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
             runner.device=cpu runner.throughput_steps=5
     """
 

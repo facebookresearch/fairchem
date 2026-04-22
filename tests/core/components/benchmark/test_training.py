@@ -12,7 +12,7 @@ from fairchem.core.components.benchmark.training import (
     run_training_benchmark,
 )
 
-TRAINING_CONFIG = "configs/uma/benchmark/toolkit/training_inner.yaml"
+TRAINING_CONFIG = "configs/uma/benchmark/perf_check/training_inner.yaml"
 
 
 def test_training_benchmark_smoke():

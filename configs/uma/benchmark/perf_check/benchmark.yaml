@@ -1,15 +1,15 @@
 # Benchmark a single inference config against fp64 baseline
 #
 # Usage:
-#   fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml
+#   fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml
 #
 # Override any setting from the command line:
-#   fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml \
+#   fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
 #     runner.inference_settings.execution_mode=umas_fast_gpu
-#   fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml \
+#   fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
 #     runner.inference_settings.tf32=True runner.inference_settings.compile=True
-#   fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml runner.device=cpu
-#   fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml runner.warmup_iters=20
+#   fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
+#   fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.warmup_iters=20
 
 defaults:
   - job: local
@@ -20,7 +20,7 @@ checkpoint:
   model_name: "uma-s-1p2"
 
 runner:
-  _target_: fairchem.core.components.benchmark.toolkit.BenchmarkToolkitRunner
+  _target_: fairchem.core.components.benchmark.perf_check.PerfCheckRunner
   checkpoint: ${checkpoint}
   device: "cuda"
   warmup_iters: 10

@@ -5,7 +5,7 @@
 # Fake datasets are auto-generated and cached on first run.
 #
 # Usage:
-#   fairchem -c configs/uma/benchmark/toolkit/training_benchmark_2x.yaml
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark_2x.yaml
 
 defaults:
   - job: local
@@ -16,7 +16,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.benchmark.training.TrainingBenchmarkRunner
-  training_config: configs/uma/benchmark/toolkit/training_inner_2x.yaml
+  training_config: configs/uma/benchmark/perf_check/training_inner_2x.yaml
   device: "cuda"
   bf16: False
   throughput_steps: 50

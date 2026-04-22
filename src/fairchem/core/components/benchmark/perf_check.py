@@ -323,7 +323,7 @@ def format_report_table(
     return "\n".join(lines)
 
 
-class BenchmarkToolkitRunner(Runner):
+class PerfCheckRunner(Runner):
     """
     Benchmark a single inference configuration against a fp64 baseline.
 
@@ -332,8 +332,8 @@ class BenchmarkToolkitRunner(Runner):
     accuracy error and performance metrics.
 
     Usage via fairchem CLI:
-        fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml
-        fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml \
+        fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml
+        fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
             runner.inference_settings.execution_mode=umas_fast_gpu
     """
 

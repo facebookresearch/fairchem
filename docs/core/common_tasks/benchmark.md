@@ -106,9 +106,9 @@ If it makes sense for your benchmark metrics and are happy working with dictiona
 :::
 :::
 
-## Inference & Training Benchmark Toolkit
+## Inference & Training Perf Check
 
-The benchmark toolkit (`configs/uma/benchmark/toolkit/`) provides lightweight benchmarks for validating inference and training fidelity and performance. Unlike the model benchmarks above, these do **not** require real datasets — they use built-in test systems or auto-generated fake data, making them ideal for quick sanity checks after configuration changes.
+The perf check (`configs/uma/benchmark/perf_check/`) provides lightweight benchmarks for validating inference and training fidelity and performance. Unlike the model benchmarks above, these do **not** require real datasets — they use built-in test systems or auto-generated fake data, making them ideal for quick sanity checks after configuration changes.
 
 ### Inference Benchmark
 
@@ -138,18 +138,18 @@ Three built-in test systems are used:
 
 ```bash
 # Run with default settings
-fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml
+fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml
 
 # Test a specific execution mode
-fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml \
+fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
   runner.inference_settings.execution_mode=umas_fast_gpu
 
 # Enable TF32 and torch.compile
-fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml \
+fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
   runner.inference_settings.tf32=True runner.inference_settings.compile=True
 
 # Run on CPU
-fairchem -c configs/uma/benchmark/toolkit/benchmark.yaml runner.device=cpu
+fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
 ```
 
 **Available overrides:**
@@ -187,18 +187,18 @@ The training benchmark compares an **fp32 baseline** against a candidate trainin
 
 ```bash
 # Run with default settings
-fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml
+fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml
 
 # Enable bf16 candidate
-fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
+fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.bf16=True
 
 # Increase throughput measurement steps
-fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
+fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.throughput_steps=20
 
 # Run on CPU
-fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
+fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.device=cpu
 ```
 
@@ -210,4 +210,4 @@ fairchem -c configs/uma/benchmark/toolkit/training_benchmark.yaml \
 | `runner.bf16` | `False` | Enable bf16 mixed precision for the candidate run |
 | `runner.throughput_steps` | `50` | Number of training steps for throughput measurement |
 | `runner.seed` | `42` | Random seed for reproducibility |
-| `runner.training_config` | `configs/uma/benchmark/toolkit/training_inner.yaml` | Inner training config path |
+| `runner.training_config` | `configs/uma/benchmark/perf_check/training_inner.yaml` | Inner training config path |
