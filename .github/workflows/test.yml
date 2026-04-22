@@ -76,6 +76,12 @@ jobs:
             -r tests/requirements.txt # pin test packages
 
       - name: Install fairchem_cpp
+        # CPU runner has no GPU/nvcc; opt out of the CUDA build. Only op
+        # schemas get compiled, which is enough for import but any call to a
+        # fairchem_cpp op will raise NotImplementedError. GPU-only tests are
+        # marked @pytest.mark.gpu and excluded here.
+        env:
+          USE_CUDA: "0"
         run: |
           pip install --no-build-isolation -e src/fairchem/fairchem_cpp
 
@@ -169,9 +175,34 @@ jobs:
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
 
-      - name: Install fairchem_cpp
+      - name: Install CUDA toolkit
+        # The GH-hosted GPU runner image ships CUDA runtime libs but not nvcc.
+        # Pull cuda-toolkit from the official NVIDIA conda channel, matching
+        # the CUDA version torch 2.8 is built against (12.8), and expose it
+        # via CUDA_HOME / PATH for the fairchem_cpp build that follows.
         run: |
-          pip install --no-build-isolation -e src/fairchem/fairchem_cpp
+          nvidia-smi
+          mkdir -p "$HOME/micromamba-cuda" && cd "$HOME/micromamba-cuda"
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          ./bin/micromamba create -r "$HOME/micromamba-cuda" -n cuda -y -q \
+            -c nvidia/label/cuda-12.8.0 -c conda-forge cuda-toolkit=12.8
+          CUDA_PREFIX="$HOME/micromamba-cuda/envs/cuda"
+          echo "CUDA_HOME=$CUDA_PREFIX" >> "$GITHUB_ENV"
+          echo "$CUDA_PREFIX/bin" >> "$GITHUB_PATH"
+          "$CUDA_PREFIX/bin/nvcc" --version
+
+      - name: Install fairchem_cpp
+        # T4 is sm_75; pin TORCH_CUDA_ARCH_LIST so nvcc doesn't build for every
+        # arch (slow) or miss the runner's GPU. -v so setup.py prints and nvcc
+        # invocations surface in the log; pip otherwise swallows them, which is
+        # how a kernel-less build went unnoticed in the previous CI run.
+        env:
+          TORCH_CUDA_ARCH_LIST: "7.5"
+          TORCH_DONT_CHECK_COMPILER_ABI: "1"
+        run: |
+          which nvcc
+          nvcc --version
+          pip install -v --no-build-isolation -e src/fairchem/fairchem_cpp
 
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
