@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -18,31 +17,29 @@ import ase.io
 import ase.units
 from ase.md import MDLogger
 from monty.json import jsanitize
-from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.simulation_tools.trajectory import (
     ParquetTrajectoryWriter,
     TrajectoryFrame,
 )
+from fairchem.core.components.runner import (
+    PreemptableMixin,
+    StopfairDetected,
+)
 
 if TYPE_CHECKING:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
+    from omegaconf import DictConfig
 
     from fairchem.core.components.calculate.simulation_tools.thermostats import (
         Thermostat,
     )
 
 
-class _StopfairDetected(Exception):
-    """
-    Raised by the STOPFAIR callback to break out of dyn.run().
-    """
-
-
-class MDRunner(CalculateRunner):
+class MDRunner(PreemptableMixin, CalculateRunner):
     """
     General-purpose molecular dynamics runner for single structures.
 
@@ -181,25 +178,14 @@ class MDRunner(CalculateRunner):
 
         # Attach STOPFAIR checker if heartbeat_interval is configured
         if self.heartbeat_interval is not None and self.heartbeat_interval > 0:
-            stopfair_path = (
-                Path(self.job_config.metadata.checkpoint_dir).parent / "STOPFAIR"
-            )
 
-            def check_stopfair():
+            def check_stopfair_callback():
                 if self._dyn.get_number_of_steps() == self._start_step:
                     return
-                if stopfair_path.exists():
-                    current_step = self._dyn.get_number_of_steps()
-                    save_path = self.job_config.metadata.preemption_checkpoint_dir
-                    logging.info(
-                        f"STOPFAIR detected in {stopfair_path.parent}, "
-                        f"saving state to {save_path} at step {current_step}"
-                    )
-                    if self.save_state(save_path, is_preemption=True):
-                        stopfair_path.unlink()
-                    raise _StopfairDetected
+                if self.check_stopfair():
+                    self.handle_stopfair()
 
-            self._dyn.attach(check_stopfair, interval=self.heartbeat_interval)
+            self._dyn.attach(check_stopfair_callback, interval=self.heartbeat_interval)
 
         # Attach periodic checkpoint saving if checkpoint_interval is configured
         if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
@@ -228,7 +214,7 @@ class MDRunner(CalculateRunner):
 
         try:
             self._dyn.run(remaining_steps)
-        except _StopfairDetected:
+        except StopfairDetected:
             stopped_by_stopfair = True
         finally:
             self._elapsed_wall_time += time.monotonic() - self._wall_t0
@@ -289,107 +275,68 @@ class MDRunner(CalculateRunner):
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
-    def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
-        """
-        Save current MD state for resumption.
+    def _modify_resume_config(self, cfg: DictConfig) -> DictConfig:
+        if "atoms" in cfg.get("runner", {}):
+            del cfg.runner.atoms
+        return cfg
 
-        Writes to a temporary directory first, then swaps it into place so
-        that a crash mid-write never leaves a corrupt checkpoint.
+    def save_simulation_state(self, checkpoint_dir: Path, is_preemption: bool) -> None:
+        """
+        Save MD-specific state files into checkpoint_dir.
 
         Saves:
         - Atoms state (positions, velocities) in ExtXYZ format
         - Thermostat/barostat state in JSON format
         - MD metadata (step count, etc.) in JSON format
-        - resume_config.yaml: canonical config with runner_state_path set
-        - portable_config.yaml: config stripped of system-specific fields
-          (metadata, timestamp_id) so it can be run on a new machine
 
         Args:
-            checkpoint_location: Directory to save checkpoint files
-            is_preemption: Whether this save is due to preemption
-
-        Returns:
-            bool: True if state was successfully saved
+            checkpoint_dir: Directory to write state files into.
+            is_preemption: Whether this save is due to preemption.
         """
         if self._dyn is None or self._atoms is None:
-            return False
+            return
 
-        checkpoint_dir = Path(checkpoint_location)
-        tmp_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".tmp")
+        if self._trajectory_writer:
+            if is_preemption:
+                self._trajectory_writer.close()
+            elif hasattr(self._trajectory_writer, "flush"):
+                self._trajectory_writer.flush()
 
-        try:
-            # Clean up any leftover temp dir from a previous failed save.
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            tmp_dir.mkdir(parents=True, exist_ok=True)
+        atoms_path = checkpoint_dir / "checkpoint.xyz"
+        self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
+        ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
-            if self._trajectory_writer:
-                if is_preemption:
-                    self._trajectory_writer.close()
-                elif hasattr(self._trajectory_writer, "flush"):
-                    self._trajectory_writer.flush()
+        thermostat_state = self.thermostat.save_state(self._dyn)
+        thermostat_path = checkpoint_dir / "thermostat_state.json"
+        with open(thermostat_path, "w") as f:
+            json.dump(thermostat_state, f)
 
-            atoms_path = tmp_dir / "checkpoint.xyz"
-            self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
-            ase.io.write(str(atoms_path), self._atoms, format="extxyz")
-
-            thermostat_state = self.thermostat.save_state(self._dyn)
-            thermostat_path = tmp_dir / "thermostat_state.json"
-            with open(thermostat_path, "w") as f:
-                json.dump(thermostat_state, f)
-
-            md_state = {
-                "current_step": self._dyn.get_number_of_steps(),
-                "total_steps": self.steps,
-                "elapsed_wall_time": (
-                    self._elapsed_wall_time + time.monotonic() - self._wall_t0
-                ),
-            }
-            state_path = tmp_dir / "md_state.json"
-            with open(state_path, "w") as f:
-                json.dump(md_state, f)
-
-            # Save resume configs from the canonical config
-            config_path = Path(self.job_config.metadata.config_path)
-            if config_path.is_file():
-                cfg = OmegaConf.load(config_path)
-                cfg.job.runner_state_path = checkpoint_location
-                # Remove atoms from runner since state is in checkpoint.xyz
-                if "atoms" in cfg.get("runner", {}):
-                    del cfg.runner.atoms
-
-                # System-specific resume config (same machine)
-                resume_path = tmp_dir / "resume_config.yaml"
-                OmegaConf.save(cfg, resume_path)
-
-                # Portable config (new machine): strip auto-generated fields
-                portable_cfg = cfg.copy()
-                portable_cfg.job.runner_state_path = "."
-                if "run_dir" in portable_cfg.get("job", {}):
-                    run_dir = Path(portable_cfg.job.run_dir)
-                    portable_cfg.job.run_dir = run_dir.name
-                if "metadata" in portable_cfg.get("job", {}):
-                    del portable_cfg.job.metadata
-                if "timestamp_id" in portable_cfg.get("job", {}):
-                    del portable_cfg.job.timestamp_id
-                portable_path = tmp_dir / "portable_config.yaml"
-                OmegaConf.save(portable_cfg, portable_path)
-
-            # Atomically swap: remove old checkpoint, move temp into place.
-            if checkpoint_dir.exists():
-                shutil.rmtree(checkpoint_dir, ignore_errors=True)
-            tmp_dir.rename(checkpoint_dir)
-            return True
-        except Exception as e:
-            # Clean up the temp dir so it doesn't interfere with future saves
-            if tmp_dir.exists():
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            logging.exception(f"Failed to save checkpoint: {e}")
-            return False
+        md_state = {
+            "current_step": self._dyn.get_number_of_steps(),
+            "total_steps": self.steps,
+            "elapsed_wall_time": (
+                self._elapsed_wall_time + time.monotonic() - self._wall_t0
+            ),
+        }
+        state_path = checkpoint_dir / "md_state.json"
+        with open(state_path, "w") as f:
+            json.dump(md_state, f)
 
     def load_state(self, checkpoint_location: str | None) -> None:
         """
         Load MD state from checkpoint.
+
+        Delegates to PreemptableRunner.load_state which calls
+        load_simulation_state.
+
+        Args:
+            checkpoint_location: Directory containing checkpoint files, or None.
+        """
+        PreemptableMixin.load_state(self, checkpoint_location)
+
+    def load_simulation_state(self, checkpoint_dir: Path) -> None:
+        """
+        Load MD-specific state from checkpoint_dir.
 
         Restores:
         - Atoms positions and velocities from ExtXYZ
@@ -397,12 +344,8 @@ class MDRunner(CalculateRunner):
         - Thermostat/barostat state (applied after dynamics creation)
 
         Args:
-            checkpoint_location: Directory containing checkpoint files, or None
+            checkpoint_dir: Directory containing checkpoint files.
         """
-        if checkpoint_location is None:
-            return
-
-        checkpoint_dir = Path(checkpoint_location).absolute()
         atoms_path = checkpoint_dir / "checkpoint.xyz"
         state_path = checkpoint_dir / "md_state.json"
 
