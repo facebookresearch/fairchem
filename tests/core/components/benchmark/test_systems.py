@@ -7,8 +7,10 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from ase import Atoms
+from ase.constraints import FixAtoms
 
 from fairchem.core.components.benchmark.systems import (
     BenchmarkSystem,
@@ -37,13 +39,36 @@ def test_make_benchmark_system_water():
     assert len(sys.atoms) == 60
 
 
+def test_make_benchmark_system_slab_adsorbate():
+    sys = make_benchmark_system(
+        name="slab_ads", structure_type="slab_adsorbate", task_name="oc20"
+    )
+    atoms = sys.atoms
+    assert sys.task_name == "oc20"
+
+    # Has OC20-style tags (0=subsurface, 1=surface, 2=adsorbate)
+    tags = atoms.get_tags()
+    assert set(np.unique(tags)) == {0, 1, 2}
+
+    # Has FixAtoms on subsurface
+    assert len(atoms.constraints) == 1
+    assert isinstance(atoms.constraints[0], FixAtoms)
+    fixed_tags = tags[atoms.constraints[0].index]
+    assert np.all(fixed_tags == 0)
+
+    # Has charge and spin in info
+    assert "charge" in atoms.info
+    assert "spin" in atoms.info
+
+
 def test_get_default_benchmark_systems():
     systems = get_default_benchmark_systems()
-    assert len(systems) >= 3
+    assert len(systems) >= 4
     names = [s.name for s in systems]
     assert "small_molecule" in names
     assert "medium_bulk" in names
     assert "large_bulk" in names
+    assert "slab_adsorbate" in names
 
 
 def test_make_variable_size_batch():

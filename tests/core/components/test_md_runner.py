@@ -21,6 +21,7 @@ import pytest
 from ase import units
 from ase.build import bulk
 from ase.calculators.emt import EMT
+from ase.constraints import FixAtoms
 from ase.io import Trajectory
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
@@ -35,6 +36,7 @@ from fairchem.core.components.calculate import (
     TrajectoryFrame,
     VelocityVerletThermostat,
 )
+from fairchem.core.datasets.common_structures import get_slab_adsorbate
 
 
 @dataclass
@@ -223,9 +225,9 @@ class TestMDRunner:
         assert steps1 == [0, 10, 20, 30]
 
         # Verify checkpoint files
-        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "checkpoint.extxyz").exists()
         assert (checkpoint_dir / "thermostat_state.json").exists()
-        checkpoint_atoms = ase.io.read(str(checkpoint_dir / "checkpoint.xyz"))
+        checkpoint_atoms = ase.io.read(str(checkpoint_dir / "checkpoint.extxyz"))
         assert checkpoint_atoms.info["md_step"] == interrupt_at_step
 
         # Run 2: resume from checkpoint
@@ -278,7 +280,7 @@ class TestMDRunner:
         # Create a fake checkpoint with current_step beyond what we'll configure
         atoms = cu_atoms.copy()
         atoms.info["md_step"] = 50
-        ase.io.write(str(checkpoint_dir / "checkpoint.xyz"), atoms, format="extxyz")
+        ase.io.write(str(checkpoint_dir / "checkpoint.extxyz"), atoms, format="extxyz")
 
         with open(checkpoint_dir / "md_state.json", "w") as f:
             json.dump({"current_step": 50, "total_steps": 100}, f)
@@ -331,7 +333,7 @@ class TestMDRunner:
         results = runner.calculate(job_num=0, num_jobs=1)
 
         assert results["stopped_by_stopfair"] is True
-        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "checkpoint.extxyz").exists()
         assert (checkpoint_dir / "md_state.json").exists()
         assert not stopfair_path.exists()
 
@@ -376,3 +378,62 @@ class TestMDRunner:
 
         final_volume = atoms.get_volume()
         assert initial_volume != pytest.approx(final_volume, rel=1e-6)
+
+
+class TestTrajectoryFrame:
+    def test_round_trip_oc20_slab_adsorbate(self, results_dir):
+        """
+        Run MD on an OC20-style slab+adsorbate and verify the parquet
+        trajectory preserves tags, FixAtoms constraints, and charge/spin.
+        """
+        atoms = get_slab_adsorbate()
+
+        # Verify the structure has the properties we expect
+        assert np.any(atoms.get_tags() != 0)
+        assert len(atoms.constraints) > 0
+        assert "charge" in atoms.info
+        assert "spin" in atoms.info
+
+        original_tags = atoms.get_tags().copy()
+        original_fixed_indices = sorted(atoms.constraints[0].index)
+
+        # Cu slab+CO works with EMT
+        atoms.calc = EMT()
+
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        runner = MDRunner(
+            calculator=atoms.calc,
+            atoms=atoms,
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=10,
+            trajectory_interval=5,
+            log_interval=5,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=100),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        # Read back the parquet trajectory and reconstruct atoms
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        assert len(traj_df) > 0
+
+        for _, row in traj_df.iterrows():
+            frame = TrajectoryFrame.from_dict(row.to_dict())
+            reconstructed = frame.to_atoms()
+
+            # Tags should be preserved in every frame
+            npt.assert_array_equal(reconstructed.get_tags(), original_tags)
+
+            # Fixed atoms should be preserved in every frame
+            assert len(reconstructed.constraints) == 1
+            assert isinstance(reconstructed.constraints[0], FixAtoms)
+            npt.assert_array_equal(
+                sorted(reconstructed.constraints[0].index), original_fixed_indices
+            )
+
+            # charge/spin should be preserved
+            assert reconstructed.info["charge"] == atoms.info["charge"]
+            assert reconstructed.info["spin"] == atoms.info["spin"]

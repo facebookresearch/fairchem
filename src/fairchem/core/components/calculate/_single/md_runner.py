@@ -302,7 +302,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
             elif hasattr(self._trajectory_writer, "flush"):
                 self._trajectory_writer.flush()
 
-        atoms_path = checkpoint_dir / "checkpoint.xyz"
+        atoms_path = checkpoint_dir / "checkpoint.extxyz"
         self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
         ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
@@ -346,7 +346,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         Args:
             checkpoint_dir: Directory containing checkpoint files.
         """
-        atoms_path = checkpoint_dir / "checkpoint.xyz"
+        atoms_path = checkpoint_dir / "checkpoint.extxyz"
         state_path = checkpoint_dir / "md_state.json"
 
         if not atoms_path.exists() or not state_path.exists():

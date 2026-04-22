@@ -47,6 +47,10 @@ class TrajectoryFrame:
     kinetic_energy: float | None = None  # eV
     pressure: float | None = None  # bar
     sid: str | int | None = None
+    tags: np.ndarray | None = None  # (N,) int
+    fixed: np.ndarray | None = None  # (N,) bool
+    charge: int | None = None
+    spin: int | None = None
 
     def to_dict(self) -> dict:
         """
@@ -77,6 +81,14 @@ class TrajectoryFrame:
             d["kinetic_energy"] = self.kinetic_energy
         if self.pressure is not None:
             d["pressure"] = self.pressure
+        if self.tags is not None:
+            d["tags"] = self.tags.tolist()
+        if self.fixed is not None:
+            d["fixed"] = self.fixed.tolist()
+        if self.charge is not None:
+            d["charge"] = self.charge
+        if self.spin is not None:
+            d["spin"] = self.spin
         return d
 
     @classmethod
@@ -130,6 +142,25 @@ class TrajectoryFrame:
         else:
             pressure = None
 
+        # Tags: only store if any are nonzero (all zeros is ASE default)
+        raw_tags = atoms.get_tags()
+        tags = raw_tags.copy() if np.any(raw_tags) else None
+
+        # Fixed atoms: build bool mask from FixAtoms constraints
+        fixed = None
+        if atoms.constraints:
+            from ase.constraints import FixAtoms
+
+            mask = np.zeros(len(atoms), dtype=bool)
+            for constraint in atoms.constraints:
+                if isinstance(constraint, FixAtoms):
+                    mask[constraint.index] = True
+            if np.any(mask):
+                fixed = mask
+
+        charge = atoms.info.get("charge", None)
+        spin = atoms.info.get("spin", None)
+
         return cls(
             step=step,
             time=time,
@@ -145,6 +176,91 @@ class TrajectoryFrame:
             kinetic_energy=kinetic_energy,
             pressure=pressure,
             sid=atoms.info.get("sid"),
+            tags=tags,
+            fixed=fixed,
+            charge=charge,
+            spin=spin,
+        )
+
+    def to_atoms(self) -> Atoms:
+        """
+        Reconstruct an ASE Atoms object from this frame.
+
+        Returns:
+            Atoms object with positions, cell, tags, constraints, and info.
+        """
+        from ase import Atoms as _Atoms
+
+        atoms = _Atoms(
+            numbers=self.atomic_numbers,
+            positions=self.positions,
+            cell=self.cell,
+            pbc=self.pbc,
+        )
+        if self.tags is not None:
+            atoms.set_tags(self.tags)
+        if self.velocities is not None:
+            atoms.set_velocities(self.velocities)
+        if self.fixed is not None:
+            from ase.constraints import FixAtoms
+
+            atoms.constraints = [FixAtoms(indices=np.where(self.fixed)[0])]
+        if self.sid is not None:
+            atoms.info["sid"] = self.sid
+        if self.charge is not None:
+            atoms.info["charge"] = self.charge
+        if self.spin is not None:
+            atoms.info["spin"] = self.spin
+        return atoms
+
+    @classmethod
+    def from_dict(cls, d: dict) -> TrajectoryFrame:
+        """
+        Create a TrajectoryFrame from a dictionary (e.g. a parquet row).
+
+        Args:
+            d: Dictionary with trajectory frame data.
+
+        Returns:
+            TrajectoryFrame populated from the dictionary.
+        """
+
+        def _to_array(val, dtype=float):
+            """
+            Convert a value to a numpy array, handling parquet-style
+            nested lists (list of arrays) that np.array() can't auto-stack.
+            """
+            if isinstance(val, np.ndarray) and val.dtype == object:
+                return np.stack(val).astype(dtype)
+            return np.asarray(val, dtype=dtype)
+
+        return cls(
+            step=d["step"],
+            atomic_numbers=_to_array(d["atomic_numbers"], dtype=int),
+            positions=_to_array(d["positions"]),
+            cell=_to_array(d["cell"]),
+            pbc=_to_array(d["pbc"], dtype=bool),
+            sid=d.get("sid"),
+            time=d.get("time"),
+            velocities=(
+                _to_array(d["velocities"]) if d.get("velocities") is not None else None
+            ),
+            energy=d.get("energy"),
+            forces=(_to_array(d["forces"]) if d.get("forces") is not None else None),
+            stress=(_to_array(d["stress"]) if d.get("stress") is not None else None),
+            temperature=d.get("temperature"),
+            kinetic_energy=d.get("kinetic_energy"),
+            pressure=d.get("pressure"),
+            tags=(
+                _to_array(d["tags"], dtype=int) if d.get("tags") is not None else None
+            ),
+            fixed=(
+                _to_array(d["fixed"], dtype=bool)
+                if d.get("fixed") is not None
+                else None
+            ),
+            charge=d.get("charge"),
+            spin=d.get("spin"),
         )
 
 
