@@ -75,6 +75,10 @@ jobs:
             packages/fairchem-demo-ocpapi[dev] \
             -r tests/requirements.txt # pin test packages
 
+      - name: Install fairchem_cpp
+        run: |
+          pip install --no-build-isolation -e src/fairchem/fairchem_cpp
+
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         run: |
@@ -164,6 +168,10 @@ jobs:
           packages/fairchem-data-omol[dev] \
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
+
+      - name: Install fairchem_cpp
+        run: |
+          pip install --no-build-isolation -e src/fairchem/fairchem_cpp
 
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
