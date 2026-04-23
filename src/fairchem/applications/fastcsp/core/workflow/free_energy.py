@@ -44,6 +44,8 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "t_max": fe_config.get("t_max", 500),
         "t_min": fe_config.get("t_min", 0),
         "structures_per_job": fe_config.get("structures_per_job", 10),
+        "match_only": fe_config.get("match_only", True),
+        "energy_cutoff": fe_config.get("energy_cutoff", None),
     }
 
 
@@ -231,6 +233,56 @@ def collect_free_energy_results(
         )
 
 
+def filter_structure_indices(
+    structures_df: pd.DataFrame,
+    fe_config: dict[str, Any],
+) -> list[int]:
+    """
+    Return row indices to include based on filtering criteria.
+
+    When both filters are active, they are intersected — a structure must
+    have an experimental match AND fall within the energy cutoff.
+
+    Args:
+        structures_df: DataFrame with columns "match" and
+            "energy_relaxed_per_molecule"
+        fe_config: Free energy config containing optional keys
+            ``match_only`` and ``energy_cutoff``
+
+    Returns:
+        Sorted list of integer row indices to process.
+    """
+    match_only = fe_config.get("match_only", False)
+    energy_cutoff = fe_config.get("energy_cutoff")
+
+    if not match_only and energy_cutoff is None:
+        return list(range(len(structures_df)))
+
+    all_indices = set(range(len(structures_df)))
+    masks = []
+
+    if match_only:
+        masks.append(set(structures_df.index[structures_df["match"].notna()].tolist()))
+
+    if energy_cutoff is not None:
+        min_energy = structures_df["energy_relaxed_per_molecule"].min()
+        masks.append(
+            set(
+                structures_df.index[
+                    structures_df["energy_relaxed_per_molecule"]
+                    <= min_energy + energy_cutoff
+                ].tolist()
+            )
+        )
+
+    # Intersection of all active filters
+    indices = all_indices
+    for mask in masks:
+        indices = indices & mask
+
+    return sorted(indices)
+
+
 def compute_free_energies(
     input_dir: Path,
     output_dir: Path,
@@ -265,9 +317,8 @@ def compute_free_energies(
             continue
 
         structures_df = pd.read_parquet(parquet_file, engine="pyarrow")
-        work_items.extend(
-            (str(parquet_file), row_index) for row_index in range(len(structures_df))
-        )
+        indices = filter_structure_indices(structures_df, fe_config)
+        work_items.extend((str(parquet_file), row_index) for row_index in indices)
 
     batches = [
         work_items[i : i + structures_per_job]
