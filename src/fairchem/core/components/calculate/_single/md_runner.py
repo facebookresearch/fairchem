@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
+    from omegaconf import DictConfig
 
     from fairchem.core.components.calculate.simulation_tools.thermostats import (
         Thermostat,
@@ -221,8 +222,8 @@ class MDRunner(PreemptableMixin, CalculateRunner):
                 self._trajectory_writer.close()
 
         return {
-            "trajectory_file": str(trajectory_file),
-            "log_file": str(log_file),
+            "trajectory_file": trajectory_file,
+            "log_file": log_file,
             "total_steps": self.steps,
             "start_step": self._start_step,
             "structure_id": sid,
@@ -259,8 +260,8 @@ class MDRunner(PreemptableMixin, CalculateRunner):
 
         metadata = jsanitize(
             {
-                "trajectory_file": str(trajectory_file),
-                "log_file": str(log_file),
+                "trajectory_file": trajectory_file,
+                "log_file": log_file,
                 "total_steps": results["total_steps"],
                 "trajectory_interval": self.trajectory_interval,
                 "log_interval": self.log_interval,
@@ -273,6 +274,11 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         metadata_file = Path(results_dir) / "metadata.json"
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
+
+    def _modify_resume_config(self, cfg: DictConfig) -> DictConfig:
+        if "atoms" in cfg.get("runner", {}):
+            del cfg.runner.atoms
+        return cfg
 
     def save_simulation_state(self, checkpoint_dir: Path, is_preemption: bool) -> None:
         """

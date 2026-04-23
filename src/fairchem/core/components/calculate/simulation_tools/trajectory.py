@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import ase.units
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -42,6 +43,9 @@ class TrajectoryFrame:
     energy: float | None = None
     forces: np.ndarray | None = None  # (N, 3)
     stress: np.ndarray | None = None  # (6,) Voigt notation
+    temperature: float | None = None  # Kelvin
+    kinetic_energy: float | None = None  # eV
+    pressure: float | None = None  # bar
     sid: str | int | None = None
 
     def to_dict(self) -> dict:
@@ -67,6 +71,12 @@ class TrajectoryFrame:
             d["forces"] = self.forces.tolist()
         if self.stress is not None:
             d["stress"] = self.stress.tolist()
+        if self.temperature is not None:
+            d["temperature"] = self.temperature
+        if self.kinetic_energy is not None:
+            d["kinetic_energy"] = self.kinetic_energy
+        if self.pressure is not None:
+            d["pressure"] = self.pressure
         return d
 
     @classmethod
@@ -104,6 +114,22 @@ class TrajectoryFrame:
         except (PropertyNotImplementedError, RuntimeError):
             velocities = None
 
+        try:
+            temperature = atoms.get_temperature()
+        except Exception:
+            temperature = None
+
+        try:
+            kinetic_energy = atoms.get_kinetic_energy()
+        except Exception:
+            kinetic_energy = None
+
+        # Pressure from stress: P = -trace(stress)/3, converted to bar
+        if stress is not None:
+            pressure = -stress[:3].mean() / ase.units.bar
+        else:
+            pressure = None
+
         return cls(
             step=step,
             time=time,
@@ -115,6 +141,9 @@ class TrajectoryFrame:
             energy=energy,
             forces=forces,
             stress=stress,
+            temperature=temperature,
+            kinetic_energy=kinetic_energy,
+            pressure=pressure,
             sid=atoms.info.get("sid"),
         )
 
