@@ -46,6 +46,7 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "structures_per_job": fe_config.get("structures_per_job", 10),
         "match_only": fe_config.get("match_only", True),
         "energy_cutoff": fe_config.get("energy_cutoff", None),
+        "max_structures": fe_config.get("max_structures", None),
     }
 
 
@@ -240,22 +241,24 @@ def filter_structure_indices(
     """
     Return row indices to include based on filtering criteria.
 
-    When both filters are active, they are intersected — a structure must
-    have an experimental match AND fall within the energy cutoff.
+    When multiple filters are active, they are intersected — a structure must
+    satisfy all active criteria. If ``max_structures`` is set, the filtered
+    results are further truncated to the N lowest-energy structures.
 
     Args:
         structures_df: DataFrame with columns "match" and
             "energy_relaxed_per_molecule"
         fe_config: Free energy config containing optional keys
-            ``match_only`` and ``energy_cutoff``
+            ``match_only``, ``energy_cutoff``, and ``max_structures``
 
     Returns:
         Sorted list of integer row indices to process.
     """
     match_only = fe_config.get("match_only", False)
     energy_cutoff = fe_config.get("energy_cutoff")
+    max_structures = fe_config.get("max_structures")
 
-    if not match_only and energy_cutoff is None:
+    if not match_only and energy_cutoff is None and max_structures is None:
         return list(range(len(structures_df)))
 
     all_indices = set(range(len(structures_df)))
@@ -280,7 +283,14 @@ def filter_structure_indices(
     for mask in masks:
         indices = indices & mask
 
-    return sorted(indices)
+    indices = sorted(indices)
+
+    if max_structures is not None:
+        energies = structures_df.loc[indices, "energy_relaxed_per_molecule"]
+        indices = energies.nsmallest(max_structures).index.tolist()
+        indices.sort()
+
+    return indices
 
 
 def compute_free_energies(
