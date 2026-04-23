@@ -228,3 +228,28 @@ jobs:
           verbose: true
           packages-dir: dist-data-omc/
           skip-existing: true
+
+  release-data-odac:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: |
+      ( github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_data_odac-') ) || startsWith(github.event.release.tag_name, 'fairchem_data_odac-')
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fairchem-data-odac/
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-data-odac
+          path: dist-data-odac
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          packages-dir: dist-data-odac/
+          skip-existing: true
