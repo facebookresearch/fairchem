@@ -50,7 +50,9 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
     stage_requirements = {
         "generate": {
             "keys": ["molecules", "genarris"],
-            "nested": {"genarris": ["python_cmd", "genarris_script", "base_config"]},
+            "nested": {
+                "genarris": ["python_cmd", "genarris_cli", "genarris_base_config"]
+            },
         },
         "process_generated": {
             "keys": ["pre_relaxation_filter"],
