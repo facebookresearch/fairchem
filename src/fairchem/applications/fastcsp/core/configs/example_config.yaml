@@ -28,9 +28,11 @@ genarris:
 # Structure comparison tolerances for Pymatgen's StructureMatcher
 # Deduplication parameters after structure generation with Genarris
 pre_relaxation_filter:        # Before ML relaxation
+  assign_groups: true          # Assign groups to structures
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
+  remove_duplicates: true      # Enable duplicate removal
   npartitions: 1000            # Size of slurm array
 
 # ML relaxation parameters
@@ -41,16 +43,21 @@ relax:
   max-steps: 1000            # Maximum optimization steps
   fix-symmetry: false        # Do not preserve crystal symmetry
   relax-cell: true           # Allow unit cell relaxation
+  write_traj: true           # Enable writing of trajectory files
+  traj-interval: 1           # Interval for writing trajectory frames
   slurm:
     num_ranks: 1000
 
 # Filtering criteria and deduplication parameters after relaxation
 post_relaxation_filter:       # After ML relaxation
-  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
-  density_cutoff: 10           # Density cutoff in g/cm³
+  remove_problematic: true     # Remove structures that failed to converge or connectivity check
+  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum or None
+  density_cutoff: 10           # Density cutoff in g/cm³ or None
+  assign_groups: true          # Assign groups to structures
   ltol: 0.2
   stol: 0.3
   angle_tol: 5
+  remove_duplicates: true      # Enable duplicate removal
 
 # (Optional) Experimental structure evaluation settings
 evaluate:
@@ -63,8 +70,7 @@ evaluate:
   #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
   csd:
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
-    # TODO: Use CSD_PYTHON_CMD executable with subprocess in eval.py
-    # python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
+    python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
   pymatgen:
     match_params:           # Pymatgen matching tolerances if pymatgen method is used
       ltol: 0.2

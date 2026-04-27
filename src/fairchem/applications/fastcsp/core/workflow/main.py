@@ -26,6 +26,7 @@ The workflow stages are:
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -62,22 +63,6 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
     return config
 
 
-def detect_restart(root_dir: Path, log_file: str = "FastCSP.log") -> bool:
-    """
-    Detect if this is a workflow restart by checking for existing log file.
-
-    Args:
-        root_dir: Root directory where the log file would be located
-        log_file: Name of the log file to check (default: "FastCSP.log")
-
-    Returns:
-        bool: True if this appears to be a restart (log file exists with content),
-              False for a fresh start
-    """
-    log_path = root_dir / log_file
-    return log_path.exists() and log_path.stat().st_size > 0
-
-
 def main(args: argparse.Namespace) -> None:
     """
     Main orchestration function for the FastCSP crystal structure prediction workflow.
@@ -110,13 +95,23 @@ def main(args: argparse.Namespace) -> None:
     root = Path(config["root"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
 
+    # Config and molecules info into root
+    if not (root / "config.yaml").exists():
+        shutil.copy2(args.config, root / "config.yaml")
+    if not (root / "molecules.csv").exists():
+        shutil.copy2(config["molecules"], root / "molecules.csv")
+
     # Reorder stages based on dependencies
     args.stages = reorder_stages_by_dependencies(args.stages)
-
     # Set up logging to FastCSP.log in root directory
     log_file = root / "FastCSP.log"
-    is_restart = detect_restart(root)
-    logging.setup_fastcsp_logger(log_file=log_file, append=True)
+    is_restart = logging.detect_restart(root)
+    log_config = config.get("logging", {})
+    console_output = log_config.get("console", True)
+    log_level = log_config.get("level", "INFO")
+    logging.setup_fastcsp_logger(
+        log_file=log_file, level=log_level, console_output=console_output, append=True
+    )
     logging.ensure_all_modules_use_central_logger()
     logger = logging.get_central_logger()
 
@@ -147,7 +142,7 @@ def main(args: argparse.Namespace) -> None:
 
         genarris_config = get_genarris_config(config)
         jobs = run_genarris_jobs(
-            output_dir=root / "genarris",
+            output_dir=root / "generated_structures",
             genarris_config=genarris_config,
             molecules_file=config["molecules"],
         )
@@ -164,9 +159,10 @@ def main(args: argparse.Namespace) -> None:
 
         pre_relax_config = get_pre_relax_filter_config(config)
         jobs = process_genarris_outputs(
-            input_dir=root / "genarris",
+            input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
@@ -185,7 +181,7 @@ def main(args: argparse.Namespace) -> None:
             run_relax_jobs,
         )
 
-        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        relax_config, relax_output_dir = get_relax_config_and_dir(config, verbose=True)
         jobs = run_relax_jobs(
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
@@ -213,11 +209,14 @@ def main(args: argparse.Namespace) -> None:
             input_dir=relax_output_dir / "raw_structures",
             output_dir=relax_output_dir / "filtered_structures",
             post_relax_config=post_relax_config,
+            remove_problematic=post_relax_config["remove_problematic"],
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
             density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
+            assign_groups=post_relax_config["assign_groups"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
+            remove_duplicates=post_relax_config["remove_duplicates"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
@@ -239,11 +238,10 @@ def main(args: argparse.Namespace) -> None:
         )
 
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
-        eval_config, eval_method = get_eval_config_and_method(config)
-
+        eval_config, eval_method, eval_dir_name = get_eval_config_and_method(config)
         jobs = compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
-            output_dir=relax_output_dir / "matched_structures",
+            output_dir=relax_output_dir / eval_dir_name,
             eval_method=eval_method,
             eval_config=eval_config,
             molecules_file=config["molecules"],
@@ -266,5 +264,5 @@ def main(args: argparse.Namespace) -> None:
             "Please check future releases or contact the developers for updates."
         )
 
-    logger.info("🎉 FastCSP workflow completed successfully!")
+    logger.info("🎉 FastCSP workflow completed!")
     logger.info("=" * 80)

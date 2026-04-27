@@ -30,6 +30,7 @@ import pandas as pd
 import submitit
 from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
+from ase.io import Trajectory
 from ase.optimize import BFGS, FIRE, LBFGS
 from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
@@ -57,6 +58,16 @@ CHECKPOINTS = {
         "model": "uma-s-1p1",
         "task_name": "omol",
     },
+    "uma_sm_1p2_omc": {  # UMA 1p2 w/ OMC task
+        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "model": "uma-s-1p2",
+        "task_name": "omc",
+    },
+    "uma_sm_1p2_omol": {  # UMA 1p2 w/ OMol task
+        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "model": "uma-s-1p2",
+        "task_name": "omol",
+    },
 }
 
 
@@ -81,7 +92,9 @@ def create_calculator(relax_config):
     return calc
 
 
-def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+def get_relax_config_and_dir(
+    config: dict[str, Any], verbose=False
+) -> tuple[dict[str, Any], Path]:
     """
     Generate relaxation parameters and determine output directory from workflow configuration.
 
@@ -119,6 +132,9 @@ def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Pa
         "max_steps": relax_config.get("max-steps", 1000),
         "fix_symmetry": relax_config.get("fix-symmetry", False),
         "relax_cell": relax_config.get("relax-cell", True),
+        "write_traj": relax_config.get("write-traj", False),
+        "traj_interval": relax_config.get("traj-interval", 1),
+        "slurm": relax_config.get("slurm", {}),
     }
 
     relax_output_dir = f"{relax_params['calculator']}_{relax_params['optimizer']}_{relax_params['fmax']}_{relax_params['max_steps']}"
@@ -129,10 +145,11 @@ def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Pa
 
     relax_output_dir = root / "relaxed" / relax_output_dir
 
-    logger = get_central_logger()
-    logger.info("Relaxation configuration:")
-    logger.info(f"Relaxation config: {relax_config}")
-    logger.info(f"Relaxation output directory: {relax_output_dir}")
+    if verbose:
+        logger = get_central_logger()
+        logger.info("Relaxation configuration:")
+        logger.info(f"Relaxation config: {relax_config}")
+        logger.info(f"Relaxation output directory: {relax_output_dir}")
     return relax_params, relax_output_dir
 
 
@@ -179,10 +196,10 @@ def relax_atoms_batch(atoms_list, relax_config, calc):
     else:
         ecf = OptimizableBatch(atoms_batch, predictor)
     optimizer = FairchemLBFGS(ecf)
-    potential_energies = ecf.get_potential_energies()
     converged_batch = optimizer.run(
         fmax=relax_config["fmax"], steps=relax_config["max_steps"]
     )
+    potential_energies = ecf.get_potential_energies()
     atoms_relaxed = ecf.get_atoms_list()
     for atoms, converged, potential_energy in zip(
         atoms_relaxed, converged_batch, potential_energies
@@ -202,6 +219,7 @@ def relax_atoms(atoms, relax_config, calc):
 
     Args:
         atoms: ASE Atoms object representing the crystal structure
+        structure_id: Identifier for the structure being relaxed
         relax_config: Dictionary containing relaxation parameters:
             - optimizer: Optimization algorithm ("bfgs", "fire", "lbfgs")
             - relax_cell: Whether to optimize unit cell parameters
@@ -242,13 +260,18 @@ def relax_atoms(atoms, relax_config, calc):
             f"Unsupported optimizer: {optimizer_name}. (L)BFGS and FIRE are recommended."
         )
     if relax_config.get("relax_cell"):
-        optimizer = optimizer_cls(FrechetCellFilter(atoms))
+        optimizer = optimizer_cls(FrechetCellFilter(atoms), logfile=None)
     else:
-        optimizer = optimizer_cls(atoms)
+        optimizer = optimizer_cls(atoms, logfile=None)
+
     # Perform optimization
+    if relax_config.get("write_traj"):
+        traj = Trajectory(atoms.info["traj_path"], "w", atoms)
+        optimizer.attach(traj.write, interval=relax_config.get("traj_interval"))
     converged = optimizer.run(
         fmax=relax_config["fmax"], steps=relax_config["max_steps"]
     )
+
     logger = get_central_logger()
     logger.debug(
         f"Relaxation converged: {converged}, Energy: {atoms.get_potential_energy()}"
@@ -257,6 +280,12 @@ def relax_atoms(atoms, relax_config, calc):
     # Store relaxation metadata
     atoms.info["converged"] = converged  # Store convergence status
     atoms.info["energy"] = atoms.get_potential_energy()  # Store relaxed energy
+    atoms.info["optimizer_steps"] = (
+        optimizer.nsteps
+    )  # Store number of optimization steps
+
+    if relax_config.get("write_traj"):
+        traj.close()
     return atoms
 
 
@@ -270,10 +299,10 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
             output_dir.parent.parent.parent
         )
         if output_file.exists():
-            logger.info(f"Skipping {input_file} because {output_file} exists")
+            logger.debug(f"Skipping {input_file} because {output_file} exists")
             continue
 
-        logger.info(f"Relaxing structures from {input_file}")
+        logger.debug(f"Relaxing structures from {input_file}")
 
         structures_df = pd.read_parquet(input_file)
         atoms_list = (
@@ -283,6 +312,19 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
             )
             .to_numpy()
         )
+        structure_ids_list = structures_df["structure_id"].to_numpy().astype(str)
+
+        # Create traj folder
+        if relax_config.get("write_traj"):
+            traj_folder = (
+                output_dir.parent
+                / "trajectories"
+                / input_file.parent.relative_to(output_dir.parent.parent.parent)
+            )
+            traj_folder.mkdir(parents=True, exist_ok=True)
+            for structure_id, atoms in zip(structure_ids_list, atoms_list):
+                traj_path = traj_folder / f"{structure_id}.traj"
+                atoms.info["traj_path"] = str(traj_path)
 
         # Special handling for OMol tasks - setting spin and charge
         if relax_config["calculator"] == "uma_sm_1p1_omol":
@@ -321,6 +363,9 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
         structures_df["energy_relaxed_per_molecule"] = (
             structures_df["energy_relaxed"] / structures_df["z"]
         )
+        structures_df["optimizer_steps"] = [
+            atoms.info["optimizer_steps"] for atoms in atoms_relaxed
+        ]
         structures_df["converged"] = [
             atoms.info["converged"] for atoms in atoms_relaxed
         ]
@@ -341,6 +386,8 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
 def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     """Submit parallel structure relaxation jobs to SLURM."""
 
+    logger = get_central_logger()
+
     # Configure SLURM parameters
     relax_slurm_config, executor_params = get_relax_slurm_config(relax_config)
 
@@ -348,11 +395,9 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     executor = submitit.AutoExecutor(folder=output_dir.parent / "slurm")
     executor.update_parameters(**executor_params)
 
-    logger = get_central_logger()
-
     # Discover all input files to process
     input_files = list(input_dir.glob("**/*.parquet"))
-    logger.info(f"Total number of input files: {len(input_files)}")
+    logger.info(f"Total number of input files found: {len(input_files)}")
 
     # Filter out files that have already been relaxed to avoid recomputation
     input_files = [
@@ -365,7 +410,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     logger.info(f"Number of input files to relax: {len(input_files)}")
 
     jobs = []
-    num_ranks = relax_slurm_config.get("num_ranks", 1000)
+    num_ranks = relax_slurm_config.get("num_ranks", 25000)
     with executor.batch():
         for rank in range(min(num_ranks, len(input_files))):
             input_files_rank = input_files[rank::num_ranks]
@@ -380,7 +425,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
 
     logger = get_central_logger()
     logger.info(
-        f"Submitted {len(jobs)} relaxation jobs: {jobs[0].job_id.split('_')[0] if jobs else 'none'}"
+        f"Submitted {len(jobs)} relaxation array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
     )
     return jobs
 

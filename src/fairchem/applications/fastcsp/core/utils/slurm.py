@@ -94,7 +94,9 @@ def submit_slurm_jobs(
             jobs.append(job)
 
     if jobs:
-        logger.info(f"Submitted {len(jobs)} jobs with job ID: {jobs[0].job_id}")
+        logger.info(
+            f"Submitted {len(jobs)} array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
+        )
 
     return jobs
 
@@ -199,9 +201,19 @@ def get_slurm_config(
     }
 
     # Prepare parameters based on executor type
+    standard_flags = {
+        "nodes",
+        "ntasks_per_node",
+        "time",
+        "cpus_per_task",
+        "gpus_per_node",
+        "mem_gb",
+        "num_ranks",
+        "job_name",
+        "array_parallelism",
+    }
     if executor_type == "submitit_executor":
         executor_params = {}
-        standard_flags = set()
 
         if module_name == "genarris":
             # Genarris-specific parameter mapping
@@ -212,13 +224,9 @@ def get_slurm_config(
                 "timeout_min": normalized_config.get("time", 7200),
                 "slurm_use_srun": False,
                 "cpus_per_task": normalized_config.get("cpus_per_task", 1),
-            }
-            standard_flags = {
-                "job_name",
-                "nodes",
-                "ntasks_per_node",
-                "time",
-                "cpus_per_task",
+                "slurm_array_parallelism": normalized_config.get(
+                    "array_parallelism", 0
+                ),
             }
 
         elif module_name == "relax":
@@ -229,13 +237,9 @@ def get_slurm_config(
                 "gpus_per_node": normalized_config.get("gpus_per_node", 1),
                 "cpus_per_task": normalized_config.get("cpus_per_task", 10),
                 "mem_gb": normalized_config.get("mem_gb", 50),
-            }
-            standard_flags = {
-                "job_name",
-                "gpus_per_node",
-                "cpus_per_task",
-                "mem_gb",
-                "time",
+                "slurm_array_parallelism": normalized_config.get(
+                    "array_parallelism", 0
+                ),
             }
 
         executor_params.update(base_params)
@@ -269,7 +273,6 @@ def get_slurm_config(
         }
 
         # Handle additional SLURM flags (already normalized to snake_case)
-        standard_flags = {"job_name", "cpus_per_task", "mem_gb", "time"}
         for key, value in normalized_config.items():
             if key not in standard_flags:
                 slurm_params[key] = value
