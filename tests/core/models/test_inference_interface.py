@@ -47,6 +47,9 @@ class MockBackbone(nn.Module):
     def on_predict_check(self, data):
         self._checked = True
 
+    def get_default_untrained_tasks(self, checkpoint_tasks, inference_settings):
+        return []
+
 
 class MockBackboneWithReplacement(MockBackbone):
     """Mock backbone that returns a new backbone on prepare_for_inference."""
@@ -162,13 +165,6 @@ class TestHydraModelInferenceInterface:
         """Test that accessing dataset_to_tasks before setup_tasks raises."""
         with pytest.raises(RuntimeError, match="setup_tasks"):
             _ = mock_hydra_model.dataset_to_tasks
-
-    def test_direct_forces_property(self, mock_hydra_model):
-        """Test direct_forces property delegates to backbone."""
-        assert mock_hydra_model.direct_forces is False
-
-        mock_hydra_model.backbone.direct_forces = True
-        assert mock_hydra_model.direct_forces is True
 
 
 class TestBackboneInterface:

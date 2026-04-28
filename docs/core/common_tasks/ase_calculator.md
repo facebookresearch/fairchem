@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -68,7 +68,7 @@ For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxa
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2", device="cuda", inference_settings="turbo"
 )
 ```
 
@@ -87,7 +87,7 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 | edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
 | use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
 | base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
-| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "general". "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
+| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "None", when set to "None", the predictor will automatically determine the best backend. For example, "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
 
@@ -104,7 +104,30 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", device="cuda", inference_settings=settings
+    "uma-s-1p2", device="cuda", inference_settings=settings
+)
+```
+
+## Enabling gradient stress or Hessian prediction
+
+Some tasks, for example omol, odac, or oc20/25, were not trained using stress labels. Similarly, no tasks were supervised to predict Hessians. However, predictions of untrained derivatives of energy, such as stress and Hessians, can be enabled by using the following inference settings flags,
+
+| Setting Flag  | Description |
+| ----- | ----- |
+| predict_untrained_forces | A set of task/dataset names (e.g., `{"omol", "oc20"}`) for which forces will be computed via autograd even though the checkpoint was not trained with a forces head for those tasks. |
+| predict_untrained_stress | A set of task/dataset names for which stress tensors will be computed via autograd even though the checkpoint was not trained with a stress head for those tasks. The default empty set disables this. |
+| predict_untrained_hessian | A set of task/dataset names for which the Hessian matrix will be computed via autograd. |
+
+For example, to enable stress and Hessian predictions with `omol` level of theory, the following settings can be used,
+
+```{code-cell} python3
+settings = InferenceSettings(
+    predict_untrained_stress={'omol'},
+    predict_untrained_hessian={'omol'}
+)
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings=settings
 )
 ```
 
@@ -133,7 +156,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 

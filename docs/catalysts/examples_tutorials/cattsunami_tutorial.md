@@ -141,7 +141,7 @@ product2_configs = AdsorbateSlabConfig(
 
 ```{code-cell} ipython3
 # Instantiate the calculator
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 

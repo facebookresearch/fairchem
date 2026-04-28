@@ -1,5 +1,5 @@
 """
-Copyright (c) Facebook, Inc. and its affiliates.
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -194,21 +194,24 @@ def test_calculator_setup(all_calculators):
         datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
-        if not calc.predictor.direct_forces and (
+        if not calc.predictor.model.module.backbone.regress_config.direct_forces and (
             len(datasets) > 1 or (calc.task_name != "omol" and calc.task_name != "odac")
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
 
         # TOOD: UMA-S-1.2 does not have stress implemented, for some tasks, skip
-        remove_properties_from_checks=set()
-        if calc.predictor.model.module.model_id=="UMA-S-1.2" and calc.task_name not in ["omc", "omat"]:
-            remove_properties_from_checks={"stress"}
+        remove_properties_from_checks = set()
+        if (
+            calc.predictor.model.module.model_id == "UMA-S-1.2"
+            and calc.task_name not in ["omc", "omat"]
+        ):
+            remove_properties_from_checks = {"stress"}
 
         assert all(
-            prop in calc.implemented_properties for prop in set(implemented_properties) - remove_properties_from_checks
+            prop in calc.implemented_properties
+            for prop in set(implemented_properties) - remove_properties_from_checks
         )
-        
 
 
 @pytest.mark.parametrize(

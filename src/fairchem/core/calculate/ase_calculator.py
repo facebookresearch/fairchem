@@ -14,7 +14,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from ase.calculators.calculator import Calculator
+from ase.calculators.calculator import Calculator, PropertyNotImplementedError
 from ase.stress import full_3x3_to_voigt_6_stress
 
 from fairchem.core.calculate import pretrained_mlip
@@ -181,6 +181,22 @@ class FAIRChemCalculator(Calculator):
             state.append("info")
         return state
 
+    def get_property(self, name, atoms=None, allow_calculation=True):
+        try:
+            result = super().get_property(
+                name, atoms=atoms, allow_calculation=allow_calculation
+            )
+        except PropertyNotImplementedError as exc:
+            msg = str(exc)
+            if name in ("forces", "stress", "hessian"):
+                msg += (
+                    f"\n {name} prediction can be enabled by setting `predict_untrained_{name}=set('{self.task_name}')` "
+                    f"in the InferenceSettings."
+                )
+            raise PropertyNotImplementedError(msg) from exc
+
+        return result
+
     def calculate(
         self, atoms: Atoms, properties: list[str], system_changes: list[str]
     ) -> None:
@@ -236,6 +252,9 @@ class FAIRChemCalculator(Calculator):
                 stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
                 stress_voigt = full_3x3_to_voigt_6_stress(stress)
                 self.results["stress"] = stress_voigt
+            if calc_key == "hessian":
+                hessian = pred[calc_key].detach().cpu().numpy().squeeze()
+                self.results["hessian"] = hessian
 
     def _check_atoms_pbc(self, atoms) -> None:
         """

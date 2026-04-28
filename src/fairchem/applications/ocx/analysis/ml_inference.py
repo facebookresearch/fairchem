@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 """The script used to perform inference for HER"""
 
 from __future__ import annotations
@@ -42,13 +43,17 @@ def get_computational_df_to_predict(computational_file: str):
 
     """
     # Load data
-    if computational_file.split(".")[-1] == "csv":
+    ext = computational_file.rsplit(".", 1)[-1]
+    if ext == "csv":
         df = pd.read_csv(computational_file, low_memory=False)
-    elif computational_file.split(".")[-1] == "pkl":
-        df = pd.read_pickle(computational_file)
+    elif ext == "parquet":
+        df = pd.read_parquet(computational_file)
     else:
         raise NotImplementedError(
-            "please provide a pkl or csv for `computational_file`."
+            "please provide a parquet or csv for `computational_file`. "
+            "Pickle files are no longer supported due to security concerns "
+            "(arbitrary code execution). Convert with: "
+            "pd.read_pickle('file.pkl').to_parquet('file.parquet')"
         )
     energies = [
         "CO_min_sp_e",
@@ -230,8 +235,10 @@ if __name__ == "__main__":
         df_expt[f"predicted_{product}"] = trained_preds
         df_comp_pred[f"predicted_{product}"] = predictions
 
-    df_comp_pred.to_pickle(os.path.join(args.output_dir, "full_comp_inference.pkl"))
-    df_expt.to_pickle(os.path.join(args.output_dir, "trained_inference.pkl"))
+    df_comp_pred.to_parquet(
+        os.path.join(args.output_dir, "full_comp_inference.parquet")
+    )
+    df_expt.to_parquet(os.path.join(args.output_dir, "trained_inference.parquet"))
 
     # MAKE VOLCANO FIGURE
     os.chdir(args.output_dir)

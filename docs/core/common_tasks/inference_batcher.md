@@ -51,7 +51,7 @@ from fairchem.core import pretrained_mlip
 from fairchem.core.calculate import FAIRChemCalculator, InferenceBatcher
 
 # Create a predict unit
-predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p2")
 
 # Wrap it with InferenceBatcher
 batcher = InferenceBatcher(
