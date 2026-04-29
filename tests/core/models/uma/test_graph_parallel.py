@@ -497,3 +497,99 @@ def test_a2a_multi_rank(world_size):
         assert result[
             "match"
         ], f"world_size={world_size}, rank {result['rank']}: mismatch"
+
+
+def a2a_spatial_partition_test(atomic_numbers, edge_index, pos):
+    """
+    Test all-to-all with spatial partitioning produces correct results
+    by comparing to all-gather (which always uses index-based partitioning).
+    """
+    rank = gp_utils.get_gp_rank()
+    world_size = gp_utils.get_gp_world_size()
+    natoms = atomic_numbers.shape[0]
+
+    # --- All-gather with index-based partitioning (baseline) ---
+    node_partition_idx = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    node_offset_idx = node_partition_idx.min().item()
+
+    target_in_partition_idx = (edge_index[1] >= node_partition_idx.min()) & (
+        edge_index[1] <= node_partition_idx.max()
+    )
+    local_edge_index_idx = edge_index[:, target_in_partition_idx]
+
+    x_local_idx = atomic_numbers[node_partition_idx].clone().unsqueeze(-1)
+    result_ag = _allgather_simple_layer(
+        x_local_idx, local_edge_index_idx, node_offset_idx, natoms
+    )
+
+    # --- All-to-all with spatial partitioning ---
+    rank_assignments_spatial = partition_atoms_spatial(pos, world_size)
+    local_mask = rank_assignments_spatial == rank
+    node_partition_sp = local_mask.nonzero(as_tuple=True)[0]
+
+    target_in_partition_sp = local_mask[edge_index[1]]
+    local_edge_index_sp = edge_index[:, target_in_partition_sp]
+
+    x_local_sp = atomic_numbers[node_partition_sp].clone().unsqueeze(-1)
+    result_a2a = _a2a_simple_layer(
+        x_local_sp, local_edge_index_sp, rank_assignments_spatial, natoms
+    )
+
+    # Both methods compute message passing over the SAME global graph,
+    # so local atoms get the same aggregated messages regardless of
+    # which partition strategy is used. However, different ranks own
+    # different atoms under spatial vs index partitioning, so we
+    # gather all results and compare the full output.
+    # Gather all local results to rank 0 for comparison
+    full_ag = gather_from_model_parallel_region_sum_grad(result_ag, natoms)
+    full_a2a = gather_from_model_parallel_region_sum_grad(result_a2a, natoms)
+
+    return {
+        "rank": rank,
+        "allgather_full": full_ag.detach(),
+        "all_to_all_full": full_a2a.detach(),
+        "match": torch.allclose(full_ag, full_a2a, atol=1e-5),
+    }
+
+
+def test_a2a_spatial_partition():
+    """
+    Verify that all-to-all with spatial partitioning produces the same
+    global results as all-gather with index partitioning.
+    """
+    num_atoms = 8
+    # Create atoms in two spatial clusters
+    pos = torch.cat(
+        [
+            torch.randn(4, 3) + torch.tensor([0.0, 0.0, 0.0]),
+            torch.randn(4, 3) + torch.tensor([100.0, 0.0, 0.0]),
+        ]
+    )
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+    # Dense graph connecting all atoms
+    src = []
+    dst = []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+
+    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        a2a_spatial_partition_test,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+        pos,
+    )
+
+    for result in all_rank_results:
+        assert result["match"], (
+            f"Rank {result['rank']}: spatial partitioning produced "
+            f"different global results than index partitioning"
+        )
