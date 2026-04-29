@@ -129,26 +129,44 @@ class GPContext:
     total_recv: int | None = None
 
 
+def _expand_bits_10(v: torch.Tensor) -> torch.Tensor:
+    """
+    Expand a 10-bit integer so each bit is spaced by 2 zero bits.
+
+    Maps bit at position i to position 3*i, producing a 30-bit
+    output suitable for interleaving with two other axes to form
+    a Morton Z-order code.
+
+    Args:
+        v: Integer tensor with values in [0, 1023].
+
+    Returns:
+        Tensor with bits expanded (each input bit at position 3*i).
+    """
+    v = (v | (v << 16)) & 0x030000FF
+    v = (v | (v << 8)) & 0x0300F00F
+    v = (v | (v << 4)) & 0x030C30C3
+    v = (v | (v << 2)) & 0x09249249
+    return v
+
+
 def partition_atoms_spatial(
     pos: torch.Tensor,
     num_ranks: int,
     num_iters: int = 10,
 ) -> torch.Tensor:
     """
-    Spatial partitioning via recursive coordinate bisection.
+    Spatial partitioning via Morton Z-order curve on GPU.
 
-    Recursively halves the atom set along the longest axis of each
-    sub-group until the desired number of partitions is reached.
-    Guarantees balanced partition sizes (differ by at most 1) and
-    runs in O(N log P) time with no iterative refinement.
+    Computes a 30-bit Morton code per atom by interleaving 10 bits
+    from each spatial axis. Sorting by Morton code groups spatially
+    nearby atoms together, minimizing boundary edges. Atoms are
+    then split into num_ranks equal chunks in sorted order.
 
-    Falls back to the longest-axis sort-and-split for non-power-of-2
-    ranks, which is O(N log N).
-
-    All computation is done on CPU to avoid GPU→CPU sync points
-    from .argmax().item() calls in the recursive bisection (up to
-    P-1 sync points eliminated). The position tensor is small
-    (N x 3 floats, ~768KB at 64k atoms), so the transfer is fast.
+    Runs entirely on GPU with zero CPU transfers or sync points
+    (unlike recursive coordinate bisection which requires CPU
+    round-trips). The Morton curve provides O(N^{2/3}) surface
+    fraction per partition, similar to recursive bisection.
 
     Args:
         pos: Atom positions, shape (N, 3).
@@ -168,19 +186,30 @@ def partition_atoms_spatial(
     if num_ranks >= N:
         return torch.arange(N, dtype=torch.long, device=device)
 
-    # Move to CPU to avoid GPU->CPU sync points in recursive bisection.
-    # Each recursion level calls .argmax().item() which forces a sync.
-    # For P=64, that's 63 sync points (~10-20us each = 0.6-1.2ms).
-    # CPU sort on 64k atoms takes <0.1ms, so this is a net win.
-    pos_cpu = pos.detach().cpu()
-    assignments = torch.zeros(N, dtype=torch.long)
+    # Normalize positions to [0, 1023] using a SINGLE global scale
+    # factor (the largest bounding-box extent).  Per-dimension
+    # normalization would amplify noise in short dimensions, breaking
+    # Morton locality (e.g. a 100-unit x-gap becomes indistinguishable
+    # from a 2-unit y-gap after independent rescaling).
+    min_pos = pos.min(0)[0]
+    extent = (pos.max(0)[0] - min_pos).max().clamp(min=1e-8)
+    norm = ((pos - min_pos) / extent * 1023).long().clamp(0, 1023)
 
-    # Recursive coordinate bisection: O(N log P), no iterations.
-    # Handles both power-of-2 and non-power-of-2 rank counts via
-    # uneven splits (right_half = num_parts - left_half).
-    _recursive_bisect(pos_cpu, assignments, torch.arange(N), 0, num_ranks)
+    # 30-bit Morton Z-order code: interleave x, y, z bits
+    x, y, z = norm[:, 0], norm[:, 1], norm[:, 2]
+    morton = _expand_bits_10(x) | (_expand_bits_10(y) << 1) | (_expand_bits_10(z) << 2)
 
-    return assignments.to(device)
+    # Sort by Morton code and assign to ranks in equal chunks
+    _, sorted_indices = morton.sort()
+    chunk_size = (N + num_ranks - 1) // num_ranks
+    assignments = torch.empty(N, dtype=torch.long, device=device)
+    assignments[sorted_indices] = torch.div(
+        torch.arange(N, device=device),
+        chunk_size,
+        rounding_mode="floor",
+    ).clamp(max=num_ranks - 1)
+
+    return assignments
 
 
 def _recursive_bisect(
@@ -358,13 +387,16 @@ def build_gp_context(
     tgt_is_local_edge = edge_index_local[1] < total_local_atoms
     local_edge_mask = src_is_local & tgt_is_local_edge
 
-    # Batch scalar extractions to minimize GPU→CPU sync points:
-    # move counts to CPU in one transfer instead of per-element syncs.
-    send_recv_cpu = torch.stack([send_counts, recv_counts]).cpu()
-    send_splits = send_recv_cpu[0].tolist()
-    recv_splits = send_recv_cpu[1].tolist()
+    # Batch ALL GPU→CPU scalar extractions into a single transfer.
+    # Stacking send_counts, recv_counts, and local_edge_count into
+    # one tensor avoids 3 separate sync points (each .cpu()/.item()
+    # is a GPU→CPU sync).
+    local_edge_count = local_edge_mask.sum().unsqueeze(0).to(torch.long)
+    all_cpu = torch.cat([send_counts, recv_counts, local_edge_count]).cpu()
+    send_splits = all_cpu[:world_size].tolist()
+    recv_splits = all_cpu[world_size : 2 * world_size].tolist()
     total_recv = sum(recv_splits)
-    num_local_edges = int(local_edge_mask.sum().cpu().item())
+    num_local_edges = int(all_cpu[-1].item())
     num_boundary_edges = edge_index_local.shape[1] - num_local_edges
 
     return GPContext(
