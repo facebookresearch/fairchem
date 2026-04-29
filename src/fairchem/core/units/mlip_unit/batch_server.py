@@ -185,6 +185,14 @@ class BatchPredictServerMixin:
                         f"and num_atoms {batch.num_atoms}"
                     )
 
+                # Move to CPU before returning so the caller (which may be a
+                # CPU-only Ray worker) can deserialize the result without
+                # requiring CUDA.
+                if hasattr(system_predictions[key], "detach"):
+                    system_predictions[key] = (
+                        system_predictions[key].detach().cpu()
+                    )
+
             split_preds.append(system_predictions)
 
         return split_preds
@@ -225,6 +233,9 @@ class BatchPredictServer(BatchPredictServerMixin):
         logging.info(
             "BatchPredictServer initialized with predict_unit from object store"
         )
+
+    def is_multiplexed(self) -> bool:
+        return False
 
 
 @serve.deployment(
@@ -269,6 +280,9 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         self.split_oom_batch = split_oom_batch
         self.configure_batching(max_batch_size, batch_wait_timeout_s)
         logging.info("MultiplexedBatchPredictServer initialized")
+
+    def is_multiplexed(self) -> bool:
+        return True
 
     @serve.batch(
         batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
