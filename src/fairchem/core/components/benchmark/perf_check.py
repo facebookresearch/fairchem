@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from fairchem.core.components.runner import Runner
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -46,6 +46,26 @@ BASELINE_SETTINGS = InferenceSettings(
 
 BASELINE_CACHE_FILE = "baseline_cache.json"
 
+# Pinned MOE layer type for candidate (speedup) runs.
+# fairchem_cpp.ops.segment_mm only supports fp32 and lower, so the fp64
+# baseline keeps the default pytorch MOLE. The override is applied for
+# any non-fp64 inference run; that covers every candidate config.
+# See src/fairchem/core/models/uma/nn/mole_utils.py:142-153 for dispatch.
+MOE_LAYER_TYPE = "fairchem_cpp"
+_BACKBONE_OVERRIDES = {"backbone": {"moe_layer_type": MOE_LAYER_TYPE}}
+
+
+def _overrides_for(settings: InferenceSettings) -> dict | None:
+    """
+    Pick predictor overrides based on dtype.
+
+    fp64 (baseline) → None: keeps pytorch MOLE (segment_mm has no fp64 path).
+    Any other dtype → fairchem_cpp MOE layer.
+    """
+    if settings.base_precision_dtype == torch.float64:
+        return None
+    return _BACKBONE_OVERRIDES
+
 
 def _baseline_cache_key(
     checkpoint: str,
@@ -62,6 +82,7 @@ def _baseline_cache_key(
         "device": device,
         "seed": seed,
         "baseline_settings": str(BASELINE_SETTINGS),
+        "mixed_batch": True,
     }
     key_json = json.dumps(key_data, sort_keys=True)
     return hashlib.sha256(key_json.encode()).hexdigest()
@@ -182,7 +203,10 @@ def run_inference(
         checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
 
     predictor = MLIPPredictUnit(
-        checkpoint, device, inference_settings=inference_settings
+        checkpoint,
+        device,
+        overrides=_overrides_for(inference_settings),
+        inference_settings=inference_settings,
     )
     data = AtomicData.from_ase(system.atoms, task_name=system.task_name)
 
@@ -238,6 +262,110 @@ def run_inference(
         peak_gpu_memory_mb=peak_mem,
         warmup_time_seconds=warmup_time if warmup_iters > 0 else None,
     )
+
+
+def run_inference_mixed(
+    checkpoint: str,
+    systems: list[BenchmarkSystem],
+    inference_settings: InferenceSettings,
+    device: str = "cuda",
+    seed: int = 42,
+    warmup_iters: int = 0,
+    timed_iters: int = 1,
+) -> dict[str, InferenceResult]:
+    """
+    Run one inference pass over a mixed batch built from `systems`.
+
+    The systems are concatenated into a single AtomicData via
+    atomicdata_list_to_batch and fed to the predictor in one forward.
+    Per-system predictions are sliced from the batched output. Wall-time
+    metrics describe the whole batched forward and are duplicated onto
+    every per-system InferenceResult so downstream code reads them per
+    system without a separate API.
+
+    Stress is intentionally not sliced here — the four default benchmark
+    systems span tasks where some have stress targets and some do not,
+    and per-graph stress is not strictly needed for the accuracy gate.
+
+    Returns:
+        Dict of {system.name: InferenceResult}.
+    """
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    if not os.path.exists(checkpoint):
+        from fairchem.core.calculate.pretrained_mlip import (
+            pretrained_checkpoint_path_from_name,
+        )
+
+        checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
+
+    predictor = MLIPPredictUnit(
+        checkpoint,
+        device,
+        overrides=_overrides_for(inference_settings),
+        inference_settings=inference_settings,
+    )
+
+    data_list = [
+        AtomicData.from_ase(s.atoms, task_name=s.task_name) for s in systems
+    ]
+    data = atomicdata_list_to_batch(data_list)
+
+    is_cuda = device == "cuda" and torch.cuda.is_available()
+    if is_cuda:
+        torch.cuda.reset_peak_memory_stats()
+
+    warmup_time = 0.0
+    if warmup_iters > 0:
+        warmup_start = time.perf_counter()
+        for _ in range(warmup_iters):
+            predictor.predict(data)
+            if is_cuda:
+                torch.cuda.synchronize()
+        warmup_time = time.perf_counter() - warmup_start
+
+    timed_start = time.perf_counter()
+    for _ in range(timed_iters):
+        preds = predictor.predict(data)
+        if is_cuda:
+            torch.cuda.synchronize()
+    wall_time = time.perf_counter() - timed_start
+
+    energy_all = preds["energy"].detach().cpu().to(torch.float64)
+    forces_all = preds["forces"].detach().cpu().to(torch.float64).numpy()
+
+    natoms = [len(s.atoms) for s in systems]
+    offsets = [0]
+    for n in natoms:
+        offsets.append(offsets[-1] + n)
+
+    qps = None
+    peak_mem = None
+    if timed_iters > 1 or warmup_iters > 0:
+        qps = (timed_iters / wall_time) if wall_time > 0 else 0.0
+        if is_cuda:
+            peak_mem = torch.cuda.max_memory_allocated() / (1024**2)
+
+    per_system: dict[str, InferenceResult] = {}
+    for i, system in enumerate(systems):
+        per_system[system.name] = InferenceResult(
+            energy=float(energy_all[i].item()),
+            forces=forces_all[offsets[i] : offsets[i + 1]],
+            stress=None,
+            qps=qps,
+            wall_time_seconds=wall_time if qps is not None else None,
+            peak_gpu_memory_mb=peak_mem,
+            warmup_time_seconds=warmup_time if warmup_iters > 0 else None,
+        )
+
+    del predictor
+    gc.collect()
+    if is_cuda:
+        torch.cuda.empty_cache()
+
+    return per_system
 
 
 def compare_results(
@@ -385,21 +513,17 @@ class PerfCheckRunner(Runner):
                 cache_path,
             )
         else:
-            logger.info("Running baseline inference (fp64)...")
-            baselines = {}
-            for system in self.systems:
-                logger.info(
-                    "  Baseline: %s (%d atoms)",
-                    system.name,
-                    len(system.atoms),
-                )
-                baselines[system.name] = run_inference(
-                    checkpoint=self.checkpoint,
-                    system=system,
-                    inference_settings=BASELINE_SETTINGS,
-                    device=self.device,
-                    seed=self.seed,
-                )
+            logger.info(
+                "Running baseline inference (fp64) on mixed batch of %d systems...",
+                len(self.systems),
+            )
+            baselines = run_inference_mixed(
+                checkpoint=self.checkpoint,
+                systems=self.systems,
+                inference_settings=BASELINE_SETTINGS,
+                device=self.device,
+                seed=self.seed,
+            )
             _save_baseline_cache(cache_path, cache_key, baselines)
 
         baseline_summary = {
@@ -410,32 +534,36 @@ class PerfCheckRunner(Runner):
             for name, result in baselines.items()
         }
 
-        # Step 2: Evaluate the candidate config
+        # Step 2: Evaluate the candidate config on the mixed batch
         logger.info("Evaluating config: %s", self.inference_settings)
+        logger.info(
+            "  mixed batch: %s",
+            ", ".join(f"{s.name}({len(s.atoms)})" for s in self.systems),
+        )
         results: dict[str, dict[str, Any]] = {}
-        for system in self.systems:
-            logger.info("  %s (%d atoms)", system.name, len(system.atoms))
-            try:
-                candidate = run_inference(
-                    checkpoint=self.checkpoint,
-                    system=system,
-                    inference_settings=self.inference_settings,
-                    device=self.device,
-                    seed=self.seed,
-                    warmup_iters=self.warmup_iters,
-                    timed_iters=self.timed_iters,
-                )
+        try:
+            candidates = run_inference_mixed(
+                checkpoint=self.checkpoint,
+                systems=self.systems,
+                inference_settings=self.inference_settings,
+                device=self.device,
+                seed=self.seed,
+                warmup_iters=self.warmup_iters,
+                timed_iters=self.timed_iters,
+            )
+            for system in self.systems:
                 results[system.name] = compare_results(
-                    baselines[system.name], candidate
+                    baselines[system.name], candidates[system.name]
                 )
-            except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
-                if "out of memory" in str(e).lower() or isinstance(
-                    e, torch.cuda.OutOfMemoryError
-                ):
-                    logger.warning("  OOM on %s", system.name)
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            if "out of memory" in str(e).lower() or isinstance(
+                e, torch.cuda.OutOfMemoryError
+            ):
+                logger.warning("  OOM on mixed batch")
+                for system in self.systems:
                     results[system.name] = {"error": "OOM"}
-                else:
-                    raise
+            else:
+                raise
 
         # Step 3: Format and log results
         table = format_report_table(results)

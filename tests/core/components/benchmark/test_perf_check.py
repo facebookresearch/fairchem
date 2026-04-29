@@ -21,6 +21,7 @@ from fairchem.core.components.benchmark.perf_check import (
     compare_results,
     format_report_table,
     run_inference,
+    run_inference_mixed,
 )
 from fairchem.core.components.benchmark.systems import make_benchmark_system
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
@@ -59,6 +60,9 @@ def test_compare_results_and_format_table():
 def test_runner_catches_oom(tmp_path):
     """
     Verify OOM is caught and non-OOM errors are re-raised.
+
+    The runner now runs one mixed-batch forward for baseline and one for
+    candidate, so OOM and other errors land at the batch level.
     """
     runner = PerfCheckRunner(checkpoint="x", device="cpu")
 
@@ -72,19 +76,25 @@ def test_runner_catches_oom(tmp_path):
     )
     runner.job_config = job_config
 
+    def _baseline(systems):
+        return {
+            s.name: InferenceResult(
+                energy=-10.0, forces=np.zeros((len(s.atoms), 3))
+            )
+            for s in systems
+        }
+
     call_count = {"n": 0}
 
-    def mock_run(checkpoint, system, inference_settings, **kw):
+    def mock_mixed_oom(checkpoint, systems, inference_settings, **kw):
         call_count["n"] += 1
-        if call_count["n"] <= 3:  # baseline calls
-            return InferenceResult(
-                energy=-10.0, forces=np.zeros((len(system.atoms), 3))
-            )
+        if call_count["n"] == 1:  # baseline
+            return _baseline(systems)
         raise RuntimeError("CUDA out of memory")
 
     with patch(
-        "fairchem.core.components.benchmark.perf_check.run_inference",
-        side_effect=mock_run,
+        "fairchem.core.components.benchmark.perf_check.run_inference_mixed",
+        side_effect=mock_mixed_oom,
     ):
         result = runner.run()
 
@@ -93,23 +103,20 @@ def test_runner_catches_oom(tmp_path):
 
     # Non-OOM errors should propagate
     call_count["n"] = 0
-    # Remove cached baselines so the next run recomputes them
     cache_file = os.path.join(str(tmp_path), "baseline_cache.json")
     if os.path.exists(cache_file):
         os.remove(cache_file)
 
-    def mock_run_bad(checkpoint, system, inference_settings, **kw):
+    def mock_mixed_bad(checkpoint, systems, inference_settings, **kw):
         call_count["n"] += 1
-        if call_count["n"] <= 3:
-            return InferenceResult(
-                energy=-10.0, forces=np.zeros((len(system.atoms), 3))
-            )
+        if call_count["n"] == 1:
+            return _baseline(systems)
         raise RuntimeError("unrelated error")
 
     with (
         patch(
-            "fairchem.core.components.benchmark.perf_check.run_inference",
-            side_effect=mock_run_bad,
+            "fairchem.core.components.benchmark.perf_check.run_inference_mixed",
+            side_effect=mock_mixed_bad,
         ),
         pytest.raises(RuntimeError, match="unrelated error"),
     ):

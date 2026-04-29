@@ -17,7 +17,7 @@ defaults:
 
 checkpoint:
   _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
-  model_name: "uma-s-1p2"
+  model_name: "uma-s-1p1"
 
 runner:
   _target_: fairchem.core.components.benchmark.perf_check.PerfCheckRunner
@@ -28,7 +28,7 @@ runner:
   inference_settings:
     _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
     tf32: False
-    activation_checkpointing: True
+    activation_checkpointing: False
     merge_mole: False
     compile: False
     execution_mode: "general"

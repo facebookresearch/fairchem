@@ -25,6 +25,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastGPUMixedBackend",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
@@ -41,6 +42,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FAST_GPU_MIXED = "umas_fast_gpu_mixed"
 
 
 class ExecutionBackend:
@@ -422,10 +424,67 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class UMASFastGPUMixedBackend(UMASFastPytorchBackend):
+    """
+    GPU backend for mixed-task / mixed-size batches.
+
+    Inherits the parent so loop experiments can call super() into
+    UMASFastPytorchBackend's helpers, but the seed overrides
+    prepare_model_for_inference with a true no-op: the parent's SO2
+    block-diagonal conversion (convert_so2_conv1/2) assumes fc_m0 is a
+    plain Linear with a `.weight` attribute, which is not true once
+    moe_layer_type=fairchem_cpp wraps fc_m0 as MOLEFairchemCpp. SO2
+    conversion adapted for fairchem_cpp MOLE is a candidate experiment.
+
+    merge_mole is forbidden — it is incompatible with batches that mix
+    tasks, charges, or spins (see
+    eSCNMDMoeBackbone._assert_all_mole_info_consistent).
+
+    Seed body is otherwise a pure passthrough. Add overrides in this
+    class body to experiment.
+
+    Requires CUDA, lmax==2, mmax==2, merge_mole=False.
+    """
+
+    @staticmethod
+    def validate(
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
+    ) -> None:
+        UMASFastPytorchBackend.validate(lmax, mmax, settings)
+        if not torch.cuda.is_available():
+            raise ValueError("umas_fast_gpu_mixed requires CUDA")
+        if lmax != 2 or mmax != 2:
+            raise ValueError("umas_fast_gpu_mixed requires lmax==2 and mmax==2")
+        if settings is not None and settings.merge_mole:
+            raise ValueError(
+                "umas_fast_gpu_mixed requires merge_mole=False "
+                "(merge_mole is invalid on mixed-task batches)"
+            )
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        # Seed: no-op. Override in experiments to install fast-path
+        # transforms compatible with MOLEFairchemCpp.
+        return
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        # The parent's UnifiedRadialMLP path requires _unified_radial_mlp
+        # to be installed by prepare_model_for_inference. Since the seed
+        # no-ops that hook, fall back to ExecutionBackend's default.
+        return ExecutionBackend.get_layer_radial_emb(x_edge, model)
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FAST_GPU_MIXED: UMASFastGPUMixedBackend,
 }
 
 
