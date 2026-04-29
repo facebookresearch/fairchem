@@ -123,6 +123,10 @@ class GPContext:
     local_edge_mask: torch.Tensor | None = None
     num_local_edges: int | None = None
     num_boundary_edges: int | None = None
+    # Precomputed Python lists to avoid repeated .tolist() in AllToAllCollect
+    send_splits: list[int] | None = None
+    recv_splits: list[int] | None = None
+    total_recv: int | None = None
 
 
 def partition_atoms_spatial(
@@ -395,6 +399,10 @@ def build_gp_context(
         local_edge_mask=local_edge_mask,
         num_local_edges=num_local_edges,
         num_boundary_edges=num_boundary_edges,
+        # Precompute Python lists once (avoids .tolist() per layer per forward)
+        send_splits=send_counts.tolist(),
+        recv_splits=recv_counts.tolist(),
+        total_recv=int(recv_counts.sum().item()),
     )
 
     # Precompute send_indices if distributed is initialized.
@@ -495,6 +503,9 @@ class AllToAllCollect(torch.autograd.Function):
         gp_group: dist.ProcessGroup,
         rank: int,
         world_size: int,
+        precomputed_send_splits: list[int] | None = None,
+        precomputed_recv_splits: list[int] | None = None,
+        precomputed_total_recv: int | None = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -505,6 +516,9 @@ class AllToAllCollect(torch.autograd.Function):
             gp_group: GP process group.
             rank: GP rank.
             world_size: GP world size.
+            precomputed_send_splits: Optional cached send_counts.tolist().
+            precomputed_recv_splits: Optional cached recv_counts.tolist().
+            precomputed_total_recv: Optional cached sum(recv_splits).
 
         Returns:
             Received remote embeddings, shape (sum(recv_counts), *feature_dims).
@@ -527,11 +541,22 @@ class AllToAllCollect(torch.autograd.Function):
                 0, *feature_shape, device=x_local.device, dtype=x_local.dtype
             )
 
-        # Prepare send/recv tensors split by rank
-        send_splits = send_counts.tolist()
-        recv_splits = recv_counts.tolist()
-
-        total_recv = sum(recv_splits)
+        # Use precomputed splits if available (avoids .tolist() per layer)
+        send_splits = (
+            precomputed_send_splits
+            if precomputed_send_splits is not None
+            else send_counts.tolist()
+        )
+        recv_splits = (
+            precomputed_recv_splits
+            if precomputed_recv_splits is not None
+            else recv_counts.tolist()
+        )
+        total_recv = (
+            precomputed_total_recv
+            if precomputed_total_recv is not None
+            else sum(recv_splits)
+        )
         x_recv = torch.empty(
             total_recv, *feature_shape, device=x_local.device, dtype=x_local.dtype
         )
@@ -603,7 +628,7 @@ class AllToAllCollect(torch.autograd.Function):
             grad_local.index_add_(0, send_indices, grad_from_others)
 
         # Return gradients for x_local only; None for all other inputs
-        return grad_local, None, None, None, None, None, None
+        return grad_local, None, None, None, None, None, None, None, None, None
 
 
 def all_to_all_collect(
@@ -634,6 +659,9 @@ def all_to_all_collect(
         gp_utils.get_gp_group(),
         gp_ctx.rank,
         gp_ctx.world_size,
+        gp_ctx.send_splits,
+        gp_ctx.recv_splits,
+        gp_ctx.total_recv,
     )
 
 
@@ -675,11 +703,20 @@ def start_all_to_all_collect(
             0, *feature_shape, device=x_local.device, dtype=x_local.dtype
         )
 
-    # Prepare send/recv tensors split by rank
-    send_splits = gp_ctx.send_counts.tolist()
-    recv_splits = gp_ctx.recv_counts.tolist()
-
-    total_recv = sum(recv_splits)
+    # Use precomputed splits if available (avoids .tolist() per layer)
+    send_splits = (
+        gp_ctx.send_splits
+        if gp_ctx.send_splits is not None
+        else gp_ctx.send_counts.tolist()
+    )
+    recv_splits = (
+        gp_ctx.recv_splits
+        if gp_ctx.recv_splits is not None
+        else gp_ctx.recv_counts.tolist()
+    )
+    total_recv = (
+        gp_ctx.total_recv if gp_ctx.total_recv is not None else sum(recv_splits)
+    )
     x_recv = torch.empty(
         total_recv, *feature_shape, device=x_local.device, dtype=x_local.dtype
     )

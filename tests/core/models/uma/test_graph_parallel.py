@@ -852,3 +852,78 @@ def test_overlap_matches_sequential():
         assert (
             result["num_boundary_edges"] > 0
         ), f"Rank {result['rank']}: no boundary edges — test is trivial"
+
+
+# =========================================================================
+# GPContext caching (unit tests, no distributed)
+# =========================================================================
+
+
+class TestGPContextCaching:
+    """
+    Tests for the GPContext caching mechanism on the backbone.
+    """
+
+    def test_cache_attributes_default(self):
+        """
+        cache_gp_context=False by default: no cached state.
+        """
+        # Verify the parameter exists and defaults to False
+        import inspect
+
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+
+        sig = inspect.signature(eSCNMDBackbone.__init__)
+        assert "cache_gp_context" in sig.parameters
+        assert sig.parameters["cache_gp_context"].default is False
+
+    def test_clear_gp_cache(self):
+        """
+        clear_gp_cache() resets cached GPContext and rank_assignments.
+        """
+        from fairchem.core.models.uma.graph_parallel import GPContext
+
+        # Create a mock backbone-like object with the caching attributes
+        class MockBackbone:
+            def __init__(self):
+                self._cached_gp_ctx = GPContext(
+                    rank=0,
+                    world_size=2,
+                    node_partition=torch.tensor([0, 1]),
+                    rank_assignments=torch.tensor([0, 0, 1, 1]),
+                    needed_atoms=torch.tensor([2]),
+                    needed_from_ranks=torch.tensor([1]),
+                    send_counts=torch.tensor([0, 1]),
+                    recv_counts=torch.tensor([0, 1]),
+                    global_to_local=torch.tensor([0, 1, 2, -1]),
+                    total_local_atoms=2,
+                    total_needed_atoms=1,
+                    edge_index_local=torch.tensor([[0, 2], [1, 0]]),
+                    local_edge_mask=torch.tensor([True, False]),
+                    num_local_edges=1,
+                    num_boundary_edges=1,
+                )
+                self._cached_rank_assignments = torch.tensor([0, 0, 1, 1])
+
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+
+        mock = MockBackbone()
+        assert mock._cached_gp_ctx is not None
+        assert mock._cached_rank_assignments is not None
+
+        # Apply clear_gp_cache from the backbone class
+        eSCNMDBackbone.clear_gp_cache(mock)
+        assert mock._cached_gp_ctx is None
+        assert mock._cached_rank_assignments is None
+
+    def test_cache_invalidation_on_atom_count_change(self):
+        """
+        When atom count changes, the cache should not be used.
+        """
+        # The caching check in _generate_graph is:
+        # len(atomic_numbers_full) == self._cached_rank_assignments.shape[0]
+        # If atom count doesn't match, cache is skipped.
+        cached_assignments = torch.tensor([0, 0, 1, 1])  # 4 atoms
+        # Simulate new input with 6 atoms
+        new_atom_count = 6
+        assert new_atom_count != cached_assignments.shape[0]

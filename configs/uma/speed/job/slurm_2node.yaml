@@ -1,0 +1,13 @@
+# SLURM 16 GPU (2 nodes) job configuration — multi-node InfiniBand test
+run_dir: /checkpoint/ocp/rgao/speed
+run_name: test_speed_16gpu
+scheduler:
+  mode: SLURM
+  num_nodes: 2
+  ranks_per_node: 8
+  slurm:
+    account: ocp
+    qos: h200_dev
+    mem_gb: 0
+    cpus_per_task: 24
+graph_parallel_group_size: 16

@@ -325,6 +325,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_all_to_all_gp: bool = False,
         gp_partition_strategy: str = "index_split",
         use_overlap_gp: bool = False,
+        cache_gp_context: bool = False,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -379,6 +380,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.use_all_to_all_gp = use_all_to_all_gp
         self.use_overlap_gp = use_overlap_gp
         self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
+        self.cache_gp_context = cache_gp_context
+        # Cached GPContext for repeated inference on the same structure.
+        # Only used when cache_gp_context=True and use_all_to_all_gp=True.
+        self._cached_gp_ctx: GPContext | None = None
+        self._cached_rank_assignments: torch.Tensor | None = None
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -602,6 +608,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
+    def clear_gp_cache(self):
+        """
+        Invalidate the cached GPContext.
+
+        Call this when the input structure changes (different atom count,
+        positions, or cell) to force recomputation on the next forward pass.
+        The cache is automatically invalidated when the atom count changes.
+        """
+        self._cached_gp_ctx = None
+        self._cached_rank_assignments = None
+
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
         node_partition = None
@@ -611,22 +628,38 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             atomic_numbers_full = data_dict["atomic_numbers_full"]
 
             if self.use_all_to_all_gp:
-                # All-to-all: compute rank_assignments FIRST, then derive
-                # node_partition from them.  This ensures the graph-generation
-                # partition and the GPContext partition are identical, avoiding
-                # index mismatches that cause OOB crashes.
-                total_atoms = len(atomic_numbers_full)
-                device = atomic_numbers_full.device
-                world_size = gp_utils.get_gp_world_size()
+                # Check if we can reuse a cached GPContext.
+                # Valid when cache_gp_context=True and the atom count
+                # matches (same system being inferred repeatedly).
+                _use_cached = (
+                    self.cache_gp_context
+                    and self._cached_gp_ctx is not None
+                    and self._cached_rank_assignments is not None
+                    and len(atomic_numbers_full)
+                    == self._cached_rank_assignments.shape[0]
+                )
 
-                if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
-                    rank_assignments = partition_atoms_spatial(
-                        data_dict["pos"], world_size
-                    )
+                if _use_cached:
+                    # Reuse cached partition (skip k-means / index-split)
+                    rank_assignments = self._cached_rank_assignments
                 else:
-                    rank_assignments = partition_atoms_index_split(
-                        total_atoms, world_size, device
-                    )
+                    # All-to-all: compute rank_assignments FIRST, then derive
+                    # node_partition from them.  This ensures the
+                    # graph-generation partition and the GPContext partition
+                    # are identical, avoiding index mismatches that cause
+                    # OOB crashes.
+                    total_atoms = len(atomic_numbers_full)
+                    device = atomic_numbers_full.device
+                    world_size = gp_utils.get_gp_world_size()
+
+                    if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
+                        rank_assignments = partition_atoms_spatial(
+                            data_dict["pos"], world_size
+                        )
+                    else:
+                        rank_assignments = partition_atoms_index_split(
+                            total_atoms, world_size, device
+                        )
 
                 node_partition = (rank_assignments == gp_utils.get_gp_rank()).nonzero(
                     as_tuple=True
@@ -714,12 +747,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
-                gp_ctx = build_gp_context(
-                    edge_index=graph_dict["edge_index"],
-                    rank_assignments=rank_assignments,
-                    rank=gp_utils.get_gp_rank(),
-                    world_size=gp_utils.get_gp_world_size(),
-                )
+                if _use_cached:
+                    # Reuse cached GPContext (skip build_gp_context +
+                    # _compute_send_indices — saves 2 all-to-all calls
+                    # and all CPU-side index computation per forward).
+                    gp_ctx = self._cached_gp_ctx
+                else:
+                    gp_ctx = build_gp_context(
+                        edge_index=graph_dict["edge_index"],
+                        rank_assignments=rank_assignments,
+                        rank=gp_utils.get_gp_rank(),
+                        world_size=gp_utils.get_gp_world_size(),
+                    )
+                    # Cache for reuse on subsequent calls
+                    if self.cache_gp_context:
+                        self._cached_gp_ctx = gp_ctx
+                        self._cached_rank_assignments = rank_assignments
                 data_dict["gp_ctx"] = gp_ctx
                 # All-to-all uses local indices via gp_ctx.edge_index_local,
                 # so node_offset is always 0.
