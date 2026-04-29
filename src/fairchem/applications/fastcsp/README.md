@@ -58,7 +58,7 @@ your_project_root/
 │   ├── MOLECULE1/
 │   │   ├── CONFORMER1/
 │   │   │   ├── Z1/
-│   │   │   │    ├──ui.conf
+│   │   │   │    ├── ui.conf
 │   │   │   │    ├── slurm.sh
 │   │   │   │    ├── Genarris.out
 │   │   │   │    └── structures.json
@@ -84,14 +84,14 @@ your_project_root/
         │   └── MOLECULE2/
         │
         ├── filtered_structures/    # Stage 4: Energy-filtered and deduplicated structures
-        │   ├── MOLECULE1/
-        │   │   └── *.parquet      # Best structures ranked by energy/
-        │   └── MOLECULE2/
+        │   ├── MOLECULE1.parquet   # One parquet per molecule
+        │   └── MOLECULE2.parquet
         │
-        ├── matched_structures/     # Stage 5: Structures compared to experimental data
-        │   ├── MOLECULE1/
-        │   │   └── *.parquet      # Structures with experimental similarity scores/
-        │   └── MOLECULE2/
+        └── matched_structures/         # Stage 5 (eval): name depends on method
+            │                               #   csd      → matched_structures_csd/
+            │                               #   pymatgen → matched_structures_pmg_l<ltol>_s<stol>_a<angle_tol>/
+            ├── MOLECULE1.parquet           # Per-molecule structures with experimental similarity scores
+            └── MOLECULE2.parquet
 ```
 
 ### Key Data Files
@@ -106,42 +106,37 @@ your_project_root/
 The `molecules.csv` file defines the target molecules for crystal structure prediction.
 
 **Required Columns:**
-| Column | Description |
-|--------|-------------|
-| `name` | Unique identifier for the molecule |
-| `molecule_path` | Path to molecular geometry file (.xyz, .extxyz, .mol) or directory containing multiple conformers |
+| Column | Type | Description |
+|--------|------|-------------|
+| `name` | str | Unique identifier for the molecule (used as directory names) |
+| `molecule_path` | str | Path to molecular geometry file (.xyz, .extxyz, .mol) or directory containing multiple conformers |
 
-**Optional Columns (for per-molecule customization):**
-| Column | Description | Example |
-|--------|-------------|---------|
-| `z` | List of Z-values (molecules per unit cell) | `[1, 2, 4]` |
-| `spg` | Space group specification per Z-value | `[[1, 2, 4], [14, 19]]` or `"standard"` |
-| `cif_path` | Path to experimental CIF file(s) for evaluation | `/path/to/experimental.cif` |
+**Optional Columns:**
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| `z` | str | List of Z-values (molecules per unit cell) | `"[1, 2, 4]"` |
+| `spg` | str | Space group specification per Z-value | `"[[14, 19], [2, 4]]"` or `"standard"` |
+| `refcode` | str | CSD refcode(s) for evaluation, comma-separated for polymorphs | `"ACSALA01,ACSALA02"` |
+| `cif_path` | str | Path to experimental CIF file or directory for evaluation | `/data/experimental/aspirin.cif` |
 
 **Example molecules.csv:**
 ```csv
-name,molecule_path,z,spg,cif_path
-aspirin,/data/conformers/aspirin/,"[1, 2, 4]","standard",/data/experimental/ACSALA.cif
-caffeine,/data/conformers/caffeine.xyz,"[2, 4]","[[14, 19], [2, 4, 14]]",/data/experimental/caffeine/
+name,molecule_path,z,spg,refcode,cif_path
+aspirin,/data/conformers/aspirin/,"[1, 2, 4]","standard",ACSALA01,/data/experimental/ACSALA.cif
+caffeine,/data/conformers/caffeine.xyz,"[2, 4]","[[14, 19], [2, 4, 14]]","CAFINE,CAFINE01",/data/experimental/caffeine/
 ```
 
 **Space Group (`spg`) Behavior:**
-The `spg` column supports flexible specification with automatic broadcasting:
-
 | `spg` value | `z` value | Result |
 |-------------|-----------|--------|
 | `"standard"` | `[1, 2, 4]` | All compatible space groups used for each Z |
 | `[14, 19]` | `[1, 2, 4]` | Space groups 14 and 19 used for **all** Z values |
 | `[[14, 19], [2, 4], [14]]` | `[1, 2, 4]` | SG 14,19 for Z=1; SG 2,4 for Z=2; SG 14 for Z=4 |
 
-- A single list of integers (e.g., `[14, 19]`) is automatically replicated for all Z values
-- `"standard"` is expanded to use all compatible space groups for each Z value
-- A list of lists must have the same length as the Z list (one entry per Z value)
-
 **Notes:**
 - Enable `read_z_from_file: true` and/or `read_spg_from_file: true` in the config to use per-molecule Z and space group values from the CSV
-- `molecule_path` can point to a single geometry file or a directory containing multiple conformer files (.xyz, .extxyz, .mol)
-- For evaluation, `cif_path` can point to a single CIF file or a directory containing multiple CIF files
+- `molecule_path` can point to a single geometry file (.xyz, .extxyz, .mol) or a directory containing multiple conformer files
+- For evaluation, `cif_path` can point to a single CIF file or a directory; `refcode` can be comma-separated for polymorphs
 
 ## Getting Started
 
@@ -187,24 +182,24 @@ fastcsp --config config.yaml --stages generate process_generated relax filter
 
 | Stage | Description | Output |
 |-------|-------------|--------|
-| `generate` | Generate crystal structures using Genarris | `generated_structures/` directory |
-| `process_generated` | Process and deduplicate Genarris outputs | `raw_structures/` directory |
-| `relax` | Perform UMA-based structure relaxation | `relaxed/` directory |
-| `filter` | Energy filtering and duplicate removal | `filtered_structures/` directory |
-| `evaluate` | Compare against experimental data | `matched_structures/` directory |
+| `generate` | Generate crystal structures using Genarris | `generated_structures/` |
+| `process_generated` | Process and deduplicate Genarris outputs | `raw_structures/` |
+| `relax` | Perform UMA-based structure relaxation | `relaxed/<run_name>/raw_structures/` |
+| `filter` | Property filtering and duplicate removal | `relaxed/<run_name>/filtered_structures/` |
+| `evaluate` | Compare against experimental data | `relaxed/<run_name>/matched_structures_{csd,pmg_*}/` |
 
 ### Configuration
 
 FastCSP uses YAML configuration files to control all workflow parameters. Example configurations can be found in `core/configs/example_config.yaml`.
 
 **Key Configuration Sections:**
-- `molecules`: Path to input molecule CSV file
 - `root`: Base directory for all outputs
+- `molecules`: Path to input molecule CSV file
 - `genarris`: Structure generation parameters and SLURM configuration
-- `pre_relaxation_filter`: Deduplication tolerances
+- `pre_relaxation_filter`: Pre-relaxation deduplication (`assign_groups`, `remove_duplicates`, `ltol`/`stol`/`angle_tol`, `npartitions`)
 - `relax`: ML relaxation settings and SLURM configuration
-- `post_relaxation_filter`: Property cutoffs and deduplication tolerances
-- `evaluate`: Experimental comparison settings
+- `post_relaxation_filter`: Property cutoffs (`energy_cutoff`, `density_cutoff`) and deduplication tolerances (`ltol`/`stol`/`angle_tol`, `remove_duplicates`)
+- `evaluate`: Experimental comparison method (`csd` or `pymatgen`) and parameters
 - `logging`: Log file settings and verbosity levels
 
 ### Monitoring Progress

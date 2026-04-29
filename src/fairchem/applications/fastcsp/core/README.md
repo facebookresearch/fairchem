@@ -44,11 +44,11 @@ Input: molecules.csv + config.yaml
         ↓
 [process_generated] → raw_structures/ (processed & deduplicated)
         ↓
-[relax] → relaxed/<calculator_and_optimizer_info>/relaxed_structures/ (ML-optimized)
+[relax] → relaxed/<calculator_and_optimizer_info>/raw_structures/ (ML-optimized parquet per conformer)
         ↓
-[filter] → relaxed/<calculator_and_optimizer_info>/filtered_structures/ (ranked by energy)
+[filter] → relaxed/<calculator_and_optimizer_info>/filtered_structures/ (one parquet per molecule)
         ↓
-[evaluate] → relaxed/<calculator_and_optimizer_info>/matched_structures/ (experimental comparison)
+[evaluate] → relaxed/<calculator_and_optimizer_info>/matched_structures_{csd,pmg_l*_s*_a*}/ (one parquet per molecule)
 ```
 
 ## Configuration Management
@@ -65,7 +65,7 @@ molecules: "molecules.csv"
 # generation stage
 genarris:
   vars:
-    Z: [1,2]
+    Z: [1, 2]
     num_structures_per_spg: 500
   slurm:
     nodes: 1
@@ -73,9 +73,12 @@ genarris:
 # Structure comparison tolerances for Pymatgen's StructureMatcher
 # Deduplication parameters after structure generation with Genarris
 pre_relaxation_filter:        # Before ML relaxation
-  ltol: 0.2           # lattice tolerance
-  stol: 0.3           # site tolerance
-  angle_tol: 5        # angle tolerance (degrees)
+  assign_groups: true   # assign group indices via deduplication pass
+  remove_duplicates: false  # drop duplicates within each group
+  ltol: 0.2             # lattice tolerance
+  stol: 0.3             # site tolerance
+  angle_tol: 5          # angle tolerance (degrees)
+  npartitions: 1000     # number of output partitions / SLURM array size
 
 # ml relaxation
 relax:
@@ -88,8 +91,11 @@ relax:
 
 # post-ml deduplication and ranking
 post_relaxation_filter:       # After ML relaxation
-  energy_cutoff: 20.0  # kJ/mol above minimum
-  density_cutoff: 0.1  # g/cm³ tolerance
+  remove_problematic: true  # drop structures that didn't converge or whose connectivity changed
+  energy_cutoff: 20.0   # kJ/mol above the global minimum
+  density_cutoff: 10.0  # g/cm³ upper bound on relaxed density
+  assign_groups: true
+  remove_duplicates: true
   ltol: 0.2
   stol: 0.3
   angle_tol: 5
