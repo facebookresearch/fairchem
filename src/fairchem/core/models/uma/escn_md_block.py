@@ -19,6 +19,8 @@ from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     all_to_all_collect,
+    finish_all_to_all_collect,
+    start_all_to_all_collect,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -58,6 +60,7 @@ class Edgewise(torch.nn.Module):
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
         act_type: Literal["gate", "s2"] = "gate",
+        use_overlap_gp: bool = False,
     ):
         super().__init__()
 
@@ -66,6 +69,7 @@ class Edgewise(torch.nn.Module):
         self.lmax = lmax
         self.mmax = mmax
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
+        self.use_overlap_gp = use_overlap_gp
         self.backend = backend
 
         self.mappingReduced = mappingReduced
@@ -131,7 +135,32 @@ class Edgewise(torch.nn.Module):
 
         When gp_ctx is provided, uses all-to-all to collect only the
         needed remote embeddings. Otherwise falls back to all-gather.
+
+        When use_overlap_gp is True and in eval mode, overlaps
+        communication with local edge computation for better latency.
         """
+        # Check if we should use the overlapped path:
+        # - gp_ctx must be provided (all-to-all mode)
+        # - use_overlap_gp must be enabled
+        # - must NOT be in training mode (overlap path doesn't support autograd)
+        # - must NOT use activation checkpointing (incompatible with edge split)
+        # - must have both local and boundary edges
+        use_overlap = (
+            self.use_overlap_gp
+            and gp_ctx is not None
+            and gp_utils.initialized()
+            and not self.training
+            and self.activation_checkpoint_chunk_size is None
+            and gp_ctx.local_edge_mask is not None
+            and gp_ctx.num_local_edges > 0
+            and gp_ctx.num_boundary_edges > 0
+        )
+
+        if use_overlap:
+            return self._forward_overlap(
+                x, x_edge, wigner, wigner_inv_envelope, gp_ctx, send_indices
+            )
+
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings
             with record_function("a2a_collect"):
@@ -196,6 +225,80 @@ class Edgewise(torch.nn.Module):
             if len(new_embeddings) > 8:
                 new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
         return torch.stack(new_embeddings).sum(axis=0)
+
+    def _forward_overlap(
+        self,
+        x,
+        x_edge,
+        wigner,
+        wigner_inv_envelope,
+        gp_ctx: GPContext,
+        send_indices: torch.Tensor | None,
+    ):
+        """
+        Overlapped communication-computation forward pass.
+
+        Overlaps the all-to-all communication with local edge
+        computation for better inference latency. Only used in
+        eval mode (no autograd through the communication).
+
+        Steps:
+        1. Start async all-to-all to exchange boundary embeddings.
+        2. Compute local edges (both endpoints are local atoms)
+           while communication is in flight.
+        3. Wait for communication to complete.
+        4. Compute boundary edges (source is remote).
+        5. Sum local + boundary contributions.
+        """
+        local_mask = gp_ctx.local_edge_mask
+        edge_index_local = gp_ctx.edge_index_local
+        num_local_atoms = x.shape[0]
+
+        # Split per-edge data into local vs boundary
+        local_edge_idx = edge_index_local[:, local_mask]
+        boundary_edge_idx = edge_index_local[:, ~local_mask]
+        local_x_edge = x_edge[local_mask]
+        boundary_x_edge = x_edge[~local_mask]
+        local_wigner = wigner[local_mask]
+        boundary_wigner = wigner[~local_mask]
+        local_wigner_inv = wigner_inv_envelope[local_mask]
+        boundary_wigner_inv = wigner_inv_envelope[~local_mask]
+
+        # Step 1: Start async all-to-all
+        with record_function("a2a_collect_async_start"):
+            recv_buf, work_handles = start_all_to_all_collect(x, gp_ctx, send_indices)
+
+        # Step 2: Compute local edges while comm is in flight
+        with record_function("local_edges"):
+            local_contribution = self.forward_chunk(
+                x,
+                num_local_atoms,
+                local_x_edge,
+                local_edge_idx,
+                local_wigner,
+                local_wigner_inv,
+                0,
+            )
+
+        # Step 3: Wait for communication
+        with record_function("a2a_collect_async_wait"):
+            x_received = finish_all_to_all_collect(recv_buf, work_handles)
+            x_full = torch.cat([x, x_received], dim=0)
+
+        # Step 4: Compute boundary edges
+        with record_function("boundary_edges"):
+            boundary_contribution = self.forward_chunk(
+                x_full,
+                num_local_atoms,
+                boundary_x_edge,
+                boundary_edge_idx,
+                boundary_wigner,
+                boundary_wigner_inv,
+                0,
+            )
+
+        # Step 5: Sum contributions
+        return local_contribution + boundary_contribution
 
     def forward_chunk(
         self,
@@ -325,6 +428,7 @@ class eSCNMD_Block(torch.nn.Module):
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
+        use_overlap_gp: bool = False,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -348,6 +452,7 @@ class eSCNMD_Block(torch.nn.Module):
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
             backend=backend,
+            use_overlap_gp=use_overlap_gp,
         )
 
         self.norm_2 = get_normalization_layer(

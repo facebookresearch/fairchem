@@ -324,6 +324,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         execution_mode: str = "general",
         use_all_to_all_gp: bool = False,
         gp_partition_strategy: str = "index_split",
+        use_overlap_gp: bool = False,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -376,6 +377,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         self.edge_chunk_size = edge_chunk_size
         self.use_all_to_all_gp = use_all_to_all_gp
+        self.use_overlap_gp = use_overlap_gp
         self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
 
         self.backend = get_execution_backend(execution_mode)
@@ -509,6 +511,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
                 backend=self.backend,
+                use_overlap_gp=self.use_overlap_gp,
             )
             self.blocks.append(block)
 
