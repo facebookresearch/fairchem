@@ -79,7 +79,7 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
         "assign_groups": match_config.get(
             "assign_groups", False
         ),  # default assign group indices to similar structures
-        "remove_duplicates": match_config.get("remove-duplicates", False),
+        "remove_duplicates": match_config.get("remove_duplicates", False),
         "ltol": match_config.get("ltol", 0.2),  # default lattice tolerance
         "stol": match_config.get("stol", 0.3),  # default site tolerance
         "angle_tol": match_config.get(

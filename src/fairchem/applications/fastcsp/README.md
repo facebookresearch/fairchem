@@ -109,7 +109,7 @@ The `molecules.csv` file defines the target molecules for crystal structure pred
 | Column | Type | Description |
 |--------|------|-------------|
 | `name` | str | Unique identifier for the molecule (used as directory names) |
-| `molecule_path` | str | Path to molecular geometry file (.xyz, .extxyz, .mol) or directory containing multiple conformers |
+| `conformers_path` | str | Path to molecular geometry file (.xyz, .extxyz, .mol) or directory containing multiple conformers |
 
 **Optional Columns:**
 | Column | Type | Description | Example |
@@ -117,13 +117,14 @@ The `molecules.csv` file defines the target molecules for crystal structure pred
 | `z` | str | List of Z-values (molecules per unit cell) | `"[1, 2, 4]"` |
 | `spg` | str | Space group specification per Z-value | `"[[14, 19], [2, 4]]"` or `"standard"` |
 | `refcode` | str | CSD refcode(s) for evaluation, comma-separated for polymorphs | `"ACSALA01,ACSALA02"` |
-| `cif_path` | str | Path to experimental CIF file or directory for evaluation | `/data/experimental/aspirin.cif` |
+| `cif_path` | str | Path to experimental CIF file or directory for evaluation (alternative to global `evaluate.target_xtals_dir`) | `/data/experimental/aspirin.cif` |
 
-**Example molecules.csv:**
+**Example molecules.csv** (matches `core/configs/example_systems.csv`):
 ```csv
-name,molecule_path,z,spg,refcode,cif_path
-aspirin,/data/conformers/aspirin/,"[1, 2, 4]","standard",ACSALA01,/data/experimental/ACSALA.cif
-caffeine,/data/conformers/caffeine.xyz,"[2, 4]","[[14, 19], [2, 4, 14]]","CAFINE,CAFINE01",/data/experimental/caffeine/
+name,conformers_path,refcode
+ACETAC,ACETAC03_mol.xyz,ACETAC
+GLYCIN,GLYCIN20_mol.xyz,"GLYCIN20,GLYCIN32,GLYCIN68,GLYCIN16,GLYCIN67"
+IHEPUG,IHEPUG_mol.xyz,"IHEPUG02,IHEPUG"
 ```
 
 **Space Group (`spg`) Behavior:**
@@ -134,9 +135,10 @@ caffeine,/data/conformers/caffeine.xyz,"[2, 4]","[[14, 19], [2, 4, 14]]","CAFINE
 | `[[14, 19], [2, 4], [14]]` | `[1, 2, 4]` | SG 14,19 for Z=1; SG 2,4 for Z=2; SG 14 for Z=4 |
 
 **Notes:**
-- Enable `read_z_from_file: true` and/or `read_spg_from_file: true` in the config to use per-molecule Z and space group values from the CSV
-- `molecule_path` can point to a single geometry file (.xyz, .extxyz, .mol) or a directory containing multiple conformer files
-- For evaluation, `cif_path` can point to a single CIF file or a directory; `refcode` can be comma-separated for polymorphs
+- Enable `read_z_from_file: true` and/or `read_spg_from_file: true` under `genarris.vars` in the config to use per-molecule `z`/`spg` values from the CSV
+- `conformers_path` can point to a single geometry file (.xyz, .extxyz, .mol) or a directory containing multiple conformer files
+- For evaluation, supply experimental crystals via either `evaluate.target_xtals_dir` (one shared directory of `.cif` files keyed by refcode) or a per-molecule `cif_path` column
+- `refcode` can be comma-separated for polymorphs
 
 ## Getting Started
 

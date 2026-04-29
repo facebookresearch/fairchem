@@ -122,11 +122,19 @@ def get_relax_config_and_dir(
         "calculator": relax_config.get("calculator", "uma-s-1p1-omc"),
         "optimizer": relax_config.get("optimizer", "bfgs").lower(),
         "fmax": relax_config.get("fmax", 0.01),
-        "max_steps": relax_config.get("max-steps", 1000),
-        "fix_symmetry": relax_config.get("fix-symmetry", False),
-        "relax_cell": relax_config.get("relax-cell", True),
-        "write_traj": relax_config.get("write-traj", False),
-        "traj_interval": relax_config.get("traj-interval", 1),
+        "max_steps": relax_config.get("max_steps", relax_config.get("max-steps", 1000)),
+        "fix_symmetry": relax_config.get(
+            "fix_symmetry", relax_config.get("fix-symmetry", False)
+        ),
+        "relax_cell": relax_config.get(
+            "relax_cell", relax_config.get("relax-cell", True)
+        ),
+        "write_traj": relax_config.get(
+            "write_traj", relax_config.get("write-traj", False)
+        ),
+        "traj_interval": relax_config.get(
+            "traj_interval", relax_config.get("traj-interval", 1)
+        ),
         "slurm": relax_config.get("slurm", {}),
     }
 
