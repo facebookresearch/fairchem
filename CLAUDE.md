@@ -248,3 +248,20 @@ This includes:
 - Gotchas that are not obvious
 - Subtle bugs that manifest under specific conditions
 - Repeat corrections I make to the output of coding agents
+
+## Learned Gotchas
+
+### Gloo backend does not support `dist.all_to_all`
+The Gloo distributed backend (used in CPU-only tests) does not support the `all_to_all` collective operation. When writing code that uses `all_to_all`, always provide a Gloo-compatible fallback using pairwise `isend`/`irecv` via `dist.batch_isend_irecv`. See `graph_parallel._safe_all_to_all()` for the pattern.
+
+### pre-commit cache location
+On the FAIR-SC cluster, the researcher agent's HOME is `agents/researcher/`, but pre-commit stores its cache under the real user HOME (`/storage/home/rgao/.cache/pre-commit/`). To run pre-commit successfully with the cached hooks, use `HOME=/storage/home/rgao` before the command: `HOME=/storage/home/rgao .venv/bin/pre-commit run --files <path>`. The `ruff` hooks are pre-cached there.
+
+### Ruff PD011 false positive with PyTorch `.values`
+Ruff's PD011 rule flags `.values` as a pandas anti-pattern, but PyTorch's `torch.return_types` NamedTuples also have `.values`. Use `[0]` indexing instead of `.values` to avoid the lint error: `result.max(dim=0)[0]` instead of `result.max(dim=0).values`.
+
+### libgomp.so.1 path on H200 nodes
+On FAIR-SC H200 nodes, `libgomp.so.1` is at `/usr/lib/x86_64-linux-gnu/libgomp.so.1`, NOT `/usr/lib64/libgomp.so.1`. When setting `LD_PRELOAD` for SLURM jobs, always check both paths.
+
+### profai-cli launch-experiment venv
+Use `--python /path/to/.venv/bin/python` flag with `profai-cli launch-experiment` to ensure SLURM jobs use the correct virtual environment. Without it, the system Python is used and fairchem won't be importable.
