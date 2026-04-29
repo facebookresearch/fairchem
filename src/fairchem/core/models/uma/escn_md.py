@@ -623,6 +623,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["gp_node_offset"] = 0
         node_partition = None
         rank_assignments = None
+        _use_cached = False
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]

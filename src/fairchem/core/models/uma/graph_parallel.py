@@ -43,11 +43,11 @@ def _safe_all_to_all(
         for r in range(world_size):
             if r == rank:
                 # Local copy
-                output_list[r].copy_(input_list[r])
-            else:
-                # Send our data to rank r
+                if input_list[r].numel() > 0:
+                    output_list[r].copy_(input_list[r])
+            elif input_list[r].numel() > 0 or output_list[r].numel() > 0:
+                # Skip zero-length P2P ops to avoid potential hangs
                 ops.append(dist.P2POp(dist.isend, input_list[r], r, group=group))
-                # Receive data from rank r
                 ops.append(dist.P2POp(dist.irecv, output_list[r], r, group=group))
         if ops:
             reqs = dist.batch_isend_irecv(ops)
@@ -248,11 +248,14 @@ def _balance_assignments(
 
         if pos is not None and centroids is not None:
             # Move atoms closest to the destination centroid
-            # to preserve spatial locality
+            # to preserve spatial locality.
+            # Use reshape(-1) instead of squeeze() to handle the case
+            # where src_atoms has exactly 1 element (squeeze() would
+            # produce a 0-d tensor that cannot be sliced).
             dists_to_dst = torch.cdist(
                 pos[src_atoms].unsqueeze(0),
                 centroids[dst_rank].unsqueeze(0).unsqueeze(0),
-            ).squeeze()
+            ).reshape(-1)
             _, closest_order = dists_to_dst.sort()
             atoms_to_move = src_atoms[closest_order[:n_move]]
         else:
@@ -782,8 +785,10 @@ def start_all_to_all_collect(
         ops = []
         for r in range(world_size):
             if r == rank:
-                recv_list[r].copy_(send_list[r])
-            else:
+                if send_list[r].numel() > 0:
+                    recv_list[r].copy_(send_list[r])
+            elif send_list[r].numel() > 0 or recv_list[r].numel() > 0:
+                # Skip zero-length P2P ops to avoid potential hangs
                 ops.append(dist.P2POp(dist.isend, send_list[r], r, group=gp_group))
                 ops.append(dist.P2POp(dist.irecv, recv_list[r], r, group=gp_group))
         if ops:
