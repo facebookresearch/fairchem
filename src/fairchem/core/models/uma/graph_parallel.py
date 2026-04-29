@@ -135,18 +135,24 @@ def partition_atoms_spatial(
     num_iters: int = 10,
 ) -> torch.Tensor:
     """
-    Spatial partitioning using k-means-style clustering.
+    Spatial partitioning via recursive coordinate bisection.
 
-    Divides atoms into num_ranks groups by spatial proximity.
-    Uses up to num_iters iterations with early convergence check.
+    Recursively halves the atom set along the longest axis of each
+    sub-group until the desired number of partitions is reached.
+    Guarantees balanced partition sizes (differ by at most 1) and
+    runs in O(N log P) time with no iterative refinement.
+
+    Falls back to the longest-axis sort-and-split for non-power-of-2
+    ranks, which is O(N log N).
 
     Args:
         pos: Atom positions, shape (N, 3).
         num_ranks: Number of partitions (GP world size).
-        num_iters: Maximum number of k-means iterations. Default 10.
+        num_iters: Unused (kept for API compatibility).
 
     Returns:
-        rank_assignments: Tensor of shape (N,) with rank index for each atom.
+        rank_assignments: Tensor of shape (N,) with rank index
+            for each atom.
     """
     N = pos.shape[0]
     device = pos.device
@@ -155,117 +161,70 @@ def partition_atoms_spatial(
         return torch.zeros(N, dtype=torch.long, device=device)
 
     if num_ranks >= N:
-        # Edge case: fewer atoms than ranks
-        assignments = torch.arange(N, dtype=torch.long, device=device)
-        return assignments
+        return torch.arange(N, dtype=torch.long, device=device)
 
-    # Initialize centroids by evenly sampling from sorted positions
-    # Sort along longest axis for better initial seeding
-    ranges = pos.max(dim=0)[0] - pos.min(dim=0)[0]
-    longest_axis = ranges.argmax().item()
-    sorted_indices = pos[:, longest_axis].argsort()
-    step = N // num_ranks
-    centroid_indices = sorted_indices[step // 2 :: step][:num_ranks]
-    centroids = pos[centroid_indices].clone()  # (num_ranks, 3)
+    assignments = torch.zeros(N, dtype=torch.long, device=device)
 
-    # K-means iterations with early convergence
-    prev_assignments = None
-    for _ in range(num_iters):
-        # Assign each atom to nearest centroid
-        # Use chunked distance computation to avoid O(N * num_ranks) memory
-        chunk_size = max(1, min(65536, N))
-        assignments = torch.empty(N, dtype=torch.long, device=device)
-        for start in range(0, N, chunk_size):
-            end = min(start + chunk_size, N)
-            # (chunk, 3) vs (num_ranks, 3) -> (chunk, num_ranks)
-            dists = torch.cdist(pos[start:end], centroids)
-            assignments[start:end] = dists.argmin(dim=1)
+    # Check if num_ranks is a power of 2 for clean recursive bisection
+    is_power_of_2 = (num_ranks & (num_ranks - 1)) == 0
 
-        # Early convergence check
-        if prev_assignments is not None and torch.equal(assignments, prev_assignments):
-            break
-        prev_assignments = assignments.clone()
-
-        # Update centroids
-        for k in range(num_ranks):
-            mask = assignments == k
-            if mask.any():
-                centroids[k] = pos[mask].mean(dim=0)
-
-    # Balance: ensure each rank has at least one atom and roughly equal counts
-    assignments = _balance_assignments(assignments, num_ranks, N, pos, centroids)
+    if is_power_of_2:
+        # Recursive coordinate bisection: O(N log P), no iterations
+        # Each bisection splits the longest axis of the current group
+        _recursive_bisect(
+            pos, assignments, torch.arange(N, device=device), 0, num_ranks
+        )
+    else:
+        # Fallback: sort along longest axis and split evenly
+        ranges = pos.max(dim=0)[0] - pos.min(dim=0)[0]
+        longest_axis = ranges.argmax().item()
+        sorted_indices = pos[:, longest_axis].argsort()
+        partitions = torch.tensor_split(sorted_indices, num_ranks)
+        for r, part in enumerate(partitions):
+            assignments[part] = r
 
     return assignments
 
 
-def _balance_assignments(
+def _recursive_bisect(
+    pos: torch.Tensor,
     assignments: torch.Tensor,
-    num_ranks: int,
-    total_atoms: int,
-    pos: torch.Tensor | None = None,
-    centroids: torch.Tensor | None = None,
-) -> torch.Tensor:
+    indices: torch.Tensor,
+    rank_offset: int,
+    num_parts: int,
+) -> None:
     """
-    Post-process assignments to ensure balanced partition sizes.
+    Recursively bisect a group of atoms along the longest axis.
 
-    Moves atoms from overloaded ranks to underloaded ranks.
-    When positions and centroids are provided, preferentially moves
-    atoms that are closest to the destination centroid (preserving
-    spatial locality).
-
-    Target size per rank is total_atoms // num_ranks (± 1).
+    Args:
+        pos: Full position tensor (N, 3).
+        assignments: Output rank assignment tensor (N,), modified in-place.
+        indices: Global indices of atoms in this group.
+        rank_offset: Starting rank ID for this group.
+        num_parts: Number of partitions to create from this group.
     """
-    target_size = total_atoms // num_ranks
-    remainder = total_atoms % num_ranks
+    if num_parts == 1:
+        assignments[indices] = rank_offset
+        return
 
-    # Count atoms per rank
-    counts = torch.zeros(num_ranks, dtype=torch.long, device=assignments.device)
-    for k in range(num_ranks):
-        counts[k] = (assignments == k).sum()
+    # Find longest axis of this group's bounding box
+    group_pos = pos[indices]
+    ranges = group_pos.max(dim=0)[0] - group_pos.min(dim=0)[0]
+    axis = ranges.argmax().item()
 
-    # Target sizes: first `remainder` ranks get target_size + 1
-    target_sizes = torch.full(
-        (num_ranks,), target_size, dtype=torch.long, device=assignments.device
+    # Sort along this axis and split in half
+    axis_vals = group_pos[:, axis]
+    sorted_order = axis_vals.argsort()
+    sorted_indices = indices[sorted_order]
+
+    mid = len(sorted_indices) // 2
+    left_half = num_parts // 2
+    right_half = num_parts - left_half
+
+    _recursive_bisect(pos, assignments, sorted_indices[:mid], rank_offset, left_half)
+    _recursive_bisect(
+        pos, assignments, sorted_indices[mid:], rank_offset + left_half, right_half
     )
-    target_sizes[:remainder] += 1
-
-    # Iterative rebalancing: move atoms from over-full to under-full
-    for _ in range(num_ranks):
-        over = (counts - target_sizes).clamp(min=0)
-        under = (target_sizes - counts).clamp(min=0)
-        if over.sum() == 0:
-            break
-
-        # Find most overloaded and most underloaded
-        src_rank = over.argmax().item()
-        dst_rank = under.argmax().item()
-        if over[src_rank] == 0 or under[dst_rank] == 0:
-            break
-
-        # Move atoms
-        n_move = min(over[src_rank].item(), under[dst_rank].item())
-        src_atoms = (assignments == src_rank).nonzero(as_tuple=True)[0]
-
-        if pos is not None and centroids is not None:
-            # Move atoms closest to the destination centroid
-            # to preserve spatial locality.
-            # Use reshape(-1) instead of squeeze() to handle the case
-            # where src_atoms has exactly 1 element (squeeze() would
-            # produce a 0-d tensor that cannot be sliced).
-            dists_to_dst = torch.cdist(
-                pos[src_atoms].unsqueeze(0),
-                centroids[dst_rank].unsqueeze(0).unsqueeze(0),
-            ).reshape(-1)
-            _, closest_order = dists_to_dst.sort()
-            atoms_to_move = src_atoms[closest_order[:n_move]]
-        else:
-            atoms_to_move = src_atoms[:n_move]
-
-        assignments[atoms_to_move] = dst_rank
-        counts[src_rank] -= n_move
-        counts[dst_rank] += n_move
-
-    return assignments
 
 
 def partition_atoms_index_split(
@@ -345,19 +304,21 @@ def build_gp_context(
     recv_counts[rank] = 0  # Never receive from self
 
     # Compute send_counts: how many atoms we send to each rank.
-    # We need to know what OTHER ranks need from us. This requires communication.
-    # Use all_to_all on the counts themselves.
+    # This is the transpose of all ranks' recv_counts — use all_to_all_single.
     send_counts = torch.zeros(world_size, dtype=torch.long, device=device)
     if gp_utils.initialized():
-        # Exchange counts via all_to_all
-        send_counts_list = list(send_counts.reshape(world_size, 1).split(1))
-        recv_counts_list = list(recv_counts.reshape(world_size, 1).split(1))
-        _safe_all_to_all(
-            send_counts_list,
-            recv_counts_list,
-            group=gp_utils.get_gp_group(),
-        )
-        send_counts = torch.cat(send_counts_list).squeeze(1)
+        gp_group = gp_utils.get_gp_group()
+        backend = dist.get_backend(gp_group)
+        if backend == "nccl":
+            # all_to_all_single transposes the count matrix:
+            # send_counts[r] = rank r's recv_counts[my_rank]
+            dist.all_to_all_single(send_counts, recv_counts, group=gp_group)
+        else:
+            # Gloo fallback: use all_gather to get full count matrix,
+            # then extract our column.
+            all_recv = [torch.zeros_like(recv_counts) for _ in range(world_size)]
+            dist.all_gather(all_recv, recv_counts, group=gp_group)
+            send_counts = torch.stack(all_recv)[:, rank]
 
     # Build global_to_local mapping:
     # Local atoms: index 0..total_local_atoms-1 (in order of node_partition)
@@ -420,11 +381,10 @@ def _compute_send_indices(
     gp_ctx: GPContext,
 ) -> torch.Tensor:
     """
-    Compute which of our local atoms need to be sent to other ranks,
-    and in what order (sorted by destination rank).
+    Compute which local atoms to send to other ranks, and in what order.
 
-    This requires knowing what other ranks need from us.
-    We exchange the needed atom indices via all-to-all.
+    Uses a single all-to-all exchange of atom indices (vectorized,
+    no Python loop over ranks).
 
     Returns:
         send_indices: Local indices of atoms to send, ordered by dest rank.
@@ -434,52 +394,59 @@ def _compute_send_indices(
         return torch.empty(0, dtype=torch.long, device=gp_ctx.node_partition.device)
 
     device = gp_ctx.node_partition.device
-    world_size = gp_ctx.world_size
 
-    # Prepare what we need: for each rank r, the global indices of atoms
-    # we need from r. We send these indices TO rank r so it knows what to send us.
-    send_idx_lists = []
-    recv_idx_lists = []
+    # Sort needed_atoms by source rank so the buffer is contiguous
+    # per destination rank (required for all_to_all_single split sizes).
+    sort_order = gp_ctx.needed_from_ranks.argsort()
+    needed_sorted = gp_ctx.needed_atoms[sort_order]
 
-    for r in range(world_size):
-        if r == gp_ctx.rank:
-            # Self: no communication needed
-            send_idx_lists.append(torch.empty(0, dtype=torch.long, device=device))
-            recv_idx_lists.append(torch.empty(0, dtype=torch.long, device=device))
-        else:
-            # We need to tell rank r which atoms we need from it
-            mask = gp_ctx.needed_from_ranks == r
-            needed_from_r = gp_ctx.needed_atoms[mask.nonzero(as_tuple=True)[0]]
-            send_idx_lists.append(needed_from_r)
+    # recv_counts = how many atoms we need FROM each rank (our send buffer)
+    # send_counts = how many atoms each rank needs FROM us (our recv buffer)
+    send_splits = gp_ctx.recv_counts.tolist()
+    recv_splits = gp_ctx.send_counts.tolist()
+    total_recv = int(gp_ctx.send_counts.sum().item())
 
-            # We'll receive from rank r the indices it needs from us
-            recv_count = gp_ctx.send_counts[r].item()
-            recv_idx_lists.append(
-                torch.empty(recv_count, dtype=torch.long, device=device)
-            )
+    recv_buf = torch.empty(total_recv, dtype=torch.long, device=device)
 
-    # Exchange indices via all_to_all
-    _safe_all_to_all(
-        recv_idx_lists,
-        send_idx_lists,
-        group=gp_utils.get_gp_group(),
-    )
+    gp_group = gp_utils.get_gp_group()
+    backend = dist.get_backend(gp_group)
+    if backend == "nccl":
+        dist.all_to_all_single(
+            recv_buf,
+            needed_sorted,
+            output_split_sizes=recv_splits,
+            input_split_sizes=send_splits,
+            group=gp_group,
+        )
+    else:
+        # Gloo fallback: pairwise send/recv
+        send_list = list(needed_sorted.split(send_splits))
+        recv_list = list(recv_buf.split(recv_splits))
+        rank = gp_ctx.rank
+        world_size = gp_ctx.world_size
+        ops = []
+        for r in range(world_size):
+            if r == rank:
+                if send_list[r].numel() > 0:
+                    recv_list[r].copy_(send_list[r])
+            elif send_list[r].numel() > 0 or recv_list[r].numel() > 0:
+                ops.append(dist.P2POp(dist.isend, send_list[r], r, group=gp_group))
+                ops.append(dist.P2POp(dist.irecv, recv_list[r], r, group=gp_group))
+        if ops:
+            reqs = dist.batch_isend_irecv(ops)
+            for req in reqs:
+                req.wait()
 
-    # Now recv_idx_lists[r] contains the global indices that rank r needs from us.
-    # Convert to local indices and concatenate in rank order.
-    send_indices_parts = []
-    for r in range(world_size):
-        if r != gp_ctx.rank and recv_idx_lists[r].numel() > 0:
-            # Convert global indices to local indices
-            local_idxs = gp_ctx.global_to_local[recv_idx_lists[r]]
-            assert (local_idxs >= 0).all(), (
-                f"Rank {gp_ctx.rank}: rank {r} requested atoms " f"not in our partition"
-            )
-            send_indices_parts.append(local_idxs)
+    # recv_buf now contains global indices that other ranks need from us.
+    # Convert to local indices.
+    send_indices = gp_ctx.global_to_local[recv_buf]
 
-    if send_indices_parts:
-        return torch.cat(send_indices_parts)
-    return torch.empty(0, dtype=torch.long, device=device)
+    if not (send_indices >= 0).all():
+        raise RuntimeError(
+            f"Rank {gp_ctx.rank}: received requests for atoms " f"not in our partition"
+        )
+
+    return send_indices
 
 
 class AllToAllCollect(torch.autograd.Function):

@@ -287,9 +287,6 @@ To pass backbone config overrides (e.g., enabling all-to-all GP) through Inferen
 ### fairchem CLI cannot submit from within SLURM
 The `_cli.py` explicitly blocks SLURM submission from within an active SLURM job (`assert os.getenv("SLURM_SUBMIT_HOST") is None`). Always run `fairchem -c ... job=slurm` from a login node, not from an `srun` session. This also means profai-cli's `launch-experiment --qos` (which creates its own SLURM job) cannot be used to wrap `fairchem -c ... job=slurm` — it would create a double submission.
 
-### GPContext caching: cache_gp_context flag
-When using `use_all_to_all_gp=true`, set `cache_gp_context=true` to cache the GPContext after the first forward pass. This eliminates the per-forward overhead of k-means clustering, build_gp_context (2 all-to-all calls), and _compute_send_indices (1 all-to-all call). The cache auto-invalidates when the atom count changes. For MD where positions change, call `backbone.clear_gp_cache()` when the neighbor list changes, or implement lazy rebuild with displacement tracking.
-
 ### AllToAllCollect backward must match forward arg count
 The `AllToAllCollect.forward()` uses `torch.autograd.Function.apply()`. Every argument passed to `apply()` must have a corresponding `None` gradient returned in `backward()`. If you add new arguments to `forward()`, you MUST also add corresponding `None`s to the backward return tuple, or autograd will error: "returned an incorrect number of gradients".
 
