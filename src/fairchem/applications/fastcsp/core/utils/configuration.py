@@ -165,9 +165,9 @@ def _validate_tolerance_params(params: dict[str, Any], param_set_name: str) -> N
     """Validate tolerance parameters are positive numbers."""
     tolerance_params = ["ltol", "stol", "angle_tol"]
     for param in tolerance_params:
-        if (param in params and not isinstance(params[param], (int, float))) or params[
-            param
-        ] <= 0:
+        if param in params and (
+            not isinstance(params[param], (int, float)) or params[param] <= 0
+        ):
             raise ValueError(
                 f"'{param}' in '{param_set_name}' must be a positive number"
             )

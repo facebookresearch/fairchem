@@ -54,36 +54,14 @@ def cif_to_structure(cif: str) -> Structure | None:
 
 def cif_to_atoms(cif: str) -> Atoms | None:
     """
-    Convert CIF string to ASE (Atomic Simulation Environment) Atoms object.
-
-    This function provides a direct path from CIF format to ASE Atoms objects,
-    which are commonly used for structure optimization and analysis.
-
-    Args:
-        cif: CIF format string containing crystal structure data
-
-    Returns:
-        ASE Atoms object if conversion successful, None if cif is empty/invalid
+    Convert CIF string to ASE Atoms object.
     """
     return AseAtomsAdaptor.get_atoms(cif_to_structure(cif)) if cif else None
 
 
 def get_partition_id(key: str, npartitions: int = 1000) -> int:
     """
-    Generate a consistent partition ID for distributed processing of structures.
-
-    This function creates deterministic partitioning for parallel processing,
-    ensuring that structures with the same key always map to the same partition.
-
-    Args:
-        key: String identifier for the structure (e.g., molecule_name + space_group)
-        npartitions: Total number of partitions for distribution (default: 1000)
-
-    Returns:
-        int: Partition ID in range [0, npartitions-1]
-
-    Notes:
-        - Deterministic: same key always produces same partition ID
+    Generate consistent partition ID from key using MD5 hash.
     """
     key_encoded = key.encode("utf-8")
     md5_hash = hashlib.md5()
@@ -102,12 +80,7 @@ def get_structure_hash(
     vol_bin_size: float = 0.2,
 ) -> str:
     """
-    Generate a hash string for crystal structure grouping and fast pre-filtering.
-
-    Creates a binned hash based on chemical formula and geometric properties to
-    enable fast pre-filtering before expensive crystallographic comparisons.
-    This approach dramatically reduces the number of structure pairs that need
-    detailed comparison during deduplication.
+    Generate hash string for structure grouping based on formula and binned properties.
 
     Args:
         structure: Pymatgen Structure object to hash
@@ -118,35 +91,25 @@ def get_structure_hash(
         vol_bin_size: Bin size for volume discretization (Ų)
 
     Returns:
-        Hash string combining formula, Z, and optionally density/volume bins
-
-    Hashing Strategy:
-        1. Start with reduced chemical formula and Z value
-        2. Add binned density if use_density=True for packing similarity
-        3. Add binned volume if use_volume=True for volume grouping
-        4. Combine components for readable hash
-
-    Example:
-        >>> get_structure_hash(structure, z=4, use_density=True)
-        "C6H4O4_4_1.5_125.2"  # Formula_Z_density_volume
+        Hash string like "C6H4O4_z4_d1.5_v125.2".
     """
-    # Start with chemical composition and stoichiometry
+    # Start with chemical composition
     formula = structure.composition.reduced_formula
-    hash_components = [formula, str(z)]
+    hash_components = [formula, "z" + str(z)]
 
     # Add density-based grouping if requested
     if use_density:
         density = structure.density
         # Bin density to group structures with similar packing
         density_bin = round(density / density_bin_size) * density_bin_size
-        hash_components.append(f"{density_bin:.1f}")
+        hash_components.append(f"d{density_bin:.1f}")
 
     # Add volume-based grouping if requested
     if use_volume:
         volume = structure.volume
         # Bin volume to group structures with similar cell sizes
         vol_bin = round(volume / vol_bin_size**3) * vol_bin_size**3
-        hash_components.append(f"{vol_bin:.1f}")
+        hash_components.append(f"v{vol_bin:.1f}")
 
     # Combine all components into single hash string
     return "_".join(hash_components)
@@ -156,32 +119,14 @@ def check_no_changes_in_covalent_matrix(
     initial_atoms: Atoms, final_atoms: Atoms
 ) -> bool:
     """
-    Validate that covalent bonding network is preserved during structure relaxation.
-
-    Compares the covalent bonding adjacency matrices before and after ML-based
-    relaxation to detect unwanted chemical reconstructions. This validation ensures
-    that the relaxation process only optimizes geometry without breaking or forming
-    chemical bonds, which would indicate problematic initial structures or
-    relaxation failures.
+    Check if covalent bonding network is preserved after relaxation.
 
     Args:
-        initial_atoms: Original structure before relaxation
-        final_atoms: Structure after ML-based relaxation
+        initial_atoms: Structure before relaxation.
+        final_atoms: Structure after relaxation.
 
     Returns:
-        True if bonding network is preserved, False otherwise
-        Returns False if either structure is None (error handling)
-
-    Algorithm:
-        1. Convert ASE Atoms to pymatgen Structures for analysis
-        2. Use JmolNN to identify covalent neighbors in both structures
-        3. Build adjacency matrices representing bonding networks
-        4. Compare matrices for exact equality
-
-    Validation Purpose:
-        - Detect atom overlaps that lead to artificial bonding
-        - Identify relaxation artifacts that break molecular integrity
-        - Filter out reconstructions that change chemical connectivity
+        True if bonding network unchanged, False otherwise.
     """
     # Handle error cases where structures couldn't be processed
     if initial_atoms is None or final_atoms is None:

@@ -26,6 +26,7 @@ Filtering Process:
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -87,7 +88,7 @@ def filter_and_deduplicate_structures_single(
     root_unrelaxed: Path | None = None,
 ):
     """
-    Apply filtering to a single dataset.
+    Apply filtering and deduplication to a single parquet dataset.
 
     Args:
         input_filename: Path to input parquet file with structure data
@@ -131,15 +132,17 @@ def filter_and_deduplicate_structures_single(
         )
 
         # Convert CIF strings to atomic structures for connectivity analysis
-        final_atoms = structures_df["relaxed_cif"].apply(cif_to_atoms)
+        final_atoms = structures_df["cif_relaxed"].apply(cif_to_atoms)
         initial_atoms = structures_df["cif"].apply(cif_to_atoms)
 
         # Validate bonding network preservation during relaxation
-        structures_df["connectivity_unchanged"] = p_map(
+
+        num_cpus = max(len(os.sched_getaffinity(0)), 1)
+        structures_df["validity.connectivity_unchanged"] = p_map(
             check_no_changes_in_covalent_matrix,
             initial_atoms,
             final_atoms,
-            num_cpus=70,  # Parallel processing for connectivity validation
+            num_cpus=num_cpus,
         )
 
         # Save intermediate results with connectivity validation flags
@@ -180,7 +183,7 @@ def filter_and_deduplicate_structures_single(
         logger.info(f"After filtering by energy: {structures_df_filtered.shape}")
 
     # Convert CIF strings to pymatgen Structures for deduplication
-    structures_df_filtered["structure"] = structures_df_filtered["relaxed_cif"].apply(
+    structures_df_filtered["structure"] = structures_df_filtered["cif_relaxed"].apply(
         cif_to_structure
     )
 
@@ -232,7 +235,7 @@ def filter_and_deduplicate_structures(
     root_unrelaxed: Path | None = None,
 ):
     """
-    Orchestrate parallel filtering and deduplication across multiple structure datasets.
+    Submit parallel filtering jobs for multiple datasets.
 
     Args:
         input_dir: Root directory containing multiple dataset directories
@@ -249,7 +252,7 @@ def filter_and_deduplicate_structures(
         root_unrelaxed: Root directory with unrelaxed structures
 
     Returns:
-        List of submitit job objects for monitoring progress
+        List of submitit job objects.
     """
     logger = get_central_logger()
 

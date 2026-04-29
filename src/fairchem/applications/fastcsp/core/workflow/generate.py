@@ -124,7 +124,7 @@ def create_gnrs_config(
         config.read_file(config_file)
 
     config["master"]["name"] = mol_name
-    config["master"]["molecule_path"] = json.dumps([str(geometry_path)])
+    config["master"]["conformers_path"] = json.dumps([str(geometry_path)])
     config["master"]["Z"] = str(Z)
     config["generation"]["num_structures_per_spg"] = str(num_structures)
     config["generation"]["spg_distribution_type"] = spg_distribution_type
@@ -188,7 +188,7 @@ def create_genarris_jobs(
     # conformers in .xyz, .extxyz, or .mol formats
     allowed_extensions = [".xyz", ".extxyz", ".mol"]
 
-    conf_path = Path(mol_info["molecule_path"])
+    conf_path = Path(mol_info["conformers_path"])
     if conf_path.is_file():
         if Path(conf_path).suffix not in allowed_extensions:
             raise TypeError(
