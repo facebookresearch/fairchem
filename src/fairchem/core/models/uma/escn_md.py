@@ -35,6 +35,12 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.graph_parallel import (
+    GPContext,
+    _compute_send_indices,
+    build_gp_context,
+    partition_atoms_index_split,
+)
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
@@ -315,6 +321,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int = 1,
         execution_mode: str = "general",
+        use_all_to_all_gp: bool = False,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -366,6 +373,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+        self.use_all_to_all_gp = use_all_to_all_gp
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -672,6 +680,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
 
+            # Build GPContext for all-to-all communication
+            if self.use_all_to_all_gp:
+                total_atoms = len(data_dict["atomic_numbers_full"])
+                rank_assignments = partition_atoms_index_split(
+                    total_atoms,
+                    gp_utils.get_gp_world_size(),
+                    data_dict["atomic_numbers_full"].device,
+                )
+                gp_ctx = build_gp_context(
+                    edge_index=graph_dict["edge_index"],
+                    rank_assignments=rank_assignments,
+                    rank=gp_utils.get_gp_rank(),
+                    world_size=gp_utils.get_gp_world_size(),
+                )
+                data_dict["gp_ctx"] = gp_ctx
+
         if graph_dict["edge_index"].shape[1] == 0:
             add_n_empty_edges(graph_dict, 1, self.cutoff, data_dict["gp_node_offset"])
 
@@ -788,6 +812,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         with record_function("layer_radial_emb"):
             x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
+        # Compute all-to-all context once for all layers
+        gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
+        send_indices: torch.Tensor | None = None
+        if gp_ctx is not None:
+            with record_function("compute_send_indices"):
+                send_indices = _compute_send_indices(gp_ctx)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
@@ -801,6 +832,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                    gp_ctx=gp_ctx,
+                    send_indices=send_indices,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(
