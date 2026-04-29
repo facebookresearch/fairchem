@@ -92,6 +92,12 @@ class GPContext:
             Shape: (total_atoms,), with -1 for atoms not accessible.
         total_local_atoms: Number of atoms in this rank's partition.
         total_needed_atoms: Total atoms needed from other ranks.
+        send_indices: Precomputed local indices of atoms to send, ordered by
+            destination rank. Computed once at build time to avoid per-forward
+            all-to-all index exchange. None if not yet computed.
+        edge_index_local: Precomputed edge index remapped to local indices.
+            None if not yet computed (set by build_gp_context when edge_index
+            is provided).
     """
 
     rank: int
@@ -105,6 +111,8 @@ class GPContext:
     global_to_local: torch.Tensor
     total_local_atoms: int
     total_needed_atoms: int
+    send_indices: torch.Tensor | None = None
+    edge_index_local: torch.Tensor | None = None
 
 
 def partition_atoms_spatial(
@@ -287,10 +295,13 @@ def build_gp_context(
     needed_from_ranks = rank_assignments[needed_atoms]
 
     # Compute recv_counts: how many atoms we receive from each rank
-    recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
-    for r in range(world_size):
-        if r != rank:
-            recv_counts[r] = (needed_from_ranks == r).sum()
+    if total_needed_atoms > 0:
+        recv_counts = torch.bincount(needed_from_ranks, minlength=world_size).to(
+            dtype=torch.long, device=device
+        )
+    else:
+        recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
+    recv_counts[rank] = 0  # Never receive from self
 
     # Compute send_counts: how many atoms we send to each rank.
     # We need to know what OTHER ranks need from us. This requires communication.
@@ -323,7 +334,7 @@ def build_gp_context(
         device=device,
     )
 
-    return GPContext(
+    ctx = GPContext(
         rank=rank,
         world_size=world_size,
         node_partition=node_partition,
@@ -335,7 +346,16 @@ def build_gp_context(
         global_to_local=global_to_local,
         total_local_atoms=total_local_atoms,
         total_needed_atoms=total_needed_atoms,
+        # Precompute edge_index_local to avoid per-layer remapping
+        edge_index_local=global_to_local[edge_index],
     )
+
+    # Precompute send_indices if distributed is initialized.
+    # This avoids an all-to-all index exchange on every forward pass.
+    if gp_utils.initialized():
+        ctx.send_indices = _compute_send_indices(ctx)
+
+    return ctx
 
 
 def _compute_send_indices(

@@ -38,7 +38,6 @@ from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     PartitionStrategy,
-    _compute_send_indices,
     build_gp_context,
     partition_atoms_index_split,
     partition_atoms_spatial,
@@ -823,12 +822,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         with record_function("layer_radial_emb"):
             x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
-        # Compute all-to-all context once for all layers
+        # Retrieve precomputed all-to-all context for all layers
         gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
         send_indices: torch.Tensor | None = None
         if gp_ctx is not None:
-            with record_function("compute_send_indices"):
-                send_indices = _compute_send_indices(gp_ctx)
+            send_indices = gp_ctx.send_indices
 
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):

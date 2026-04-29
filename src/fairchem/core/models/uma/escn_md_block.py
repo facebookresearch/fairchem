@@ -19,7 +19,6 @@ from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     all_to_all_collect,
-    remap_edge_index_to_local,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -138,10 +137,8 @@ class Edgewise(torch.nn.Module):
             with record_function("a2a_collect"):
                 x_received = all_to_all_collect(x, gp_ctx, send_indices)
                 x_full = torch.cat([x, x_received], dim=0)
-                # Remap edge_index to local index space
-                edge_index_local = remap_edge_index_to_local(
-                    edge_index, gp_ctx.global_to_local
-                )
+                # Use precomputed local edge index from GPContext
+                edge_index_local = gp_ctx.edge_index_local
             # In local space, node_offset is 0
             local_node_offset = 0
         elif gp_utils.initialized():
