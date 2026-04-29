@@ -4,15 +4,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import argparse
-import pickle
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.scripts import download_large_files
 
 
@@ -174,15 +175,11 @@ def main():
         or not Path(__file__).with_name("ml_relaxed_dft_targets.pkl").exists()
     ):
         download_large_files.download_file_group("adsorbml")
-    targets = pickle.load(
-        open(Path(__file__).with_name("oc20dense_val_targets.pkl"), "rb")
+    targets = safe_pickle_load(Path(__file__).with_name("oc20dense_val_targets.pkl"))
+    ml_dft_targets = safe_pickle_load(
+        Path(__file__).with_name("ml_relaxed_dft_targets.pkl")
     )
-    ml_dft_targets = pickle.load(
-        open(Path(__file__).with_name("ml_relaxed_dft_targets.pkl"), "rb")
-    )
-    metadata = pickle.load(
-        open(Path(__file__).with_name("oc20dense_mapping.pkl"), "rb")
-    )
+    metadata = safe_pickle_load(Path(__file__).with_name("oc20dense_mapping.pkl"))
 
     ###### Process DFT Data ######
     dft_data = get_dft_data(targets)

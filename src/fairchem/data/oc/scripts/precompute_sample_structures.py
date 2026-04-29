@@ -28,6 +28,8 @@ from pymatgen.core.surface import (
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
+
 # from .base_atoms.pkls import BULK_PKL
 # from .constants import MAX_MILLER
 
@@ -162,7 +164,7 @@ def flip_struct(struct):
 
 def precompute_enumerate_surface(bulk_database, bulk_index, opfile):
     with open(bulk_database, "rb") as f:
-        inv_index = pickle.load(f)
+        inv_index = safe_pickle_load(f)
     flatten = inv_index[1] + inv_index[2] + inv_index[3]
     assert bulk_index < len(flatten)
 

@@ -39,6 +39,6 @@ class TestSlab:
         bulk = Bulk(bulk_id_from_db=100)
         slab = Slab.from_bulk_get_random_slab(bulk)
 
-        assert slab.atoms.get_chemical_formula() == "Sn48"
+        assert slab.atoms.get_chemical_formula() == "Sn24"
         assert slab.millers == (2, 1, 0)
         assert slab.shift == pytest.approx(0.0833333333333334)

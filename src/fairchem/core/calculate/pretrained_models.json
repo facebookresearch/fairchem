@@ -1,4 +1,4 @@
-{    
+{
     "uma-s-1p2": {
         "filename": "uma-s-1p2.pt",
         "repo_id": "facebook/UMA",
@@ -60,6 +60,24 @@
         "filename": "esen_sm_direct_all.pt",
         "repo_id": "facebook/OMol25",
         "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
+    "allscaip-md-conserving-all-omol": {
+        "filename": "AllScAIP-OMol102M-md-cons.pt",
+        "repo_id": "facebook/OMol25",
+        "subfolder": "checkpoints/AllScAIP",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
+    "allscaip-md-direct-all-omol": {
+        "filename": "AllScAIP-OMol102M-md-d.pt",
+        "repo_id": "facebook/OMol25",
+        "subfolder": "checkpoints/AllScAIP",
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
