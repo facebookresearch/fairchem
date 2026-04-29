@@ -24,9 +24,11 @@ from fairchem.core.models.uma.graph_parallel import (
     _compute_send_indices,
     all_to_all_collect,
     build_gp_context,
+    finish_all_to_all_collect,
     partition_atoms_index_split,
     partition_atoms_spatial,
     remap_edge_index_to_local,
+    start_all_to_all_collect,
 )
 
 pytestmark = pytest.mark.serial
@@ -662,3 +664,72 @@ class TestEdgeClassification:
         # First 2 edges are local, last 2 are boundary
         expected_mask = torch.tensor([True, True, False, False])
         assert torch.equal(ctx.local_edge_mask, expected_mask)
+
+
+# =========================================================================
+# Distributed tests: async all-to-all correctness
+# =========================================================================
+
+
+def async_a2a_test(atomic_numbers, edge_index):
+    """
+    Verify that start/finish_all_to_all_collect produces same
+    results as the synchronous all_to_all_collect.
+    """
+    rank = gp_utils.get_gp_rank()
+    world_size = gp_utils.get_gp_world_size()
+    natoms = atomic_numbers.shape[0]
+
+    rank_assignments = partition_atoms_index_split(
+        natoms, world_size, torch.device("cpu")
+    )
+    gp_ctx = build_gp_context(edge_index, rank_assignments, rank, world_size)
+
+    x = atomic_numbers[gp_ctx.node_partition].unsqueeze(1).float()
+    send_indices = gp_ctx.send_indices
+
+    # Synchronous all-to-all
+    x_received_sync = all_to_all_collect(x, gp_ctx, send_indices)
+
+    # Async all-to-all
+    recv_buf, work_handles = start_all_to_all_collect(x, gp_ctx, send_indices)
+    x_received_async = finish_all_to_all_collect(recv_buf, work_handles)
+
+    match = torch.allclose(x_received_sync, x_received_async, atol=1e-6)
+
+    return {
+        "rank": rank,
+        "match": match,
+        "sync_shape": x_received_sync.shape,
+        "async_shape": x_received_async.shape,
+    }
+
+
+def test_async_a2a_matches_sync():
+    """
+    Verify async start/finish all-to-all matches sync all_to_all_collect.
+    """
+    num_atoms = 6
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 3, 4, 4, 5, 5, 0], [1, 2, 0, 4, 5, 3, 5, 3, 4, 3]],
+        dtype=torch.long,
+    )
+
+    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        async_a2a_test,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["match"], (
+            f"Rank {result['rank']}: async and sync all-to-all produced "
+            f"different results. sync_shape={result['sync_shape']}, "
+            f"async_shape={result['async_shape']}"
+        )
