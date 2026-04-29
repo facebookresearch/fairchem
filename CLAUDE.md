@@ -292,3 +292,6 @@ When using `use_all_to_all_gp=true`, set `cache_gp_context=true` to cache the GP
 
 ### AllToAllCollect backward must match forward arg count
 The `AllToAllCollect.forward()` uses `torch.autograd.Function.apply()`. Every argument passed to `apply()` must have a corresponding `None` gradient returned in `backward()`. If you add new arguments to `forward()`, you MUST also add corresponding `None`s to the backward return tuple, or autograd will error: "returned an incorrect number of gradients".
+
+### Prefer all_to_all_single over all_to_all for packed tensors
+For NCCL, `dist.all_to_all_single(output, input, output_split_sizes, input_split_sizes, group)` operates on packed contiguous tensors directly, avoiding the Python list creation overhead from `tensor.split()` + `list()` that `dist.all_to_all(output_list, input_list, group)` requires. When send/recv data is already contiguous (as in AllToAllCollect), `all_to_all_single` is more efficient. However, it's not supported on Gloo — always provide a fallback. Also note that `split()` creates views into the original tensor, so after `all_to_all` fills the views, the original buffer already contains the data — a subsequent `torch.cat()` on the views is a redundant copy.
