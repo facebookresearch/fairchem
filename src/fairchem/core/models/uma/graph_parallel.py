@@ -128,19 +128,18 @@ class GPContext:
 def partition_atoms_spatial(
     pos: torch.Tensor,
     num_ranks: int,
-    num_iters: int = 3,
+    num_iters: int = 10,
 ) -> torch.Tensor:
     """
-    Fast spatial partitioning using k-means-style clustering.
+    Spatial partitioning using k-means-style clustering.
 
     Divides atoms into num_ranks groups by spatial proximity.
-    Uses a fixed number of iterations for speed — does not need
-    to converge perfectly, just needs roughly balanced spatial groups.
+    Uses up to num_iters iterations with early convergence check.
 
     Args:
         pos: Atom positions, shape (N, 3).
         num_ranks: Number of partitions (GP world size).
-        num_iters: Number of k-means iterations. Default 3 for speed.
+        num_iters: Maximum number of k-means iterations. Default 10.
 
     Returns:
         rank_assignments: Tensor of shape (N,) with rank index for each atom.
@@ -165,7 +164,8 @@ def partition_atoms_spatial(
     centroid_indices = sorted_indices[step // 2 :: step][:num_ranks]
     centroids = pos[centroid_indices].clone()  # (num_ranks, 3)
 
-    # K-means iterations
+    # K-means iterations with early convergence
+    prev_assignments = None
     for _ in range(num_iters):
         # Assign each atom to nearest centroid
         # Use chunked distance computation to avoid O(N * num_ranks) memory
@@ -177,6 +177,11 @@ def partition_atoms_spatial(
             dists = torch.cdist(pos[start:end], centroids)
             assignments[start:end] = dists.argmin(dim=1)
 
+        # Early convergence check
+        if prev_assignments is not None and torch.equal(assignments, prev_assignments):
+            break
+        prev_assignments = assignments.clone()
+
         # Update centroids
         for k in range(num_ranks):
             mask = assignments == k
@@ -184,7 +189,7 @@ def partition_atoms_spatial(
                 centroids[k] = pos[mask].mean(dim=0)
 
     # Balance: ensure each rank has at least one atom and roughly equal counts
-    assignments = _balance_assignments(assignments, num_ranks, N)
+    assignments = _balance_assignments(assignments, num_ranks, N, pos, centroids)
 
     return assignments
 
@@ -193,11 +198,17 @@ def _balance_assignments(
     assignments: torch.Tensor,
     num_ranks: int,
     total_atoms: int,
+    pos: torch.Tensor | None = None,
+    centroids: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Post-process assignments to ensure balanced partition sizes.
 
     Moves atoms from overloaded ranks to underloaded ranks.
+    When positions and centroids are provided, preferentially moves
+    atoms that are closest to the destination centroid (preserving
+    spatial locality).
+
     Target size per rank is total_atoms // num_ranks (± 1).
     """
     target_size = total_atoms // num_ranks
@@ -230,7 +241,20 @@ def _balance_assignments(
         # Move atoms
         n_move = min(over[src_rank].item(), under[dst_rank].item())
         src_atoms = (assignments == src_rank).nonzero(as_tuple=True)[0]
-        assignments[src_atoms[:n_move]] = dst_rank
+
+        if pos is not None and centroids is not None:
+            # Move atoms closest to the destination centroid
+            # to preserve spatial locality
+            dists_to_dst = torch.cdist(
+                pos[src_atoms].unsqueeze(0),
+                centroids[dst_rank].unsqueeze(0).unsqueeze(0),
+            ).squeeze()
+            _, closest_order = dists_to_dst.sort()
+            atoms_to_move = src_atoms[closest_order[:n_move]]
+        else:
+            atoms_to_move = src_atoms[:n_move]
+
+        assignments[atoms_to_move] = dst_rank
         counts[src_rank] -= n_move
         counts[dst_rank] += n_move
 
