@@ -37,9 +37,11 @@ from fairchem.core.models.uma.common.rotation import (
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
+    PartitionStrategy,
     _compute_send_indices,
     build_gp_context,
     partition_atoms_index_split,
+    partition_atoms_spatial,
 )
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
@@ -322,6 +324,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         edge_chunk_size: int = 1,
         execution_mode: str = "general",
         use_all_to_all_gp: bool = False,
+        gp_partition_strategy: str = "index_split",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -374,6 +377,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         self.edge_chunk_size = edge_chunk_size
         self.use_all_to_all_gp = use_all_to_all_gp
+        self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -683,16 +687,23 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
                 total_atoms = len(data_dict["atomic_numbers_full"])
-                rank_assignments = partition_atoms_index_split(
-                    total_atoms,
-                    gp_utils.get_gp_world_size(),
-                    data_dict["atomic_numbers_full"].device,
-                )
+                device = data_dict["atomic_numbers_full"].device
+                world_size = gp_utils.get_gp_world_size()
+
+                if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
+                    rank_assignments = partition_atoms_spatial(
+                        data_dict["pos"], world_size
+                    )
+                else:
+                    rank_assignments = partition_atoms_index_split(
+                        total_atoms, world_size, device
+                    )
+
                 gp_ctx = build_gp_context(
                     edge_index=graph_dict["edge_index"],
                     rank_assignments=rank_assignments,
                     rank=gp_utils.get_gp_rank(),
-                    world_size=gp_utils.get_gp_world_size(),
+                    world_size=world_size,
                 )
                 data_dict["gp_ctx"] = gp_ctx
 
