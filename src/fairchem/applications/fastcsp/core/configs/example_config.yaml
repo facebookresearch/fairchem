@@ -51,23 +51,23 @@ relax:
 # Filtering criteria and deduplication parameters after relaxation
 post_relaxation_filter:       # After ML relaxation
   remove_problematic: true     # Remove structures that failed to converge or connectivity check
-  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum or None
-  density_cutoff: 10           # Density cutoff in g/cm³ or None
-  assign_groups: true          # Assign groups to structures
-  ltol: 0.2
-  stol: 0.3
-  angle_tol: 5
-  remove_duplicates: true      # Enable duplicate removal
+  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum (null = no filter)
+  density_cutoff: 10           # Maximum density in g/cm³ (null = no filter)
+  assign_groups: true          # Assign group indices via deduplication
+  ltol: 0.2                    # Lattice parameter tolerance
+  stol: 0.3                    # Site tolerance (Angstrom)
+  angle_tol: 5                 # Angle tolerance (degrees)
+  remove_duplicates: true      # Drop all-but-one structure per group
 
 # (Optional) Experimental structure evaluation settings
 evaluate:
-  method: csd               # Either "csd" or "pymatgen"
   target_xtals_dir: /path/to/experimental/crystal/structures # Directory with experimental structures (CIF format)
   # NOTE: Optional if molecules CSV file contains "cif_path" column
   # Alternative: Use molecules CSV file with cif_path column instead of target_xtals_dir
   # If molecules file contains "cif_path" column:
   #   - Single refcode: cif_path should point to a .cif file or directory containing {refcode}.cif
   #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
+  method: csd               # Either "csd" or "pymatgen"
   csd:
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
     python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
