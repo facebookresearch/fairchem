@@ -194,7 +194,7 @@ def test_calculator_setup(all_calculators):
         datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
-        if not calc.predictor.direct_forces and (
+        if not calc.predictor.model.module.backbone.regress_config.direct_forces and (
             len(datasets) > 1 or (calc.task_name != "omol" and calc.task_name != "odac")
         ):
             print(len(datasets), calc.task_name)
