@@ -490,6 +490,14 @@ class AllToAllCollect(torch.autograd.Function):
 
     Backward: Reverses the communication — sends gradient of received
     embeddings back to their owners, receives gradient of sent embeddings.
+
+    Optimizations over naive all-to-all:
+    - Uses ``all_to_all_single`` on NCCL to avoid Python list creation
+      from ``split()`` — communicates packed tensors directly.
+    - Returns the pre-allocated receive buffer directly instead of
+      ``torch.cat(recv_list)`` — avoids a redundant copy.
+    - Accepts precomputed ``send_splits``/``recv_splits`` to avoid
+      repeated ``.tolist()`` calls per layer.
     """
 
     @staticmethod
@@ -533,7 +541,7 @@ class AllToAllCollect(torch.autograd.Function):
 
         feature_shape = x_local.shape[1:]
 
-        # Gather atoms to send
+        # Gather atoms to send (index_select into contiguous buffer)
         if send_indices.numel() > 0:
             x_send = x_local[send_indices].contiguous()
         else:
@@ -561,22 +569,27 @@ class AllToAllCollect(torch.autograd.Function):
             total_recv, *feature_shape, device=x_local.device, dtype=x_local.dtype
         )
 
-        # Split send tensor by destination rank
-        send_list = list(x_send.split(send_splits))
-        recv_list = list(x_recv.split(recv_splits))
-
-        # Perform all-to-all
-        _safe_all_to_all(recv_list, send_list, group=gp_group)
-
-        # Concatenate received parts
-        if recv_list:
-            x_received = torch.cat(recv_list, dim=0)
-        else:
-            x_received = torch.empty(
-                0, *feature_shape, device=x_local.device, dtype=x_local.dtype
+        # Perform all-to-all communication
+        backend = dist.get_backend(gp_group)
+        if backend == "nccl":
+            # Use all_to_all_single for NCCL — avoids Python list creation
+            # from split(). Operates on packed contiguous tensors directly.
+            dist.all_to_all_single(
+                x_recv,
+                x_send,
+                output_split_sizes=recv_splits,
+                input_split_sizes=send_splits,
+                group=gp_group,
             )
+        else:
+            # Gloo fallback: use list-based pairwise send/recv
+            send_list = list(x_send.split(send_splits))
+            recv_list = list(x_recv.split(recv_splits))
+            _safe_all_to_all(recv_list, send_list, group=gp_group)
 
-        return x_received
+        # x_recv already contains all received data in rank order —
+        # no need for torch.cat (recv_list are views into x_recv).
+        return x_recv
 
     @staticmethod
     @torch.compiler.disable
@@ -607,12 +620,22 @@ class AllToAllCollect(torch.autograd.Function):
             dtype=grad_received.dtype,
         )
 
-        # Split grad_received by source rank (same order as recv in forward)
-        bwd_send_list = list(grad_received.split(bwd_send_splits))
-        bwd_recv_list = list(grad_send_back.split(bwd_recv_splits))
-
         # Reverse all-to-all
-        _safe_all_to_all(bwd_recv_list, bwd_send_list, group=gp_group)
+        backend = dist.get_backend(gp_group)
+        if backend == "nccl":
+            # Use all_to_all_single for NCCL — packed tensor, no list
+            dist.all_to_all_single(
+                grad_send_back,
+                grad_received.contiguous(),
+                output_split_sizes=bwd_recv_splits,
+                input_split_sizes=bwd_send_splits,
+                group=gp_group,
+            )
+        else:
+            # Gloo fallback
+            bwd_send_list = list(grad_received.split(bwd_send_splits))
+            bwd_recv_list = list(grad_send_back.split(bwd_recv_splits))
+            _safe_all_to_all(bwd_recv_list, bwd_send_list, group=gp_group)
 
         # Scatter received gradients back to local positions
         grad_local = torch.zeros(
@@ -623,9 +646,8 @@ class AllToAllCollect(torch.autograd.Function):
         )
 
         if total_bwd_recv > 0:
-            grad_from_others = torch.cat(bwd_recv_list, dim=0)
-            # Accumulate gradients at the send_indices positions
-            grad_local.index_add_(0, send_indices, grad_from_others)
+            # grad_send_back already contains data — no cat needed
+            grad_local.index_add_(0, send_indices, grad_send_back)
 
         # Return gradients for x_local only; None for all other inputs
         return grad_local, None, None, None, None, None, None, None, None, None
@@ -683,6 +705,9 @@ def start_all_to_all_collect(
     is intended for the overlap path where gradients are handled
     separately.
 
+    Uses ``all_to_all_single`` on NCCL for efficiency (avoids Python
+    list creation from ``split()``).
+
     Args:
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
@@ -721,20 +746,26 @@ def start_all_to_all_collect(
         total_recv, *feature_shape, device=x_local.device, dtype=x_local.dtype
     )
 
-    send_list = list(x_send.split(send_splits))
-    recv_list = list(x_recv.split(recv_splits))
-
-    # Launch async all-to-all (NCCL only)
+    # Launch async all-to-all
     gp_group = gp_utils.get_gp_group()
     backend = dist.get_backend(gp_group)
 
     work_handles = []
     if backend == "nccl":
-        # NCCL supports async all-to-all
-        work = dist.all_to_all(recv_list, send_list, group=gp_group, async_op=True)
+        # Use all_to_all_single for NCCL — packed tensor, no list creation
+        work = dist.all_to_all_single(
+            x_recv,
+            x_send,
+            output_split_sizes=recv_splits,
+            input_split_sizes=send_splits,
+            group=gp_group,
+            async_op=True,
+        )
         work_handles.append(work)
     else:
-        # Gloo fallback: use pairwise send/recv (already async via batch_isend_irecv)
+        # Gloo fallback: use pairwise send/recv
+        send_list = list(x_send.split(send_splits))
+        recv_list = list(x_recv.split(recv_splits))
         rank = dist.get_rank(gp_group)
         world_size = dist.get_world_size(gp_group)
         ops = []
