@@ -605,15 +605,42 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
         node_partition = None
+        rank_assignments = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
-            node_partition = torch.tensor_split(
-                torch.arange(
-                    len(atomic_numbers_full), device=atomic_numbers_full.device
-                ),
-                gp_utils.get_gp_world_size(),
-            )[gp_utils.get_gp_rank()]
+
+            if self.use_all_to_all_gp:
+                # All-to-all: compute rank_assignments FIRST, then derive
+                # node_partition from them.  This ensures the graph-generation
+                # partition and the GPContext partition are identical, avoiding
+                # index mismatches that cause OOB crashes.
+                total_atoms = len(atomic_numbers_full)
+                device = atomic_numbers_full.device
+                world_size = gp_utils.get_gp_world_size()
+
+                if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
+                    rank_assignments = partition_atoms_spatial(
+                        data_dict["pos"], world_size
+                    )
+                else:
+                    rank_assignments = partition_atoms_index_split(
+                        total_atoms, world_size, device
+                    )
+
+                node_partition = (rank_assignments == gp_utils.get_gp_rank()).nonzero(
+                    as_tuple=True
+                )[0]
+            else:
+                # Legacy all-gather: use consecutive index split
+                node_partition = torch.tensor_split(
+                    torch.arange(
+                        len(atomic_numbers_full),
+                        device=atomic_numbers_full.device,
+                    ),
+                    gp_utils.get_gp_world_size(),
+                )[gp_utils.get_gp_rank()]
+
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -684,30 +711,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 node_partition
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
-            data_dict["gp_node_offset"] = node_partition.min().item()
 
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
-                total_atoms = len(data_dict["atomic_numbers_full"])
-                device = data_dict["atomic_numbers_full"].device
-                world_size = gp_utils.get_gp_world_size()
-
-                if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
-                    rank_assignments = partition_atoms_spatial(
-                        data_dict["pos"], world_size
-                    )
-                else:
-                    rank_assignments = partition_atoms_index_split(
-                        total_atoms, world_size, device
-                    )
-
                 gp_ctx = build_gp_context(
                     edge_index=graph_dict["edge_index"],
                     rank_assignments=rank_assignments,
                     rank=gp_utils.get_gp_rank(),
-                    world_size=world_size,
+                    world_size=gp_utils.get_gp_world_size(),
                 )
                 data_dict["gp_ctx"] = gp_ctx
+                # All-to-all uses local indices via gp_ctx.edge_index_local,
+                # so node_offset is always 0.
+                data_dict["gp_node_offset"] = 0
+            else:
+                data_dict["gp_node_offset"] = node_partition.min().item()
 
         if graph_dict["edge_index"].shape[1] == 0:
             add_n_empty_edges(graph_dict, 1, self.cutoff, data_dict["gp_node_offset"])
@@ -786,6 +804,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+        # Retrieve precomputed all-to-all context (needed for edge embedding
+        # and message passing layers)
+        gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
+        send_indices: torch.Tensor | None = None
+        if gp_ctx is not None:
+            send_indices = gp_ctx.send_indices
+
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
@@ -810,7 +835,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_index"],
+                # All-to-all uses local edge indices from GPContext because
+                # spatial partitions are non-contiguous (node_offset math
+                # doesn't work). edge_degree_scatter only reads edge_index[1],
+                # so the remapped source indices in edge_index_local are fine.
+                gp_ctx.edge_index_local
+                if gp_ctx is not None
+                else graph_dict["edge_index"],
                 wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
@@ -824,12 +855,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Fast backends: precomputed radials
         with record_function("layer_radial_emb"):
             x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
-
-        # Retrieve precomputed all-to-all context for all layers
-        gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
-        send_indices: torch.Tensor | None = None
-        if gp_ctx is not None:
-            send_indices = gp_ctx.send_indices
 
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):

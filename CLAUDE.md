@@ -274,3 +274,15 @@ The `build_gp_context()` function expects the edge_index to be already filtered 
 
 ### Overlap path is eval-mode only
 The `_forward_overlap()` path in `Edgewise` uses `start_all_to_all_collect`/`finish_all_to_all_collect` which don't participate in autograd. This means gradients won't flow through the all-to-all communication in the overlap path. It's gated on `not self.training` to prevent use during training. For training, the sync `all_to_all_collect` (which wraps `AllToAllCollect` autograd function) is always used.
+
+### NEVER use torchrun directly — always use `fairchem` CLI
+Multi-GPU and multi-node jobs MUST be launched via the `fairchem` CLI: `fairchem -c config.yaml [overrides...]`. The CLI handles all distributed setup (torchrun, SLURM submission via submitit, etc.). Using `torchrun` directly bypasses the fairchem launcher infrastructure and may cause subtle configuration issues.
+
+### Hydra overrides for SLURM config
+The SLURM job configs (`configs/uma/speed/job/slurm.yaml`) use structured configs via OmegaConf. To override fields that exist in the YAML, use regular Hydra syntax: `job.scheduler.slurm.qos=h200_lowest`. To add fields not in the YAML but in the SlurmConfig dataclass (like `timeout_hr`), use `+` prefix: `+job.scheduler.slurm.timeout_hr=1`. This applies to any structured config field.
+
+### Backbone config overrides via runner.overrides
+To pass backbone config overrides (e.g., enabling all-to-all GP) through InferenceBenchRunner, use Hydra `+` prefix since `runner.overrides` is not in the default YAML: `'+runner.overrides={backbone: {use_all_to_all_gp: true, gp_partition_strategy: spatial}}'`. MLIPPredictUnit's `_build_overrides_from_settings()` merges these with checkpoint defaults, with user overrides taking precedence.
+
+### fairchem CLI cannot submit from within SLURM
+The `_cli.py` explicitly blocks SLURM submission from within an active SLURM job (`assert os.getenv("SLURM_SUBMIT_HOST") is None`). Always run `fairchem -c ... job=slurm` from a login node, not from an `srun` session. This also means profai-cli's `launch-experiment --qos` (which creates its own SLURM job) cannot be used to wrap `fairchem -c ... job=slurm` — it would create a double submission.
