@@ -538,6 +538,9 @@ class AllToAllCollect(torch.autograd.Function):
         ctx.rank = rank
         ctx.world_size = world_size
         ctx.local_size = x_local.shape[0]
+        # Cache precomputed splits for backward (avoids .tolist() per layer)
+        ctx.precomputed_send_splits = precomputed_send_splits
+        ctx.precomputed_recv_splits = precomputed_recv_splits
 
         feature_shape = x_local.shape[1:]
 
@@ -609,8 +612,16 @@ class AllToAllCollect(torch.autograd.Function):
         # In backward, the roles are reversed:
         # What we received in forward, we now send back gradients for
         # What we sent in forward, we now receive gradients for
-        bwd_send_splits = recv_counts.tolist()
-        bwd_recv_splits = send_counts.tolist()
+        bwd_send_splits = (
+            ctx.precomputed_recv_splits
+            if ctx.precomputed_recv_splits is not None
+            else recv_counts.tolist()
+        )
+        bwd_recv_splits = (
+            ctx.precomputed_send_splits
+            if ctx.precomputed_send_splits is not None
+            else send_counts.tolist()
+        )
 
         total_bwd_recv = sum(bwd_recv_splits)
         grad_send_back = torch.empty(
