@@ -265,3 +265,12 @@ On FAIR-SC H200 nodes, `libgomp.so.1` is at `/usr/lib/x86_64-linux-gnu/libgomp.s
 
 ### profai-cli launch-experiment venv
 Use `--python /path/to/.venv/bin/python` flag with `profai-cli launch-experiment` to ensure SLURM jobs use the correct virtual environment. Without it, the system Python is used and fairchem won't be importable.
+
+### Spatial partitioning does NOT handle PBC wrapping
+The `partition_atoms_spatial()` k-means uses raw Cartesian positions without periodic boundary condition (PBC) minimum-image convention. This means atoms near opposite sides of a periodic box may be assigned to different clusters even if they're neighbors through the periodic image. This is intentional — for large systems (64k+ atoms) the fraction of PBC-crossing edges is small, and the graph generation handles PBC edges correctly regardless of how atoms are partitioned. For small periodic systems, the boundary fraction may be higher than the theoretical surface-to-volume prediction.
+
+### build_gp_context expects pre-filtered edge_index
+The `build_gp_context()` function expects the edge_index to be already filtered to only include edges whose targets are in this rank's partition. Passing the full unfiltered edge_index will cause index-out-of-bounds errors in the local edge_index. The filtering step is: `target_in_partition = (rank_assignments == rank)[edge_index[1]]; filtered = edge_index[:, target_in_partition]`.
+
+### Overlap path is eval-mode only
+The `_forward_overlap()` path in `Edgewise` uses `start_all_to_all_collect`/`finish_all_to_all_collect` which don't participate in autograd. This means gradients won't flow through the all-to-all communication in the overlap path. It's gated on `not self.training` to prevent use during training. For training, the sync `all_to_all_collect` (which wraps `AllToAllCollect` autograd function) is always used.
