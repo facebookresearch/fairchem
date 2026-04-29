@@ -98,6 +98,13 @@ class GPContext:
         edge_index_local: Precomputed edge index remapped to local indices.
             None if not yet computed (set by build_gp_context when edge_index
             is provided).
+        local_edge_mask: Boolean mask identifying fully-local edges (both src
+            and tgt are local atoms). Used for comm-compute overlap. Shape:
+            (num_edges,). None if not yet computed.
+        num_local_edges: Number of fully-local edges (precomputed from
+            local_edge_mask). None if not yet computed.
+        num_boundary_edges: Number of boundary edges (src is remote). None
+            if not yet computed.
     """
 
     rank: int
@@ -113,6 +120,9 @@ class GPContext:
     total_needed_atoms: int
     send_indices: torch.Tensor | None = None
     edge_index_local: torch.Tensor | None = None
+    local_edge_mask: torch.Tensor | None = None
+    num_local_edges: int | None = None
+    num_boundary_edges: int | None = None
 
 
 def partition_atoms_spatial(
@@ -334,6 +344,17 @@ def build_gp_context(
         device=device,
     )
 
+    # Precompute edge_index_local
+    edge_index_local = global_to_local[edge_index]
+
+    # Classify edges: fully-local (both endpoints local) vs boundary
+    # (source is remote). Used for communication-computation overlap.
+    src_is_local = edge_index_local[0] < total_local_atoms
+    tgt_is_local = edge_index_local[1] < total_local_atoms
+    local_edge_mask = src_is_local & tgt_is_local
+    num_local_edges = int(local_edge_mask.sum().item())
+    num_boundary_edges = edge_index_local.shape[1] - num_local_edges
+
     ctx = GPContext(
         rank=rank,
         world_size=world_size,
@@ -346,8 +367,10 @@ def build_gp_context(
         global_to_local=global_to_local,
         total_local_atoms=total_local_atoms,
         total_needed_atoms=total_needed_atoms,
-        # Precompute edge_index_local to avoid per-layer remapping
-        edge_index_local=global_to_local[edge_index],
+        edge_index_local=edge_index_local,
+        local_edge_mask=local_edge_mask,
+        num_local_edges=num_local_edges,
+        num_boundary_edges=num_boundary_edges,
     )
 
     # Precompute send_indices if distributed is initialized.
@@ -588,6 +611,101 @@ def all_to_all_collect(
         gp_ctx.rank,
         gp_ctx.world_size,
     )
+
+
+def start_all_to_all_collect(
+    x_local: torch.Tensor,
+    gp_ctx: GPContext,
+    send_indices: torch.Tensor,
+) -> tuple[torch.Tensor, list[dist.Work]]:
+    """
+    Start async all-to-all communication for comm-compute overlap.
+
+    Launches the all-to-all without waiting for completion. Returns
+    the pre-allocated receive buffer and work handles. The caller
+    should do useful compute, then call ``finish_all_to_all_collect``
+    to wait for completion and get the received embeddings.
+
+    This function does NOT participate in autograd. For differentiable
+    all-to-all, use ``all_to_all_collect`` instead. This async variant
+    is intended for the overlap path where gradients are handled
+    separately.
+
+    Args:
+        x_local: Local atom embeddings, shape (local_atoms, *features).
+        gp_ctx: Graph parallel context.
+        send_indices: Local indices of atoms to send.
+
+    Returns:
+        Tuple of (recv_buffer, work_handles):
+            recv_buffer: Pre-allocated tensor for received embeddings.
+            work_handles: List of dist.Work handles to wait on.
+    """
+    feature_shape = x_local.shape[1:]
+
+    # Gather atoms to send
+    if send_indices.numel() > 0:
+        x_send = x_local[send_indices].contiguous()
+    else:
+        x_send = torch.empty(
+            0, *feature_shape, device=x_local.device, dtype=x_local.dtype
+        )
+
+    # Prepare send/recv tensors split by rank
+    send_splits = gp_ctx.send_counts.tolist()
+    recv_splits = gp_ctx.recv_counts.tolist()
+
+    total_recv = sum(recv_splits)
+    x_recv = torch.empty(
+        total_recv, *feature_shape, device=x_local.device, dtype=x_local.dtype
+    )
+
+    send_list = list(x_send.split(send_splits))
+    recv_list = list(x_recv.split(recv_splits))
+
+    # Launch async all-to-all (NCCL only)
+    gp_group = gp_utils.get_gp_group()
+    backend = dist.get_backend(gp_group)
+
+    work_handles = []
+    if backend == "nccl":
+        # NCCL supports async all-to-all
+        work = dist.all_to_all(recv_list, send_list, group=gp_group, async_op=True)
+        work_handles.append(work)
+    else:
+        # Gloo fallback: use pairwise send/recv (already async via batch_isend_irecv)
+        rank = dist.get_rank(gp_group)
+        world_size = dist.get_world_size(gp_group)
+        ops = []
+        for r in range(world_size):
+            if r == rank:
+                recv_list[r].copy_(send_list[r])
+            else:
+                ops.append(dist.P2POp(dist.isend, send_list[r], r, group=gp_group))
+                ops.append(dist.P2POp(dist.irecv, recv_list[r], r, group=gp_group))
+        if ops:
+            work_handles = dist.batch_isend_irecv(ops)
+
+    return x_recv, work_handles
+
+
+def finish_all_to_all_collect(
+    recv_buffer: torch.Tensor,
+    work_handles: list[dist.Work],
+) -> torch.Tensor:
+    """
+    Wait for async all-to-all to complete and return received embeddings.
+
+    Args:
+        recv_buffer: Pre-allocated receive buffer from start_all_to_all_collect.
+        work_handles: Work handles from start_all_to_all_collect.
+
+    Returns:
+        x_received: Received remote atom embeddings.
+    """
+    for work in work_handles:
+        work.wait()
+    return recv_buffer
 
 
 def remap_edge_index_to_local(
