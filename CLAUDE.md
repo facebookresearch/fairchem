@@ -347,3 +347,6 @@ The `uma-speed.yaml` config uses `runner.natoms_list: [1000]` (a list), not `run
 
 ### V2 internal edge filtering is faster than post-filtering for send_info
 Bypassing `radius_graph_pbc_v2`'s internal `node_partition` filtering to compute `send_info` via `filter_edges_by_node_partition` post-hoc is ~12ms SLOWER at 64 GPUs. The reason: without v2's internal filter, v2 generates edges for ALL 64k atoms instead of 1k local atoms, producing ~64× more edges that are then discarded. The 4.2ms `_fused_index_exchange` NCCL collective is a necessary cost when using v2 — it's cheaper than the alternative. Benchmarked: A2A+P2P dropped from 1.405 to 1.249 ns/day at 64 GPUs when bypassing v2's filter.
+
+### AtomicData.get() requires explicit default argument
+`AtomicData.get(key)` (without a `default` kwarg) raises `TypeError: AtomicData.get() missing 1 required positional argument: 'default'`. Unlike a regular Python dict where `.get(key)` defaults to `None`, `AtomicData.get()` mandates the second argument. Always use `data_dict.get("key", default=None)`. This only manifests in distributed runs where `data_dict` is an `AtomicData` object — unit tests using plain dicts pass fine.
