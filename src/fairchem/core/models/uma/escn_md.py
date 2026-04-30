@@ -39,7 +39,6 @@ from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     PartitionStrategy,
-    _compute_send_info_aabb,
     build_gp_context,
     partition_atoms_index_split,
     partition_atoms_spatial,
@@ -616,24 +615,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         world_size: int,
         rank: int,
         strategy: PartitionStrategy,
-        cell: torch.Tensor | None = None,
-        cutoff: float | None = None,
-        pbc: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Compute A2A rank assignments, node partition, and send_info.
-
-        When cell and cutoff are provided, also computes send_info from
-        AABB geometry — for each local atom, determines which remote
-        ranks' domains it is within cutoff of. This eliminates the
-        4.2ms _fused_index_exchange NCCL collective in build_gp_context.
-
-        The AABB check is conservative (may include atoms not strictly
-        needed), but the extra communication volume is negligible.
-
-        send_info is stored on self._aabb_send_info rather than returned
-        to avoid flowing a dict through the compiled graph (which causes
-        compilation hangs). Retrieved in build_gp_context via the caller.
+        Compute A2A rank assignments and node partition.
 
         Separated from _generate_graph so that only the A2A-specific
         partitioning is excluded from torch.compile.  The BL (all-gather)
@@ -648,21 +632,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
         node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
 
-        # Compute send_info from AABB geometry if cell/cutoff provided.
-        # Store on self to avoid dict flowing through compiled graph.
+        # NOTE: AABB send_info is disabled. For the benchmark system
+        # (FCC crystal, cell ~36Å, cutoff 6Å), every rank is a PBC neighbor
+        # of every other rank, making AABB's O(N*27) computation MORE
+        # expensive than the O(P) NCCL _fused_index_exchange it replaces.
+        # At 64 GPUs: AABB costs 7.6ms vs exchange at 4.2ms.
+        # AABB would only help for very large cells (cutoff << cell size)
+        # where most ranks are NOT neighbors.
         self._aabb_send_info = None
-        if cell is not None and cutoff is not None:
-            with record_function("a2a_send_info_aabb"):
-                self._aabb_send_info = _compute_send_info_aabb(
-                    pos=pos,
-                    cell=cell,
-                    cutoff=cutoff,
-                    pbc=pbc,
-                    rank_assignments=rank_assignments,
-                    node_partition=node_partition,
-                    rank=rank,
-                    world_size=world_size,
-                )
 
         return rank_assignments, node_partition
 
@@ -791,9 +768,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # are identical, avoiding index mismatches that cause
                 # OOB crashes.
                 #
-                # Pass always_use_pbc as a Python bool (not tensor) to
-                # avoid graph breaks from pbc tensor ops in compiled code.
-                # AABB only needs to know whether to use 27 PBC images.
                 rank_assignments, node_partition = self._compute_a2a_partition(
                     pos=data_dict["pos"],
                     total_atoms=len(atomic_numbers_full),
@@ -801,11 +775,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     world_size=gp_utils.get_gp_world_size(),
                     rank=gp_utils.get_gp_rank(),
                     strategy=self.gp_partition_strategy,
-                    cell=data_dict["cell"],
-                    cutoff=self.cutoff,
-                    pbc=torch.ones(1, 3, dtype=torch.bool)
-                    if self.always_use_pbc
-                    else None,
                 )
             else:
                 # Legacy all-gather: use consecutive index split

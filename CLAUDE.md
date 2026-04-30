@@ -350,3 +350,21 @@ Bypassing `radius_graph_pbc_v2`'s internal `node_partition` filtering to compute
 
 ### AtomicData.get() requires explicit default argument
 `AtomicData.get(key)` (without a `default` kwarg) raises `TypeError: AtomicData.get() missing 1 required positional argument: 'default'`. Unlike a regular Python dict where `.get(key)` defaults to `None`, `AtomicData.get()` mandates the second argument. Always use `data_dict.get("key", default=None)`. This only manifests in distributed runs where `data_dict` is an `AtomicData` object — unit tests using plain dicts pass fine.
+
+### Dict flowing through torch.compile causes compilation hangs
+Returning a dict from a `@torch.compiler.disable` function and having it flow through the compiled graph to another disabled function causes the compiler to hang indefinitely. The fix is to store the dict on `self` (instance attribute) inside the disabled function, then retrieve it in the next disabled function. Never return complex non-tensor types (dict, SimpleNamespace, etc.) from `@torch.compiler.disable` functions if they will be consumed later in the compiled region.
+
+### Torchrun entrypoints must not call fairchem CLI main()
+When launching via `torchrun` (e.g., profai-cli's SLURM submit), the entrypoint must NOT call `fairchem.core._cli.main()`. The CLI's `local_launch()` calls `distutils.setup_env_local()` which overwrites `RANK=0` and `LOCAL_RANK=0` for all processes, breaking multi-GPU setup. Instead, directly call `distutils.setup(dist_config)` with `submit=False, cpu=False` and `setup_graph_parallel_groups(world_size, "nccl")`, then instantiate the runner directly.
+
+### profai-cli launch-experiment --gpus means per-node GPUs
+The `--gpus` flag in `profai-cli launch-experiment` sets `--gpus-per-node` and `--nproc_per_node` in the generated SLURM script. For 64 total GPUs across 8 nodes, use `--gpus 8 --nodes 8`, NOT `--gpus 64 --nodes 8`.
+
+### InferenceBenchRunner.job_config requires OmegaConf DictConfig
+`Runner.job_config` uses a property descriptor (`TypedPropertyDescriptor`) that enforces the value must be `omegaconf.DictConfig`. Using `types.SimpleNamespace` or a plain dict raises `ValueError`. When constructing a runner outside the Hydra pipeline, use `OmegaConf.create({"metadata": {"results_dir": path}})` instead of `SimpleNamespace`.
+
+### AABB send_info must compute BOTH send and recv counts symmetrically
+When computing send_info from AABB geometry to replace `_fused_index_exchange`, you MUST compute both `send_counts` (local atoms → remote AABBs) AND `recv_counts` (remote atoms → our AABB). The all-to-all requires `rank_A.send_counts[B] == rank_B.recv_counts[A]`. If recv_counts is computed from edge_index (edge-based needed atoms) while send_counts comes from AABB, they won't match — AABB is conservative (includes false positives), so send_counts >= edge-based recv_counts. This mismatch deadlocks `all_to_all_single`. Since all ranks have the full position tensor, each rank can independently compute what every other rank will send to it (checking remote atoms against its own expanded AABB). This is purely local, requires no NCCL, and guarantees consistency.
+
+### global_to_local must map needed_atoms in recv_buf (source-rank) order
+The `global_to_local` mapping in `build_gp_context` assigns local indices to received atoms. These local indices index into `[x_local | recv_buf]`. Since `all_to_all` fills `recv_buf` by **source rank** (rank 0's data first, then rank 1's, etc.), `needed_atoms` MUST be sorted by source rank before assigning local indices. `nonzero()` returns indices sorted by global index, which does NOT match source-rank ordering with spatial partitioning. With `index_split`, global-index order == rank order (no bug), so this was latent until spatial partitioning was used. Without the sort, 99.9% of remote atom positions are mismatched, producing wrong embeddings silently (model runs but gives incorrect predictions). Fix: `sort_order = needed_from_ranks.argsort(stable=True); needed_atoms = needed_atoms[sort_order]` before the `global_to_local` assignment.

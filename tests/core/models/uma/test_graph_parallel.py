@@ -609,11 +609,13 @@ class TestEdgeClassification:
         Verify that local_edge_mask is computed and has correct type/shape.
         """
         # 6 atoms, 2 ranks, edges cross the partition boundary
+        # build_gp_context expects edges pre-filtered to targets in this
+        # rank's partition (atoms 0, 1, 2 for rank 0).
         rank_assignments = torch.tensor([0, 0, 0, 1, 1, 1])
         edge_index = torch.tensor(
             [
-                [0, 1, 2, 3, 0, 3],
-                [1, 2, 0, 4, 3, 0],
+                [0, 1, 2, 3],
+                [1, 2, 0, 0],
             ]
         )
         ctx = build_gp_context(edge_index, rank_assignments, rank=0, world_size=2)

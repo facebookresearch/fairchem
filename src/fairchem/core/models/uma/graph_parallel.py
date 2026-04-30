@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 
@@ -269,7 +270,7 @@ def _compute_send_info_aabb(
     device = pos.device
     local_pos = pos[node_partition]  # (n_local, 3)
 
-    # Compute AABB for each remote rank using scatter min/max.
+    # Compute AABB for each rank using scatter min/max.
     # Initialize with extreme values so empty ranks stay excluded.
     aabb_min = torch.full((world_size, 3), float("inf"), device=device, dtype=pos.dtype)
     aabb_max = torch.full(
@@ -280,10 +281,6 @@ def _compute_send_info_aabb(
     ra_expanded = rank_assignments.unsqueeze(1).expand(-1, 3)
     aabb_min.scatter_reduce_(0, ra_expanded, pos, reduce="amin")
     aabb_max.scatter_reduce_(0, ra_expanded, pos, reduce="amax")
-
-    # Expand AABBs by cutoff
-    aabb_min = aabb_min - cutoff
-    aabb_max = aabb_max + cutoff
 
     # Build PBC shift vectors. For PBC systems, atoms near box edges
     # may be within cutoff of a remote rank's domain through a periodic
@@ -303,75 +300,103 @@ def _compute_send_info_aabb(
         # No PBC: only check identity (no periodic images)
         shift_vectors = torch.zeros(1, 3, device=device, dtype=pos.dtype)
 
-    # For each local atom, check against all remote ranks' AABBs
-    # across all periodic images. Use vectorized operations.
-    #
-    # local_pos: (n_local, 3)
+    # --- PRE-FILTER: Identify neighbor ranks via AABB overlap ---
+    # Instead of checking all atoms against all ranks' AABBs (O(N*P*S)),
+    # first determine which remote ranks could possibly overlap with our
+    # local AABB (expanded by cutoff). With spatial partitioning at 64+
+    # GPUs, only ~10-15 ranks are actual neighbors; pre-filtering reduces
+    # per-atom checks by 4-5x.
+    my_min_raw = aabb_min[rank] + cutoff  # undo expansion → raw AABB
+    my_max_raw = aabb_max[rank] + cutoff
+    my_min_expanded = my_min_raw - cutoff
+    my_max_expanded = my_max_raw + cutoff
+
+    # Check which remote rank AABBs overlap with our expanded AABB
+    # across any PBC shift. Two AABBs overlap if they overlap in all
+    # 3 dimensions.
+    # Remote raw AABBs: (world_size, 3)
+    remote_min_raw = aabb_min + cutoff  # undo expansion
+    remote_max_raw = aabb_max + cutoff
+
+    # For each shift, check AABB overlap (vectorized, no Python loop):
+    #   shifted_remote = remote + shift → check overlap with our AABB
+    # remote_min/max_raw: (world_size, 3)
     # shift_vectors: (n_shifts, 3)
+    # Broadcast: (n_shifts, world_size, 3)
+    shifted_rmin = remote_min_raw.unsqueeze(0) + shift_vectors.unsqueeze(1)  # (S, W, 3)
+    shifted_rmax = remote_max_raw.unsqueeze(0) + shift_vectors.unsqueeze(1)  # (S, W, 3)
+    overlap = (
+        (shifted_rmax >= my_min_expanded) & (shifted_rmin <= my_max_expanded)
+    ).all(dim=-1)  # (S, W)
+    is_neighbor = overlap.any(dim=0)  # (W,)
+
+    is_neighbor[rank] = False  # exclude self
+
+    # Convert to list of neighbor ranks for efficient indexing
+    neighbor_ranks = is_neighbor.nonzero(as_tuple=True)[0]  # (n_neighbors,)
+
+    # Expand AABBs by cutoff (for the actual atom-level checks below)
+    aabb_min_exp = aabb_min - cutoff
+    aabb_max_exp = aabb_max + cutoff
+
+    # --- SEND side: check local atoms against NEIGHBOR ranks' AABBs ---
+    # Only check against n_neighbors ranks instead of world_size.
     # shifted_pos: (n_shifts, n_local, 3)
     shifted_pos = local_pos.unsqueeze(0) + shift_vectors.unsqueeze(1)
 
-    # Check each shifted position against each remote rank's AABB.
-    # aabb_min/aabb_max: (world_size, 3)
-    # We want: for each (shift, atom, rank), is the atom inside the AABB?
-    #
-    # shifted_pos: (n_shifts, n_local, 1, 3)
-    # aabb_min:    (1,        1,       world_size, 3)
+    # Select only neighbor AABBs
+    neighbor_lo = aabb_min_exp[neighbor_ranks]  # (n_neighbors, 3)
+    neighbor_hi = aabb_max_exp[neighbor_ranks]  # (n_neighbors, 3)
+
     sp = shifted_pos.unsqueeze(2)  # (n_shifts, n_local, 1, 3)
-    lo = aabb_min.unsqueeze(0).unsqueeze(0)  # (1, 1, world_size, 3)
-    hi = aabb_max.unsqueeze(0).unsqueeze(0)  # (1, 1, world_size, 3)
+    lo = neighbor_lo.unsqueeze(0).unsqueeze(0)  # (1, 1, n_neighbors, 3)
+    hi = neighbor_hi.unsqueeze(0).unsqueeze(0)  # (1, 1, n_neighbors, 3)
 
     # in_box: True if atom is within AABB in all 3 dimensions
-    in_box = ((sp >= lo) & (sp <= hi)).all(dim=-1)  # (n_shifts, n_local, W)
+    in_box = ((sp >= lo) & (sp <= hi)).all(dim=-1)  # (n_shifts, n_local, n_neighbors)
 
     # Collapse shifts: atom is reachable if ANY periodic image is in box
-    reachable = in_box.any(dim=0)  # (n_local, world_size)
+    reachable_nbr = in_box.any(dim=0)  # (n_local, n_neighbors)
 
-    # Exclude self-rank (don't send to yourself)
-    reachable[:, rank] = False
+    # Reconstruct full send_counts (world_size,) from neighbor subset
+    send_counts = torch.zeros(world_size, dtype=torch.long, device=device)
+    nbr_counts = reachable_nbr.sum(dim=0).to(torch.long)  # (n_neighbors,)
+    send_counts[neighbor_ranks] = nbr_counts
 
-    # Build send_counts and send_indices_global sorted by rank
-    # reachable: (n_local, world_size) boolean
-    send_counts = reachable.sum(dim=0).to(torch.long)  # (world_size,)
-
-    # For each (atom, rank) pair where reachable is True, we need to
-    # record the global atom index. Sort by rank (then atom within rank).
-    atom_idx, rank_idx = reachable.nonzero(as_tuple=True)
-    # atom_idx is index into node_partition → convert to global
+    # Build send_indices_global sorted by rank
+    atom_idx, nbr_idx = reachable_nbr.nonzero(as_tuple=True)
     global_atoms = node_partition[atom_idx]
-
-    # Sort by destination rank (stable sort preserves atom order within rank)
-    sort_order = rank_idx.argsort(stable=True)
+    dest_ranks = neighbor_ranks[nbr_idx]
+    sort_order = dest_ranks.argsort(stable=True)
     send_indices_global = global_atoms[sort_order]
 
-    # --- RECV side: check all remote atoms against OUR expanded AABB ---
-    # This is the symmetric computation: for each remote rank R, how many
-    # of R's atoms fall within our AABB? This equals R's send_counts[rank],
-    # guaranteeing send/recv count consistency without communication.
-    my_lo = aabb_min[rank]  # (3,)
-    my_hi = aabb_max[rank]  # (3,)
+    # --- RECV side: check NEIGHBOR atoms against OUR expanded AABB ---
+    # Only process atoms from neighbor ranks, not all N atoms.
+    my_lo = aabb_min_exp[rank]  # (3,)
+    my_hi = aabb_max_exp[rank]  # (3,)
 
-    # Check all atoms against our AABB across PBC shifts.
-    # shifted_all: (n_shifts, N, 3) — N is total atoms across all ranks
-    shifted_all = pos.unsqueeze(0) + shift_vectors.unsqueeze(1)
-    in_my_box = ((shifted_all >= my_lo) & (shifted_all <= my_hi)).all(
+    # Gather atoms from neighbor ranks only
+    neighbor_mask = is_neighbor[rank_assignments]  # (N,) — True for neighbor atoms
+    neighbor_atom_indices = neighbor_mask.nonzero(as_tuple=True)[0]
+    neighbor_pos = pos[neighbor_atom_indices]  # (n_neighbor_atoms, 3)
+
+    # shifted_nbr: (n_shifts, n_neighbor_atoms, 3)
+    shifted_nbr = neighbor_pos.unsqueeze(0) + shift_vectors.unsqueeze(1)
+    in_my_box = ((shifted_nbr >= my_lo) & (shifted_nbr <= my_hi)).all(
         dim=-1
-    )  # (n_shifts, N)
-    reachable_to_me = in_my_box.any(dim=0)  # (N,)
+    )  # (n_shifts, n_neighbor_atoms)
+    reachable_to_me = in_my_box.any(dim=0)  # (n_neighbor_atoms,)
 
-    # Exclude own atoms (never receive from self)
-    reachable_to_me[rank_assignments == rank] = False
-
-    # Build recv_counts and recv_indices_global sorted by source rank
-    recv_atoms = reachable_to_me.nonzero(as_tuple=True)[0]
-    if recv_atoms.numel() > 0:
-        recv_from_ranks = rank_assignments[recv_atoms]
+    # Map back to global indices and build recv_counts
+    recv_global = neighbor_atom_indices[reachable_to_me]
+    if recv_global.numel() > 0:
+        recv_from_ranks = rank_assignments[recv_global]
         recv_counts = torch.bincount(recv_from_ranks, minlength=world_size).to(
             torch.long
         )
         recv_counts[rank] = 0
         sort_order_recv = recv_from_ranks.argsort(stable=True)
-        recv_indices_global = recv_atoms[sort_order_recv]
+        recv_indices_global = recv_global[sort_order_recv]
     else:
         recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
         recv_indices_global = torch.empty(0, dtype=torch.long, device=device)
@@ -530,45 +555,64 @@ def build_gp_context(
         recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
     recv_counts[rank] = 0  # Never receive from self
 
-    # Fused count + index exchange: single padded all-to-all replaces
-    # the old 2-step approach (count exchange + index exchange).
-    if send_info is not None:
-        # Pre-computed during graph filtering — skip NCCL collective.
+    # CRITICAL: Sort needed_atoms by source rank to match recv_buf ordering.
+    # all_to_all fills recv_buf by source rank: [atoms from rank 0 | atoms
+    # from rank 1 | ...]. Within each rank, atoms are in the order we
+    # requested them (global index order, since argsort is stable).
+    # global_to_local must assign local indices in this SAME order,
+    # otherwise local index i maps to recv_buf[i] which has a DIFFERENT
+    # atom's embedding.
+    # With index_split, global index order == rank order (no-op sort).
+    # With spatial, global index order != rank order → sort is essential.
+    sort_order = needed_from_ranks.argsort(stable=True)
+    needed_atoms = needed_atoms[sort_order]
+    needed_from_ranks = needed_from_ranks[sort_order]
+
+    # Use AABB send_info when available to skip the _fused_index_exchange
+    # NCCL collective entirely. AABB computes send_counts and recv_counts
+    # symmetrically (rank A's send_counts[B] == rank B's recv_counts[A])
+    # without any communication.
+    #
+    # AABB recv_indices_global is a SUPERSET of edge-based needed_atoms
+    # (AABB is conservative — L2 ≤ L-inf for each axis). The extra atoms
+    # waste some bandwidth/memory but don't affect correctness since they
+    # are never referenced by any edge.
+    if send_info is not None and "recv_counts" in send_info:
+        # AABB send_info — use fully (send + recv), skip NCCL.
         send_counts = send_info["send_counts"]
         send_indices_global = send_info["send_indices_global"]
-
-        # AABB send_info also provides recv data (symmetric AABB check).
-        # This MUST be used for consistency: rank A's send_counts[B]
-        # must equal rank B's recv_counts[A]. The edge-based recv_counts
-        # computed above won't match because AABB is conservative
-        # (includes false positives). Using AABB recv_counts guarantees
-        # the all-to-all buffer sizes are consistent across all ranks.
-        if "recv_counts" in send_info:
-            recv_counts = send_info["recv_counts"]
-            needed_atoms = send_info["recv_indices_global"]
-            total_needed_atoms = needed_atoms.shape[0]
-            needed_from_ranks = rank_assignments[needed_atoms]
+        recv_counts = send_info["recv_counts"]
+        needed_atoms = send_info["recv_indices_global"]
+        needed_from_ranks = rank_assignments[needed_atoms]
+        total_needed_atoms = needed_atoms.shape[0]
+    elif send_info is not None:
+        # Pre-computed during graph filtering (no recv_counts) — use it.
+        send_counts = send_info["send_counts"]
+        send_indices_global = send_info["send_indices_global"]
     else:
-        with record_function("a2a_fused_index_exchange"):
-            send_counts, send_indices_global = _fused_index_exchange(
+        with record_function("a2a_sparse_index_exchange"):
+            send_counts, send_indices_global = _sparse_index_exchange(
                 needed_atoms=needed_atoms,
                 needed_from_ranks=needed_from_ranks,
                 recv_counts=recv_counts,
                 rank=rank,
                 world_size=world_size,
-                total_atoms=total_atoms,
                 device=device,
             )
 
     # Build global_to_local mapping:
     # Local atoms: index 0..total_local_atoms-1 (in order of node_partition)
-    # Received atoms: index total_local_atoms..total_local_atoms+total_needed_atoms-1
+    # Received atoms: index total_local_atoms..total_local_atoms+total_needed
+    # IMPORTANT: needed_atoms is sorted by source rank (not global index)
+    # to match the recv_buf ordering from all_to_all. This ensures that
+    # local index (total_local + i) maps to recv_buf[i], which contains
+    # the embedding of needed_atoms[i].
     global_to_local = torch.full((total_atoms,), -1, dtype=torch.long, device=device)
     # Map local atoms
     global_to_local[node_partition] = torch.arange(
         total_local_atoms, dtype=torch.long, device=device
     )
-    # Map needed remote atoms
+    # Map needed remote atoms (in recv_buf order = source rank order)
     global_to_local[needed_atoms] = torch.arange(
         total_local_atoms,
         total_local_atoms + total_needed_atoms,
@@ -578,13 +622,10 @@ def build_gp_context(
 
     # Convert send_indices from global to local
     send_indices = None
-    if send_indices_global is not None and send_indices_global.numel() > 0:
+    has_send = send_indices_global is not None
+    if has_send and send_indices_global.numel() > 0:
         send_indices = global_to_local[send_indices_global]
-        if not (send_indices >= 0).all():
-            raise RuntimeError(
-                f"Rank {rank}: received requests for atoms not in our partition"
-            )
-    elif send_indices_global is not None:
+    elif has_send:
         send_indices = torch.empty(0, dtype=torch.long, device=device)
 
     # Precompute edge_index_local
@@ -597,16 +638,84 @@ def build_gp_context(
     local_edge_mask = src_is_local & tgt_is_local_edge
 
     # Batch ALL GPU→CPU scalar extractions into a single transfer.
-    # Stacking send_counts, recv_counts, and local_edge_count into
-    # one tensor avoids 3 separate sync points (each .cpu()/.item()
-    # is a GPU→CPU sync).
+    # This batches send_counts, recv_counts, local_edge_count, AND
+    # validation scalars into ONE .cpu() call, eliminating 2 extra
+    # GPU→CPU syncs from separate .all()/.any() validation checks.
     local_edge_count = local_edge_mask.sum().unsqueeze(0).to(torch.long)
-    all_cpu = torch.cat([send_counts, recv_counts, local_edge_count]).cpu()
+    bad_edge_count = (edge_index_local < 0).sum().unsqueeze(0).to(torch.long)
+    send_valid = (
+        torch.ones(1, dtype=torch.long, device=device)
+        if send_indices is None or send_indices.numel() == 0
+        else (send_indices >= 0).all().unsqueeze(0).to(torch.long)
+    )
+    all_cpu = torch.cat(
+        [send_counts, recv_counts, local_edge_count, bad_edge_count, send_valid]
+    ).cpu()
     send_splits = all_cpu[:world_size].tolist()
     recv_splits = all_cpu[world_size : 2 * world_size].tolist()
     total_recv = sum(recv_splits)
-    num_local_edges = int(all_cpu[-1].item())
+    num_local_edges = int(all_cpu[2 * world_size].item())
     num_boundary_edges = edge_index_local.shape[1] - num_local_edges
+    n_bad = int(all_cpu[2 * world_size + 1].item())
+    send_ok = int(all_cpu[2 * world_size + 2].item())
+
+    # Validate AFTER the batched CPU transfer (no extra GPU syncs).
+    if not send_ok:
+        raise RuntimeError(
+            f"Rank {rank}: received requests for atoms not in our partition"
+        )
+    if n_bad > 0:
+        # Only compute diagnostics in the error path (rare).
+        bad_cols = (edge_index_local < 0).any(dim=0)
+        bad_globals = edge_index[:, bad_cols].unique()
+        bad_ranks = rank_assignments[bad_globals]
+
+        # Compute edge-based needed atoms for comparison.
+        edge_src_remote = ~local_mask[edge_index[0]]
+        edge_needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
+        edge_needed_mask[edge_index[0, edge_src_remote]] = True
+        edge_needed_mask &= ~local_mask
+        edge_needed_count = edge_needed_mask.sum().item()
+
+        # Check which edge-needed atoms are NOT in our needed_atoms.
+        needed_set = torch.zeros(total_atoms, dtype=torch.bool, device=device)
+        needed_set[needed_atoms] = True
+        missing = edge_needed_mask & ~needed_set
+        missing_count = missing.sum().item()
+
+        # Check for local atoms in needed_atoms.
+        local_in_needed = (local_mask & needed_set).sum().item()
+
+        # Check for bad local atoms (local atoms mapped to -1).
+        local_is_bad = local_mask[bad_globals]
+        n_local_bad = local_is_bad.sum().item()
+
+        logging.error(
+            f"Rank {rank}: AABB DIAGNOSTIC — "
+            f"{n_bad} entries in edge_index_local are -1. "
+            f"edge_needed={edge_needed_count}, "
+            f"aabb_needed={total_needed_atoms}, "
+            f"missing_from_aabb={missing_count}, "
+            f"local_in_needed={local_in_needed}, "
+            f"n_local_bad={n_local_bad}/{len(bad_globals)} bad globals, "
+            f"total_atoms={total_atoms}, "
+            f"total_local={total_local_atoms}, "
+            f"node_partition_range=[{node_partition.min().item()}, "
+            f"{node_partition.max().item()}], "
+            f"send_info_provided={send_info is not None}, "
+            f"bad_globals[:20]={bad_globals.tolist()[:20]}, "
+            f"bad_ranks[:20]={bad_ranks.tolist()[:20]}"
+        )
+        if missing_count > 0:
+            missing_indices = missing.nonzero(as_tuple=True)[0][:10]
+            logging.error(
+                f"Rank {rank}: Missing atoms (edge-needed but "
+                f"not in AABB): {missing_indices.tolist()}"
+            )
+        raise RuntimeError(
+            f"Rank {rank}: edge_index has {n_bad} endpoints not in "
+            f"global_to_local mapping. AABB may not be conservative enough."
+        )
 
     return GPContext(
         rank=rank,
@@ -755,6 +864,92 @@ def _fused_index_exchange(
     # Since padding is at the end of each chunk, within-chunk order is
     # preserved, matching what the old 2-step approach produced.
     send_indices_global = recv_2d[valid_mask]
+
+    return send_counts, send_indices_global
+
+
+def _sparse_index_exchange(
+    needed_atoms: torch.Tensor,
+    needed_from_ranks: torch.Tensor,
+    recv_counts: torch.Tensor,
+    rank: int,
+    world_size: int,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """
+    Variable-split index exchange using two small all-to-alls.
+
+    Step 1: Exchange recv_counts to get send_counts (64 ints = 0.5KB).
+    Step 2: Exchange actual atom indices with variable split sizes.
+
+    This sends 12.8x less data than _fused_index_exchange at 64 GPUs
+    (40KB vs 512KB) because it avoids padding empty rank-chunks to
+    ceil(N/P) with sentinel values.
+
+    Args:
+        needed_atoms: Global indices of atoms this rank needs, sorted.
+        needed_from_ranks: Source rank for each needed atom.
+        recv_counts: Number of atoms needed from each rank.
+        rank: This rank's GP rank.
+        world_size: GP world size.
+        device: Tensor device.
+
+    Returns:
+        Tuple of (send_counts, send_indices_global).
+    """
+    if not gp_utils.initialized():
+        return (
+            torch.zeros(world_size, dtype=torch.long, device=device),
+            None,
+        )
+
+    gp_group = gp_utils.get_gp_group()
+    backend = dist.get_backend(gp_group)
+
+    # Step 1: Exchange counts.
+    # What rank A calls recv_counts[B] is what rank B must send to A.
+    # So rank B's send_counts[A] = rank A's recv_counts[B].
+    # all_to_all on a (world_size,) tensor transposes the count matrix.
+    send_counts = torch.empty(world_size, dtype=torch.long, device=device)
+    if backend == "nccl":
+        dist.all_to_all_single(send_counts, recv_counts.contiguous(), group=gp_group)
+    else:
+        # Gloo fallback
+        send_list = list(recv_counts.split(1))
+        recv_list = list(send_counts.split(1))
+        dist.all_to_all(recv_list, send_list, group=gp_group)
+
+    # Step 2: Exchange actual atom indices with variable splits.
+    # Build send buffer: needed_atoms sorted by source rank.
+    if needed_atoms.numel() > 0:
+        sort_order = needed_from_ranks.argsort(stable=True)
+        send_buf = needed_atoms[sort_order].contiguous()
+    else:
+        send_buf = torch.empty(0, dtype=torch.long, device=device)
+
+    total_recv_indices = send_counts.sum().item()
+    recv_buf = torch.empty(total_recv_indices, dtype=torch.long, device=device)
+
+    send_splits = recv_counts.tolist()  # what we send = what others need from us
+    recv_splits = send_counts.tolist()  # what we recv = what we need from others
+
+    if backend == "nccl":
+        dist.all_to_all_single(
+            recv_buf,
+            send_buf,
+            output_split_sizes=recv_splits,
+            input_split_sizes=send_splits,
+            group=gp_group,
+        )
+    else:
+        # Gloo fallback
+        send_list = list(send_buf.split(send_splits))
+        recv_list = list(recv_buf.split(recv_splits))
+        dist.all_to_all(recv_list, send_list, group=gp_group)
+
+    # recv_buf now contains the global indices of atoms we must SEND,
+    # ordered by destination rank.
+    send_indices_global = recv_buf
 
     return send_counts, send_indices_global
 
