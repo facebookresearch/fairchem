@@ -461,6 +461,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self.move_to_device()
 
+        # Freeze all model parameters before compile — only pos/cell need
+        # requires_grad for force/stress computation via autograd.
+        if self.inference_settings.freeze_model_parameters:
+            for p in self.model.parameters():
+                p.requires_grad_(False)
+
         if self.inference_settings.compile:
             logging.warning(
                 "Model is being compiled this might take a while for the first time"

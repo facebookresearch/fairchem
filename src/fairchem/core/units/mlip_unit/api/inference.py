@@ -123,6 +123,11 @@ class InferenceSettings:
     # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
     auto_add_default_untrained_tasks: bool = True
 
+    # When True, set requires_grad=False on all model parameters before
+    # inference. Only pos and cell retain requires_grad for force/stress
+    # computation via autograd.
+    freeze_model_parameters: bool = False
+
     # Maximum number of atoms per system for padding. Required when
     # compile=True for models that use padding (e.g., AllScAIP).
     # All inputs will be padded to this size. Larger values consume more
