@@ -19,6 +19,7 @@ from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     all_to_all_collect,
+    all_to_all_collect_compiled,
     all_to_all_collect_p2p,
     finish_all_to_all_collect,
     start_all_to_all_collect,
@@ -173,7 +174,15 @@ class Edgewise(torch.nn.Module):
                     x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
+            elif not self.training:
+                # Compile-friendly path: uses functional collectives
+                # that torch.compile can trace through (no graph break).
+                with record_function("a2a_collect_compiled"):
+                    x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
             else:
+                # Training path: uses autograd-compatible AllToAllCollect
                 with record_function("a2a_collect"):
                     x_received = all_to_all_collect(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)

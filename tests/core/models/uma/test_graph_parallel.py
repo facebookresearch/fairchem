@@ -23,6 +23,7 @@ from fairchem.core.common.test_utils import (
 from fairchem.core.models.uma.graph_parallel import (
     _compute_send_indices,
     all_to_all_collect,
+    all_to_all_collect_compiled,
     build_gp_context,
     finish_all_to_all_collect,
     partition_atoms_index_split,
@@ -1002,4 +1003,103 @@ def test_send_info_matches_fused_exchange():
         assert result["functional_match"], (
             f"Rank {result['rank']}: functional mismatch — "
             f"all-to-all produced different embeddings"
+        )
+
+
+def compiled_collect_test(
+    atomic_numbers: torch.Tensor,
+    edge_index: torch.Tensor,
+    strategy: str,
+):
+    """
+    Verify that all_to_all_collect_compiled produces same results
+    as the original all_to_all_collect (autograd version).
+    """
+    rank = gp_utils.get_gp_rank()
+    world_size = gp_utils.get_gp_world_size()
+
+    # Partition atoms (deterministic positions — same across all ranks)
+    if strategy == "spatial":
+        torch.manual_seed(42)
+        pos = torch.rand(atomic_numbers.shape[0], 3)
+        rank_assignments = partition_atoms_spatial(pos, world_size, pos.device)
+    else:
+        rank_assignments = partition_atoms_index_split(
+            atomic_numbers.shape[0], world_size, atomic_numbers.device
+        )
+
+    # Filter edges to this rank's partition
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    target_mask = (rank_assignments == rank)[edge_index[1]]
+    rank_edge_index = edge_index[:, target_mask]
+
+    gp_ctx = build_gp_context(
+        rank_edge_index,
+        rank_assignments,
+        rank,
+        world_size,
+        node_partition=node_partition,
+    )
+
+    send_indices = gp_ctx.send_indices
+    if send_indices is None:
+        send_indices = _compute_send_indices(gp_ctx)
+
+    x = atomic_numbers[node_partition].unsqueeze(1).float()
+
+    # Reference: original autograd version
+    x_ref = all_to_all_collect(x, gp_ctx, send_indices)
+
+    # Test: compiled functional version
+    x_compiled = all_to_all_collect_compiled(x, gp_ctx, send_indices)
+
+    match = torch.allclose(x_ref, x_compiled, atol=1e-6)
+    shape_match = x_ref.shape == x_compiled.shape
+
+    return {
+        "rank": rank,
+        "match": match,
+        "shape_match": shape_match,
+        "ref_shape": x_ref.shape,
+        "compiled_shape": x_compiled.shape,
+    }
+
+
+@pytest.mark.parametrize("strategy", ["index_split", "spatial"])
+def test_compiled_collect_matches_autograd(strategy):
+    """
+    Verify that compile-friendly functional collective produces
+    identical results to the @torch.compiler.disable autograd version.
+    """
+    num_atoms = 12
+    src = []
+    dst = []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+
+    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        compiled_collect_test,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+        strategy,
+    )
+
+    for result in all_rank_results:
+        assert result["shape_match"], (
+            f"Rank {result['rank']}: shape mismatch. "
+            f"ref={result['ref_shape']}, compiled={result['compiled_shape']}"
+        )
+        assert result["match"], (
+            f"Rank {result['rank']}: functional mismatch — "
+            f"compiled collect produced different embeddings"
         )
