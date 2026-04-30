@@ -670,21 +670,27 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             cell_sq = cell.view(3, 3) if cell.dim() == 3 else cell
             pbc_flat = pbc.view(3) if pbc.dim() == 2 else pbc
 
-            shifts_per_dim = []
+            # Build shift vectors for periodic images (up to 27).
+            # Vectorized: one GPU kernel instead of 27 Python-loop
+            # iterations.
+            shift_components = []
             for d in range(3):
                 if pbc_flat[d]:
-                    shifts_per_dim.append([-1, 0, 1])
+                    shift_components.append(torch.tensor([-1, 0, 1], device=pos.device))
                 else:
-                    shifts_per_dim.append([0])
-
-            halo_mask = torch.zeros(n_total, dtype=torch.bool, device=pos.device)
-            for sx in shifts_per_dim[0]:
-                for sy in shifts_per_dim[1]:
-                    for sz in shifts_per_dim[2]:
-                        shift = sx * cell_sq[0] + sy * cell_sq[1] + sz * cell_sq[2]
-                        shifted = pos + shift
-                        in_box = ((shifted >= lo) & (shifted <= hi)).all(dim=-1)
-                        halo_mask |= in_box
+                    shift_components.append(torch.tensor([0], device=pos.device))
+            # Cartesian product → (n_shifts, 3) integer grid
+            grid = torch.cartesian_prod(*shift_components)  # (≤27, 3)
+            # Convert integer grid to real-space shifts: (n_shifts, 3)
+            shift_vecs = grid.float() @ cell_sq  # (n_shifts, 3)
+            # Broadcast: shifted = pos[None,:,:] + shifts[:,None,:]
+            # → (n_shifts, n_total, 3)
+            shifted = pos.unsqueeze(0) + shift_vecs.unsqueeze(1)
+            # Check AABB containment and reduce across shifts
+            in_box = ((shifted >= lo) & (shifted <= hi)).all(
+                dim=-1
+            )  # (n_shifts, n_total)
+            halo_mask = in_box.any(dim=0)  # (n_total,)
 
             n_halo = halo_mask.sum().item()
 
