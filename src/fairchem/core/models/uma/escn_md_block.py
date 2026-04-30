@@ -174,9 +174,29 @@ class Edgewise(torch.nn.Module):
                     x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
+            elif (
+                not self.training
+                and gp_ctx.num_local_edges is not None
+                and gp_ctx.num_local_edges > 0
+                and gp_ctx.num_boundary_edges is not None
+                and gp_ctx.num_boundary_edges > 0
+            ):
+                # Funcoll overlap: split into local + boundary edges,
+                # overlap communication with local edge computation.
+                # Edges are pre-sorted (local first, boundary last)
+                # by edge_reorder applied in the backbone forward loop.
+                return self._forward_funcoll_overlap(
+                    x,
+                    x_edge,
+                    wigner,
+                    wigner_inv_envelope,
+                    gp_ctx,
+                    send_indices,
+                )
             elif not self.training:
-                # Compile-friendly path: uses functional collectives
+                # Compile-friendly sync path: uses functional collectives
                 # that torch.compile can trace through (no graph break).
+                # Fallback when all edges are local or all are boundary.
                 with record_function("a2a_collect_compiled"):
                     x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
@@ -323,6 +343,84 @@ class Edgewise(torch.nn.Module):
             )
 
         # Step 5: Sum contributions
+        return local_contribution + boundary_contribution
+
+    def _forward_funcoll_overlap(
+        self,
+        x,
+        x_edge,
+        wigner,
+        wigner_inv_envelope,
+        gp_ctx: GPContext,
+        send_indices: torch.Tensor | None,
+    ):
+        """
+        Overlap communication with local edge computation using
+        functional collectives (compile-friendly, no graph break).
+
+        Uses ``funcol.all_to_all_single`` which torch.compile can
+        trace through. The inductor backend can automatically overlap
+        the NCCL operation with independent local edge computation
+        when ``reorder_for_compute_comm_overlap`` is enabled.
+
+        Unlike ``_forward_overlap`` which uses manual CUDA streams
+        (causing graph breaks), this stays inside the compiled graph.
+
+        Edges must be pre-sorted: local first, boundary last (via
+        ``edge_reorder`` applied in the backbone forward loop).
+        """
+        from torch.distributed._functional_collectives import (
+            all_to_all_single as functional_a2a,
+        )
+
+        edge_index_local = gp_ctx.edge_index_local
+        num_local_atoms = x.shape[0]
+        n_local = gp_ctx.num_local_edges
+
+        # Split pre-sorted per-edge data: local first, boundary last.
+        local_edge_idx = edge_index_local[:, :n_local]
+        boundary_edge_idx = edge_index_local[:, n_local:]
+        local_x_edge = x_edge[:n_local]
+        boundary_x_edge = x_edge[n_local:]
+        local_wigner = wigner[:n_local]
+        boundary_wigner = wigner[n_local:]
+        local_wigner_inv = wigner_inv_envelope[:n_local]
+        boundary_wigner_inv = wigner_inv_envelope[n_local:]
+
+        # Start communication (funcoll — no graph break, tracing-safe).
+        x_send = x[send_indices].contiguous()
+        gp_group = gp_utils.get_gp_group()
+        x_recv = functional_a2a(
+            x_send,
+            output_split_sizes=gp_ctx.recv_splits,
+            input_split_sizes=gp_ctx.send_splits,
+            group=gp_group,
+        )
+
+        # Compute local edges while a2a may still be in flight.
+        # This is independent of x_recv — the inductor can overlap.
+        local_contribution = self.forward_chunk(
+            x,
+            num_local_atoms,
+            local_x_edge,
+            local_edge_idx,
+            local_wigner,
+            local_wigner_inv,
+            0,
+        )
+
+        # Now use x_recv for boundary edges.
+        x_full = torch.cat([x, x_recv], dim=0)
+        boundary_contribution = self.forward_chunk(
+            x_full,
+            num_local_atoms,
+            boundary_x_edge,
+            boundary_edge_idx,
+            boundary_wigner,
+            boundary_wigner_inv,
+            0,
+        )
+
         return local_contribution + boundary_contribution
 
     def forward_chunk(

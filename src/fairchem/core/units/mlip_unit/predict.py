@@ -466,6 +466,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "Model is being compiled this might take a while for the first time"
             )
             torch._dynamo.config.recompile_limit = 32
+            # Enable compute-communication overlap for funcoll A2A.
+            # This lets the inductor pipeline NCCL all-to-all with
+            # independent local edge computation in each layer.
+            torch._inductor.config.reorder_for_compute_comm_overlap = True
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
