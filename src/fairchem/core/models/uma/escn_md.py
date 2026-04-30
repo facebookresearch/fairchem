@@ -790,8 +790,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # reduce the number of atoms passed to graph generation.
             # Only atoms within cutoff of the local partition AABB
             # (considering periodic images) are included.
+            # Gate on world_size >= 16 to avoid graph break overhead
+            # at small GPU counts where the halo covers the entire box.
             graph_dict = None
-            if self.use_all_to_all_gp and node_partition is not None and pbc.all():
+            if (
+                self.use_all_to_all_gp
+                and node_partition is not None
+                and gp_utils.get_gp_world_size() >= 16
+                and pbc.all()
+            ):
                 graph_dict = self._compute_halo_graph(
                     data_dict, node_partition, rank_assignments, pbc
                 )
