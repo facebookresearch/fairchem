@@ -461,6 +461,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self.move_to_device()
 
+        if getattr(self.inference_settings, "freeze_params", False):
+            for p in self.model.parameters():
+                p.requires_grad_(False)
+
         if self.inference_settings.compile:
             logging.warning(
                 "Model is being compiled this might take a while for the first time"

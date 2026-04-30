@@ -72,6 +72,17 @@ class InferenceSettings:
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
+    # Freeze model parameters at inference (requires_grad=False on all
+    # weights). For gradient-force models, autograd then short-circuits
+    # the dW backward kernels for every Linear/segment_mm in the
+    # backward pass that produces forces. With moe_layer_type=fairchem_cpp
+    # this is a clear win because segment_mm fwd / bwd are separate
+    # kernels and the bwd skip is pure savings; with pytorch MOLE under
+    # tf32 it can be a regression because cuBLAS dispatches a fused
+    # (dx, dW) Tensor Core path that's not selected when only dx is
+    # requested. Default off; opt-in.
+    freeze_params: bool = False
+
     # Deprecated
     # Flag to enable or disable the use of CUDA Graphs for compute
     # This flag is no longer used and will be removed in future versions
