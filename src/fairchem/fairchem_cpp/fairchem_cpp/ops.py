@@ -20,33 +20,93 @@ __all__ = ["segment_mm"]
 # ---------------------------------------------------------------------------
 
 
-def _segment_mm_fwd(A, B, seglen, b_trans=False):
-    """
-    Raw forward: C = A @ B (or A @ B^T when b_trans=True) per segment.
-    """
+# E1 (compile fix): wrap the in-place C++ kernels in functional
+# torch.library.custom_op declarations so torch.compile / torch._dynamo
+# can trace past them. The underlying torch.ops.fairchem_cpp.segment_mm
+# kernel writes its result in-place into a pre-allocated C; that
+# mutation pattern has no fake/meta registration and produces a
+# fundamental graph break (gb0090: "unsupported operator
+# fairchem_cpp.segment_mm.default"). Registering a functional wrapper
+# (allocate-and-return inside the op) gives dynamo a known output shape
+# and removes the break. Behavior is unchanged for eager callers.
+
+
+@torch.library.custom_op(
+    "fairchem_cpp::segment_mm_functional", mutates_args=()
+)
+def _segment_mm_functional(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    seglen: torch.Tensor,
+    b_trans: bool,
+) -> torch.Tensor:
     A = A.contiguous()
     B = B.contiguous()
     seglen = seglen.contiguous()
     if not b_trans:
-        C = torch.empty((A.shape[0], B.shape[2]), device=A.device, dtype=A.dtype)
+        C = torch.empty(
+            (A.shape[0], B.shape[2]), device=A.device, dtype=A.dtype
+        )
     else:
-        C = torch.empty((A.shape[0], B.shape[1]), device=A.device, dtype=A.dtype)
+        C = torch.empty(
+            (A.shape[0], B.shape[1]), device=A.device, dtype=A.dtype
+        )
     torch.ops.fairchem_cpp.segment_mm(A, B, C, seglen, b_trans)
     return C
+
+
+@_segment_mm_functional.register_fake
+def _segment_mm_functional_fake(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    seglen: torch.Tensor,
+    b_trans: bool,
+) -> torch.Tensor:
+    M = B.shape[1] if b_trans else B.shape[2]
+    return torch.empty((A.shape[0], M), device=A.device, dtype=A.dtype)
+
+
+@torch.library.custom_op(
+    "fairchem_cpp::segment_mm_bwd_b_functional", mutates_args=()
+)
+def _segment_mm_bwd_b_functional(
+    A: torch.Tensor, dC: torch.Tensor, seglen: torch.Tensor
+) -> torch.Tensor:
+    A = A.contiguous()
+    dC = dC.contiguous()
+    seglen = seglen.contiguous()
+    dB = torch.empty(
+        (seglen.numel(), A.shape[1], dC.shape[1]),
+        device=A.device,
+        dtype=A.dtype,
+    )
+    torch.ops.fairchem_cpp.segment_mm_backward(A, dC, dB, seglen)
+    return dB
+
+
+@_segment_mm_bwd_b_functional.register_fake
+def _segment_mm_bwd_b_functional_fake(
+    A: torch.Tensor, dC: torch.Tensor, seglen: torch.Tensor
+) -> torch.Tensor:
+    return torch.empty(
+        (seglen.numel(), A.shape[1], dC.shape[1]),
+        device=A.device,
+        dtype=A.dtype,
+    )
+
+
+def _segment_mm_fwd(A, B, seglen, b_trans=False):
+    """
+    Raw forward: C = A @ B (or A @ B^T when b_trans=True) per segment.
+    """
+    return _segment_mm_functional(A, B, seglen, b_trans)
 
 
 def _segment_mm_bwd_b(A, dC, seglen):
     """
     Raw backward-B: dB_i = A_i^T @ dC_i per segment.
     """
-    A = A.contiguous()
-    dC = dC.contiguous()
-    seglen = seglen.contiguous()
-    dB = torch.empty(
-        (seglen.numel(), A.shape[1], dC.shape[1]), device=A.device, dtype=A.dtype
-    )
-    torch.ops.fairchem_cpp.segment_mm_backward(A, dC, dB, seglen)
-    return dB
+    return _segment_mm_bwd_b_functional(A, dC, seglen)
 
 
 # ---------------------------------------------------------------------------

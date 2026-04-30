@@ -80,6 +80,7 @@ def get_pbc_distances(
     neighbors,
     return_offsets: bool = False,
     return_distance_vec: bool = False,
+    skip_redundant_filter: bool = False,
 ):
     row, col = edge_index
 
@@ -93,6 +94,22 @@ def get_pbc_distances(
 
     # compute distances
     distances = distance_vectors.norm(dim=-1)
+
+    # E5b (compile fix): the original `nonzero_idx = arange[distances !=
+    # 0]` filter is data-dependent boolean indexing — a fundamental
+    # graph break. Callers who already guarantee no zero-distance edges
+    # (e.g. cached topology from a previous radius graph) can opt out
+    # via skip_redundant_filter=True.
+    if skip_redundant_filter:
+        out = {
+            "edge_index": edge_index,
+            "distances": distances,
+        }
+        if return_distance_vec:
+            out["distance_vec"] = distance_vectors
+        if return_offsets:
+            out["offsets"] = offsets
+        return out
 
     # redundancy: remove zero distances
     nonzero_idx = torch.arange(len(distances), device=distances.device)[distances != 0]
