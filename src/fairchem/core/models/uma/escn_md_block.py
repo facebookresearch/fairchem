@@ -174,29 +174,9 @@ class Edgewise(torch.nn.Module):
                     x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
-            elif (
-                not self.training
-                and gp_ctx.num_local_edges is not None
-                and gp_ctx.num_local_edges > 0
-                and gp_ctx.num_boundary_edges is not None
-                and gp_ctx.num_boundary_edges > 0
-            ):
-                # Funcoll overlap: split into local + boundary edges,
-                # overlap communication with local edge computation.
-                # Edges are pre-sorted (local first, boundary last)
-                # by edge_reorder applied in the backbone forward loop.
-                return self._forward_funcoll_overlap(
-                    x,
-                    x_edge,
-                    wigner,
-                    wigner_inv_envelope,
-                    gp_ctx,
-                    send_indices,
-                )
             elif not self.training:
-                # Compile-friendly sync path: uses functional collectives
+                # Compile-friendly path: uses functional collectives
                 # that torch.compile can trace through (no graph break).
-                # Fallback when all edges are local or all are boundary.
                 with record_function("a2a_collect_compiled"):
                     x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)

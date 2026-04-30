@@ -1021,13 +1021,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         with record_function("layer_radial_emb"):
             x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
-        # Pre-sort all per-edge tensors so local edges come first and
-        # boundary edges last. This enables compile-friendly overlap
-        # via split() instead of boolean indexing. Applied whenever
-        # A2A is active (edge_reorder is always precomputed in
-        # build_gp_context). Reordering is idempotent for the
-        # non-overlap path (scatter_add is order-invariant).
-        if gp_ctx is not None and gp_ctx.edge_reorder is not None:
+        # When overlap is enabled, pre-sort all per-edge tensors so local
+        # edges come first and boundary edges last. This lets the overlap
+        # path use compile-friendly split() instead of boolean indexing.
+        if (
+            gp_ctx is not None
+            and gp_ctx.edge_reorder is not None
+            and self.use_overlap_gp
+        ):
             reorder = gp_ctx.edge_reorder
             wigner = wigner[reorder]
             wigner_inv_envelope = wigner_inv_envelope[reorder]
