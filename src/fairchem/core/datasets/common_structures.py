@@ -17,12 +17,14 @@ def get_fcc_crystal_by_num_atoms(
     num_atoms: int,
     lattice_constant: float = 3.8,
     atom_type: str = "C",
+    seed: int = 42,
 ) -> Atoms:
     # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom, used for benchmarking
     atoms = bulk(atom_type, "fcc", a=lattice_constant)
     n_cells = int(np.ceil(np.cbrt(num_atoms)))
     atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
+    rng = np.random.default_rng(seed)
+    indices = rng.choice(len(atoms), num_atoms, replace=False)
     sampled_atoms = atoms[indices]
     sampled_atoms.info = {"charge": 0, "spin": 0}
     return sampled_atoms

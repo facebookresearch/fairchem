@@ -10,8 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from fairchem.core.datasets.common_structures import (
     get_fcc_crystal_by_num_atoms,
     get_water_box,
@@ -55,9 +53,7 @@ def make_benchmark_system(
         A BenchmarkSystem instance.
     """
     if structure_type == "fcc":
-        rng = np.random.default_rng(seed)
-        np.random.seed(rng.integers(0, 2**31))
-        atoms = get_fcc_crystal_by_num_atoms(natoms)
+        atoms = get_fcc_crystal_by_num_atoms(natoms, seed=seed)
     elif structure_type == "water_box":
         atoms = get_water_box(num_molecules=num_molecules, seed=seed)
     else:
@@ -68,39 +64,73 @@ def make_benchmark_system(
     return BenchmarkSystem(name=name, atoms=atoms, task_name=task_name)
 
 
-def get_default_benchmark_systems(seed: int = 42) -> list[BenchmarkSystem]:
+DEFAULT_ARCHETYPES: tuple[tuple[str, dict], ...] = (
+    (
+        "small_molecule",
+        {"structure_type": "water_box", "num_molecules": 20, "task_name": "omol"},
+    ),
+    (
+        "medium_bulk",
+        {"structure_type": "fcc", "natoms": 200, "task_name": "omat"},
+    ),
+    (
+        "large_bulk",
+        {"structure_type": "fcc", "natoms": 1000, "task_name": "omat"},
+    ),
+)
+
+VARIANT_SEP = "_v"
+
+
+def archetype_of(name: str) -> str:
     """
-    Return a list of default benchmark systems.
+    Return the archetype prefix for a variant name (e.g. "small_molecule_v007"
+    -> "small_molecule"). Names without the variant separator are returned as-is.
+    """
+    head, sep, _ = name.rpartition(VARIANT_SEP)
+    return head if sep else name
+
+
+def get_default_benchmark_systems(
+    seed: int = 42, n_per_archetype: int = 1
+) -> list[BenchmarkSystem]:
+    """
+    Return default benchmark systems, optionally with multiple distinct variants
+    per archetype.
+
+    With ``n_per_archetype=1`` (default) this returns 3 systems with the
+    canonical names ``small_molecule``, ``medium_bulk``, ``large_bulk``. With
+    a larger value, each archetype contributes ``n_per_archetype`` distinct
+    variants named ``<archetype>_v<idx>`` (e.g. ``medium_bulk_v007``); each
+    variant gets its own deterministic seed so the set is reproducible across
+    runs.
 
     Args:
-        seed: Random seed for reproducibility.
+        seed: Base random seed for reproducibility.
+        n_per_archetype: Number of distinct variants per archetype.
 
     Returns:
-        A list of 3 BenchmarkSystem instances.
+        A flat list of 3 * ``n_per_archetype`` BenchmarkSystem instances.
     """
-    return [
-        make_benchmark_system(
-            name="small_molecule",
-            structure_type="water_box",
-            num_molecules=20,
-            task_name="omol",
-            seed=seed,
-        ),
-        make_benchmark_system(
-            name="medium_bulk",
-            structure_type="fcc",
-            natoms=200,
-            task_name="omat",
-            seed=seed,
-        ),
-        make_benchmark_system(
-            name="large_bulk",
-            structure_type="fcc",
-            natoms=1000,
-            task_name="omat",
-            seed=seed,
-        ),
-    ]
+    out: list[BenchmarkSystem] = []
+    # Per-archetype seed offsets; primes keep the per-variant seeds well-spaced
+    # across archetypes so they don't collide as ``n_per_archetype`` grows.
+    arch_offsets = (0, 100_003, 200_017)
+    for arch_offset, (arch_name, kwargs) in zip(arch_offsets, DEFAULT_ARCHETYPES):
+        for i in range(n_per_archetype):
+            variant_name = (
+                arch_name
+                if n_per_archetype == 1
+                else f"{arch_name}{VARIANT_SEP}{i:03d}"
+            )
+            out.append(
+                make_benchmark_system(
+                    name=variant_name,
+                    seed=seed + arch_offset + i,
+                    **kwargs,
+                )
+            )
+    return out
 
 
 def make_variable_size_batch(
