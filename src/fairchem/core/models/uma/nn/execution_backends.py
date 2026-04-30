@@ -428,20 +428,16 @@ class UMASFastGPUMixedBackend(UMASFastPytorchBackend):
     """
     GPU backend for mixed-task / mixed-size batches.
 
-    Inherits the parent so loop experiments can call super() into
-    UMASFastPytorchBackend's helpers, but the seed overrides
-    prepare_model_for_inference with a true no-op: the parent's SO2
-    block-diagonal conversion (convert_so2_conv1/2) assumes fc_m0 is a
-    plain Linear with a `.weight` attribute, which is not true once
-    moe_layer_type=fairchem_cpp wraps fc_m0 as MOLEFairchemCpp. SO2
-    conversion adapted for fairchem_cpp MOLE is a candidate experiment.
+    Skips the parent's SO2 block-diagonal conversion (convert_so2_conv1/2)
+    because it assumes fc_m0 is a plain Linear, which is not true when
+    moe_layer_type=fairchem_cpp wraps fc_m0 as MOLEFairchemCpp.
 
     merge_mole is forbidden — it is incompatible with batches that mix
     tasks, charges, or spins (see
     eSCNMDMoeBackbone._assert_all_mole_info_consistent).
 
-    Seed body is otherwise a pure passthrough. Add overrides in this
-    class body to experiment.
+    Wraps graph-gen / MOLE / wigner helpers with dynamo.disable and
+    compiles model.forward for throughput.
 
     Requires CUDA, lmax==2, mmax==2, merge_mole=False.
     """
@@ -465,63 +461,16 @@ class UMASFastGPUMixedBackend(UMASFastPytorchBackend):
 
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
-        # Cache graph topology after the first forward, then recompute
-        # edge_distance / distance_vec from pos via get_pbc_distances on
-        # every call so autograd still flows pos → distances → energy →
-        # forces. ASSUMES TOPOLOGY IS CONSTANT across this predictor's
-        # lifetime — true in our benchmark (50 iters of identical
-        # batch); production users with changing topology need a Verlet-
-        # skin invalidation or per-batch cache key.
-        from fairchem.core.graph.compute import get_pbc_distances
+        # Skip the parent's SO2 block-diagonal conversion — it assumes
+        # fc_m0 is a plain Linear, which isn't true when
+        # moe_layer_type=fairchem_cpp wraps it as MOLEFairchemCpp.
 
-        cache: dict = {}
-        orig_generate = model._generate_graph
-
-        def cached_generate(data_dict):
-            if "edge_index" not in cache:
-                graph_dict = orig_generate(data_dict)
-                cache["edge_index"] = graph_dict["edge_index"]
-                cache["cell_offsets"] = graph_dict.get("cell_offsets")
-                cache["neighbors"] = graph_dict.get("neighbors")
-                cache["gp_node_offset"] = data_dict.get("gp_node_offset", 0)
-                return graph_dict
-            data_dict["gp_node_offset"] = cache["gp_node_offset"]
-            edge_index = cache["edge_index"]
-            cell_offsets = cache["cell_offsets"]
-            neighbors = cache["neighbors"]
-            if cell_offsets is not None:
-                out = get_pbc_distances(
-                    data_dict["pos"],
-                    edge_index,
-                    data_dict["cell"],
-                    cell_offsets,
-                    neighbors,
-                    return_offsets=True,
-                    return_distance_vec=True,
-                    skip_redundant_filter=True,
-                )
-                return {
-                    "edge_index": edge_index,
-                    "edge_distance": out["distances"],
-                    "edge_distance_vec": out["distance_vec"],
-                    "cell_offsets": cell_offsets,
-                    "offset_distances": out["offsets"],
-                    "neighbors": neighbors,
-                }
-            distance_vec = (
-                data_dict["pos"][edge_index[0]] - data_dict["pos"][edge_index[1]]
-            )
-            return {
-                "edge_index": edge_index,
-                "edge_distance": torch.linalg.norm(distance_vec, dim=-1),
-                "edge_distance_vec": distance_vec,
-            }
-
-        # Make the cached_generate, MOLE setup, and wigner gen opaque to
-        # dynamo — these are eager-only setup operations that compile
-        # would otherwise repeatedly graph-break on (numpy.isclose, list
-        # iteration over Python state, etc.).
-        model._generate_graph = torch._dynamo.disable(cached_generate)
+        # Make graph gen, MOLE setup, and wigner gen opaque to dynamo —
+        # these are eager-only operations that compile would otherwise
+        # repeatedly graph-break on (numpy.isclose, list iteration over
+        # Python state, etc.).
+        if hasattr(model, "_generate_graph"):
+            model._generate_graph = torch._dynamo.disable(model._generate_graph)
         if hasattr(model, "_get_rotmat_and_wigner"):
             model._get_rotmat_and_wigner = torch._dynamo.disable(
                 model._get_rotmat_and_wigner
@@ -536,8 +485,7 @@ class UMASFastGPUMixedBackend(UMASFastPytorchBackend):
         # Compile the backbone forward. With segment_mm registered as a
         # custom_op (see fairchem_cpp/ops.py) and the _generate_graph
         # branch removed (escn_md.py), dynamo can trace the message-
-        # passing loop cleanly. Static shapes are appropriate for the
-        # mixed-batch use case (one fixed-shape forward per timed iter).
+        # passing loop cleanly.
         torch._dynamo.config.recompile_limit = 32
         model.forward = torch.compile(model.forward, dynamic=False)
 
