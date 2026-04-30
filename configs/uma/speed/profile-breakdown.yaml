@@ -1,0 +1,29 @@
+# Profile breakdown: measures time in each forward pass phase
+# Usage:
+#   fairchem -c configs/uma/speed/profile-breakdown.yaml job=slurm
+#   fairchem -c configs/uma/speed/profile-breakdown.yaml job=local_8gpu
+
+defaults:
+  - job: local
+  - _self_
+
+uma_s_1p2:
+  _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+  model_name: "uma-s-1p2"
+
+runner:
+  _target_: fairchem.core.components.benchmark._single.profile_breakdown.OverheadProfileRunner
+  device: "cuda"
+  warmup_steps: 10
+  measure_steps: 20
+  natoms_list: [4000]
+  model_checkpoint: ${uma_s_1p2}
+  inference_settings:
+    _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+    tf32: true
+    activation_checkpointing: false
+    merge_mole: true
+    compile: true
+    external_graph_gen: false
+    internal_graph_gen_version: 2
+    execution_mode: "umas_fast_gpu"
