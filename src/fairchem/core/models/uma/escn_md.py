@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import types
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -632,6 +633,65 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
         return rank_assignments, node_partition
 
+    @staticmethod
+    @torch.compiler.disable
+    def _compute_halo_mask(
+        pos: torch.Tensor,
+        node_partition: torch.Tensor,
+        cutoff: float,
+        cell: torch.Tensor,
+        pbc: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute an AABB-based halo mask for graph generation.
+
+        Returns a boolean mask over all atoms indicating which atoms
+        could potentially have edges to/from atoms in the local
+        partition.  Only atoms within ``cutoff`` of the local
+        partition's axis-aligned bounding box (AABB) are included.
+
+        For periodic systems, all 27 periodic images are checked
+        (shifts of -1, 0, +1 along each cell vector).
+
+        Args:
+            pos: All atom positions, shape (N, 3).
+            node_partition: Indices of local atoms.
+            cutoff: Interaction cutoff radius.
+            cell: Unit cell matrix, shape (1, 3, 3) or (3, 3).
+            pbc: Periodic boundary conditions, shape (1, 3) or (3,).
+
+        Returns:
+            Boolean mask of shape (N,).  True for atoms in the halo
+            (including the local atoms themselves).
+        """
+        with record_function("a2a_halo_mask"):
+            local_pos = pos[node_partition]
+            lo = local_pos.min(dim=0)[0] - cutoff
+            hi = local_pos.max(dim=0)[0] + cutoff
+
+            cell_sq = cell.view(3, 3) if cell.dim() == 3 else cell
+            pbc_flat = pbc.view(3) if pbc.dim() == 2 else pbc
+
+            # Check all 27 periodic images for periodic dimensions.
+            # For non-periodic dimensions only shift=0 is used.
+            shifts_per_dim = []
+            for d in range(3):
+                if pbc_flat[d]:
+                    shifts_per_dim.append([-1, 0, 1])
+                else:
+                    shifts_per_dim.append([0])
+
+            halo_mask = torch.zeros(pos.shape[0], dtype=torch.bool, device=pos.device)
+            for sx in shifts_per_dim[0]:
+                for sy in shifts_per_dim[1]:
+                    for sz in shifts_per_dim[2]:
+                        shift = sx * cell_sq[0] + sy * cell_sq[1] + sz * cell_sq[2]
+                        shifted = pos + shift
+                        in_box = ((shifted >= lo) & (shifted <= hi)).all(dim=-1)
+                        halo_mask |= in_box
+
+            return halo_mask
+
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
         node_partition = None
@@ -680,22 +740,106 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
-            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
-            graph_dict = generate_graph(
-                data_dict,
-                cutoff=self.cutoff,
-                max_neighbors=self.max_neighbors,
-                enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
-                radius_pbc_version=self.radius_pbc_version,
-                pbc=pbc,
-                node_partition=node_partition,
-                rank_assignments=rank_assignments if self.use_all_to_all_gp else None,
-                rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
-                world_size=gp_utils.get_gp_world_size()
-                if self.use_all_to_all_gp
-                else None,
-            )
+
+            # For the A2A path with PBC, use AABB halo filtering to
+            # reduce the number of atoms passed to graph generation.
+            # Only atoms within cutoff of the local partition AABB
+            # (considering periodic images) are included.
+            halo_indices = None
+            if self.use_all_to_all_gp and node_partition is not None and pbc.all():
+                halo_mask = self._compute_halo_mask(
+                    pos=data_dict["pos"],
+                    node_partition=node_partition,
+                    cutoff=self.cutoff,
+                    cell=data_dict["cell"],
+                    pbc=pbc,
+                )
+                n_halo = halo_mask.sum().item()
+                n_total = len(data_dict["pos"])
+                # Only use halo filtering if it actually reduces atoms
+                # significantly (>20% reduction).
+                if n_halo < n_total * 0.8:
+                    halo_indices = halo_mask.nonzero(as_tuple=True)[0]
+
+                    # Map global indices to halo-local indices
+                    global_to_halo = torch.full(
+                        (n_total,),
+                        -1,
+                        dtype=torch.long,
+                        device=data_dict["pos"].device,
+                    )
+                    global_to_halo[halo_indices] = torch.arange(
+                        n_halo, device=data_dict["pos"].device
+                    )
+
+                    # Create subset data for graph generation
+                    data_subset = types.SimpleNamespace()
+                    data_subset.pos = data_dict["pos"][halo_indices]
+                    data_subset.cell = data_dict["cell"]
+                    data_subset.natoms = torch.tensor(
+                        [n_halo],
+                        device=data_dict["pos"].device,
+                    )
+                    if hasattr(data_dict, "batch") and data_dict["batch"] is not None:
+                        data_subset.batch = data_dict["batch"][halo_indices]
+                    else:
+                        data_subset.batch = torch.zeros(
+                            n_halo,
+                            dtype=torch.long,
+                            device=data_dict["pos"].device,
+                        )
+                    data_subset.pbc = pbc
+
+                    # Remap node_partition and rank_assignments to
+                    # halo-local indices
+                    node_partition_local = global_to_halo[node_partition]
+                    rank_assignments_local = rank_assignments[halo_indices]
+
+                    graph_dict = generate_graph(
+                        data_subset,
+                        cutoff=self.cutoff,
+                        max_neighbors=self.max_neighbors,
+                        enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                        radius_pbc_version=self.radius_pbc_version,
+                        pbc=pbc,
+                        node_partition=node_partition_local,
+                        rank_assignments=rank_assignments_local,
+                        rank=gp_utils.get_gp_rank(),
+                        world_size=gp_utils.get_gp_world_size(),
+                    )
+
+                    # Remap edge_index from halo-local back to global
+                    graph_dict["edge_index"] = halo_indices[graph_dict["edge_index"]]
+
+                    # Remap send_info indices back to global
+                    if (
+                        "send_info" in graph_dict
+                        and graph_dict["send_info"] is not None
+                    ):
+                        si = graph_dict["send_info"]
+                        if si["send_indices_global"].numel() > 0:
+                            si["send_indices_global"] = halo_indices[
+                                si["send_indices_global"]
+                            ]
+
+            if halo_indices is None:
+                # No halo filtering: run graph gen on all atoms
+                graph_dict = generate_graph(
+                    data_dict,
+                    cutoff=self.cutoff,
+                    max_neighbors=self.max_neighbors,
+                    enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                    radius_pbc_version=self.radius_pbc_version,
+                    pbc=pbc,
+                    node_partition=node_partition,
+                    rank_assignments=rank_assignments
+                    if self.use_all_to_all_gp
+                    else None,
+                    rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
+                    world_size=gp_utils.get_gp_world_size()
+                    if self.use_all_to_all_gp
+                    else None,
+                )
         else:
             # this assume edge_index is provided
             assert (
