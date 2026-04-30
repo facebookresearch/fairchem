@@ -19,6 +19,7 @@ from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     all_to_all_collect,
+    all_to_all_collect_p2p,
     finish_all_to_all_collect,
     start_all_to_all_collect,
 )
@@ -61,6 +62,7 @@ class Edgewise(torch.nn.Module):
         backend: ExecutionBackend,
         act_type: Literal["gate", "s2"] = "gate",
         use_overlap_gp: bool = False,
+        use_p2p_gp: bool = False,
     ):
         super().__init__()
 
@@ -70,6 +72,7 @@ class Edgewise(torch.nn.Module):
         self.mmax = mmax
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
         self.use_overlap_gp = use_overlap_gp
+        self.use_p2p_gp = use_p2p_gp
         self.backend = backend
 
         self.mappingReduced = mappingReduced
@@ -163,11 +166,18 @@ class Edgewise(torch.nn.Module):
 
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings
-            with record_function("a2a_collect"):
-                x_received = all_to_all_collect(x, gp_ctx, send_indices)
-                x_full = torch.cat([x, x_received], dim=0)
-                # Use precomputed local edge index from GPContext
-                edge_index_local = gp_ctx.edge_index_local
+            if self.use_p2p_gp and not self.training:
+                # Sparse P2P: only communicate with actual neighbors
+                # Uses pre-allocated buffers. Eval-mode only.
+                with record_function("a2a_collect_p2p"):
+                    x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
+            else:
+                with record_function("a2a_collect"):
+                    x_received = all_to_all_collect(x, gp_ctx, send_indices)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
             # In local space, node_offset is 0
             local_node_offset = 0
         elif gp_utils.initialized():
@@ -430,6 +440,7 @@ class eSCNMD_Block(torch.nn.Module):
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
         use_overlap_gp: bool = False,
+        use_p2p_gp: bool = False,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -454,6 +465,7 @@ class eSCNMD_Block(torch.nn.Module):
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
             backend=backend,
             use_overlap_gp=use_overlap_gp,
+            use_p2p_gp=use_p2p_gp,
         )
 
         self.norm_2 = get_normalization_layer(
