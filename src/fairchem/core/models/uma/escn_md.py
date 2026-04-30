@@ -602,6 +602,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
+    @staticmethod
+    @torch.compiler.disable
+    def _compute_a2a_partition(
+        pos: torch.Tensor,
+        total_atoms: int,
+        device: torch.device,
+        world_size: int,
+        rank: int,
+        strategy: PartitionStrategy,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute A2A rank assignments and node partition.
+
+        Separated from _generate_graph so that only the A2A-specific
+        partitioning is excluded from torch.compile.  The BL (all-gather)
+        path stays fully compilable.
+        """
+        with record_function("a2a_partition"):
+            if strategy == PartitionStrategy.SPATIAL:
+                rank_assignments = partition_atoms_spatial(pos, world_size)
+            else:
+                rank_assignments = partition_atoms_index_split(
+                    total_atoms, world_size, device
+                )
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+        return rank_assignments, node_partition
+
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
         node_partition = None
@@ -616,22 +643,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # graph-generation partition and the GPContext partition
                 # are identical, avoiding index mismatches that cause
                 # OOB crashes.
-                total_atoms = len(atomic_numbers_full)
-                device = atomic_numbers_full.device
-                world_size = gp_utils.get_gp_world_size()
-
-                if self.gp_partition_strategy == PartitionStrategy.SPATIAL:
-                    rank_assignments = partition_atoms_spatial(
-                        data_dict["pos"], world_size
-                    )
-                else:
-                    rank_assignments = partition_atoms_index_split(
-                        total_atoms, world_size, device
-                    )
-
-                node_partition = (rank_assignments == gp_utils.get_gp_rank()).nonzero(
-                    as_tuple=True
-                )[0]
+                rank_assignments, node_partition = self._compute_a2a_partition(
+                    pos=data_dict["pos"],
+                    total_atoms=len(atomic_numbers_full),
+                    device=atomic_numbers_full.device,
+                    world_size=gp_utils.get_gp_world_size(),
+                    rank=gp_utils.get_gp_rank(),
+                    strategy=self.gp_partition_strategy,
+                )
             else:
                 # Legacy all-gather: use consecutive index split
                 node_partition = torch.tensor_split(
@@ -668,6 +687,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
                 node_partition=node_partition,
+                rank_assignments=rank_assignments if self.use_all_to_all_gp else None,
+                rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
+                world_size=gp_utils.get_gp_world_size()
+                if self.use_all_to_all_gp
+                else None,
             )
         else:
             # this assume edge_index is provided
@@ -715,12 +739,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
-                gp_ctx = build_gp_context(
-                    edge_index=graph_dict["edge_index"],
-                    rank_assignments=rank_assignments,
-                    rank=gp_utils.get_gp_rank(),
-                    world_size=gp_utils.get_gp_world_size(),
-                )
+                with record_function("a2a_build_gp_context"):
+                    gp_ctx = build_gp_context(
+                        edge_index=graph_dict["edge_index"],
+                        rank_assignments=rank_assignments,
+                        rank=gp_utils.get_gp_rank(),
+                        world_size=gp_utils.get_gp_world_size(),
+                        send_info=graph_dict.get("send_info"),
+                    )
                 data_dict["gp_ctx"] = gp_ctx
                 # All-to-all uses local indices via gp_ctx.edge_index_local,
                 # so node_offset is always 0.
