@@ -146,6 +146,8 @@ class OverheadProfileRunner(Runner):
             categories = {
                 "generate_graph": [],
                 "a2a_partition": [],
+                "a2a_build_gp_context": [],
+                "a2a_collect_compiled": [],
                 "a2a_collect": [],
                 "allgather_collect": [],
                 "SO2Conv": [],
@@ -160,16 +162,21 @@ class OverheadProfileRunner(Runner):
                 "local_edges": [],
                 "boundary_edges": [],
                 "final_barrier": [],
+                "obtain wigner": [],
+                "atom embedding": [],
+                "edge embedding": [],
             }
 
             for evt in key_avgs:
                 for cat_key in categories:
                     if cat_key.lower() in evt.key.lower():
+                        # PyTorch 2.8+ renamed cuda_time_total → device_time_total
+                        device_time = getattr(evt, "device_time_total", 0)
                         categories[cat_key].append(
                             {
                                 "key": evt.key,
                                 "cpu_time_ms": evt.cpu_time_total / 1000,
-                                "cuda_time_ms": evt.cuda_time_total / 1000,
+                                "cuda_time_ms": device_time / 1000,
                                 "count": evt.count,
                             }
                         )
@@ -233,13 +240,20 @@ class OverheadProfileRunner(Runner):
                     )
                 logging.info("=" * 70)
 
-                logging.info("\n--- Top 30 CUDA operations ---")
-                logging.info(
-                    key_avgs.table(
-                        sort_by="cuda_time_total",
+                logging.info("\n--- Top 30 device operations ---")
+                # PyTorch 2.8+ uses "self_device_time_total" instead
+                # of "cuda_time_total" for sorting.
+                try:
+                    table = key_avgs.table(
+                        sort_by="self_device_time_total",
                         row_limit=30,
                     )
-                )
+                except Exception:
+                    table = key_avgs.table(
+                        sort_by="cpu_time_total",
+                        row_limit=30,
+                    )
+                logging.info(table)
 
                 output_file = os.path.join(
                     run_dir,
