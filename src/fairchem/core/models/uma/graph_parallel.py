@@ -221,6 +221,131 @@ def partition_atoms_spatial(
     return assignments
 
 
+def _compute_send_info_aabb(
+    pos: torch.Tensor,
+    cell: torch.Tensor,
+    cutoff: float,
+    pbc: torch.Tensor | None,
+    rank_assignments: torch.Tensor,
+    node_partition: torch.Tensor,
+    rank: int,
+    world_size: int,
+) -> dict:
+    """
+    Compute send_info from AABB geometry without any NCCL collectives.
+
+    For each remote rank R, computes the axis-aligned bounding box (AABB)
+    of atoms assigned to R, expands it by cutoff, then checks which local
+    atoms fall within that expanded AABB (considering 27 periodic images
+    for PBC systems). Local atoms that are within cutoff of rank R's
+    domain must be sent to rank R.
+
+    This is conservative — the AABB may include atoms outside the actual
+    Voronoi cell of rank R's partition. The extra atoms are harmless
+    (they'll be filtered out during edge generation) and the bandwidth
+    overhead is negligible (~1MB extra vs ~100GB/s InfiniBand).
+
+    Args:
+        pos: All atom positions, shape (N, 3).
+        cell: Unit cell, shape (1, 3, 3) or (B, 3, 3).
+        cutoff: Neighbor cutoff radius.
+        pbc: Periodic boundary conditions, shape (B, 3) or None.
+        rank_assignments: Rank for each atom, shape (N,).
+        node_partition: Indices of atoms in this rank's partition.
+        rank: This rank's GP rank.
+        world_size: GP world size.
+
+    Returns:
+        dict with keys:
+            send_counts: Tensor of shape (world_size,) — atoms to send
+                to each rank.
+            send_indices_global: Tensor of global atom indices to send,
+                sorted by destination rank.
+    """
+    device = pos.device
+    local_pos = pos[node_partition]  # (n_local, 3)
+
+    # Compute AABB for each remote rank using scatter min/max.
+    # Initialize with extreme values so empty ranks stay excluded.
+    aabb_min = torch.full((world_size, 3), float("inf"), device=device, dtype=pos.dtype)
+    aabb_max = torch.full(
+        (world_size, 3), float("-inf"), device=device, dtype=pos.dtype
+    )
+
+    # Expand rank_assignments for broadcasting: (N, 1)
+    ra_expanded = rank_assignments.unsqueeze(1).expand(-1, 3)
+    aabb_min.scatter_reduce_(0, ra_expanded, pos, reduce="amin")
+    aabb_max.scatter_reduce_(0, ra_expanded, pos, reduce="amax")
+
+    # Expand AABBs by cutoff
+    aabb_min = aabb_min - cutoff
+    aabb_max = aabb_max + cutoff
+
+    # Build PBC shift vectors. For PBC systems, atoms near box edges
+    # may be within cutoff of a remote rank's domain through a periodic
+    # image. We check all 27 shifts (including identity).
+    use_pbc = pbc is not None and pbc.any()
+    if use_pbc:
+        # cell is (B, 3, 3) — use first system's cell for shifts
+        c = cell[0]  # (3, 3)
+        offsets = torch.tensor([-1, 0, 1], device=device, dtype=pos.dtype)
+        # Create 27 shift combinations
+        shifts_ijk = torch.stack(
+            torch.meshgrid(offsets, offsets, offsets, indexing="ij"),
+            dim=-1,
+        ).reshape(27, 3)  # (27, 3)
+        shift_vectors = shifts_ijk @ c  # (27, 3)
+    else:
+        # No PBC: only check identity (no periodic images)
+        shift_vectors = torch.zeros(1, 3, device=device, dtype=pos.dtype)
+
+    # For each local atom, check against all remote ranks' AABBs
+    # across all periodic images. Use vectorized operations.
+    #
+    # local_pos: (n_local, 3)
+    # shift_vectors: (n_shifts, 3)
+    # shifted_pos: (n_shifts, n_local, 3)
+    shifted_pos = local_pos.unsqueeze(0) + shift_vectors.unsqueeze(1)
+
+    # Check each shifted position against each remote rank's AABB.
+    # aabb_min/aabb_max: (world_size, 3)
+    # We want: for each (shift, atom, rank), is the atom inside the AABB?
+    #
+    # shifted_pos: (n_shifts, n_local, 1, 3)
+    # aabb_min:    (1,        1,       world_size, 3)
+    sp = shifted_pos.unsqueeze(2)  # (n_shifts, n_local, 1, 3)
+    lo = aabb_min.unsqueeze(0).unsqueeze(0)  # (1, 1, world_size, 3)
+    hi = aabb_max.unsqueeze(0).unsqueeze(0)  # (1, 1, world_size, 3)
+
+    # in_box: True if atom is within AABB in all 3 dimensions
+    in_box = ((sp >= lo) & (sp <= hi)).all(dim=-1)  # (n_shifts, n_local, W)
+
+    # Collapse shifts: atom is reachable if ANY periodic image is in box
+    reachable = in_box.any(dim=0)  # (n_local, world_size)
+
+    # Exclude self-rank (don't send to yourself)
+    reachable[:, rank] = False
+
+    # Build send_counts and send_indices_global sorted by rank
+    # reachable: (n_local, world_size) boolean
+    send_counts = reachable.sum(dim=0).to(torch.long)  # (world_size,)
+
+    # For each (atom, rank) pair where reachable is True, we need to
+    # record the global atom index. Sort by rank (then atom within rank).
+    atom_idx, rank_idx = reachable.nonzero(as_tuple=True)
+    # atom_idx is index into node_partition → convert to global
+    global_atoms = node_partition[atom_idx]
+
+    # Sort by destination rank (stable sort preserves atom order within rank)
+    sort_order = rank_idx.argsort(stable=True)
+    send_indices_global = global_atoms[sort_order]
+
+    return {
+        "send_counts": send_counts,
+        "send_indices_global": send_indices_global,
+    }
+
+
 def _recursive_bisect(
     pos: torch.Tensor,
     assignments: torch.Tensor,

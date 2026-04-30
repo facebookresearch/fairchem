@@ -39,6 +39,7 @@ from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     PartitionStrategy,
+    _compute_send_info_aabb,
     build_gp_context,
     partition_atoms_index_split,
     partition_atoms_spatial,
@@ -615,9 +616,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         world_size: int,
         rank: int,
         strategy: PartitionStrategy,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+        cell: torch.Tensor | None = None,
+        cutoff: float | None = None,
+        pbc: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, dict | None]:
         """
-        Compute A2A rank assignments and node partition.
+        Compute A2A rank assignments, node partition, and send_info.
+
+        When cell and cutoff are provided, also computes send_info from
+        AABB geometry — for each local atom, determines which remote
+        ranks' domains it is within cutoff of. This eliminates the
+        4.2ms _fused_index_exchange NCCL collective in build_gp_context.
+
+        The AABB check is conservative (may include atoms not strictly
+        needed), but the extra communication volume is negligible.
 
         Separated from _generate_graph so that only the A2A-specific
         partitioning is excluded from torch.compile.  The BL (all-gather)
@@ -631,7 +643,23 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     total_atoms, world_size, device
                 )
         node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
-        return rank_assignments, node_partition
+
+        # Compute send_info from AABB geometry if cell/cutoff provided.
+        send_info = None
+        if cell is not None and cutoff is not None:
+            with record_function("a2a_send_info_aabb"):
+                send_info = _compute_send_info_aabb(
+                    pos=pos,
+                    cell=cell,
+                    cutoff=cutoff,
+                    pbc=pbc,
+                    rank_assignments=rank_assignments,
+                    node_partition=node_partition,
+                    rank=rank,
+                    world_size=world_size,
+                )
+
+        return rank_assignments, node_partition, send_info
 
     @torch.compiler.disable
     def _compute_halo_graph(
@@ -747,6 +775,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["gp_node_offset"] = 0
         node_partition = None
         rank_assignments = None
+        send_info = None
+
+        # Compute PBC early so it's available for A2A partition AABB.
+        pbc = None
+        if self.otf_graph:
+            if self.always_use_pbc:
+                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
+            else:
+                assert (
+                    "pbc" in data_dict
+                ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
+                pbc = data_dict["pbc"]
+            assert (
+                pbc.all() or (~pbc).all()
+            ), "We can only accept pbc that is all true or all false"
+
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -757,13 +801,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # graph-generation partition and the GPContext partition
                 # are identical, avoiding index mismatches that cause
                 # OOB crashes.
-                rank_assignments, node_partition = self._compute_a2a_partition(
-                    pos=data_dict["pos"],
-                    total_atoms=len(atomic_numbers_full),
-                    device=atomic_numbers_full.device,
-                    world_size=gp_utils.get_gp_world_size(),
-                    rank=gp_utils.get_gp_rank(),
-                    strategy=self.gp_partition_strategy,
+                rank_assignments, node_partition, send_info = (
+                    self._compute_a2a_partition(
+                        pos=data_dict["pos"],
+                        total_atoms=len(atomic_numbers_full),
+                        device=atomic_numbers_full.device,
+                        world_size=gp_utils.get_gp_world_size(),
+                        rank=gp_utils.get_gp_rank(),
+                        strategy=self.gp_partition_strategy,
+                        cell=data_dict.get("cell"),
+                        cutoff=self.cutoff,
+                        pbc=pbc,
+                    )
                 )
             else:
                 # Legacy all-gather: use consecutive index split
@@ -780,18 +829,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
 
         if self.otf_graph:
-            pbc = None
-            if self.always_use_pbc:
-                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
-            else:
-                assert (
-                    "pbc" in data_dict
-                ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
-                pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
-
             # NOTE: AABB halo filtering was removed because profiling at
             # 64 GPUs turbo showed it costs 11ms/step for the graph-break
             # overhead while providing 0% speedup (graph gen is overlapped
@@ -860,12 +897,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
                 with record_function("a2a_build_gp_context"):
+                    # Prefer AABB send_info (no NCCL) over graph-filter
+                    # send_info. Both are valid; AABB is faster.
+                    effective_send_info = send_info or graph_dict.get("send_info")
                     gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],
                         rank_assignments=rank_assignments,
                         rank=gp_utils.get_gp_rank(),
                         world_size=gp_utils.get_gp_world_size(),
-                        send_info=graph_dict.get("send_info"),
+                        send_info=effective_send_info,
                         node_partition=node_partition,
                     )
                 data_dict["gp_ctx"] = gp_ctx
