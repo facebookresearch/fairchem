@@ -107,6 +107,10 @@ class GPContext:
             local_edge_mask). None if not yet computed.
         num_boundary_edges: Number of boundary edges (src is remote). None
             if not yet computed.
+        edge_reorder: Permutation that sorts edges so local edges come first,
+            then boundary edges. Shape: (num_edges,). Applied once to per-edge
+            tensors (wigner, x_edge, etc.) in the backbone forward. Enables
+            compile-friendly overlap via split() instead of boolean indexing.
     """
 
     rank: int
@@ -125,6 +129,7 @@ class GPContext:
     local_edge_mask: torch.Tensor | None = None
     num_local_edges: int | None = None
     num_boundary_edges: int | None = None
+    edge_reorder: torch.Tensor | None = None
     # Precomputed Python lists to avoid repeated .tolist() in AllToAllCollect
     send_splits: list[int] | None = None
     recv_splits: list[int] | None = None
@@ -637,6 +642,12 @@ def build_gp_context(
     tgt_is_local_edge = edge_index_local[1] < total_local_atoms
     local_edge_mask = src_is_local & tgt_is_local_edge
 
+    # Pre-compute edge reorder permutation: local edges first, boundary
+    # edges last. This enables compile-friendly overlap via split()
+    # instead of boolean indexing. The reorder is applied in the
+    # backbone forward to all per-edge tensors simultaneously.
+    edge_reorder = torch.argsort((~local_edge_mask).to(torch.int32), stable=True)
+
     # Batch ALL GPU→CPU scalar extractions into a single transfer.
     # This batches send_counts, recv_counts, local_edge_count, AND
     # validation scalars into ONE .cpu() call, eliminating 2 extra
@@ -734,6 +745,7 @@ def build_gp_context(
         local_edge_mask=local_edge_mask,
         num_local_edges=num_local_edges,
         num_boundary_edges=num_boundary_edges,
+        edge_reorder=edge_reorder,
         # Precompute Python lists once (avoids .tolist() per layer per forward)
         send_splits=send_splits,
         recv_splits=recv_splits,
@@ -914,10 +926,10 @@ def _sparse_index_exchange(
     if backend == "nccl":
         dist.all_to_all_single(send_counts, recv_counts.contiguous(), group=gp_group)
     else:
-        # Gloo fallback
+        # Gloo fallback: use pairwise send/recv
         send_list = list(recv_counts.split(1))
         recv_list = list(send_counts.split(1))
-        dist.all_to_all(recv_list, send_list, group=gp_group)
+        _safe_all_to_all(recv_list, send_list, group=gp_group)
 
     # Step 2: Exchange actual atom indices with variable splits.
     # Build send buffer: needed_atoms sorted by source rank.
@@ -942,10 +954,10 @@ def _sparse_index_exchange(
             group=gp_group,
         )
     else:
-        # Gloo fallback
+        # Gloo fallback: use pairwise send/recv
         send_list = list(send_buf.split(send_splits))
         recv_list = list(recv_buf.split(recv_splits))
-        dist.all_to_all(recv_list, send_list, group=gp_group)
+        _safe_all_to_all(recv_list, send_list, group=gp_group)
 
     # recv_buf now contains the global indices of atoms we must SEND,
     # ordered by destination rank.

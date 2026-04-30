@@ -22,7 +22,6 @@ from fairchem.core.models.uma.graph_parallel import (
     all_to_all_collect_p2p,
     finish_all_to_all_collect,
     start_all_to_all_collect,
-    start_all_to_all_collect_p2p,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -254,6 +253,10 @@ class Edgewise(torch.nn.Module):
         computation for better inference latency. Only used in
         eval mode (no autograd through the communication).
 
+        Edges are pre-sorted in build_gp_context (local edges first,
+        boundary edges last via edge_reorder). This allows using
+        compile-friendly split() instead of boolean indexing.
+
         Steps:
         1. Start async all-to-all to exchange boundary embeddings.
         2. Compute local edges (both endpoints are local atoms)
@@ -262,31 +265,24 @@ class Edgewise(torch.nn.Module):
         4. Compute boundary edges (source is remote).
         5. Sum local + boundary contributions.
         """
-        local_mask = gp_ctx.local_edge_mask
         edge_index_local = gp_ctx.edge_index_local
         num_local_atoms = x.shape[0]
+        n_local = gp_ctx.num_local_edges
 
-        # Split per-edge data into local vs boundary
-        local_edge_idx = edge_index_local[:, local_mask]
-        boundary_edge_idx = edge_index_local[:, ~local_mask]
-        local_x_edge = x_edge[local_mask]
-        boundary_x_edge = x_edge[~local_mask]
-        local_wigner = wigner[local_mask]
-        boundary_wigner = wigner[~local_mask]
-        local_wigner_inv = wigner_inv_envelope[local_mask]
-        boundary_wigner_inv = wigner_inv_envelope[~local_mask]
+        # Split pre-sorted per-edge data: local first, boundary last.
+        # No boolean indexing — compile-friendly.
+        local_edge_idx = edge_index_local[:, :n_local]
+        boundary_edge_idx = edge_index_local[:, n_local:]
+        local_x_edge = x_edge[:n_local]
+        boundary_x_edge = x_edge[n_local:]
+        local_wigner = wigner[:n_local]
+        boundary_wigner = wigner[n_local:]
+        local_wigner_inv = wigner_inv_envelope[:n_local]
+        boundary_wigner_inv = wigner_inv_envelope[n_local:]
 
-        # Step 1: Start async all-to-all (P2P or standard)
-        if self.use_p2p_gp:
-            with record_function("a2a_collect_p2p_async_start"):
-                recv_buf, work_handles = start_all_to_all_collect_p2p(
-                    x, gp_ctx, send_indices
-                )
-        else:
-            with record_function("a2a_collect_async_start"):
-                recv_buf, work_handles = start_all_to_all_collect(
-                    x, gp_ctx, send_indices
-                )
+        # Step 1: Start async all-to-all
+        with record_function("a2a_collect_async_start"):
+            recv_buf, work_handles = start_all_to_all_collect(x, gp_ctx, send_indices)
 
         # Step 2: Compute local edges while comm is in flight
         with record_function("local_edges"):
