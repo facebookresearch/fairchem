@@ -25,6 +25,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastGPUMixed",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
@@ -41,6 +42,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FAST_GPU_MIXED = "umas_fast_gpu_mixed"
 
 
 class ExecutionBackend:
@@ -422,10 +424,94 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class UMASFastGPUMixed(UMASFastGPUBackend):
+    """
+    GPU backend that keeps the MOLE expert structure (merge_mole=False)
+    but routes the per-system mixed-weight linears through
+    fairchem_cpp.ops.segment_mm.
+
+    Reuses UMASFastGPUBackend's Triton Wigner permutes and L-major
+    edge_degree_scatter, but does NOT apply the block-diagonal SO2
+    conversion (UMASFastPytorchBackend.prepare_model_for_inference) —
+    that converter assumes plain nn.Linear inside SO2_Convolution and
+    would silently corrupt MOLE-wrapped weights.
+
+    Requires: CUDA, fairchem_cpp installed, lmax==2 and mmax==2,
+    merge_mole=False, activation_checkpointing=False.
+    """
+
+    @staticmethod
+    def validate(
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
+    ) -> None:
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError(
+                "UMASFastGPUMixed requires activation_checkpointing=False"
+            )
+        if not torch.cuda.is_available():
+            raise ValueError("umas_fast_gpu_mixed requires CUDA")
+        if lmax != 2 or mmax != 2:
+            raise ValueError("umas_fast_gpu_mixed requires lmax==2 and mmax==2")
+        if settings is not None and settings.merge_mole:
+            raise ValueError(
+                "umas_fast_gpu_mixed requires merge_mole=False; "
+                "use umas_fast_gpu for the merged path"
+            )
+        try:
+            import fairchem_cpp  # noqa: F401
+        except ImportError as e:
+            raise ValueError(
+                "umas_fast_gpu_mixed requires fairchem_cpp; install it via "
+                "`pip install -e src/fairchem/fairchem_cpp`"
+            ) from e
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        """
+        Swap every MOLE inside an SO2_Convolution for a MOLEFairchemCpp
+        wrapping the same nn.Parameter weights and the same global
+        MOLEGlobals object. No SO2 block-diagonal conversion runs, so
+        get_layer_radial_emb falls back to the per-block radial path.
+        """
+        from fairchem.core.models.uma.nn.mole import MOLE, MOLEFairchemCpp
+        from fairchem.core.models.uma.nn.mole_utils import (
+            recursive_replace_so2_MOLE,
+        )
+
+        def _swap(existing: MOLE) -> MOLEFairchemCpp:
+            new = MOLEFairchemCpp(
+                num_experts=existing.num_experts,
+                in_features=existing.in_features,
+                out_features=existing.out_features,
+                global_mole_tensors=existing.global_mole_tensors,
+                bias=existing.bias is not None,
+            )
+            # Reuse the existing nn.Parameter objects; identical shape/dtype.
+            new.weights = existing.weights
+            if existing.bias is not None:
+                new.bias = existing.bias
+            return new
+
+        for layer_idx in range(len(model.blocks)):
+            recursive_replace_so2_MOLE(model.blocks[layer_idx], _swap)
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        # No UnifiedRadialMLP under Mixed (we skip the SO2 block conversion).
+        # Each SO2_Convolution computes rad_func(x_edge) internally.
+        return [x_edge] * len(model.blocks)
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FAST_GPU_MIXED: UMASFastGPUMixed,
 }
 
 
