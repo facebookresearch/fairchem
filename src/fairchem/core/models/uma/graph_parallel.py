@@ -133,9 +133,8 @@ class GPContext:
     # O(world_size) iteration in the communication hot path.
     send_neighbors: list[int] | None = None  # Ranks we send to (non-zero send)
     recv_neighbors: list[int] | None = None  # Ranks we recv from (non-zero recv)
-    # Pre-allocated communication buffers (lazily initialized)
+    # Pre-allocated receive buffer (lazily initialized).
     # Reused across layers within a step to avoid per-layer CUDA malloc.
-    _send_buf: torch.Tensor | None = None
     _recv_buf: torch.Tensor | None = None
 
 
@@ -902,21 +901,14 @@ def all_to_all_collect_p2p(
     recv_splits = gp_ctx.recv_splits
     total_recv = gp_ctx.total_recv
 
-    # Gather atoms to send (index_select into contiguous buffer)
+    # Gather atoms to send
+    # Note: cannot use torch.index_select with out= because x_local
+    # may require grad (for force computation), and out= doesn't
+    # support autograd. Use regular indexing which creates a new tensor
+    # but supports the backward pass. The send buffer pre-allocation
+    # is not worth the autograd complexity.
     if send_indices.numel() > 0:
-        # Reuse pre-allocated send buffer if available and correct size
-        total_send = send_indices.shape[0]
-        send_shape = (total_send, *feature_shape)
-        if (
-            gp_ctx._send_buf is not None
-            and gp_ctx._send_buf.shape == send_shape
-            and gp_ctx._send_buf.dtype == x_local.dtype
-        ):
-            torch.index_select(x_local, 0, send_indices, out=gp_ctx._send_buf)
-            x_send = gp_ctx._send_buf
-        else:
-            x_send = x_local[send_indices].contiguous()
-            gp_ctx._send_buf = x_send
+        x_send = x_local[send_indices].contiguous()
     else:
         x_send = torch.empty(
             0, *feature_shape, device=x_local.device, dtype=x_local.dtype
