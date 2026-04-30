@@ -809,7 +809,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         world_size=gp_utils.get_gp_world_size(),
                         rank=gp_utils.get_gp_rank(),
                         strategy=self.gp_partition_strategy,
-                        cell=data_dict.get("cell"),
+                        cell=data_dict.get("cell", default=None),
                         cutoff=self.cutoff,
                         pbc=pbc,
                     )
