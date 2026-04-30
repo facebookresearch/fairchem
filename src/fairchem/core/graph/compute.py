@@ -227,7 +227,12 @@ def generate_graph(
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
         if node_partition is not None:
-            data["node_partition"] = node_partition
+            # Use setattr for compatibility with SimpleNamespace
+            # (used by halo filtering) and regular data dicts.
+            try:
+                data["node_partition"] = node_partition
+            except TypeError:
+                data.node_partition = node_partition
     elif radius_pbc_version == 3:
         radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
