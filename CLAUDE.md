@@ -329,3 +329,9 @@ Via Hydra CLI, override individual fields (not by preset name): `runner.inferenc
 
 ### BL torch.compile regression — ROOT CAUSE FOUND AND FIXED
 The `@torch.compiler.disable` on `_generate_graph` wrapped the entire function, including the BL (all-gather) code path. This created a larger graph break than main (which only has `@torch.compiler.disable` on `generate_graph` itself). At 64 GPUs the larger non-compiled region caused 12x slower compilation (92 min vs ~8 min on main). Fix: extracted A2A partitioning into `_compute_a2a_partition()` with its own `@torch.compiler.disable`, leaving `_generate_graph` fully compilable for the BL path. Verified at 1-GPU and 8-GPU: compile time matches main exactly. The "46x compile speedup" claim for A2A in experiment 19 was artificial — both paths should compile similarly fast after the fix.
+
+### Sparse P2P is faster than all_to_all_single for spatial partitioning
+At 64 GPUs with spatial partitioning, each rank only communicates with ~10-15 actual neighbors (not all 63). `dist.all_to_all_single` creates P-1=63 send/recv pairs (zero-length pairs are no-ops but still consume NCCL group slots). `dist.batch_isend_irecv` with only non-zero neighbors creates ~25 ops (15 send + 10 recv), reducing NCCL operation count by ~4×. This saves ~1ms/layer × 4 layers = 4ms/step, a 6.4% speedup over standard A2A at 64 GPUs. No effect at 8 GPUs (NVLink has negligible per-op overhead). Enable with `backbone.use_p2p_gp=true`.
+
+### torch.index_select with out= doesn't support autograd
+`torch.index_select(x, 0, indices, out=buffer)` raises `RuntimeError: functions with out=... arguments don't support automatic differentiation` when `x.requires_grad=True`. This applies even in eval mode because `pos.requires_grad_(True)` is set for force computation (via autograd). Use regular indexing `x[indices].contiguous()` instead.
