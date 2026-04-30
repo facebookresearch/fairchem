@@ -852,6 +852,7 @@ def all_to_all_collect(
     )
 
 
+@torch.compiler.disable
 def start_all_to_all_collect(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
@@ -948,6 +949,7 @@ def start_all_to_all_collect(
     return x_recv, work_handles
 
 
+@torch.compiler.disable
 def finish_all_to_all_collect(
     recv_buffer: torch.Tensor,
     work_handles: list[dist.Work],
