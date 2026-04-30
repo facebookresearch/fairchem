@@ -232,18 +232,19 @@ def _compute_send_info_aabb(
     world_size: int,
 ) -> dict:
     """
-    Compute send_info from AABB geometry without any NCCL collectives.
+    Compute send and recv info from AABB geometry without NCCL collectives.
 
     For each remote rank R, computes the axis-aligned bounding box (AABB)
     of atoms assigned to R, expands it by cutoff, then checks which local
-    atoms fall within that expanded AABB (considering 27 periodic images
-    for PBC systems). Local atoms that are within cutoff of rank R's
-    domain must be sent to rank R.
+    atoms fall within that expanded AABB (considering periodic images for
+    PBC systems). Local atoms within cutoff of rank R's domain are sent
+    to rank R.
 
-    This is conservative — the AABB may include atoms outside the actual
-    Voronoi cell of rank R's partition. The extra atoms are harmless
-    (they'll be filtered out during edge generation) and the bandwidth
-    overhead is negligible (~1MB extra vs ~100GB/s InfiniBand).
+    Also computes recv info: for each remote rank R, checks which of R's
+    atoms fall within THIS rank's expanded AABB. This is the symmetric
+    computation and ensures send/recv counts are consistent across ranks
+    (rank A's send_counts[B] == rank B's recv_counts[A]) without any
+    NCCL communication.
 
     Args:
         pos: All atom positions, shape (N, 3).
@@ -257,10 +258,13 @@ def _compute_send_info_aabb(
 
     Returns:
         dict with keys:
-            send_counts: Tensor of shape (world_size,) — atoms to send
-                to each rank.
+            send_counts: Tensor (world_size,) — atoms to send to each rank.
             send_indices_global: Tensor of global atom indices to send,
                 sorted by destination rank.
+            recv_counts: Tensor (world_size,) — atoms to receive from
+                each rank (what they will send to us based on AABB).
+            recv_indices_global: Tensor of global atom indices we will
+                receive, sorted by source rank.
     """
     device = pos.device
     local_pos = pos[node_partition]  # (n_local, 3)
@@ -340,9 +344,43 @@ def _compute_send_info_aabb(
     sort_order = rank_idx.argsort(stable=True)
     send_indices_global = global_atoms[sort_order]
 
+    # --- RECV side: check all remote atoms against OUR expanded AABB ---
+    # This is the symmetric computation: for each remote rank R, how many
+    # of R's atoms fall within our AABB? This equals R's send_counts[rank],
+    # guaranteeing send/recv count consistency without communication.
+    my_lo = aabb_min[rank]  # (3,)
+    my_hi = aabb_max[rank]  # (3,)
+
+    # Check all atoms against our AABB across PBC shifts.
+    # shifted_all: (n_shifts, N, 3) — N is total atoms across all ranks
+    shifted_all = pos.unsqueeze(0) + shift_vectors.unsqueeze(1)
+    in_my_box = ((shifted_all >= my_lo) & (shifted_all <= my_hi)).all(
+        dim=-1
+    )  # (n_shifts, N)
+    reachable_to_me = in_my_box.any(dim=0)  # (N,)
+
+    # Exclude own atoms (never receive from self)
+    reachable_to_me[rank_assignments == rank] = False
+
+    # Build recv_counts and recv_indices_global sorted by source rank
+    recv_atoms = reachable_to_me.nonzero(as_tuple=True)[0]
+    if recv_atoms.numel() > 0:
+        recv_from_ranks = rank_assignments[recv_atoms]
+        recv_counts = torch.bincount(recv_from_ranks, minlength=world_size).to(
+            torch.long
+        )
+        recv_counts[rank] = 0
+        sort_order_recv = recv_from_ranks.argsort(stable=True)
+        recv_indices_global = recv_atoms[sort_order_recv]
+    else:
+        recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
+        recv_indices_global = torch.empty(0, dtype=torch.long, device=device)
+
     return {
         "send_counts": send_counts,
         "send_indices_global": send_indices_global,
+        "recv_counts": recv_counts,
+        "recv_indices_global": recv_indices_global,
     }
 
 
@@ -439,13 +477,18 @@ def build_gp_context(
         rank_assignments: Rank assignment for each atom, shape (total_atoms,).
         rank: This rank's GP rank.
         world_size: GP world size.
-        send_info: Pre-computed send metadata from graph filtering.
+        send_info: Pre-computed send/recv metadata from AABB geometry.
             If provided, must contain:
             - send_counts: Tensor of shape (world_size,) with count of
               atoms to send to each rank.
             - send_indices_global: Tensor of global atom indices to send,
               sorted by destination rank.
-            When provided, _fused_index_exchange is skipped.
+            - recv_counts: Tensor of shape (world_size,) with count of
+              atoms to receive from each rank (AABB-based).
+            - recv_indices_global: Tensor of global atom indices to
+              receive, sorted by source rank.
+            When provided, _fused_index_exchange is skipped and AABB
+            recv data overrides edge-based recv_counts/needed_atoms.
         node_partition: Pre-computed atom indices in this rank's partition.
             If provided, avoids recomputing from rank_assignments.
 
@@ -493,6 +536,18 @@ def build_gp_context(
         # Pre-computed during graph filtering — skip NCCL collective.
         send_counts = send_info["send_counts"]
         send_indices_global = send_info["send_indices_global"]
+
+        # AABB send_info also provides recv data (symmetric AABB check).
+        # This MUST be used for consistency: rank A's send_counts[B]
+        # must equal rank B's recv_counts[A]. The edge-based recv_counts
+        # computed above won't match because AABB is conservative
+        # (includes false positives). Using AABB recv_counts guarantees
+        # the all-to-all buffer sizes are consistent across all ranks.
+        if "recv_counts" in send_info:
+            recv_counts = send_info["recv_counts"]
+            needed_atoms = send_info["recv_indices_global"]
+            total_needed_atoms = needed_atoms.shape[0]
+            needed_from_ranks = rank_assignments[needed_atoms]
     else:
         with record_function("a2a_fused_index_exchange"):
             send_counts, send_indices_global = _fused_index_exchange(
