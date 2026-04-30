@@ -344,3 +344,6 @@ The `_generate_graph()` method is in the compiled region. Any code inside it tha
 
 ### Speed benchmark YAML uses natoms_list, not num_atoms
 The `uma-speed.yaml` config uses `runner.natoms_list: [1000]` (a list), not `runner.num_atoms`. The SLURM config uses `job.run_name` for job naming (not `job.scheduler.slurm.job_name`). Fields not in the YAML but in the SlurmConfig dataclass (like `timeout_hr`) need `+` prefix: `+job.scheduler.slurm.timeout_hr=1`. Fields not in SlurmConfig at all (like `time`, `job_name`) cannot be added — use the correct field names from the dataclass.
+
+### V2 internal edge filtering is faster than post-filtering for send_info
+Bypassing `radius_graph_pbc_v2`'s internal `node_partition` filtering to compute `send_info` via `filter_edges_by_node_partition` post-hoc is ~12ms SLOWER at 64 GPUs. The reason: without v2's internal filter, v2 generates edges for ALL 64k atoms instead of 1k local atoms, producing ~64× more edges that are then discarded. The 4.2ms `_fused_index_exchange` NCCL collective is a necessary cost when using v2 — it's cheaper than the alternative. Benchmarked: A2A+P2P dropped from 1.405 to 1.249 ns/day at 64 GPUs when bypassing v2's filter.
