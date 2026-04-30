@@ -777,20 +777,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         rank_assignments = None
         send_info = None
 
-        # Compute PBC early so it's available for A2A partition AABB.
-        pbc = None
-        if self.otf_graph:
-            if self.always_use_pbc:
-                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
-            else:
-                assert (
-                    "pbc" in data_dict
-                ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
-                pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
-
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -801,6 +787,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # graph-generation partition and the GPContext partition
                 # are identical, avoiding index mismatches that cause
                 # OOB crashes.
+                #
+                # Pass always_use_pbc as a Python bool (not tensor) to
+                # avoid graph breaks from pbc tensor ops in compiled code.
+                # AABB only needs to know whether to use 27 PBC images.
                 rank_assignments, node_partition, send_info = (
                     self._compute_a2a_partition(
                         pos=data_dict["pos"],
@@ -809,9 +799,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         world_size=gp_utils.get_gp_world_size(),
                         rank=gp_utils.get_gp_rank(),
                         strategy=self.gp_partition_strategy,
-                        cell=data_dict.get("cell", default=None),
+                        cell=data_dict["cell"],
                         cutoff=self.cutoff,
-                        pbc=pbc,
+                        pbc=torch.ones(1, 3, dtype=torch.bool)
+                        if self.always_use_pbc
+                        else None,
                     )
                 )
             else:
@@ -829,6 +821,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
 
         if self.otf_graph:
+            pbc = None
+            if self.always_use_pbc:
+                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
+            else:
+                assert (
+                    "pbc" in data_dict
+                ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
+                pbc = data_dict["pbc"]
+            assert (
+                pbc.all() or (~pbc).all()
+            ), "We can only accept pbc that is all true or all false"
+
             # NOTE: AABB halo filtering was removed because profiling at
             # 64 GPUs turbo showed it costs 11ms/step for the graph-break
             # overhead while providing 0% speedup (graph gen is overlapped
