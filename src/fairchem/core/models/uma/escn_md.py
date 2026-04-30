@@ -749,6 +749,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         rank=gp_utils.get_gp_rank(),
                         world_size=gp_utils.get_gp_world_size(),
                         send_info=graph_dict.get("send_info"),
+                        node_partition=node_partition,
                     )
                 data_dict["gp_ctx"] = gp_ctx
                 # All-to-all uses local indices via gp_ctx.edge_index_local,

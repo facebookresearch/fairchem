@@ -292,6 +292,7 @@ def build_gp_context(
     rank: int,
     world_size: int,
     send_info: dict | None = None,
+    node_partition: torch.Tensor | None = None,
 ) -> GPContext:
     """
     Build the GP context from edge connectivity and atom assignments.
@@ -320,6 +321,8 @@ def build_gp_context(
             - send_indices_global: Tensor of global atom indices to send,
               sorted by destination rank.
             When provided, _fused_index_exchange is skipped.
+        node_partition: Pre-computed atom indices in this rank's partition.
+            If provided, avoids recomputing from rank_assignments.
 
     Returns:
         GPContext with all metadata needed for all-to-all communication.
@@ -327,23 +330,23 @@ def build_gp_context(
     total_atoms = rank_assignments.shape[0]
     device = rank_assignments.device
 
-    # Atoms owned by this rank
-    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    # Atoms owned by this rank (reuse pre-computed if available)
+    if node_partition is None:
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
     total_local_atoms = node_partition.shape[0]
 
     # Find which non-local atoms this rank needs as edge sources.
-    # An edge (src, tgt) with tgt in our partition needs src's embedding.
-    # If src is NOT in our partition, we need to receive it.
+    # Since edge_index is already filtered to edges whose targets are
+    # in this rank's partition, every edge has a local target. We only
+    # need to find edges where the SOURCE is remote (not in our partition).
     local_mask = rank_assignments == rank  # (total_atoms,) bool
-    tgt_is_local = local_mask[edge_index[1]]  # edges whose target is local
-    src_is_remote = ~local_mask[edge_index[0]]  # edges whose source is remote
+    src_is_remote = ~local_mask[edge_index[0]]
 
     # Remote sources needed for local targets
     # Use boolean mask + nonzero instead of .unique(sorted=True) on raw
     # edge sources — O(N) scatter + scan vs O(E log E) sort.
-    remote_edges_mask = tgt_is_local & src_is_remote
     needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
-    needed_mask[edge_index[0, remote_edges_mask]] = True
+    needed_mask[edge_index[0, src_is_remote]] = True
     needed_mask &= ~local_mask  # exclude local atoms (safety)
     needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
 
