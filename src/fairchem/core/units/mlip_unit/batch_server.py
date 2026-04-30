@@ -27,6 +27,24 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
+def _to_cpu(obj: Any) -> Any:
+    """
+    Return a CPU-resident copy of ``obj`` so that the result can be
+    deserialized on CPU-only Ray workers.
+
+    Uses ``torch.save`` + ``torch.load(map_location="cpu")`` which
+    transparently handles arbitrary object graphs containing tensors,
+    ``nn.Module`` instances, OmegaConf containers, etc., without needing
+    to walk and mutate the structure ourselves.
+    """
+    import io
+
+    buf = io.BytesIO()
+    torch.save(obj, buf)
+    buf.seek(0)
+    return torch.load(buf, map_location="cpu", weights_only=False)
+
+
 class BatchPredictServerMixin:
     """
     Shared batched-inference logic mixed into Ray Serve deployment classes.
@@ -427,7 +445,11 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         """
         model_id = model_id or serve.get_multiplexed_model_id()
         predict_unit = await self.get_model(model_id)
-        return getattr(predict_unit, attribute_name)
+        attr = getattr(predict_unit, attribute_name)
+        # Move any CUDA tensors to CPU before returning so callers (which
+        # may be CPU-only Ray workers) can deserialize the result without
+        # requiring CUDA.
+        return _to_cpu(attr)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
