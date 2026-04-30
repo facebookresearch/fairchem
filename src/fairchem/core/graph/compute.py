@@ -226,9 +226,15 @@ def generate_graph(
         radius_graph_pbc_fn = radius_graph_pbc
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
-        if node_partition is not None:
-            # Use setattr for compatibility with SimpleNamespace
-            # (used by halo filtering) and regular data dicts.
+        # For A2A mode (rank_assignments provided), DON'T use v2's
+        # internal edge filtering — we need the full (unfiltered)
+        # edge_index to compute send_info in
+        # filter_edges_by_node_partition.  Computing send_info
+        # locally eliminates the 4.2ms _fused_index_exchange NCCL
+        # collective that would otherwise run every step.
+        # For BL mode (rank_assignments is None), v2's internal
+        # filtering is faster.
+        if node_partition is not None and rank_assignments is None:
             try:
                 data["node_partition"] = node_partition
             except TypeError:
@@ -246,9 +252,15 @@ def generate_graph(
         pbc=pbc,
     )
 
-    # for v2 it is still faster right now to not do this post filtering, need to investigate further
+    # Post-filter edges to keep only those targeting this rank's partition.
+    # For v2 + BL (no rank_assignments), v2 already filtered internally.
+    # For v2 + A2A (rank_assignments provided), we skipped v2's internal
+    # filter above so we can compute send_info from the full edge_index.
     send_info = None
-    if node_partition is not None and radius_pbc_version != 2:
+    need_post_filter = node_partition is not None and (
+        radius_pbc_version != 2 or rank_assignments is not None
+    )
+    if need_post_filter:
         filter_result = filter_edges_by_node_partition(
             node_partition,
             edge_index,

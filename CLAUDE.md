@@ -335,3 +335,12 @@ At 64 GPUs with spatial partitioning, each rank only communicates with ~10-15 ac
 
 ### torch.index_select with out= doesn't support autograd
 `torch.index_select(x, 0, indices, out=buffer)` raises `RuntimeError: functions with out=... arguments don't support automatic differentiation` when `x.requires_grad=True`. This applies even in eval mode because `pos.requires_grad_(True)` is set for force computation (via autograd). Use regular indexing `x[indices].contiguous()` instead.
+
+### All graph-break-prone code in _generate_graph must be in @torch.compiler.disable methods
+The `_generate_graph()` method is in the compiled region. Any code inside it that uses `.item()`, data-dependent conditionals, `SimpleNamespace()`, or `nonzero()` will cause graph breaks, leading to either compilation failures or massive slowdowns. Extract such code into separate static/instance methods decorated with `@torch.compiler.disable`. Examples: `_compute_a2a_partition()` (partitioning logic), `_compute_halo_graph()` (AABB halo filtering + subset graph gen). The caller in `_generate_graph()` should be a simple `result = self._method(...)` call with no graph-break-inducing operations.
+
+### SimpleNamespace doesn't support dict-style assignment
+`types.SimpleNamespace` objects support attribute access (`obj.key`) but NOT dict-style assignment (`obj["key"] = val`). The `generate_graph()` function in `compute.py` does `data["node_partition"] = node_partition` for v2. When passing a SimpleNamespace as `data`, this crashes with `TypeError`. Fixed with try/except: try dict assignment, fall back to setattr.
+
+### Speed benchmark YAML uses natoms_list, not num_atoms
+The `uma-speed.yaml` config uses `runner.natoms_list: [1000]` (a list), not `runner.num_atoms`. The SLURM config uses `job.run_name` for job naming (not `job.scheduler.slurm.job_name`). Fields not in the YAML but in the SlurmConfig dataclass (like `timeout_hr`) need `+` prefix: `+job.scheduler.slurm.timeout_hr=1`. Fields not in SlurmConfig at all (like `time`, `job_name`) cannot be added — use the correct field names from the dataclass.

@@ -792,41 +792,27 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
 
-            # For the A2A path with PBC, use AABB halo filtering to
-            # reduce the number of atoms passed to graph generation.
-            # Only atoms within cutoff of the local partition AABB
-            # (considering periodic images) are included.
-            # Gate on world_size >= 16 to avoid graph break overhead
-            # at small GPU counts where the halo covers the entire box.
-            graph_dict = None
-            if (
-                self.use_all_to_all_gp
-                and node_partition is not None
-                and gp_utils.get_gp_world_size() >= 16
-                and pbc.all()
-            ):
-                graph_dict = self._compute_halo_graph(
-                    data_dict, node_partition, rank_assignments, pbc
-                )
-
-            if graph_dict is None:
-                # No halo filtering: run graph gen on all atoms
-                graph_dict = generate_graph(
-                    data_dict,
-                    cutoff=self.cutoff,
-                    max_neighbors=self.max_neighbors,
-                    enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
-                    radius_pbc_version=self.radius_pbc_version,
-                    pbc=pbc,
-                    node_partition=node_partition,
-                    rank_assignments=rank_assignments
-                    if self.use_all_to_all_gp
-                    else None,
-                    rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
-                    world_size=gp_utils.get_gp_world_size()
-                    if self.use_all_to_all_gp
-                    else None,
-                )
+            # NOTE: AABB halo filtering was removed because profiling at
+            # 64 GPUs turbo showed it costs 11ms/step for the graph-break
+            # overhead while providing 0% speedup (graph gen is overlapped
+            # with compiled GPU kernels in turbo mode).  In default
+            # (non-compiled) mode, A2A itself is slower than baseline, so
+            # halo on A2A still loses.  The _compute_halo_graph method is
+            # kept for potential future use with non-compiled inference.
+            graph_dict = generate_graph(
+                data_dict,
+                cutoff=self.cutoff,
+                max_neighbors=self.max_neighbors,
+                enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                radius_pbc_version=self.radius_pbc_version,
+                pbc=pbc,
+                node_partition=node_partition,
+                rank_assignments=rank_assignments if self.use_all_to_all_gp else None,
+                rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
+                world_size=gp_utils.get_gp_world_size()
+                if self.use_all_to_all_gp
+                else None,
+            )
         else:
             # this assume edge_index is provided
             assert (
