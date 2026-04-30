@@ -607,9 +607,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
-    @staticmethod
     @torch.compiler.disable
     def _compute_a2a_partition(
+        self,
         pos: torch.Tensor,
         total_atoms: int,
         device: torch.device,
@@ -619,7 +619,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         cell: torch.Tensor | None = None,
         cutoff: float | None = None,
         pbc: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor, dict | None]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Compute A2A rank assignments, node partition, and send_info.
 
@@ -630,6 +630,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         The AABB check is conservative (may include atoms not strictly
         needed), but the extra communication volume is negligible.
+
+        send_info is stored on self._aabb_send_info rather than returned
+        to avoid flowing a dict through the compiled graph (which causes
+        compilation hangs). Retrieved in build_gp_context via the caller.
 
         Separated from _generate_graph so that only the A2A-specific
         partitioning is excluded from torch.compile.  The BL (all-gather)
@@ -645,10 +649,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
 
         # Compute send_info from AABB geometry if cell/cutoff provided.
-        send_info = None
+        # Store on self to avoid dict flowing through compiled graph.
+        self._aabb_send_info = None
         if cell is not None and cutoff is not None:
             with record_function("a2a_send_info_aabb"):
-                send_info = _compute_send_info_aabb(
+                self._aabb_send_info = _compute_send_info_aabb(
                     pos=pos,
                     cell=cell,
                     cutoff=cutoff,
@@ -659,7 +664,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     world_size=world_size,
                 )
 
-        return rank_assignments, node_partition, send_info
+        return rank_assignments, node_partition
 
     @torch.compiler.disable
     def _compute_halo_graph(
@@ -775,8 +780,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["gp_node_offset"] = 0
         node_partition = None
         rank_assignments = None
-        send_info = None
-
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -791,20 +794,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # Pass always_use_pbc as a Python bool (not tensor) to
                 # avoid graph breaks from pbc tensor ops in compiled code.
                 # AABB only needs to know whether to use 27 PBC images.
-                rank_assignments, node_partition, send_info = (
-                    self._compute_a2a_partition(
-                        pos=data_dict["pos"],
-                        total_atoms=len(atomic_numbers_full),
-                        device=atomic_numbers_full.device,
-                        world_size=gp_utils.get_gp_world_size(),
-                        rank=gp_utils.get_gp_rank(),
-                        strategy=self.gp_partition_strategy,
-                        cell=data_dict["cell"],
-                        cutoff=self.cutoff,
-                        pbc=torch.ones(1, 3, dtype=torch.bool)
-                        if self.always_use_pbc
-                        else None,
-                    )
+                rank_assignments, node_partition = self._compute_a2a_partition(
+                    pos=data_dict["pos"],
+                    total_atoms=len(atomic_numbers_full),
+                    device=atomic_numbers_full.device,
+                    world_size=gp_utils.get_gp_world_size(),
+                    rank=gp_utils.get_gp_rank(),
+                    strategy=self.gp_partition_strategy,
+                    cell=data_dict["cell"],
+                    cutoff=self.cutoff,
+                    pbc=torch.ones(1, 3, dtype=torch.bool)
+                    if self.always_use_pbc
+                    else None,
                 )
             else:
                 # Legacy all-gather: use consecutive index split
@@ -903,7 +904,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 with record_function("a2a_build_gp_context"):
                     # Prefer AABB send_info (no NCCL) over graph-filter
                     # send_info. Both are valid; AABB is faster.
-                    effective_send_info = send_info or graph_dict.get("send_info")
+                    effective_send_info = self._aabb_send_info or graph_dict.get(
+                        "send_info"
+                    )
                     gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],
                         rank_assignments=rank_assignments,
