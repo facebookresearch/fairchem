@@ -22,6 +22,7 @@ from fairchem.core.models.uma.graph_parallel import (
     all_to_all_collect_p2p,
     finish_all_to_all_collect,
     start_all_to_all_collect,
+    start_all_to_all_collect_p2p,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -275,9 +276,17 @@ class Edgewise(torch.nn.Module):
         local_wigner_inv = wigner_inv_envelope[local_mask]
         boundary_wigner_inv = wigner_inv_envelope[~local_mask]
 
-        # Step 1: Start async all-to-all
-        with record_function("a2a_collect_async_start"):
-            recv_buf, work_handles = start_all_to_all_collect(x, gp_ctx, send_indices)
+        # Step 1: Start async all-to-all (P2P or standard)
+        if self.use_p2p_gp:
+            with record_function("a2a_collect_p2p_async_start"):
+                recv_buf, work_handles = start_all_to_all_collect_p2p(
+                    x, gp_ctx, send_indices
+                )
+        else:
+            with record_function("a2a_collect_async_start"):
+                recv_buf, work_handles = start_all_to_all_collect(
+                    x, gp_ctx, send_indices
+                )
 
         # Step 2: Compute local edges while comm is in flight
         with record_function("local_edges"):

@@ -959,6 +959,86 @@ def all_to_all_collect_p2p(
 
 
 @torch.compiler.disable
+def start_all_to_all_collect_p2p(
+    x_local: torch.Tensor,
+    gp_ctx: GPContext,
+    send_indices: torch.Tensor,
+) -> tuple[torch.Tensor, list[dist.Work]]:
+    """
+    Start async sparse P2P communication for comm-compute overlap.
+
+    Combines the benefits of sparse P2P (fewer NCCL ops) with async
+    overlap (hiding latency behind local edge computation). Uses
+    ``batch_isend_irecv`` with only non-zero neighbors and returns
+    immediately without waiting.
+
+    The caller should do useful compute, then call
+    ``finish_all_to_all_collect`` to wait for completion.
+
+    Does NOT participate in autograd — eval-mode only.
+
+    Args:
+        x_local: Local atom embeddings, shape (local_atoms, *features).
+        gp_ctx: Graph parallel context with precomputed neighbor lists.
+        send_indices: Local indices of atoms to send.
+
+    Returns:
+        Tuple of (recv_buffer, work_handles):
+            recv_buffer: Pre-allocated tensor for received embeddings.
+            work_handles: List of dist.Work handles to wait on.
+    """
+    feature_shape = x_local.shape[1:]
+    send_splits = gp_ctx.send_splits
+    recv_splits = gp_ctx.recv_splits
+    total_recv = gp_ctx.total_recv
+
+    # Gather atoms to send
+    if send_indices.numel() > 0:
+        x_send = x_local[send_indices].contiguous()
+    else:
+        x_send = torch.empty(
+            0, *feature_shape, device=x_local.device, dtype=x_local.dtype
+        )
+
+    # Reuse pre-allocated recv buffer if available and correct size
+    recv_shape = (total_recv, *feature_shape)
+    if (
+        gp_ctx._recv_buf is not None
+        and gp_ctx._recv_buf.shape == recv_shape
+        and gp_ctx._recv_buf.dtype == x_local.dtype
+    ):
+        x_recv = gp_ctx._recv_buf
+    else:
+        x_recv = torch.empty(recv_shape, device=x_local.device, dtype=x_local.dtype)
+        gp_ctx._recv_buf = x_recv
+
+    # Launch sparse P2P ops without waiting
+    gp_group = gp_utils.get_gp_group()
+    backend = dist.get_backend(gp_group)
+
+    work_handles = []
+    if backend == "nccl":
+        send_chunks = list(x_send.split(send_splits))
+        recv_chunks = list(x_recv.split(recv_splits))
+
+        ops = []
+        for r in gp_ctx.send_neighbors:
+            ops.append(dist.P2POp(dist.isend, send_chunks[r], r, group=gp_group))
+        for r in gp_ctx.recv_neighbors:
+            ops.append(dist.P2POp(dist.irecv, recv_chunks[r], r, group=gp_group))
+
+        if ops:
+            work_handles = dist.batch_isend_irecv(ops)
+    else:
+        # Gloo fallback: use pairwise send/recv
+        send_chunks = list(x_send.split(send_splits))
+        recv_chunks = list(x_recv.split(recv_splits))
+        _safe_all_to_all(recv_chunks, send_chunks, group=gp_group)
+
+    return x_recv, work_handles
+
+
+@torch.compiler.disable
 def start_all_to_all_collect(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
