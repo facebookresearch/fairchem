@@ -217,11 +217,13 @@ def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
     rank = gp_utils.get_gp_rank()
     world_size = gp_utils.get_gp_world_size()
 
-    # Build GP context
+    # Build GP context (send_indices computed via fused index exchange)
     gp_ctx = build_gp_context(edge_index, rank_assignments, rank, world_size)
 
-    # Compute send indices
-    send_indices = _compute_send_indices(gp_ctx)
+    # Use send indices from fused exchange (already in GPContext)
+    send_indices = gp_ctx.send_indices
+    if send_indices is None:
+        send_indices = _compute_send_indices(gp_ctx)
 
     # All-to-all collect
     x_received = all_to_all_collect(x, gp_ctx, send_indices)
@@ -852,3 +854,150 @@ def test_overlap_matches_sequential():
         assert (
             result["num_boundary_edges"] > 0
         ), f"Rank {result['rank']}: no boundary edges — test is trivial"
+
+
+# =========================================================================
+# Distributed tests: send_info optimization correctness
+# =========================================================================
+
+
+def send_info_optimization_test(atomic_numbers, edge_index):
+    """
+    Verify that pre-computed send_info from filter_edges_by_node_partition
+    produces the same GPContext as the _fused_index_exchange path.
+    """
+    from fairchem.core.graph.compute import filter_edges_by_node_partition
+
+    rank = gp_utils.get_gp_rank()
+    world_size = gp_utils.get_gp_world_size()
+    natoms = atomic_numbers.shape[0]
+
+    rank_assignments = partition_atoms_index_split(
+        natoms, world_size, torch.device("cpu")
+    )
+
+    # Get this rank's partition
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+
+    # Filter edges with send_info computation
+    neighbors = torch.tensor([edge_index.shape[1]])
+    edge_index_filtered, _, _, send_info = filter_edges_by_node_partition(
+        node_partition=node_partition,
+        edge_index=edge_index,
+        cell_offsets=torch.zeros(edge_index.shape[1], 3),
+        neighbors=neighbors,
+        num_atoms=natoms,
+        rank_assignments=rank_assignments,
+        rank=rank,
+        world_size=world_size,
+    )
+
+    # Build GPContext WITH send_info (skip _fused_index_exchange)
+    ctx_with_send_info = build_gp_context(
+        edge_index_filtered,
+        rank_assignments,
+        rank,
+        world_size,
+        send_info=send_info,
+    )
+
+    # Build GPContext WITHOUT send_info (use _fused_index_exchange)
+    ctx_without = build_gp_context(
+        edge_index_filtered,
+        rank_assignments,
+        rank,
+        world_size,
+    )
+
+    # Compare the two contexts
+    send_counts_match = torch.equal(
+        ctx_with_send_info.send_counts, ctx_without.send_counts
+    )
+    recv_counts_match = torch.equal(
+        ctx_with_send_info.recv_counts, ctx_without.recv_counts
+    )
+
+    # send_indices should select the same atoms (may differ in order
+    # within a rank's chunk, but counts must match)
+    si_a = ctx_with_send_info.send_indices
+    si_b = ctx_without.send_indices
+    if si_a is not None and si_b is not None:
+        send_indices_match = si_a.shape == si_b.shape and torch.equal(
+            si_a.sort()[0], si_b.sort()[0]
+        )
+    elif si_a is None and si_b is None:
+        send_indices_match = True
+    else:
+        send_indices_match = False
+
+    # Functional test: both contexts should produce identical
+    # all-to-all results
+    x = atomic_numbers[node_partition].unsqueeze(1).float()
+
+    si_opt = ctx_with_send_info.send_indices
+    if si_opt is None:
+        si_opt = _compute_send_indices(ctx_with_send_info)
+    x_recv_opt = all_to_all_collect(x, ctx_with_send_info, si_opt)
+
+    si_ref = ctx_without.send_indices
+    if si_ref is None:
+        si_ref = _compute_send_indices(ctx_without)
+    x_recv_ref = all_to_all_collect(x, ctx_without, si_ref)
+
+    functional_match = torch.allclose(x_recv_opt, x_recv_ref, atol=1e-6)
+
+    return {
+        "rank": rank,
+        "send_counts_match": send_counts_match,
+        "recv_counts_match": recv_counts_match,
+        "send_indices_match": send_indices_match,
+        "functional_match": functional_match,
+        "send_counts_opt": ctx_with_send_info.send_counts,
+        "send_counts_ref": ctx_without.send_counts,
+    }
+
+
+def test_send_info_matches_fused_exchange():
+    """
+    Verify that pre-computed send_info from filter_edges_by_node_partition
+    produces identical GPContext and all-to-all results as the
+    _fused_index_exchange path.
+    """
+    num_atoms = 8
+    # Dense graph: all atoms connected
+    src = []
+    dst = []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+
+    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        send_info_optimization_test,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["send_counts_match"], (
+            f"Rank {result['rank']}: send_counts mismatch. "
+            f"opt={result['send_counts_opt']}, ref={result['send_counts_ref']}"
+        )
+        assert result[
+            "recv_counts_match"
+        ], f"Rank {result['rank']}: recv_counts mismatch"
+        assert result[
+            "send_indices_match"
+        ], f"Rank {result['rank']}: send_indices mismatch"
+        assert result["functional_match"], (
+            f"Rank {result['rank']}: functional mismatch — "
+            f"all-to-all produced different embeddings"
+        )

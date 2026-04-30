@@ -172,9 +172,10 @@ class Edgewise(torch.nn.Module):
             local_node_offset = 0
         elif gp_utils.initialized():
             # Legacy all-gather path
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                x, total_atoms_across_gp_ranks
-            )
+            with record_function("allgather_collect"):
+                x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                    x, total_atoms_across_gp_ranks
+                )
             edge_index_local = edge_index
             local_node_offset = node_offset
         else:

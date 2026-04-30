@@ -12,6 +12,7 @@ from enum import Enum
 
 import torch
 from torch import distributed as dist
+from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
 
@@ -199,15 +200,15 @@ def partition_atoms_spatial(
     x, y, z = norm[:, 0], norm[:, 1], norm[:, 2]
     morton = _expand_bits_10(x) | (_expand_bits_10(y) << 1) | (_expand_bits_10(z) << 2)
 
-    # Sort by Morton code and assign to ranks in equal chunks
+    # Sort by Morton code and assign to ranks in balanced chunks.
+    # Use ``i * P // N`` mapping (not ``i // ceil(N/P)``) to ensure
+    # EVERY rank receives at least ``floor(N/P)`` atoms.  The ceil-based
+    # formula leaves trailing ranks empty when N is not a multiple of P
+    # (e.g. 1000 atoms / 64 ranks → rank 63 gets 0 atoms, causing a
+    # hang in collective communication).
     _, sorted_indices = morton.sort()
-    chunk_size = (N + num_ranks - 1) // num_ranks
     assignments = torch.empty(N, dtype=torch.long, device=device)
-    assignments[sorted_indices] = torch.div(
-        torch.arange(N, device=device),
-        chunk_size,
-        rounding_mode="floor",
-    ).clamp(max=num_ranks - 1)
+    assignments[sorted_indices] = torch.arange(N, device=device) * num_ranks // N
 
     return assignments
 
@@ -276,11 +277,13 @@ def partition_atoms_index_split(
     return assignments
 
 
+@torch.compiler.disable
 def build_gp_context(
     edge_index: torch.Tensor,
     rank_assignments: torch.Tensor,
     rank: int,
     world_size: int,
+    send_info: dict | None = None,
 ) -> GPContext:
     """
     Build the GP context from edge connectivity and atom assignments.
@@ -289,17 +292,26 @@ def build_gp_context(
     other ranks), exchanges atom indices via a single fused all-to-all,
     and computes all communication metadata.
 
-    Uses a single padded all-to-all collective (instead of the previous
-    2-step approach of count exchange + index exchange) by padding atom
-    index lists to a fixed size per rank. This halves the number of
-    collective operations in the setup path.
+    When send_info is provided (pre-computed during graph filtering in
+    filter_edges_by_node_partition), the NCCL index-exchange collective
+    is skipped entirely — send_counts and send_indices_global are taken
+    directly from send_info. This eliminates the most expensive collective
+    in the setup path.
 
     Args:
-        edge_index: Full graph edge index, shape (2, num_edges).
+        edge_index: Edge index filtered to edges whose targets are in
+            this rank's partition, shape (2, num_local_edges).
             Row 0 = source, row 1 = target.
         rank_assignments: Rank assignment for each atom, shape (total_atoms,).
         rank: This rank's GP rank.
         world_size: GP world size.
+        send_info: Pre-computed send metadata from graph filtering.
+            If provided, must contain:
+            - send_counts: Tensor of shape (world_size,) with count of
+              atoms to send to each rank.
+            - send_indices_global: Tensor of global atom indices to send,
+              sorted by destination rank.
+            When provided, _fused_index_exchange is skipped.
 
     Returns:
         GPContext with all metadata needed for all-to-all communication.
@@ -341,15 +353,21 @@ def build_gp_context(
 
     # Fused count + index exchange: single padded all-to-all replaces
     # the old 2-step approach (count exchange + index exchange).
-    send_counts, send_indices_global = _fused_index_exchange(
-        needed_atoms=needed_atoms,
-        needed_from_ranks=needed_from_ranks,
-        recv_counts=recv_counts,
-        rank=rank,
-        world_size=world_size,
-        total_atoms=total_atoms,
-        device=device,
-    )
+    if send_info is not None:
+        # Pre-computed during graph filtering — skip NCCL collective.
+        send_counts = send_info["send_counts"]
+        send_indices_global = send_info["send_indices_global"]
+    else:
+        with record_function("a2a_fused_index_exchange"):
+            send_counts, send_indices_global = _fused_index_exchange(
+                needed_atoms=needed_atoms,
+                needed_from_ranks=needed_from_ranks,
+                recv_counts=recv_counts,
+                rank=rank,
+                world_size=world_size,
+                total_atoms=total_atoms,
+                device=device,
+            )
 
     # Build global_to_local mapping:
     # Local atoms: index 0..total_local_atoms-1 (in order of node_partition)
