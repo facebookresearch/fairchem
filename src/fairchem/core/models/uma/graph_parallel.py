@@ -860,27 +860,26 @@ def all_to_all_collect_compiled(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
     send_indices: torch.Tensor,
-    autograd: bool = False,
 ) -> torch.Tensor:
     """
     Compile-friendly all-to-all collect using functional collectives.
 
-    Uses ``torch.distributed._functional_collectives`` ops which are
-    registered PyTorch ops — torch.compile can trace through them
-    WITHOUT creating a graph break. This eliminates the per-layer
-    graph break from the ``@torch.compiler.disable`` on
+    Uses ``torch.distributed._functional_collectives.all_to_all_single``
+    which is a registered PyTorch op — torch.compile can trace through it
+    WITHOUT creating a graph break. This eliminates the per-layer graph
+    break from the ``@torch.compiler.disable`` on
     ``AllToAllCollect.forward()``.
 
-    When ``autograd=True``, uses ``all_to_all_single_autograd`` which
-    supports gradient flow through the communication. This is required
-    when forces are computed via ``torch.autograd.grad(energy, pos)``
-    (as in UMA-S with ``direct_forces=False``). The autograd variant
-    is still compile-friendly — no graph break.
+    This function does NOT support autograd — gradients will not flow
+    through the communication. When gradients are needed (e.g., autograd
+    forces via ``torch.autograd.grad(energy, pos)``), use
+    ``all_to_all_collect`` instead, which uses an autograd.Function with
+    proper backward support.
 
-    When ``autograd=False``, uses the non-autograd variant which is
-    slightly cheaper (no backward registration). Use when gradients
-    through communication are not needed (e.g., ``direct_forces=True``
-    or when the caller explicitly disables gradients).
+    NOTE: ``all_to_all_single_autograd`` (the funcoll autograd variant)
+    crashes with torch.compile because it doesn't handle symbolic split
+    sizes (SymInt). Both BL (all-gather) and A2A have a graph break when
+    autograd is needed, so this is not a regression vs the baseline.
 
     For MD simulation with spatial partitioning, the split sizes are
     effectively constant for hundreds of steps (atoms barely move per
@@ -894,8 +893,6 @@ def all_to_all_collect_compiled(
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
         send_indices: Local indices of atoms to send.
-        autograd: If True, use the autograd-compatible functional
-            collective so gradients flow through the all-to-all.
 
     Returns:
         x_received: Remote atom embeddings, shape (total_needed, *features).
@@ -909,17 +906,12 @@ def all_to_all_collect_compiled(
     # Gather atoms to send (compile-friendly indexing)
     x_send = x_local[send_indices].contiguous()
 
-    # Use functional collective — no graph break!
+    # Use functional collective — no graph break, no autograd
     gp_group = gp_utils.get_gp_group()
 
-    if autograd:
-        from torch.distributed._functional_collectives import (
-            all_to_all_single_autograd as functional_a2a,
-        )
-    else:
-        from torch.distributed._functional_collectives import (
-            all_to_all_single as functional_a2a,
-        )
+    from torch.distributed._functional_collectives import (
+        all_to_all_single as functional_a2a,
+    )
 
     x_recv = functional_a2a(
         x_send,
