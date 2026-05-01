@@ -347,7 +347,6 @@ def build_gp_context(
         with record_function("a2a_sparse_index_exchange"):
             send_counts, send_indices_global = _sparse_index_exchange(
                 needed_atoms=needed_atoms,
-                needed_from_ranks=needed_from_ranks,
                 recv_counts=recv_counts,
                 rank=rank,
                 world_size=world_size,
@@ -497,7 +496,6 @@ def build_gp_context(
 
 def _sparse_index_exchange(
     needed_atoms: torch.Tensor,
-    needed_from_ranks: torch.Tensor,
     recv_counts: torch.Tensor,
     rank: int,
     world_size: int,
@@ -513,8 +511,8 @@ def _sparse_index_exchange(
     keeping communication volume minimal.
 
     Args:
-        needed_atoms: Global indices of atoms this rank needs, sorted.
-        needed_from_ranks: Source rank for each needed atom.
+        needed_atoms: Global indices of atoms this rank needs,
+            pre-sorted by source rank (done by the caller).
         recv_counts: Number of atoms needed from each rank.
         rank: This rank's GP rank.
         world_size: GP world size.
@@ -546,18 +544,20 @@ def _sparse_index_exchange(
         _safe_all_to_all(recv_list, send_list, group=gp_group)
 
     # Step 2: Exchange actual atom indices with variable splits.
-    # Build send buffer: needed_atoms sorted by source rank.
+    # needed_atoms is already sorted by source rank (done by the
+    # caller in build_gp_context), so use it directly as send buffer.
     if needed_atoms.numel() > 0:
-        sort_order = needed_from_ranks.argsort(stable=True)
-        send_buf = needed_atoms[sort_order].contiguous()
+        send_buf = needed_atoms.contiguous()
     else:
         send_buf = torch.empty(0, dtype=torch.long, device=device)
 
-    total_recv_indices = send_counts.sum().item()
+    # Batch send_counts and recv_counts into a single GPU→CPU transfer.
+    # This eliminates 2 extra GPU→CPU syncs vs separate .tolist() calls.
+    counts_cpu = torch.stack([send_counts, recv_counts]).cpu()
+    recv_splits = counts_cpu[0].tolist()  # what we recv = what we need
+    send_splits = counts_cpu[1].tolist()  # what we send = what others need
+    total_recv_indices = sum(recv_splits)
     recv_buf = torch.empty(total_recv_indices, dtype=torch.long, device=device)
-
-    send_splits = recv_counts.tolist()  # what we send = what others need from us
-    recv_splits = send_counts.tolist()  # what we recv = what we need from others
 
     if backend == "nccl":
         dist.all_to_all_single(
