@@ -119,14 +119,6 @@ class GPContext:
     send_splits: list[int] | None = None
     recv_splits: list[int] | None = None
     total_recv: int | None = None
-    # Precomputed sparse neighbor lists for P2P communication
-    # Only includes ranks with non-zero send/recv counts, avoiding
-    # O(world_size) iteration in the communication hot path.
-    send_neighbors: list[int] | None = None  # Ranks we send to (non-zero send)
-    recv_neighbors: list[int] | None = None  # Ranks we recv from (non-zero recv)
-    # Pre-allocated receive buffer (lazily initialized).
-    # Reused across layers within a step to avoid per-layer CUDA malloc.
-    _recv_buf: torch.Tensor | None = None
 
 
 def _expand_bits_10(v: torch.Tensor) -> torch.Tensor:
@@ -500,13 +492,6 @@ def build_gp_context(
         send_splits=send_splits,
         recv_splits=recv_splits,
         total_recv=total_recv,
-        # Precompute sparse neighbor lists for communication
-        send_neighbors=[
-            r for r in range(world_size) if send_splits[r] > 0 and r != rank
-        ],
-        recv_neighbors=[
-            r for r in range(world_size) if recv_splits[r] > 0 and r != rank
-        ],
     )
 
 
@@ -882,98 +867,5 @@ def all_to_all_collect_compiled(
         input_split_sizes=gp_ctx.send_splits,
         group=gp_group,
     )
-
-    return x_recv
-
-
-@torch.compiler.disable
-def all_to_all_collect_p2p(
-    x_local: torch.Tensor,
-    gp_ctx: GPContext,
-    send_indices: torch.Tensor,
-) -> torch.Tensor:
-    """
-    Collect remote embeddings using sparse P2P communication.
-
-    Instead of ``all_to_all_single`` (which creates P-1 send/recv pairs
-    even for zero-length messages), this uses ``batch_isend_irecv`` with
-    only the non-zero neighbors. At 64 GPUs with spatial partitioning,
-    each rank typically has ~10-15 actual neighbors, so this reduces
-    the number of NCCL operations from ~63 to ~25.
-
-    Uses pre-allocated send/recv buffers stored on ``gp_ctx`` to avoid
-    per-layer CUDA memory allocation overhead (4 allocations/step saved).
-
-    Does NOT participate in autograd — intended for eval-mode inference
-    only. For training, use ``all_to_all_collect`` instead.
-
-    Args:
-        x_local: Local atom embeddings, shape (local_atoms, *features).
-        gp_ctx: Graph parallel context with precomputed neighbor lists.
-        send_indices: Local indices of atoms to send.
-
-    Returns:
-        x_received: Remote atom embeddings, shape (total_needed, *features).
-    """
-    if send_indices is None:
-        raise ValueError(
-            "send_indices is None — build_gp_context should always "
-            "compute send_indices. Check GP setup."
-        )
-    feature_shape = x_local.shape[1:]
-    send_splits = gp_ctx.send_splits
-    recv_splits = gp_ctx.recv_splits
-    total_recv = gp_ctx.total_recv
-
-    # Gather atoms to send
-    # Note: cannot use torch.index_select with out= because x_local
-    # may require grad (for force computation), and out= doesn't
-    # support autograd. Use regular indexing which creates a new tensor
-    # but supports the backward pass. The send buffer pre-allocation
-    # is not worth the autograd complexity.
-    if send_indices.numel() > 0:
-        x_send = x_local[send_indices].contiguous()
-    else:
-        x_send = torch.empty(
-            0, *feature_shape, device=x_local.device, dtype=x_local.dtype
-        )
-
-    # Reuse pre-allocated recv buffer if available and correct size
-    recv_shape = (total_recv, *feature_shape)
-    if (
-        gp_ctx._recv_buf is not None
-        and gp_ctx._recv_buf.shape == recv_shape
-        and gp_ctx._recv_buf.dtype == x_local.dtype
-    ):
-        x_recv = gp_ctx._recv_buf
-    else:
-        x_recv = torch.empty(recv_shape, device=x_local.device, dtype=x_local.dtype)
-        gp_ctx._recv_buf = x_recv
-
-    # Sparse P2P communication: only talk to actual neighbors
-    gp_group = gp_utils.get_gp_group()
-    backend = dist.get_backend(gp_group)
-
-    if backend == "nccl":
-        # Split into per-rank chunks (views into contiguous buffers)
-        send_chunks = list(x_send.split(send_splits))
-        recv_chunks = list(x_recv.split(recv_splits))
-
-        ops = []
-        # Only create ops for non-zero neighbors
-        for r in gp_ctx.send_neighbors:
-            ops.append(dist.P2POp(dist.isend, send_chunks[r], r, group=gp_group))
-        for r in gp_ctx.recv_neighbors:
-            ops.append(dist.P2POp(dist.irecv, recv_chunks[r], r, group=gp_group))
-
-        if ops:
-            reqs = dist.batch_isend_irecv(ops)
-            for req in reqs:
-                req.wait()
-    else:
-        # Gloo fallback: use pairwise send/recv
-        send_chunks = list(x_send.split(send_splits))
-        recv_chunks = list(x_recv.split(recv_splits))
-        _safe_all_to_all(recv_chunks, send_chunks, group=gp_group)
 
     return x_recv
