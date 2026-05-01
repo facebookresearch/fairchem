@@ -100,17 +100,6 @@ class GPContext:
         edge_index_local: Precomputed edge index remapped to local indices.
             None if not yet computed (set by build_gp_context when edge_index
             is provided).
-        local_edge_mask: Boolean mask identifying fully-local edges (both src
-            and tgt are local atoms). Used for comm-compute overlap. Shape:
-            (num_edges,). None if not yet computed.
-        num_local_edges: Number of fully-local edges (precomputed from
-            local_edge_mask). None if not yet computed.
-        num_boundary_edges: Number of boundary edges (src is remote). None
-            if not yet computed.
-        edge_reorder: Permutation that sorts edges so local edges come first,
-            then boundary edges. Shape: (num_edges,). Applied once to per-edge
-            tensors (wigner, x_edge, etc.) in the backbone forward. Enables
-            compile-friendly overlap via split() instead of boolean indexing.
     """
 
     rank: int
@@ -126,10 +115,6 @@ class GPContext:
     total_needed_atoms: int
     send_indices: torch.Tensor | None = None
     edge_index_local: torch.Tensor | None = None
-    local_edge_mask: torch.Tensor | None = None
-    num_local_edges: int | None = None
-    num_boundary_edges: int | None = None
-    edge_reorder: torch.Tensor | None = None
     # Precomputed Python lists to avoid repeated .tolist() in AllToAllCollect
     send_splits: list[int] | None = None
     recv_splits: list[int] | None = None
@@ -273,7 +258,7 @@ def build_gp_context(
 
     Args:
         edge_index: Edge index filtered to edges whose targets are in
-            this rank's partition, shape (2, num_local_edges).
+            this rank's partition, shape (2, num_edges).
             Row 0 = source, row 1 = target.
         rank_assignments: Rank assignment for each atom, shape (total_atoms,).
         rank: This rank's GP rank.
@@ -408,23 +393,9 @@ def build_gp_context(
     # Precompute edge_index_local
     edge_index_local = global_to_local[edge_index]
 
-    # Classify edges: fully-local (both endpoints local) vs boundary
-    # (source is remote). Used for communication-computation overlap.
-    src_is_local = edge_index_local[0] < total_local_atoms
-    tgt_is_local_edge = edge_index_local[1] < total_local_atoms
-    local_edge_mask = src_is_local & tgt_is_local_edge
-
-    # Pre-compute edge reorder permutation: local edges first, boundary
-    # edges last. This enables compile-friendly overlap via split()
-    # instead of boolean indexing. The reorder is applied in the
-    # backbone forward to all per-edge tensors simultaneously.
-    edge_reorder = torch.argsort((~local_edge_mask).to(torch.int32), stable=True)
-
     # Batch ALL GPU→CPU scalar extractions into a single transfer.
-    # This batches send_counts, recv_counts, local_edge_count, AND
-    # validation scalars into ONE .cpu() call, eliminating 2 extra
-    # GPU→CPU syncs from separate .all()/.any() validation checks.
-    local_edge_count = local_edge_mask.sum().unsqueeze(0).to(torch.long)
+    # This batches send_counts, recv_counts, AND validation scalars
+    # into ONE .cpu() call, eliminating extra GPU→CPU syncs.
     bad_edge_count = (edge_index_local < 0).sum().unsqueeze(0).to(torch.long)
     send_valid = (
         torch.ones(1, dtype=torch.long, device=device)
@@ -436,16 +407,12 @@ def build_gp_context(
             .to(torch.long)
         )
     )
-    all_cpu = torch.cat(
-        [send_counts, recv_counts, local_edge_count, bad_edge_count, send_valid]
-    ).cpu()
+    all_cpu = torch.cat([send_counts, recv_counts, bad_edge_count, send_valid]).cpu()
     send_splits = all_cpu[:world_size].tolist()
     recv_splits = all_cpu[world_size : 2 * world_size].tolist()
     total_recv = sum(recv_splits)
-    num_local_edges = int(all_cpu[2 * world_size].item())
-    num_boundary_edges = edge_index_local.shape[1] - num_local_edges
-    n_bad = int(all_cpu[2 * world_size + 1].item())
-    send_ok = int(all_cpu[2 * world_size + 2].item())
+    n_bad = int(all_cpu[2 * world_size].item())
+    send_ok = int(all_cpu[2 * world_size + 1].item())
 
     # Validate AFTER the batched CPU transfer (no extra GPU syncs).
     if not send_ok:
@@ -529,15 +496,11 @@ def build_gp_context(
         total_needed_atoms=total_needed_atoms,
         send_indices=send_indices,
         edge_index_local=edge_index_local,
-        local_edge_mask=local_edge_mask,
-        num_local_edges=num_local_edges,
-        num_boundary_edges=num_boundary_edges,
-        edge_reorder=edge_reorder,
         # Precompute Python lists once (avoids .tolist() per layer per forward)
         send_splits=send_splits,
         recv_splits=recv_splits,
         total_recv=total_recv,
-        # Precompute sparse neighbor lists for P2P communication
+        # Precompute sparse neighbor lists for communication
         send_neighbors=[
             r for r in range(world_size) if send_splits[r] > 0 and r != rank
         ],

@@ -59,8 +59,6 @@ class Edgewise(torch.nn.Module):
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
         act_type: Literal["gate", "s2"] = "gate",
-        use_overlap_gp: bool = False,
-        use_p2p_gp: bool = False,
     ):
         super().__init__()
 
@@ -69,8 +67,6 @@ class Edgewise(torch.nn.Module):
         self.lmax = lmax
         self.mmax = mmax
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
-        self.use_overlap_gp = use_overlap_gp
-        self.use_p2p_gp = use_p2p_gp
         self.backend = backend
 
         self.mappingReduced = mappingReduced
@@ -347,8 +343,6 @@ class eSCNMD_Block(torch.nn.Module):
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
-        use_overlap_gp: bool = False,
-        use_p2p_gp: bool = False,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -372,8 +366,6 @@ class eSCNMD_Block(torch.nn.Module):
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
             backend=backend,
-            use_overlap_gp=use_overlap_gp,
-            use_p2p_gp=use_p2p_gp,
         )
 
         self.norm_2 = get_normalization_layer(
