@@ -144,6 +144,30 @@ class GPContext:
     _recv_buf: torch.Tensor | None = None
 
 
+@dataclass
+class PendingGPExchange:
+    """
+    Intermediate state for async GP index exchange.
+
+    Holds the NCCL work handle and all pre-computed local state needed
+    to build a GPContext once the exchange completes.  Created by
+    ``prepare_gp_exchange()`` and consumed by ``complete_gp_exchange()``.
+    """
+
+    work: object  # dist.Work handle from async NCCL op
+    recv_buf: torch.Tensor  # Buffer that NCCL is filling asynchronously
+    max_per_rank: int  # Padding size for fused exchange
+    total_atoms: int
+    edge_index: torch.Tensor
+    rank_assignments: torch.Tensor
+    node_partition: torch.Tensor
+    needed_atoms: torch.Tensor
+    needed_from_ranks: torch.Tensor
+    recv_counts: torch.Tensor
+    rank: int
+    world_size: int
+
+
 def _expand_bits_10(v: torch.Tensor) -> torch.Tensor:
     """
     Expand a 10-bit integer so each bit is spaced by 2 zero bits.
@@ -757,6 +781,188 @@ def build_gp_context(
         recv_neighbors=[
             r for r in range(world_size) if recv_splits[r] > 0 and r != rank
         ],
+    )
+
+
+@torch.compiler.disable
+def prepare_gp_exchange(
+    edge_index: torch.Tensor,
+    rank_assignments: torch.Tensor,
+    rank: int,
+    world_size: int,
+    send_info: dict | None,
+    node_partition: torch.Tensor | None = None,
+) -> PendingGPExchange | GPContext:
+    """
+    Start async index exchange or build GPContext synchronously.
+
+    When send_info is available (AABB or graph-filter precomputed),
+    builds GPContext synchronously (no NCCL needed). Otherwise,
+    launches an async fused all-to-all to exchange atom indices,
+    returning a ``PendingGPExchange`` that must be completed later
+    by ``complete_gp_exchange()``.
+
+    The async path uses a single padded all-to-all (1 NCCL call)
+    instead of ``_sparse_index_exchange`` (2 NCCL calls), saving
+    ~1ms of NCCL latency.  The caller can overlap this with GPU
+    compute (wigner, embeddings) for an additional ~3ms savings.
+
+    Args:
+        edge_index: Filtered edge index (2, num_local_edges).
+        rank_assignments: Rank for each atom (total_atoms,).
+        rank: This rank's GP rank.
+        world_size: GP world size.
+        send_info: Pre-computed send/recv metadata, or None.
+        node_partition: Pre-computed indices of this rank's atoms.
+
+    Returns:
+        GPContext if send_info is available (synchronous path).
+        PendingGPExchange if async NCCL was started (must complete later).
+    """
+    # If send_info is available, build synchronously (no NCCL needed)
+    if send_info is not None:
+        return build_gp_context(
+            edge_index=edge_index,
+            rank_assignments=rank_assignments,
+            rank=rank,
+            world_size=world_size,
+            send_info=send_info,
+            node_partition=node_partition,
+        )
+
+    total_atoms = rank_assignments.shape[0]
+    device = rank_assignments.device
+
+    if node_partition is None:
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+
+    # Find which non-local atoms this rank needs as edge sources
+    local_mask = rank_assignments == rank
+    src_is_remote = ~local_mask[edge_index[0]]
+    needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
+    needed_mask[edge_index[0, src_is_remote]] = True
+    needed_mask &= ~local_mask
+    needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
+
+    total_needed_atoms = needed_atoms.shape[0]
+    needed_from_ranks = rank_assignments[needed_atoms]
+
+    # Compute recv_counts
+    if total_needed_atoms > 0:
+        recv_counts = torch.bincount(needed_from_ranks, minlength=world_size).to(
+            dtype=torch.long, device=device
+        )
+    else:
+        recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
+    recv_counts[rank] = 0
+
+    # Sort by source rank (critical for recv_buf ordering match)
+    sort_order = needed_from_ranks.argsort(stable=True)
+    needed_atoms = needed_atoms[sort_order]
+    needed_from_ranks = needed_from_ranks[sort_order]
+
+    if not gp_utils.initialized():
+        # Non-distributed: build synchronously
+        return build_gp_context(
+            edge_index=edge_index,
+            rank_assignments=rank_assignments,
+            rank=rank,
+            world_size=world_size,
+            send_info=None,
+            node_partition=node_partition,
+        )
+
+    gp_group = gp_utils.get_gp_group()
+    backend = dist.get_backend(gp_group)
+
+    if backend != "nccl":
+        # Gloo / other backends: async all_to_all not reliable,
+        # fall back to synchronous build_gp_context.
+        return build_gp_context(
+            edge_index=edge_index,
+            rank_assignments=rank_assignments,
+            rank=rank,
+            world_size=world_size,
+            send_info=None,
+            node_partition=node_partition,
+        )
+
+    # --- Build fused padded send buffer (1 NCCL call) ---
+    max_per_rank = (total_atoms + world_size - 1) // world_size
+    total_padded = world_size * max_per_rank
+    sentinel = total_atoms
+    send_buf = torch.full((total_padded,), sentinel, dtype=torch.long, device=device)
+
+    if needed_atoms.numel() > 0:
+        cumcounts = torch.arange(len(needed_atoms), device=device)
+        recv_cumsum = recv_counts.cumsum(0)
+        rank_starts = torch.zeros(world_size, dtype=torch.long, device=device)
+        rank_starts[1:] = recv_cumsum[:-1]
+        within_rank_idx = cumcounts - rank_starts[needed_from_ranks]
+        buf_idx = needed_from_ranks * max_per_rank + within_rank_idx
+        send_buf[buf_idx] = needed_atoms
+
+    # Launch async NCCL (returns immediately, NCCL runs on its stream)
+    recv_buf = torch.empty(total_padded, dtype=torch.long, device=device)
+    work = dist.all_to_all_single(recv_buf, send_buf, group=gp_group, async_op=True)
+
+    return PendingGPExchange(
+        work=work,
+        recv_buf=recv_buf,
+        max_per_rank=max_per_rank,
+        total_atoms=total_atoms,
+        edge_index=edge_index,
+        rank_assignments=rank_assignments,
+        node_partition=node_partition,
+        needed_atoms=needed_atoms,
+        needed_from_ranks=needed_from_ranks,
+        recv_counts=recv_counts,
+        rank=rank,
+        world_size=world_size,
+    )
+
+
+@torch.compiler.disable
+def complete_gp_exchange(
+    pending: PendingGPExchange,
+) -> GPContext:
+    """
+    Wait for async index exchange and build full GPContext.
+
+    Completes the async NCCL all-to-all started by
+    ``prepare_gp_exchange()``, extracts send_counts and
+    send_indices from the padded receive buffer, then builds
+    the full GPContext with global_to_local mapping, edge
+    remapping, and communication metadata.
+
+    Args:
+        pending: The PendingGPExchange from prepare_gp_exchange().
+
+    Returns:
+        Fully-built GPContext ready for message passing.
+    """
+    # Wait for NCCL to complete
+    pending.work.wait()
+
+    # Extract send_counts and send_indices from padded recv buffer
+    recv_2d = pending.recv_buf.view(pending.world_size, pending.max_per_rank)
+    valid_mask = recv_2d < pending.total_atoms
+    send_counts = valid_mask.sum(dim=1).to(torch.long)
+    send_indices_global = recv_2d[valid_mask]
+
+    # Build send_info dict for build_gp_context
+    send_info = {
+        "send_counts": send_counts,
+        "send_indices_global": send_indices_global,
+    }
+
+    return build_gp_context(
+        edge_index=pending.edge_index,
+        rank_assignments=pending.rank_assignments,
+        rank=pending.rank,
+        world_size=pending.world_size,
+        send_info=send_info,
+        node_partition=pending.node_partition,
     )
 
 
