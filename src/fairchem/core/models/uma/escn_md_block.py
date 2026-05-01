@@ -22,6 +22,8 @@ from fairchem.core.models.uma.graph_parallel import (
     all_to_all_collect_compiled,
     finish_all_to_all_collect,
     start_all_to_all_collect,
+    start_all_to_all_collect_autograd,
+    wait_async_all_to_all_collect,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -139,18 +141,19 @@ class Edgewise(torch.nn.Module):
         When gp_ctx is provided, uses all-to-all to collect only the
         needed remote embeddings. Otherwise falls back to all-gather.
 
-        When use_overlap_gp is True and in eval mode, overlaps
-        communication with local edge computation for better latency.
+        When use_overlap_gp is True, overlaps communication with local
+        edge computation for better latency. Supports both autograd
+        (forces/stress) and non-autograd (pure inference) modes.
         """
         # Check if we should use the overlapped path:
         # - gp_ctx must be provided (all-to-all mode)
         # - use_overlap_gp must be enabled
-        # - must NOT be in training mode (overlap path doesn't support autograd)
-        # - must NOT need gradients (autograd forces/stress require
-        #   autograd-compatible communication, overlap path doesn't provide this)
-        # - must NOT use activation checkpointing (incompatible with edge split)
+        # - must NOT be in training mode (overlap causes graph breaks
+        #   that interfere with gradient accumulation)
+        # - must NOT use activation checkpointing (incompatible with
+        #   edge split)
         # - must have both local and boundary edges
-        needs_grad_for_overlap = torch.is_grad_enabled() and (
+        needs_grad = torch.is_grad_enabled() and (
             x.requires_grad if isinstance(x, torch.Tensor) else False
         )
         use_overlap = (
@@ -158,7 +161,6 @@ class Edgewise(torch.nn.Module):
             and gp_ctx is not None
             and gp_utils.initialized()
             and not self.training
-            and not needs_grad_for_overlap
             and self.activation_checkpoint_chunk_size is None
             and gp_ctx.local_edge_mask is not None
             and gp_ctx.num_local_edges > 0
@@ -166,9 +168,28 @@ class Edgewise(torch.nn.Module):
         )
 
         if use_overlap:
-            return self._forward_overlap(
-                x, x_edge, wigner, wigner_inv_envelope, gp_ctx, send_indices
-            )
+            if needs_grad:
+                # Autograd overlap: uses AsyncAllToAllCollect for
+                # gradient-compatible async communication.
+                return self._forward_overlap_autograd(
+                    x,
+                    x_edge,
+                    wigner,
+                    wigner_inv_envelope,
+                    gp_ctx,
+                    send_indices,
+                )
+            else:
+                # Non-autograd overlap: original path using
+                # start/finish_all_to_all_collect (no gradient).
+                return self._forward_overlap(
+                    x,
+                    x_edge,
+                    wigner,
+                    wigner_inv_envelope,
+                    gp_ctx,
+                    send_indices,
+                )
 
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings.
@@ -314,6 +335,80 @@ class Edgewise(torch.nn.Module):
         # Step 3: Wait for communication
         with record_function("a2a_collect_async_wait"):
             x_received = finish_all_to_all_collect(recv_buf, work_handles)
+            x_full = torch.cat([x, x_received], dim=0)
+
+        # Step 4: Compute boundary edges
+        with record_function("boundary_edges"):
+            boundary_contribution = self.forward_chunk(
+                x_full,
+                num_local_atoms,
+                boundary_x_edge,
+                boundary_edge_idx,
+                boundary_wigner,
+                boundary_wigner_inv,
+                0,
+            )
+
+        # Step 5: Sum contributions
+        return local_contribution + boundary_contribution
+
+    def _forward_overlap_autograd(
+        self,
+        x,
+        x_edge,
+        wigner,
+        wigner_inv_envelope,
+        gp_ctx: GPContext,
+        send_indices: torch.Tensor | None,
+    ):
+        """
+        Overlapped forward with autograd support.
+
+        Same overlap pattern as ``_forward_overlap`` but uses
+        ``AsyncAllToAllCollect`` to maintain gradient flow through
+        the communication. This enables overlap even when computing
+        autograd-based forces/stress.
+
+        Steps:
+        1. Start async A2A (autograd-tracked, non-blocking).
+        2. Compute local edges while communication is in flight.
+        3. Wait for communication to complete.
+        4. Compute boundary edges (source is remote).
+        5. Sum local + boundary contributions.
+        """
+        edge_index_local = gp_ctx.edge_index_local
+        num_local_atoms = x.shape[0]
+        n_local = gp_ctx.num_local_edges
+
+        # Split pre-sorted per-edge data: local first, boundary last.
+        local_edge_idx = edge_index_local[:, :n_local]
+        boundary_edge_idx = edge_index_local[:, n_local:]
+        local_x_edge = x_edge[:n_local]
+        boundary_x_edge = x_edge[n_local:]
+        local_wigner = wigner[:n_local]
+        boundary_wigner = wigner[n_local:]
+        local_wigner_inv = wigner_inv_envelope[:n_local]
+        boundary_wigner_inv = wigner_inv_envelope[n_local:]
+
+        # Step 1: Start async A2A (autograd-tracked)
+        with record_function("a2a_collect_async_autograd_start"):
+            x_received = start_all_to_all_collect_autograd(x, gp_ctx, send_indices)
+
+        # Step 2: Compute local edges while comm is in flight
+        with record_function("local_edges"):
+            local_contribution = self.forward_chunk(
+                x,
+                num_local_atoms,
+                local_x_edge,
+                local_edge_idx,
+                local_wigner,
+                local_wigner_inv,
+                0,
+            )
+
+        # Step 3: Wait for communication
+        with record_function("a2a_collect_async_autograd_wait"):
+            wait_async_all_to_all_collect(x_received)
             x_full = torch.cat([x, x_received], dim=0)
 
         # Step 4: Compute boundary edges
