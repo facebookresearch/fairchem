@@ -35,6 +35,13 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.graph_parallel import (
+    GPContext,
+    PartitionStrategy,
+    build_gp_context,
+    partition_atoms_index_split,
+    partition_atoms_spatial,
+)
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
@@ -315,6 +322,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int = 1,
         execution_mode: str = "general",
+        use_all_to_all_gp: bool = False,
+        gp_partition_strategy: str = "index_split",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -366,6 +375,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+        self.use_all_to_all_gp = use_all_to_all_gp
+        self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -588,18 +599,67 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
+    @torch.compiler.disable
+    def _compute_a2a_partition(
+        self,
+        pos: torch.Tensor,
+        total_atoms: int,
+        device: torch.device,
+        world_size: int,
+        rank: int,
+        strategy: PartitionStrategy,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute A2A rank assignments and node partition.
+
+        Separated from _generate_graph so that only the A2A-specific
+        partitioning is excluded from torch.compile.  The BL (all-gather)
+        path stays fully compilable.
+        """
+        with record_function("a2a_partition"):
+            if strategy == PartitionStrategy.SPATIAL:
+                rank_assignments = partition_atoms_spatial(pos, world_size)
+            else:
+                rank_assignments = partition_atoms_index_split(
+                    total_atoms, world_size, device
+                )
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+
+        return rank_assignments, node_partition
+
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
         node_partition = None
+        rank_assignments = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
-            node_partition = torch.tensor_split(
-                torch.arange(
-                    len(atomic_numbers_full), device=atomic_numbers_full.device
-                ),
-                gp_utils.get_gp_world_size(),
-            )[gp_utils.get_gp_rank()]
+
+            if self.use_all_to_all_gp:
+                # All-to-all: compute rank_assignments FIRST, then derive
+                # node_partition from them.  This ensures the
+                # graph-generation partition and the GPContext partition
+                # are identical, avoiding index mismatches that cause
+                # OOB crashes.
+                #
+                rank_assignments, node_partition = self._compute_a2a_partition(
+                    pos=data_dict["pos"],
+                    total_atoms=len(atomic_numbers_full),
+                    device=atomic_numbers_full.device,
+                    world_size=gp_utils.get_gp_world_size(),
+                    rank=gp_utils.get_gp_rank(),
+                    strategy=self.gp_partition_strategy,
+                )
+            else:
+                # Legacy all-gather: use consecutive index split
+                node_partition = torch.tensor_split(
+                    torch.arange(
+                        len(atomic_numbers_full),
+                        device=atomic_numbers_full.device,
+                    ),
+                    gp_utils.get_gp_world_size(),
+                )[gp_utils.get_gp_rank()]
+
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -616,17 +676,24 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
-            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
-            graph_dict = generate_graph(
-                data_dict,
-                cutoff=self.cutoff,
-                max_neighbors=self.max_neighbors,
-                enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
-                radius_pbc_version=self.radius_pbc_version,
-                pbc=pbc,
-                node_partition=node_partition,
-            )
+
+            with record_function("radius_graph_gen"):
+                graph_dict = generate_graph(
+                    data_dict,
+                    cutoff=self.cutoff,
+                    max_neighbors=self.max_neighbors,
+                    enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                    radius_pbc_version=self.radius_pbc_version,
+                    pbc=pbc,
+                    node_partition=node_partition,
+                    rank_assignments=rank_assignments
+                    if self.use_all_to_all_gp
+                    else None,
+                    rank=gp_utils.get_gp_rank() if self.use_all_to_all_gp else None,
+                    world_size=gp_utils.get_gp_world_size()
+                    if self.use_all_to_all_gp
+                    else None,
+                )
         else:
             # this assume edge_index is provided
             assert (
@@ -670,7 +737,29 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 node_partition
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
-            data_dict["gp_node_offset"] = node_partition.min().item()
+
+            # Build GPContext for all-to-all communication
+            if self.use_all_to_all_gp:
+                with record_function("a2a_build_gp_context"):
+                    gp_ctx = build_gp_context(
+                        edge_index=graph_dict["edge_index"],
+                        rank_assignments=rank_assignments,
+                        rank=gp_utils.get_gp_rank(),
+                        world_size=gp_utils.get_gp_world_size(),
+                        send_info=graph_dict.get("send_info"),
+                        node_partition=node_partition,
+                    )
+                data_dict["gp_ctx"] = gp_ctx
+                # All-to-all uses local indices via gp_ctx.edge_index_local,
+                # so node_offset is always 0.
+                data_dict["gp_node_offset"] = 0
+                # Store rank_assignments so output heads can reorder
+                # gathered forces/stress from partition-concatenated order
+                # back to global index order. Only needed for A2A where
+                # partitions are non-consecutive (spatial).
+                data_dict["gp_rank_assignments"] = rank_assignments
+            else:
+                data_dict["gp_node_offset"] = node_partition.min().item()
 
         if graph_dict["edge_index"].shape[1] == 0:
             add_n_empty_edges(graph_dict, 1, self.cutoff, data_dict["gp_node_offset"])
@@ -749,6 +838,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+        # Retrieve precomputed all-to-all context (needed for edge embedding
+        # and message passing layers)
+        gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
+        send_indices: torch.Tensor | None = None
+        if gp_ctx is not None:
+            send_indices = gp_ctx.send_indices
+
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
@@ -773,7 +869,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_index"],
+                # All-to-all uses local edge indices from GPContext because
+                # spatial partitions are non-contiguous (node_offset math
+                # doesn't work). edge_degree_scatter only reads edge_index[1],
+                # so the remapped source indices in edge_index_local are fine.
+                gp_ctx.edge_index_local
+                if gp_ctx is not None
+                else graph_dict["edge_index"],
                 wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
@@ -801,6 +903,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                    gp_ctx=gp_ctx,
+                    send_indices=send_indices,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(
@@ -1190,6 +1294,18 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
+            # A2A spatial partitions are non-consecutive, so the
+            # gathered forces are in partition-concatenated order
+            # (NOT global index order). Reorder to match positions.
+            ra = data_dict.get("gp_rank_assignments", None)
+            if ra is not None:
+                ws = gp_utils.get_gp_world_size()
+                perm = torch.cat(
+                    [(ra == r).nonzero(as_tuple=True)[0] for r in range(ws)]
+                )
+                forces_ordered = torch.empty_like(forces)
+                forces_ordered[perm] = forces
+                forces = forces_ordered
 
         return {"forces": forces}
 

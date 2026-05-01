@@ -16,6 +16,11 @@ from torch.profiler import record_function
 from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
+from fairchem.core.models.uma.graph_parallel import (
+    GPContext,
+    all_to_all_collect,
+    all_to_all_collect_compiled,
+)
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
@@ -77,7 +82,8 @@ class Edgewise(torch.nn.Module):
             )
             extra_m0_output_channels = self.lmax * self.hidden_channels
         elif self.act_type == "s2":
-            # NOTE: this is the only place where the SO3 grid of the edges (lmax/mmax) is used
+            # NOTE: this is the only place where the SO3 grid of the
+            # edges (lmax/mmax) is used
             self.act = SeparableS2Activation_M(
                 lmax=self.lmax,
                 mmax=self.mmax,
@@ -118,26 +124,64 @@ class Edgewise(torch.nn.Module):
         wigner_inv_envelope,
         total_atoms_across_gp_ranks,
         node_offset: int = 0,
+        gp_ctx: GPContext | None = None,
+        send_indices: torch.Tensor | None = None,
     ):
-        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
-        if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                x, total_atoms_across_gp_ranks
-            )
+        """
+        Forward pass with support for both all-gather and all-to-all GP.
+
+        When gp_ctx is provided, uses all-to-all to collect only the
+        needed remote embeddings. Otherwise falls back to all-gather.
+        """
+        if gp_ctx is not None and gp_utils.initialized():
+            # All-to-all path: collect only needed remote embeddings.
+            # When x requires grad (autograd forces/stress), we use the
+            # AllToAllCollect autograd.Function so gradients flow through
+            # the communication. This creates a graph break (same as BL's
+            # GatherFromModelParallelRegionSumGradPadded), but is necessary
+            # because funcoll autograd crashes with torch.compile (SymInt
+            # split sizes). When no autograd is needed, use the
+            # compile-friendly funcoll (no graph break).
+            needs_grad = torch.is_grad_enabled() and x.requires_grad
+            if not self.training and not needs_grad:
+                # Eval path without autograd: compile-friendly funcoll.
+                with record_function("a2a_collect_compiled"):
+                    x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
+            else:
+                # Training or eval+autograd: AllToAllCollect autograd.Function.
+                # Supports backward; creates graph break (same as BL).
+                with record_function("a2a_collect"):
+                    x_received = all_to_all_collect(x, gp_ctx, send_indices)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
+            # In local space, node_offset is 0
+            local_node_offset = 0
+        elif gp_utils.initialized():
+            # Legacy all-gather path
+            with record_function("allgather_collect"):
+                x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                    x, total_atoms_across_gp_ranks
+                )
+            edge_index_local = edge_index
+            local_node_offset = node_offset
         else:
             x_full = x
+            edge_index_local = edge_index
+            local_node_offset = node_offset
 
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x_full,
                 x.shape[0],
                 x_edge,
-                edge_index,
+                edge_index_local,
                 wigner,
                 wigner_inv_envelope,
-                node_offset,
+                local_node_offset,
             )
-        edge_index_partitions = edge_index.split(
+        edge_index_partitions = edge_index_local.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
         wigner_partitions = wigner.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -146,8 +190,8 @@ class Edgewise(torch.nn.Module):
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
         new_embeddings = []
-        # when chunking, we need to keep track of the start index of the chunk and give this information
-        # to the mole layers
+        # when chunking, we need to keep track of the start index
+        # of the chunk and give this information to the mole layers
         ac_mole_start_idx = 0
 
         for idx in range(len(edge_index_partitions)):
@@ -160,7 +204,7 @@ class Edgewise(torch.nn.Module):
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
-                    node_offset,
+                    local_node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
                 )
@@ -182,8 +226,8 @@ class Edgewise(torch.nn.Module):
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
-        # here we need to update the ac_start_idx of the mole layers under here for this chunking to
-        # work properly with MoLE together
+        # here we need to update the ac_start_idx of the mole layers
+        # under here for this chunking to work properly with MoLE
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         with record_function("SO2Conv"):
@@ -355,6 +399,8 @@ class eSCNMD_Block(torch.nn.Module):
         total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
+        gp_ctx: GPContext | None = None,
+        send_indices: torch.Tensor | None = None,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -371,6 +417,8 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner_inv_envelope,
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 node_offset=node_offset,
+                gp_ctx=gp_ctx,
+                send_indices=send_indices,
             )
             x = x + x_res
 
