@@ -147,13 +147,19 @@ class Edgewise(torch.nn.Module):
         # - gp_ctx must be provided (all-to-all mode)
         # - use_overlap_gp must be enabled
         # - must NOT be in training mode (overlap path doesn't support autograd)
+        # - must NOT need gradients (autograd forces/stress require
+        #   autograd-compatible communication, overlap path doesn't provide this)
         # - must NOT use activation checkpointing (incompatible with edge split)
         # - must have both local and boundary edges
+        needs_grad_for_overlap = torch.is_grad_enabled() and (
+            x.requires_grad if isinstance(x, torch.Tensor) else False
+        )
         use_overlap = (
             self.use_overlap_gp
             and gp_ctx is not None
             and gp_utils.initialized()
             and not self.training
+            and not needs_grad_for_overlap
             and self.activation_checkpoint_chunk_size is None
             and gp_ctx.local_edge_mask is not None
             and gp_ctx.num_local_edges > 0
@@ -167,22 +173,30 @@ class Edgewise(torch.nn.Module):
 
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings
-            if self.use_p2p_gp and not self.training:
+            # When x requires grad (autograd forces/stress), we must use
+            # the autograd-compatible all_to_all_collect so gradients flow
+            # through the communication. Functional collectives and P2P
+            # don't participate in autograd.
+            needs_grad = torch.is_grad_enabled() and x.requires_grad
+            if self.use_p2p_gp and not self.training and not needs_grad:
                 # Sparse P2P: only communicate with actual neighbors
-                # Uses pre-allocated buffers. Eval-mode only.
+                # Uses pre-allocated buffers. Eval-mode only, no autograd.
                 with record_function("a2a_collect_p2p"):
                     x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
-            elif not self.training:
+            elif not self.training and not needs_grad:
                 # Compile-friendly path: uses functional collectives
                 # that torch.compile can trace through (no graph break).
+                # Not used when autograd is needed (e.g., gradient forces).
                 with record_function("a2a_collect_compiled"):
                     x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
             else:
-                # Training path: uses autograd-compatible AllToAllCollect
+                # Training or autograd-inference path: uses
+                # autograd-compatible AllToAllCollect so gradients flow
+                # through the all-to-all communication.
                 with record_function("a2a_collect"):
                     x_received = all_to_all_collect(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)
@@ -323,84 +337,6 @@ class Edgewise(torch.nn.Module):
             )
 
         # Step 5: Sum contributions
-        return local_contribution + boundary_contribution
-
-    def _forward_funcoll_overlap(
-        self,
-        x,
-        x_edge,
-        wigner,
-        wigner_inv_envelope,
-        gp_ctx: GPContext,
-        send_indices: torch.Tensor | None,
-    ):
-        """
-        Overlap communication with local edge computation using
-        functional collectives (compile-friendly, no graph break).
-
-        Uses ``funcol.all_to_all_single`` which torch.compile can
-        trace through. The inductor backend can automatically overlap
-        the NCCL operation with independent local edge computation
-        when ``reorder_for_compute_comm_overlap`` is enabled.
-
-        Unlike ``_forward_overlap`` which uses manual CUDA streams
-        (causing graph breaks), this stays inside the compiled graph.
-
-        Edges must be pre-sorted: local first, boundary last (via
-        ``edge_reorder`` applied in the backbone forward loop).
-        """
-        from torch.distributed._functional_collectives import (
-            all_to_all_single as functional_a2a,
-        )
-
-        edge_index_local = gp_ctx.edge_index_local
-        num_local_atoms = x.shape[0]
-        n_local = gp_ctx.num_local_edges
-
-        # Split pre-sorted per-edge data: local first, boundary last.
-        local_edge_idx = edge_index_local[:, :n_local]
-        boundary_edge_idx = edge_index_local[:, n_local:]
-        local_x_edge = x_edge[:n_local]
-        boundary_x_edge = x_edge[n_local:]
-        local_wigner = wigner[:n_local]
-        boundary_wigner = wigner[n_local:]
-        local_wigner_inv = wigner_inv_envelope[:n_local]
-        boundary_wigner_inv = wigner_inv_envelope[n_local:]
-
-        # Start communication (funcoll — no graph break, tracing-safe).
-        x_send = x[send_indices].contiguous()
-        gp_group = gp_utils.get_gp_group()
-        x_recv = functional_a2a(
-            x_send,
-            output_split_sizes=gp_ctx.recv_splits,
-            input_split_sizes=gp_ctx.send_splits,
-            group=gp_group,
-        )
-
-        # Compute local edges while a2a may still be in flight.
-        # This is independent of x_recv — the inductor can overlap.
-        local_contribution = self.forward_chunk(
-            x,
-            num_local_atoms,
-            local_x_edge,
-            local_edge_idx,
-            local_wigner,
-            local_wigner_inv,
-            0,
-        )
-
-        # Now use x_recv for boundary edges.
-        x_full = torch.cat([x, x_recv], dim=0)
-        boundary_contribution = self.forward_chunk(
-            x_full,
-            num_local_atoms,
-            boundary_x_edge,
-            boundary_edge_idx,
-            boundary_wigner,
-            boundary_wigner_inv,
-            0,
-        )
-
         return local_contribution + boundary_contribution
 
     def forward_chunk(

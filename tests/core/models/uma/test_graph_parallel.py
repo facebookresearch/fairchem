@@ -21,14 +21,12 @@ from fairchem.core.common.test_utils import (
     spawn_multi_process,
 )
 from fairchem.core.models.uma.graph_parallel import (
-    _compute_send_indices,
     all_to_all_collect,
     all_to_all_collect_compiled,
     build_gp_context,
     finish_all_to_all_collect,
     partition_atoms_index_split,
     partition_atoms_spatial,
-    remap_edge_index_to_local,
     start_all_to_all_collect,
 )
 
@@ -180,31 +178,6 @@ class TestBuildGPContext:
         assert ctx.needed_atoms.numel() == 0
 
 
-class TestRemapEdgeIndex:
-    """
-    Tests for remap_edge_index_to_local.
-    """
-
-    def test_identity_mapping(self):
-        """
-        If global_to_local is identity, edge_index stays the same.
-        """
-        edge_index = torch.tensor([[0, 1], [1, 2]])
-        global_to_local = torch.arange(3)
-        result = remap_edge_index_to_local(edge_index, global_to_local)
-        assert torch.equal(result, edge_index)
-
-    def test_offset_mapping(self):
-        """
-        Global_to_local with offset.
-        """
-        edge_index = torch.tensor([[2, 3], [3, 2]])
-        global_to_local = torch.tensor([-1, -1, 0, 1])
-        result = remap_edge_index_to_local(edge_index, global_to_local)
-        expected = torch.tensor([[0, 1], [1, 0]])
-        assert torch.equal(result, expected)
-
-
 # =========================================================================
 # Distributed tests: all-to-all vs all-gather correctness
 # =========================================================================
@@ -218,13 +191,10 @@ def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
     rank = gp_utils.get_gp_rank()
     world_size = gp_utils.get_gp_world_size()
 
-    # Build GP context (send_indices computed via fused index exchange)
+    # Build GP context (send_indices computed inline)
     gp_ctx = build_gp_context(edge_index, rank_assignments, rank, world_size)
 
-    # Use send indices from fused exchange (already in GPContext)
     send_indices = gp_ctx.send_indices
-    if send_indices is None:
-        send_indices = _compute_send_indices(gp_ctx)
 
     # All-to-all collect
     x_received = all_to_all_collect(x, gp_ctx, send_indices)
@@ -232,8 +202,8 @@ def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
     # Combine local + received
     x_full = torch.cat([x, x_received], dim=0)
 
-    # Remap edges to local space
-    edge_index_local = remap_edge_index_to_local(edge_index, gp_ctx.global_to_local)
+    # Remap edges to local space (inline, no helper function needed)
+    edge_index_local = gp_ctx.global_to_local[edge_index]
 
     # Simple message passing: source embeddings aggregated to targets
     x_source = x_full[edge_index_local[0]]
@@ -867,7 +837,7 @@ def test_overlap_matches_sequential():
 def send_info_optimization_test(atomic_numbers, edge_index):
     """
     Verify that pre-computed send_info from filter_edges_by_node_partition
-    produces the same GPContext as the _fused_index_exchange path.
+    produces the same GPContext as the _sparse_index_exchange path.
     """
     from fairchem.core.graph.compute import filter_edges_by_node_partition
 
@@ -895,7 +865,7 @@ def send_info_optimization_test(atomic_numbers, edge_index):
         world_size=world_size,
     )
 
-    # Build GPContext WITH send_info (skip _fused_index_exchange)
+    # Build GPContext WITH send_info (skip _sparse_index_exchange)
     ctx_with_send_info = build_gp_context(
         edge_index_filtered,
         rank_assignments,
@@ -904,7 +874,7 @@ def send_info_optimization_test(atomic_numbers, edge_index):
         send_info=send_info,
     )
 
-    # Build GPContext WITHOUT send_info (use _fused_index_exchange)
+    # Build GPContext WITHOUT send_info (use _sparse_index_exchange)
     ctx_without = build_gp_context(
         edge_index_filtered,
         rank_assignments,
@@ -937,15 +907,10 @@ def send_info_optimization_test(atomic_numbers, edge_index):
     # all-to-all results
     x = atomic_numbers[node_partition].unsqueeze(1).float()
 
-    si_opt = ctx_with_send_info.send_indices
-    if si_opt is None:
-        si_opt = _compute_send_indices(ctx_with_send_info)
-    x_recv_opt = all_to_all_collect(x, ctx_with_send_info, si_opt)
-
-    si_ref = ctx_without.send_indices
-    if si_ref is None:
-        si_ref = _compute_send_indices(ctx_without)
-    x_recv_ref = all_to_all_collect(x, ctx_without, si_ref)
+    x_recv_opt = all_to_all_collect(
+        x, ctx_with_send_info, ctx_with_send_info.send_indices
+    )
+    x_recv_ref = all_to_all_collect(x, ctx_without, ctx_without.send_indices)
 
     functional_match = torch.allclose(x_recv_opt, x_recv_ref, atol=1e-6)
 
@@ -964,7 +929,7 @@ def test_send_info_matches_fused_exchange():
     """
     Verify that pre-computed send_info from filter_edges_by_node_partition
     produces identical GPContext and all-to-all results as the
-    _fused_index_exchange path.
+    _sparse_index_exchange path.
     """
     num_atoms = 8
     # Dense graph: all atoms connected
@@ -1042,8 +1007,6 @@ def compiled_collect_test(
     )
 
     send_indices = gp_ctx.send_indices
-    if send_indices is None:
-        send_indices = _compute_send_indices(gp_ctx)
 
     x = atomic_numbers[node_partition].unsqueeze(1).float()
 

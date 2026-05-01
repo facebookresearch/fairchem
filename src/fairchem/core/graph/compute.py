@@ -77,7 +77,7 @@ def filter_edges_by_node_partition(
 
             # Unique (dst_rank, src_atom) pairs, sorted by rank then atom.
             # Key layout: dst_rank * num_atoms + src_atom ensures rank-major
-            # ordering, matching what _fused_index_exchange produces.
+            # ordering, matching what the index exchange produces.
             key = send_dst_rank.to(torch.long) * num_atoms + send_src.to(torch.long)
             unique_keys = key.unique(sorted=True)
             send_ranks = unique_keys // num_atoms
@@ -249,10 +249,11 @@ def generate_graph(
     # V2 does its own internal edge filtering when node_partition is set,
     # which is faster than post-filtering.  However, this means send_info
     # cannot be computed here for v2 (the full edge_index is needed).
-    # Instead, build_gp_context falls back to _fused_index_exchange (~4ms
-    # NCCL collective) when send_info is None.  Bypassing v2's internal
-    # filter to compute send_info was benchmarked and is ~12ms SLOWER
-    # because v2 generates edges for ALL atoms instead of local partition.
+    # Instead, build_gp_context falls back to _sparse_index_exchange
+    # (~4ms NCCL collective) when send_info is None.  Bypassing v2's
+    # internal filter to compute send_info was benchmarked and is ~12ms
+    # SLOWER because v2 generates edges for ALL atoms instead of local
+    # partition.
     send_info = None
     if node_partition is not None and radius_pbc_version != 2:
         filter_result = filter_edges_by_node_partition(

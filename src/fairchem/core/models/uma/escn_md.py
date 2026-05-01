@@ -633,15 +633,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
         node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
 
-        # NOTE: AABB send_info is disabled. For the benchmark system
-        # (FCC crystal, cell ~36Å, cutoff 6Å), every rank is a PBC neighbor
-        # of every other rank, making AABB's O(N*27) computation MORE
-        # expensive than the O(P) NCCL _fused_index_exchange it replaces.
-        # At 64 GPUs: AABB costs 7.6ms vs exchange at 4.2ms.
-        # AABB would only help for very large cells (cutoff << cell size)
-        # where most ranks are NOT neighbors.
-        self._aabb_send_info = None
-
         return rank_assignments, node_partition
 
     @torch.compiler.disable
@@ -717,8 +708,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
             global_to_halo[halo_indices] = torch.arange(n_halo, device=pos.device)
 
-            # Create subset data for graph generation (use dict, not
-            # SimpleNamespace, so generate_graph can do data["key"])
+            # Create subset data for graph generation.
+            # SimpleNamespace is used because generate_graph handles
+            # both dict-style and attribute-style access via try/except.
             data_subset = types.SimpleNamespace()
             data_subset.pos = pos[halo_indices]
             data_subset.cell = cell
@@ -872,23 +864,23 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
                 with record_function("a2a_build_gp_context"):
-                    # Prefer AABB send_info (no NCCL) over graph-filter
-                    # send_info. Both are valid; AABB is faster.
-                    effective_send_info = self._aabb_send_info or graph_dict.get(
-                        "send_info"
-                    )
                     gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],
                         rank_assignments=rank_assignments,
                         rank=gp_utils.get_gp_rank(),
                         world_size=gp_utils.get_gp_world_size(),
-                        send_info=effective_send_info,
+                        send_info=graph_dict.get("send_info"),
                         node_partition=node_partition,
                     )
                 data_dict["gp_ctx"] = gp_ctx
                 # All-to-all uses local indices via gp_ctx.edge_index_local,
                 # so node_offset is always 0.
                 data_dict["gp_node_offset"] = 0
+                # Store rank_assignments so output heads can reorder
+                # gathered forces/stress from partition-concatenated order
+                # back to global index order. Only needed for A2A where
+                # partitions are non-consecutive (spatial).
+                data_dict["gp_rank_assignments"] = rank_assignments
             else:
                 data_dict["gp_node_offset"] = node_partition.min().item()
 
@@ -1444,6 +1436,18 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
+            # A2A spatial partitions are non-consecutive, so the
+            # gathered forces are in partition-concatenated order
+            # (NOT global index order). Reorder to match positions.
+            ra = data_dict.get("gp_rank_assignments", None)
+            if ra is not None:
+                ws = gp_utils.get_gp_world_size()
+                perm = torch.cat(
+                    [(ra == r).nonzero(as_tuple=True)[0] for r in range(ws)]
+                )
+                forces_ordered = torch.empty_like(forces)
+                forces_ordered[perm] = forces
+                forces = forces_ordered
 
         return {"forces": forces}
 
