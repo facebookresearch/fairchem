@@ -20,7 +20,6 @@ from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     all_to_all_collect,
     all_to_all_collect_compiled,
-    all_to_all_collect_p2p,
     finish_all_to_all_collect,
     start_all_to_all_collect,
 )
@@ -172,31 +171,25 @@ class Edgewise(torch.nn.Module):
             )
 
         if gp_ctx is not None and gp_utils.initialized():
-            # All-to-all path: collect only needed remote embeddings
-            # When x requires grad (autograd forces/stress), we must use
-            # the autograd-compatible all_to_all_collect so gradients flow
-            # through the communication. Functional collectives and P2P
-            # don't participate in autograd.
+            # All-to-all path: collect only needed remote embeddings.
+            # When x requires grad (autograd forces/stress), we use the
+            # autograd-compatible functional collective so gradients flow
+            # through the communication. Both autograd and non-autograd
+            # variants are compile-friendly (no graph break).
             needs_grad = torch.is_grad_enabled() and x.requires_grad
-            if self.use_p2p_gp and not self.training and not needs_grad:
-                # Sparse P2P: only communicate with actual neighbors
-                # Uses pre-allocated buffers. Eval-mode only, no autograd.
-                with record_function("a2a_collect_p2p"):
-                    x_received = all_to_all_collect_p2p(x, gp_ctx, send_indices)
-                    x_full = torch.cat([x, x_received], dim=0)
-                    edge_index_local = gp_ctx.edge_index_local
-            elif not self.training and not needs_grad:
-                # Compile-friendly path: uses functional collectives
-                # that torch.compile can trace through (no graph break).
-                # Not used when autograd is needed (e.g., gradient forces).
+            if not self.training:
+                # Eval path: compile-friendly functional collectives.
+                # Selects autograd variant when gradients are needed
+                # (e.g., UMA-S with direct_forces=False).
                 with record_function("a2a_collect_compiled"):
-                    x_received = all_to_all_collect_compiled(x, gp_ctx, send_indices)
+                    x_received = all_to_all_collect_compiled(
+                        x, gp_ctx, send_indices, autograd=needs_grad
+                    )
                     x_full = torch.cat([x, x_received], dim=0)
                     edge_index_local = gp_ctx.edge_index_local
             else:
-                # Training or autograd-inference path: uses
-                # autograd-compatible AllToAllCollect so gradients flow
-                # through the all-to-all communication.
+                # Training path: uses AllToAllCollect autograd.Function
+                # which always supports backward.
                 with record_function("a2a_collect"):
                     x_received = all_to_all_collect(x, gp_ctx, send_indices)
                     x_full = torch.cat([x, x_received], dim=0)

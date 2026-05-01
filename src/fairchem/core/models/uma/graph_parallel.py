@@ -860,24 +860,32 @@ def all_to_all_collect_compiled(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
     send_indices: torch.Tensor,
+    autograd: bool = False,
 ) -> torch.Tensor:
     """
     Compile-friendly all-to-all collect using functional collectives.
 
-    Uses ``torch.distributed._functional_collectives.all_to_all_single``
-    which is a registered PyTorch op — torch.compile can trace through
-    it WITHOUT creating a graph break. This eliminates the per-layer
+    Uses ``torch.distributed._functional_collectives`` ops which are
+    registered PyTorch ops — torch.compile can trace through them
+    WITHOUT creating a graph break. This eliminates the per-layer
     graph break from the ``@torch.compiler.disable`` on
     ``AllToAllCollect.forward()``.
+
+    When ``autograd=True``, uses ``all_to_all_single_autograd`` which
+    supports gradient flow through the communication. This is required
+    when forces are computed via ``torch.autograd.grad(energy, pos)``
+    (as in UMA-S with ``direct_forces=False``). The autograd variant
+    is still compile-friendly — no graph break.
+
+    When ``autograd=False``, uses the non-autograd variant which is
+    slightly cheaper (no backward registration). Use when gradients
+    through communication are not needed (e.g., ``direct_forces=True``
+    or when the caller explicitly disables gradients).
 
     For MD simulation with spatial partitioning, the split sizes are
     effectively constant for hundreds of steps (atoms barely move per
     timestep), so torch.compile guards on the split sizes will pass
     without recompilation.
-
-    NOTE: This function does NOT support autograd (no backward pass).
-    Use only in eval mode (inference). For training, continue to use
-    ``all_to_all_collect`` which uses the full autograd function.
 
     NOTE: Requires NCCL backend. Functional collectives are not
     supported on Gloo. CPU/Gloo tests should use ``all_to_all_collect``.
@@ -886,6 +894,8 @@ def all_to_all_collect_compiled(
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
         send_indices: Local indices of atoms to send.
+        autograd: If True, use the autograd-compatible functional
+            collective so gradients flow through the all-to-all.
 
     Returns:
         x_received: Remote atom embeddings, shape (total_needed, *features).
@@ -895,15 +905,22 @@ def all_to_all_collect_compiled(
             "send_indices is None — build_gp_context should always "
             "compute send_indices. Check GP setup."
         )
-    from torch.distributed._functional_collectives import (
-        all_to_all_single as functional_a2a,
-    )
 
     # Gather atoms to send (compile-friendly indexing)
     x_send = x_local[send_indices].contiguous()
 
     # Use functional collective — no graph break!
     gp_group = gp_utils.get_gp_group()
+
+    if autograd:
+        from torch.distributed._functional_collectives import (
+            all_to_all_single_autograd as functional_a2a,
+        )
+    else:
+        from torch.distributed._functional_collectives import (
+            all_to_all_single as functional_a2a,
+        )
+
     x_recv = functional_a2a(
         x_send,
         output_split_sizes=gp_ctx.recv_splits,

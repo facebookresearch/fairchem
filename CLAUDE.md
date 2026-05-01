@@ -386,3 +386,6 @@ UMA-S computes forces via autograd in `MLP_EFS_Head` (gradient of energy w.r.t. 
 
 ### profai-cli launch-experiment needs --partition for correct time limit
 The profai-cli SLURM script generator queries `sinfo -h -o "%l"` for partition time limits. Without `--partition`, `sinfo` returns the DEFAULT partition's limit (often `infinite`), which sbatch rejects. Always pass `--partition h200` (or the appropriate partition) alongside `--qos` to get the correct time limit.
+
+### Use all_to_all_single_autograd for compile-friendly autograd A2A
+`torch.distributed._functional_collectives.all_to_all_single` does NOT support autograd — output has `requires_grad=True` but `grad_fn=None`, so gradients don't flow back to the input. Use `all_to_all_single_autograd` instead, which wraps `torch.ops._c10d_functional_autograd.all_to_all_single` and `_FromTorchTensor.apply()` — this version IS compile-friendly (no `@torch.compiler.disable` graph break) AND supports autograd backward. The `all_to_all_collect_compiled()` function accepts `autograd=True` to select the correct variant. This gives the best of both worlds: no graph breaks for torch.compile + correct gradient flow for autograd forces.
