@@ -40,10 +40,9 @@ from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.graph_parallel import (
     GPContext,
     PartitionStrategy,
-    complete_gp_exchange,
+    build_gp_context,
     partition_atoms_index_split,
     partition_atoms_spatial,
-    prepare_gp_exchange,
 )
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
@@ -384,8 +383,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.use_overlap_gp = use_overlap_gp
         self.use_p2p_gp = use_p2p_gp
         self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
-        self._pending_gp_exchange = None  # Async index exchange state
-        self._aabb_send_info = None  # AABB send info (disabled)
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -609,31 +606,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
-
-    @torch.compiler.disable
-    def _finalize_gp_context(
-        self,
-        data_dict: dict,
-    ) -> None:
-        """
-        Complete async GP index exchange and set gp_ctx on data_dict.
-
-        If a PendingGPExchange was started in _generate_graph (async
-        NCCL all-to-all for index exchange), this waits for it to
-        complete and builds the full GPContext.  Called after wigner
-        and atom embedding computation to overlap NCCL communication
-        with GPU compute.
-
-        If gp_ctx was already set synchronously (send_info was
-        available, or non-A2A path), this is a no-op.
-        """
-        if self._pending_gp_exchange is None:
-            return
-
-        with record_function("a2a_finish_exchange"):
-            gp_ctx = complete_gp_exchange(self._pending_gp_exchange)
-            data_dict["gp_ctx"] = gp_ctx
-            self._pending_gp_exchange = None
 
     @torch.compiler.disable
     def _compute_a2a_partition(
@@ -899,13 +871,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Build GPContext for all-to-all communication
             if self.use_all_to_all_gp:
-                with record_function("a2a_start_exchange"):
+                with record_function("a2a_build_gp_context"):
                     # Prefer AABB send_info (no NCCL) over graph-filter
                     # send_info. Both are valid; AABB is faster.
                     effective_send_info = self._aabb_send_info or graph_dict.get(
                         "send_info"
                     )
-                    result = prepare_gp_exchange(
+                    gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],
                         rank_assignments=rank_assignments,
                         rank=gp_utils.get_gp_rank(),
@@ -913,14 +885,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         send_info=effective_send_info,
                         node_partition=node_partition,
                     )
-                if isinstance(result, GPContext):
-                    # Synchronous path (send_info was available)
-                    data_dict["gp_ctx"] = result
-                    self._pending_gp_exchange = None
-                else:
-                    # Async path: NCCL is running in background
-                    data_dict["gp_ctx"] = None
-                    self._pending_gp_exchange = result
+                data_dict["gp_ctx"] = gp_ctx
                 # All-to-all uses local indices via gp_ctx.edge_index_local,
                 # so node_offset is always 0.
                 data_dict["gp_node_offset"] = 0
@@ -1003,11 +968,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             edge_index=graph_dict["edge_index"],
         )
         self.log_MOLE_stats()
-
-        # Complete async GP index exchange if one is pending.
-        # By this point, wigner + atom embedding have overlapped with
-        # the NCCL all-to-all (~6.5ms compute vs ~3ms NCCL).
-        self._finalize_gp_context(data_dict)
 
         # Retrieve precomputed all-to-all context (needed for edge embedding
         # and message passing layers)
