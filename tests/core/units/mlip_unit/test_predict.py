@@ -1044,7 +1044,15 @@ def test_batch_server_predict_unit_multiple_systems(
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
-def test_merge_mole_md_consistency(workers, ensemble, device):
+@pytest.mark.parametrize(
+    "gp_mode",
+    [
+        None,  # default allgather + index_split
+        # A2A + spatial — tests multi-step MD with spatial repartitioning
+        {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"},
+    ],
+)
+def test_merge_mole_md_consistency(workers, ensemble, device, gp_mode):
     """Test merge_mole vs no-merge consistency over MD trajectory.
 
     Runs 3 trials:
@@ -1055,8 +1063,15 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     Compares the relative drift of A-C against baseline A-B to ensure
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
+
+    When gp_mode is not None, passes backbone overrides to enable
+    A2A graph parallel with the specified partition strategy.
     """
     import torch
+
+    # A2A GP modes require workers >= 2 to actually exercise multi-rank
+    if gp_mode is not None and workers < 2:
+        pytest.skip("A2A GP mode requires workers >= 2")
 
     torch.use_deterministic_algorithms(True)
 
@@ -1133,6 +1148,9 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
             "stresses": np.array(stresses),
         }
 
+    # Build overrides for GP mode
+    overrides = {"backbone": gp_mode} if gp_mode is not None else None
+
     # Trial A: no merge
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
     predict_unit_A = pretrained_mlip.get_predict_unit(
@@ -1140,6 +1158,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        overrides=overrides,
     )
     calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
     results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
@@ -1151,6 +1170,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        overrides=overrides,
     )
     calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
     results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
@@ -1159,7 +1179,11 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     # Trial C: merge
     settings_merge = InferenceSettings(merge_mole=True, **base_settings)
     predict_unit_C = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device=device, inference_settings=settings_merge, workers=workers
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_merge,
+        workers=workers,
+        overrides=overrides,
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
