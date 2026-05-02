@@ -197,8 +197,17 @@ def test_multiple_dataset_predict(internal_graph_gen_version):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
-    """Implementation of parallel predict unit test."""
+def _test_parallel_predict_unit_impl(
+    workers, device, checkpointing, graph_gen_version, gp_mode=None
+):
+    """
+    Implementation of parallel predict unit test.
+
+    Args:
+        gp_mode: Optional dict with GP overrides, e.g.
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}.
+            If None, uses default GP settings (allgather + index_split).
+    """
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -213,12 +222,17 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_v
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
 
+    overrides = None
+    if gp_mode is not None:
+        overrides = {"backbone": gp_mode}
+
     seed_everywhere(seed)
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
+        overrides=overrides,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -248,33 +262,59 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_v
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (2, False, 2),
-        (1, False, 3),
-        (1, True, 3),
-        (2, False, 3),
+        # Default GP mode (allgather + index_split)
+        (1, False, 2, None),
+        (2, False, 2, None),
+        (1, False, 3, None),
+        (1, True, 3, None),
+        (2, False, 3, None),
+        # A2A + spatial (requires workers >= 2 for actual GP)
+        (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # A2A + index_split
+        (
+            2,
+            False,
+            2,
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+        ),
     ],
 )
-def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
-    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version, gp_mode):
+    _test_parallel_predict_unit_impl(
+        workers, "cpu", checkpointing, graph_gen_version, gp_mode
+    )
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (1, True, 2),
-        (1, True, 3),
-        (1, False, 3),
-        # (2, False),
-        # (2, True),
+        # Default GP mode (allgather + index_split)
+        (1, False, 2, None),
+        (1, True, 2, None),
+        (1, True, 3, None),
+        (1, False, 3, None),
+        # GP modes with 1 worker — verifies code paths don't crash
+        # (single rank = no actual GP comms, but exercises config flow)
+        (1, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (
+            1,
+            False,
+            2,
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+        ),
+        # For local 8-GPU runs: uncomment to test multi-worker GPU GP
+        # (2, False, 2, None),
+        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
     ],
 )
-def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
-    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version, gp_mode):
+    _test_parallel_predict_unit_impl(
+        workers, "cuda", checkpointing, graph_gen_version, gp_mode
+    )
 
 
 def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
