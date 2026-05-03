@@ -515,6 +515,16 @@ class UMASFastGPUMixed(UMASFastGPUBackend):
         for layer_idx in range(len(model.blocks)):
             recursive_replace_so2_MOLE(model.blocks[layer_idx], _swap)
 
+        # Freeze ALL model parameters (requires_grad=False) BEFORE
+        # torch.compile is applied. At inference we differentiate energy
+        # w.r.t. positions only — never w.r.t. any model parameter —
+        # so autograd should not need to back-propagate through them.
+        # Doing this before compile ensures the captured graph reflects
+        # the non-leaf status; doing it after compile would create a
+        # parameter-status mismatch and trigger a recompile.
+        for param in model.parameters():
+            param.requires_grad_(False)
+
     @staticmethod
     def get_layer_radial_emb(
         x_edge: torch.Tensor,
