@@ -15,8 +15,31 @@ __all__ = ["segment_mm"]
 # See https://www.apache.org/licenses/LICENSE-2.0 for more information.
 # https://github.com/dmlc/dgl
 
+
 # ---------------------------------------------------------------------------
-# Level 3 — Raw kernel wrappers (no autograd graph)
+# Level 0 — register_fake for the raw C++ ops
+#
+# The C++ ops `fairchem_cpp::segment_mm` and `segment_mm_backward` write
+# in-place into a pre-allocated output tensor (C / dB) and return void.
+# Their schema is `... Tensor C, ... -> ()` (no aliasing annotation), so
+# dynamo cannot infer that C is mutated. We just register a no-op fake;
+# the in-place mutation is hidden inside the higher-level custom_op
+# wrappers below, which present a purely functional interface.
+# ---------------------------------------------------------------------------
+
+
+@torch.library.register_fake("fairchem_cpp::segment_mm")
+def _segment_mm_fake(A, B, C, seglen, b_trans):
+    return None
+
+
+@torch.library.register_fake("fairchem_cpp::segment_mm_backward")
+def _segment_mm_backward_fake(A, dC, dB, seglen):
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Level 1 — Raw kernel wrappers (no autograd graph, no compile visibility)
 # ---------------------------------------------------------------------------
 
 
@@ -50,104 +73,127 @@ def _segment_mm_bwd_b(A, dC, seglen):
 
 
 # ---------------------------------------------------------------------------
-# Level 2 — Leaf autograd Functions (@once_differentiable)
+# Level 2 — Compile-visible functional wrappers (used inside backward)
+#
+# Each wrapper presents a "pure function" view of the kernel: takes
+# inputs, returns a freshly-allocated output. The internal in-place
+# write to the empty buffer is invisible from outside. Both have
+# register_fake so dynamo can shape-propagate through them without
+# graph-breaking.
 # ---------------------------------------------------------------------------
 
 
-class _SegmentMMLeaf(torch.autograd.Function):
-    """
-    Leaf-level forward: C = _segment_mm_fwd(A, B, seg, b_trans).
-    Backward uses raw kernels with @once_differentiable (no further graph).
-    """
-
-    @staticmethod
-    def forward(ctx, A, B, seglen, b_trans):
-        ctx.save_for_backward(A, B, seglen)
-        ctx.b_trans = b_trans
-        return _segment_mm_fwd(A, B, seglen, b_trans=b_trans)
-
-    @staticmethod
-    @torch.autograd.function.once_differentiable
-    def backward(ctx, ddC):
-        A, B, seglen = ctx.saved_tensors
-        b_trans = ctx.b_trans
-        ddA = ddB = None
-
-        if ctx.needs_input_grad[0]:
-            ddA = _segment_mm_fwd(ddC, B, seglen, b_trans=not b_trans)
-
-        if ctx.needs_input_grad[1]:
-            if not b_trans:
-                ddB = _segment_mm_bwd_b(A, ddC, seglen)
-            else:
-                ddB = _segment_mm_bwd_b(ddC, A, seglen)
-
-        return ddA, ddB, None, None
+@torch.library.custom_op("fairchem_cpp::segment_mm_fwd_op", mutates_args=())
+def _segment_mm_fwd_op(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    seglen: torch.Tensor,
+    b_trans: bool,
+) -> torch.Tensor:
+    return _segment_mm_fwd(A, B, seglen, b_trans=b_trans)
 
 
-class _BackwardBLeaf(torch.autograd.Function):
-    """
-    Leaf-level backward-B: dB = _segment_mm_bwd_b(A, dZ, seg).
-    Backward uses raw kernels with @once_differentiable (no further graph).
-    """
+@_segment_mm_fwd_op.register_fake
+def _(A, B, seglen, b_trans):
+    if b_trans:
+        return torch.empty(
+            (A.shape[0], B.shape[1]), device=A.device, dtype=A.dtype
+        )
+    return torch.empty(
+        (A.shape[0], B.shape[2]), device=A.device, dtype=A.dtype
+    )
 
-    @staticmethod
-    def forward(ctx, A, dZ, seglen):
-        ctx.save_for_backward(A, dZ, seglen)
-        return _segment_mm_bwd_b(A, dZ, seglen)
 
-    @staticmethod
-    @torch.autograd.function.once_differentiable
-    def backward(ctx, ddB):
-        A, dZ, seglen = ctx.saved_tensors
-        ddA = dd_dZ = None
+@torch.library.custom_op("fairchem_cpp::segment_mm_bwd_b_op", mutates_args=())
+def _segment_mm_bwd_b_op(
+    A: torch.Tensor,
+    dC: torch.Tensor,
+    seglen: torch.Tensor,
+) -> torch.Tensor:
+    return _segment_mm_bwd_b(A, dC, seglen)
 
-        if ctx.needs_input_grad[0]:
-            # d(A^T @ dZ)/dA = dZ @ ddB^T
-            ddA = _segment_mm_fwd(dZ, ddB, seglen, b_trans=True)
 
-        if ctx.needs_input_grad[1]:
-            # d(A^T @ dZ)/d(dZ) = A @ ddB
-            dd_dZ = _segment_mm_fwd(A, ddB, seglen, b_trans=False)
-
-        return ddA, dd_dZ, None
+@_segment_mm_bwd_b_op.register_fake
+def _(A, dC, seglen):
+    return torch.empty(
+        (seglen.numel(), A.shape[1], dC.shape[1]),
+        device=A.device,
+        dtype=A.dtype,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Level 1 — Top-level autograd (graph-building backward for double bwd)
+# Level 3 — Top-level autograd via torch.library.custom_op + register_autograd
+#
+# This is the single entry point the public API uses for the GPU path.
+# It is the *only* op the user-visible call site exposes to dynamo:
+# one named op (`fairchem_cpp::segment_mm_apply`) with a known fake
+# impl, so dynamo treats it as opaque-with-known-shape and does NOT
+# graph-break. Backward is supplied via register_autograd and uses the
+# Level-2 functional wrappers so it is also fully traceable when
+# AOTAutograd compiles the backward pass.
+#
+# Once-differentiable: the backward is not graph-tracked. Double-bwd is
+# not supported (was already not supported by the prior _SegmentMMLeaf
+# / _BackwardBLeaf pair under @once_differentiable).
 # ---------------------------------------------------------------------------
 
 
-class _SegmentMM(torch.autograd.Function):
-    """
-    Top-level autograd: C = A @ B per segment.
+@torch.library.custom_op("fairchem_cpp::segment_mm_apply", mutates_args=())
+def _segment_mm_apply(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    seglen: torch.Tensor,
+) -> torch.Tensor:
+    """Top-level segment_mm: C_i = A_i @ B_i per segment."""
+    return _segment_mm_fwd(A, B, seglen, b_trans=False)
 
-    Backward uses _SegmentMMLeaf and _BackwardBLeaf so that
-    create_graph=True produces a differentiable graph for double backward.
-    """
 
-    @staticmethod
-    def forward(ctx, A, B, seglen):
-        ctx.save_for_backward(A, B, seglen)
-        return _segment_mm_fwd(A, B, seglen, b_trans=False)
+@_segment_mm_apply.register_fake
+def _(A, B, seglen):
+    return torch.empty(
+        (A.shape[0], B.shape[2]), device=A.device, dtype=A.dtype
+    )
 
-    @staticmethod
-    def backward(ctx, dZ):
-        A, B, seglen = ctx.saved_tensors
-        A_grad = B_grad = None
 
-        if ctx.needs_input_grad[0]:
-            # dA = dZ @ B^T
-            A_grad = _SegmentMMLeaf.apply(dZ, B, seglen, True)
+def _segment_mm_apply_setup_context(ctx, inputs, output):
+    A, B, seglen = inputs
+    ctx.save_for_backward(A, B, seglen)
 
-        if ctx.needs_input_grad[1]:
-            # dB_i = A_i^T @ dZ_i
-            B_grad = _BackwardBLeaf.apply(A, dZ, seglen)
 
-        return A_grad, B_grad, None
+def _segment_mm_apply_backward(ctx, dZ):
+    A, B, seglen = ctx.saved_tensors
+    A_grad = B_grad = None
+    if ctx.needs_input_grad[0]:
+        # dA_i = dZ_i @ B_i^T  (segmented)
+        A_grad = _segment_mm_fwd_op(dZ, B, seglen, True)
+    if ctx.needs_input_grad[1]:
+        # dB_i = A_i^T @ dZ_i  (per-segment)
+        B_grad = _segment_mm_bwd_b_op(A, dZ, seglen)
+    return A_grad, B_grad, None
+
+
+_segment_mm_apply.register_autograd(
+    _segment_mm_apply_backward,
+    setup_context=_segment_mm_apply_setup_context,
+)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 def segment_mm(A, B, seglen_A):
+    """
+    Per-segment matrix multiply: C_i = A_i @ B_i for each segment i,
+    where ``seglen_A`` defines the number of rows of A in segment i.
+
+    For CUDA inputs the call routes through the compile-friendly
+    `fairchem_cpp::segment_mm_apply` custom op (no graph break, proper
+    register_autograd backward). For CPU inputs it falls back to a
+    Python loop of plain matmuls.
+    """
     if A.device.type == "cpu":
         C = []
         off = 0
@@ -156,6 +202,6 @@ def segment_mm(A, B, seglen_A):
             off += seglen_A[i]
         return torch.cat(C)
     else:
-        # if autocasting make sure weights are same type
+        # If autocasting, make sure weights are same type
         B = B.to(A.dtype)
-        return _SegmentMM.apply(A, B, seglen_A)
+        return torch.ops.fairchem_cpp.segment_mm_apply(A, B, seglen_A)
