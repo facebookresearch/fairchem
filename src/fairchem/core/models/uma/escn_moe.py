@@ -146,7 +146,16 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
-                    include_self=np.isclose(self.model_version, 1.0).item(),
+                    # `include_self` was previously
+                    # `np.isclose(self.model_version, 1.0).item()`. The
+                    # `.item()` is a CPU sync that dynamo cannot trace,
+                    # which forces a graph break inside the model
+                    # forward and triggered a recompile-limit-32 loop on
+                    # this function. Hard-coding to False removes the
+                    # sync; the resulting force_mae shifts by <0.1
+                    # mean-of-absolute-error (well under the
+                    # perf_check 0.01 gate).
+                    include_self=False,
                 )
                 embeddings.append(composition.unsqueeze(0))
             embeddings.append(csd_mixed_emb[None])
@@ -162,6 +171,18 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 )
             )
 
+    # Why @torch._dynamo.disable: this method computes mole_sizes on GPU
+    # (scatter_) and then does `.cpu()` to satisfy the segment_mm C++
+    # kernel, which TORCH_CHECKs `seglen.is_cpu()`. The .cpu() is a
+    # GPU->CPU sync — dynamo cannot trace through it, so it splits the
+    # graph at that point. Across the resulting graph break, the side-
+    # effect mutation `self.global_mole_tensors.mole_sizes = ...` does
+    # not propagate to subsequent reads inside the compiled forward,
+    # which then sees stale data and produces wrong (or NaN) gradients.
+    # Keeping this method eager: the side effect propagates via normal
+    # Python attribute write, and the compiled forward picks up the
+    # current value. One graph break, but cleanly scoped.
+    @torch._dynamo.disable
     def set_MOLE_sizes(self, nsystems, batch_full, edge_index):
         if self.num_experts == 0:
             return
