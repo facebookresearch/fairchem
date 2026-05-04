@@ -22,21 +22,15 @@ from ase.build import molecule
 from fairchem.core.calculate.pretrained_mlip import (
     pretrained_checkpoint_path_from_name,
 )
-from fairchem.core.datasets.atomic_data import (
-    AtomicData,
-    atomicdata_list_to_batch,
-)
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from test_helpers import GRAPH_GEN, make_atomic_data, make_settings
 
 
 def build_batch(atoms):
     a = atoms.copy()
     a.info = {"charge": 0, "spin": 1}
-    data = AtomicData.from_ase(
-        a, task_name="omol", r_edges=True, radius=6.0, max_neigh=300
-    )
-    return atomicdata_list_to_batch([data])
+    return atomicdata_list_to_batch([make_atomic_data(a, task_name="omol")])
 
 
 def time_predict(predictor, batch):
@@ -48,14 +42,7 @@ def time_predict(predictor, batch):
 
 
 def main():
-    settings = InferenceSettings(
-        tf32=True,
-        activation_checkpointing=False,
-        merge_mole=False,
-        compile=True,
-        external_graph_gen=False,
-        execution_mode="umas_fast_gpu_mixed",
-    )
+    settings = make_settings(compile=True)
     ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
     predictor = MLIPPredictUnit(ckpt, "cuda", inference_settings=settings)
 
@@ -64,7 +51,7 @@ def main():
     base.center(vacuum=4.0)
     rng = np.random.default_rng(0)
 
-    print("compile=True  execution_mode=umas_fast_gpu_mixed")
+    print(f"compile=True  graph_gen={GRAPH_GEN}  execution_mode=umas_fast_gpu_mixed")
     print(f"benzene: {len(base)} atoms\n")
 
     # Warmup so phase-1 frame 0 isn't dominated by initial compile
