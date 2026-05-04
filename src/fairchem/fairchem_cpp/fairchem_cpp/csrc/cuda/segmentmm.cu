@@ -126,16 +126,25 @@ void SegmentMMBackwardB(
     }
 }
 
-void segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, at::Tensor& C, const at::Tensor& seglen, bool b_trans) {
+at::Tensor segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, const at::Tensor& seglen, bool b_trans) {
     TORCH_CHECK(seglen.dtype() == at::kInt);
-    TORCH_CHECK(A.dtype() == B.dtype())
-    TORCH_CHECK(A.dtype() == C.dtype())
+    TORCH_CHECK(A.dtype() == B.dtype());
 
     TORCH_CHECK(A.is_cuda(), "A must be a CUDA tensor");
-    TORCH_CHECK(B.is_cuda(), "dC must be a CUDA tensor");
-    TORCH_CHECK(C.is_cuda(), "dB must be a CUDA tensor");
+    TORCH_CHECK(B.is_cuda(), "B must be a CUDA tensor");
     TORCH_CHECK(seglen.is_cpu(), "seglen must be a CPU tensor");
-    
+
+    // Allocate output internally so the schema can be functional
+    // (Tensor return) instead of out-parameter (mutates Tensor C).
+    // out shape: A.size(0) rows, B.size(2) cols normally, B.size(1)
+    // cols when b_trans=True (for the dA = dZ @ B^T backward path).
+    at::Tensor C;
+    if (!b_trans) {
+        C = at::empty({A.size(0), B.size(2)}, A.options());
+    } else {
+        C = at::empty({A.size(0), B.size(1)}, A.options());
+    }
+
     if (A.scalar_type() == at::ScalarType::Float) {
         SegmentMM<float,float>(A, B, C, seglen,  b_trans, CUDA_R_32F,CUBLAS_COMPUTE_32F );
     } else if (A.scalar_type() == at::ScalarType::Half) {
@@ -145,17 +154,21 @@ void segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, at::Tensor& C
     } else {
         TORCH_CHECK(false, "Unsupported dtype");
     }
+    return C;
 }
 
-void segment_mm_backward_dispatch(const at::Tensor& A, const at::Tensor& dC, at::Tensor& dB, const at::Tensor& seglen) {
+at::Tensor segment_mm_backward_dispatch(const at::Tensor& A, const at::Tensor& dC, const at::Tensor& seglen) {
     TORCH_CHECK(seglen.dtype() == at::kInt);
-    TORCH_CHECK(A.dtype() == dC.dtype())
-    TORCH_CHECK(A.dtype() == dB.dtype())
+    TORCH_CHECK(A.dtype() == dC.dtype());
 
     TORCH_CHECK(A.is_cuda(), "A must be a CUDA tensor");
     TORCH_CHECK(dC.is_cuda(), "dC must be a CUDA tensor");
-    TORCH_CHECK(dB.is_cuda(), "dB must be a CUDA tensor");
     TORCH_CHECK(seglen.is_cpu(), "seglen must be a CPU tensor");
+
+    // dB shape: (num_segments, A.size(1), dC.size(1))
+    at::Tensor dB = at::empty(
+        {seglen.numel(), A.size(1), dC.size(1)}, A.options()
+    );
 
     if (A.scalar_type() == at::ScalarType::Float) {
         SegmentMMBackwardB<float,float>(A, dC, dB, seglen,CUDA_R_32F,CUBLAS_COMPUTE_32F);
@@ -166,6 +179,7 @@ void segment_mm_backward_dispatch(const at::Tensor& A, const at::Tensor& dC, at:
     } else {
         TORCH_CHECK(false, "Unsupported dtype");
     }
+    return dB;
 }
   
 TORCH_LIBRARY_IMPL(fairchem_cpp, CUDA, m) {
