@@ -7,9 +7,9 @@ defaults:
   - job: local
   - _self_
 
-uma_s_1p2:
+uma_s_1p1:
   _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
-  model_name: "uma-s-1p2"
+  model_name: "uma-s-1p1"
 
 runner:
   _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
@@ -18,8 +18,9 @@ runner:
   repeats: 5
   natoms_list: [1000]
   model_checkpoints:
-    # uma_s_1p1: ${uma_s_1p1}
-    uma_s_1p2: ${uma_s_1p2}
+    uma_s_1p1: ${uma_s_1p1}
+    # uma-s-1p2 was retired (size-extensivity bug). Re-enable with
+    # uma-s-1p2p1 once available.
   # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
   # for profiling, we substract the graph generation time by using external_graph_gen=True
   inference_settings:
