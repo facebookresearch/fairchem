@@ -612,7 +612,8 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+# uma-s-1p2 removed (size-extensivity bug); re-add uma-s-1p2p1 when ready.
+@pytest.mark.parametrize("model_name", ["uma-s-1p1"])
 def test_compiled_backends_match_baseline(request, model_name):
     """
     Test compiled execution modes produce same results as non-compiled baseline.

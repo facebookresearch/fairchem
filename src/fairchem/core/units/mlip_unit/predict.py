@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+import hashlib
 import logging
 import math
 import os
@@ -54,6 +55,46 @@ if TYPE_CHECKING:
     from ase import Atoms
 
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+
+
+class BannedCheckpointError(RuntimeError):
+    """
+    Raised when a checkpoint with a banned MD5 hash is loaded.
+    """
+
+
+# Map of banned checkpoint MD5 -> human-readable reason. Any inference
+# checkpoint whose md5 matches an entry here will be rejected before it is
+# deserialized by torch.load.
+_BANNED_CHECKPOINTS: dict[str, str] = {
+    # uma-s-1: trained with a size-extensivity bug. Use uma-s-1p1 instead.
+    "dc9964d66d54746652a352f74ead19b6": (
+        "uma-s-1 had a size-extensivity bug during training and has been "
+        "retired. Please use uma-s-1p1 instead."
+    ),
+    # uma-s-1p2: trained with a size-extensivity bug. Use uma-s-1p2p1 instead.
+    "26ac47f57e7d68af9f031077cdc2cbe9": (
+        "uma-s-1p2 had a size-extensivity bug during training and has been "
+        "retired. Please use uma-s-1p2p1 instead."
+    ),
+}
+
+
+def _md5_of_file(path: str, chunk_size: int = 1024 * 1024) -> str:
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _verify_checkpoint_not_banned(path: str) -> None:
+    digest = _md5_of_file(path)
+    if digest in _BANNED_CHECKPOINTS:
+        raise BannedCheckpointError(
+            f"Refusing to load banned checkpoint {path} (md5={digest}): "
+            f"{_BANNED_CHECKPOINTS[digest]}"
+        )
 
 
 def collate_predictions(predict_fn):
@@ -123,6 +164,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         # Load checkpoint first to get model type
+        _verify_checkpoint_not_banned(inference_model_path)
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
         )

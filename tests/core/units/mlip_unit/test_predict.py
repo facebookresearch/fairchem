@@ -27,7 +27,10 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import (
+    BannedCheckpointError,
+    ParallelMLIPPredictUnit,
+)
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
@@ -700,7 +703,8 @@ def test_merge_mole_composition_check():
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+# uma-s-1p2 removed (size-extensivity bug); re-add uma-s-1p2p1 when ready.
+@pytest.mark.parametrize("model_name", ["uma-s-1p1"])
 def test_merge_mole_vs_non_merged_consistency(model_name):
     """Test that merged and non-merged versions produce identical results."""
     atoms = bulk("MgO", "rocksalt", a=4.213)
@@ -1258,6 +1262,13 @@ def test_single_atom_predict_1p1(task_name, uma_1p1_predict_unit):
     _test_single_atom_predict(uma_1p1_predict_unit, task_name, energy_atol=0.0)
 
 
+# uma-s-1p2 is banned (size-extensivity bug). Re-target to uma-s-1p2p1
+# once that checkpoint is available and remove this xfail.
+@pytest.mark.xfail(
+    raises=BannedCheckpointError,
+    strict=True,
+    reason="uma-s-1p2 retired due to size-extensivity bug; should pass for uma-s-1p2p1",
+)
 @pytest.mark.parametrize("task_name", ["omat", "omol"])
 def test_single_atom_predict_1p2(task_name, uma_1p2_predict_unit):
     """Verify uma-s-1p2 single atom energies are close to reference values."""
@@ -1715,7 +1726,8 @@ def test_direct_force_model_untrained_validation(direct_mole_checkpoint):
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+# uma-s-1p2 removed (size-extensivity bug); re-add uma-s-1p2p1 when ready.
+@pytest.mark.parametrize("model_name", ["uma-s-1p1"])
 def test_execution_mode_auto_set_umas_fast_gpu(model_name):
     """Test that UMA-S models automatically use umas_fast_gpu on GPU with compatible settings.
 
@@ -1735,7 +1747,8 @@ def test_execution_mode_auto_set_umas_fast_gpu(model_name):
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+# uma-s-1p2 removed (size-extensivity bug); re-add uma-s-1p2p1 when ready.
+@pytest.mark.parametrize("model_name", ["uma-s-1p1"])
 def test_execution_mode_not_overridden_when_explicit(model_name):
     """Test that explicitly set execution_mode is not overridden."""
     from fairchem.core.models.uma.nn.execution_backends import ExecutionMode
