@@ -124,7 +124,7 @@ def create_gnrs_config(
         config.read_file(config_file)
 
     config["master"]["name"] = mol_name
-    config["master"]["conformers_path"] = json.dumps([str(geometry_path)])
+    config["master"]["molecule_path"] = json.dumps([str(geometry_path)])
     config["master"]["Z"] = str(Z)
     config["generation"]["num_structures_per_spg"] = str(num_structures)
     config["generation"]["spg_distribution_type"] = spg_distribution_type

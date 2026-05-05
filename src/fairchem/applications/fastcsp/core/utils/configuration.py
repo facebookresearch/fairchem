@@ -65,9 +65,9 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
                     "calculator",
                     "optimizer",
                     "fmax",
-                    "max-steps",
-                    "fix-symmetry",
-                    "relax-cell",
+                    "max_steps",
+                    "fix_symmetry",
+                    "relax_cell",
                 ]
             },
         },
@@ -124,9 +124,9 @@ def _validate_relax_config_types(config: dict[str, Any]) -> None:
         relax_config = config["relax"]
         type_validations = {
             "fmax": (float, int),
-            "max-steps": int,
-            "fix-symmetry": bool,
-            "relax-cell": bool,
+            "max_steps": int,
+            "fix_symmetry": bool,
+            "relax_cell": bool,
         }
 
         for key, expected_types in type_validations.items():
