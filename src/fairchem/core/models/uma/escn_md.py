@@ -665,6 +665,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         No NCCL communication — purely local computation.
 
+        Note: Only supports single-system inputs (not batched).
+        For multi-system batches, the caller should skip halo
+        filtering and fall back to full graph generation.
+
         Returns:
             Tuple of (halo_mask, shift_vecs) where:
             - halo_mask: Boolean mask over all atoms in the AABB halo.
@@ -764,6 +768,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Remap partition and rank_assignments to halo-local
             node_partition_local = global_to_halo[node_partition]
+            assert (node_partition_local >= 0).all(), (
+                "Local partition atoms not found in halo — "
+                "AABB expansion may be too small"
+            )
             rank_assignments_local = rank_assignments[halo_indices]
 
             graph_dict = generate_graph(
@@ -849,9 +857,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # expanded by cutoff, to filter graph gen input from
             # N_total to ~N_halo atoms. Pure local computation,
             # no NCCL needed.
+            # Note: AABB halo only supports single-system inputs.
+            # Multi-system batches skip halo and use full graph gen.
             graph_dict = None
-            if self.use_all_to_all_gp and rank_assignments is not None:
-                halo_mask, shift_vecs = self._compute_aabb_halo(
+            is_single_system = data_dict["cell"].dim() == 2 or (
+                data_dict["cell"].dim() == 3 and data_dict["cell"].shape[0] == 1
+            )
+            if (
+                self.use_all_to_all_gp
+                and rank_assignments is not None
+                and is_single_system
+            ):
+                halo_mask, _ = self._compute_aabb_halo(
                     data_dict["pos"],
                     node_partition,
                     pbc,
