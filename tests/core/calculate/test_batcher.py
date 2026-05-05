@@ -24,14 +24,14 @@ from fairchem.core.calculate._batch import InferenceBatcher
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
-pytestmark = pytest.mark.serial
+# uses_uma flags every test for the --uma-checkpoint sweep mode.
+pytestmark = [pytest.mark.serial, pytest.mark.uses_uma]
 
 
 @pytest.fixture(scope="module")
-def uma_predict_unit():
+def uma_predict_unit(uma_checkpoint):
     """Get a UMA predict unit for testing."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    return pretrained_mlip.get_predict_unit(uma_models[0])
+    return pretrained_mlip.get_predict_unit(uma_checkpoint)
 
 
 def setup_ray():

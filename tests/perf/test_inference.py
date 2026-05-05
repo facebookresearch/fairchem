@@ -23,6 +23,8 @@ from tests.perf.performance_report import MeasurementStats, PerformanceReport
 if TYPE_CHECKING:
     from ase import Atoms
 
+pytestmark = pytest.mark.uses_uma
+
 
 # The scope here ensures that the same report instance is passed to every
 # test that is run, letting us build up measurements and defer saving them
@@ -59,9 +61,13 @@ class InferenceTestCase:
     structures: list[Atoms]
 
 
-def generate_test_cases() -> list[InferenceTestCase]:
+def generate_test_cases(models: list[str]) -> list[InferenceTestCase]:
     """
     Generates a list of inference test cases to run.
+
+    Args:
+        models: model names (or paths) to benchmark; one InferenceTestCase
+            is produced per (model, device) combination.
 
     Returns:
         A list of test cases that should be run when measuring the
@@ -92,12 +98,23 @@ def generate_test_cases() -> list[InferenceTestCase]:
             device=device,
             structures=structures,
         )
-        for model in pretrained_mlip.available_models
+        for model in models
         for device in devices
     ]
 
 
-@pytest.mark.parametrize("test_case", generate_test_cases())
+def pytest_generate_tests(metafunc):
+    """Pick models for `test_pretrained_models` from --uma-checkpoint when set,
+    otherwise iterate every registered pretrained model."""
+    if metafunc.function.__name__ != "test_pretrained_models":
+        return
+    if "test_case" not in metafunc.fixturenames:
+        return
+    override = metafunc.config.getoption("--uma-checkpoint")
+    models = [override] if override else list(pretrained_mlip.available_models)
+    metafunc.parametrize("test_case", generate_test_cases(models))
+
+
 def test_pretrained_models(test_case, performance_report) -> None:
     """
     Evaluates the performance of all of the input inference test cases.
@@ -122,7 +139,7 @@ def test_pretrained_models(test_case, performance_report) -> None:
     #
     # In real tests at the time this was written, this saved around 20
     # minutes when using github runners (1 hour 10 minutes -> 49 minutes).
-    for task in predictor.dataset_to_tasks.keys():
+    for task in predictor.dataset_to_tasks:
         for atoms in test_case.structures:
 
             # Setup the prediction task

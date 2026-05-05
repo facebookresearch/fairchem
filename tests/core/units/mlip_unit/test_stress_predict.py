@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
     from fairchem.core.models.uma.escn_md import GradRegressConfig
 
+pytestmark = pytest.mark.uses_uma
+
 
 def apply_strain(atoms: Atoms, strain: np.ndarray) -> Atoms:
     """
@@ -59,8 +61,8 @@ def bulk_atoms() -> Atoms:
 
 
 @pytest.fixture()
-def uma_predict_unit(request):
-    return pretrained_mlip.get_predict_unit("uma-s-1p1")
+def uma_predict_unit(uma_checkpoint):
+    return pretrained_mlip.get_predict_unit(uma_checkpoint)
 
 
 def get_displacement_and_cell(

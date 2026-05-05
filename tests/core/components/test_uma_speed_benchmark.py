@@ -10,7 +10,11 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from tests.core.testing_utils import launch_main
+
+pytestmark = pytest.mark.uses_uma
 
 COMMON_ARGS = [
     "job.device_type=CPU",

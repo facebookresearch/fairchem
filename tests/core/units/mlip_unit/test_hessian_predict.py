@@ -22,6 +22,8 @@ from fairchem.core.units.mlip_unit import InferenceSettings
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
 
+pytestmark = pytest.mark.uses_uma
+
 
 def get_numerical_hessian(
     data: AtomicData,
@@ -99,10 +101,10 @@ def get_numerical_hessian(
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
-def test_hessian(vmap):
+def test_hessian(vmap, uma_checkpoint):
     """Test Hessian calculation using MLIPPredictUnit directly."""
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+        uma_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=vmap
@@ -129,17 +131,17 @@ def test_hessian(vmap):
 
 @pytest.mark.xfail(reason="Need to fix the numerical/autograd Hessian calculation")
 @pytest.mark.gpu()
-def test_hessian_vs_numerical():
+def test_hessian_vs_numerical(uma_checkpoint):
     """Test that analytical and numerical Hessians are close."""
     hessian_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+        uma_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True
         ),
     )
     forces_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+        uma_checkpoint,
         device="cuda",
     )
 
@@ -174,10 +176,10 @@ def test_hessian_vs_numerical():
 
 
 @pytest.mark.gpu()
-def test_hessian_symmetry():
+def test_hessian_symmetry(uma_checkpoint):
     """Test that the Hessian matrix is symmetric."""
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+        uma_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True

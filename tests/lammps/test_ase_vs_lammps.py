@@ -20,11 +20,13 @@ from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 
+pytestmark = pytest.mark.uses_uma
 
-def run_ase_langevin():
+
+def run_ase_langevin(uma_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -53,10 +55,10 @@ def run_ase_langevin():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_nve():
+def run_ase_nve(uma_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -82,7 +84,7 @@ def run_ase_nve():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_npt():
+def run_ase_npt(uma_checkpoint):
     """Run ASE NPT-like using a Berendsen barostat approximation via NPT wrapper.
 
     ASE doesn't provide a direct NPT integrator in the core; here we mimic
@@ -94,7 +96,7 @@ def run_ase_npt():
     """
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -138,24 +140,28 @@ def run_ase_npt():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_lammps(input_file):
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+def run_lammps(input_file, uma_checkpoint):
+    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
     lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_nve():
-    ase_kinetic, ase_pot = run_ase_nve()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_nve.file")
+def test_ase_vs_lammps_nve(uma_checkpoint):
+    ase_kinetic, ase_pot = run_ase_nve(uma_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_nve.file", uma_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.1)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_npt():
-    ase_kinetic, ase_pot = run_ase_npt()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_npt.file")
+def test_ase_vs_lammps_npt(uma_checkpoint):
+    ase_kinetic, ase_pot = run_ase_npt(uma_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_npt.file", uma_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
 
@@ -164,8 +170,10 @@ def test_ase_vs_lammps_npt():
     reason="This is more demo purposes, need to configure the right parameters for ASE langevin to match lammps"
 )
 @pytest.mark.gpu()
-def test_ase_vs_lammps_langevin():
-    ase_kinetic, ase_pot = run_ase_langevin()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_langevin.file")
+def test_ase_vs_lammps_langevin(uma_checkpoint):
+    ase_kinetic, ase_pot = run_ase_langevin(uma_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_langevin.file", uma_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=1e-4)
     assert np.isclose(ase_pot, lammps_pot, rtol=1e-4)

@@ -15,6 +15,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+import pytest
 from ase import Atoms
 from ase.optimize import BFGS
 
@@ -32,9 +33,15 @@ from fairchem.core.components.calculate.recipes.omol import (
     spin_gap,
 )
 
+pytestmark = pytest.mark.uses_uma
+
 
 class TestOmolRecipes(unittest.TestCase):
     """Test suite for OMol calculation recipes."""
+
+    @pytest.fixture(autouse=True)
+    def _inject_uma_checkpoint(self, uma_checkpoint):
+        self._uma_checkpoint = uma_checkpoint
 
     def setUp(self):
         """Set up common test fixtures."""
@@ -61,7 +68,7 @@ class TestOmolRecipes(unittest.TestCase):
         self.test_atoms = self.water_atoms.copy()
 
         # Real ASE Calculator using FAIRChem
-        predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cpu")
+        predictor = pretrained_mlip.get_predict_unit(self._uma_checkpoint, device="cpu")
         self.calculator = FAIRChemCalculator(predictor, task_name="omol")
 
         # Mock optimization flags

@@ -45,6 +45,17 @@ def pytest_addoption(parser):
     parser.addoption(
         "--inference-dataset", action="store", help="inference dataset to run check on"
     )
+    parser.addoption(
+        "--uma-checkpoint",
+        action="store",
+        default=None,
+        help=(
+            "Sweep mode: name (e.g. 'uma-s-1p3') or filesystem path of the "
+            "UMA checkpoint to run all UMA-using tests against. When set, "
+            "tests without @pytest.mark.uses_uma are deselected and tests "
+            "with @pytest.mark.checkpoint_specific are skipped."
+        ),
+    )
 
 
 def pytest_configure(config):
@@ -58,6 +69,49 @@ def pytest_configure(config):
         "markers",
         "subprocess: mark test that spawns subprocesses (excluded from parallel xdist run)",
     )
+    config.addinivalue_line(
+        "markers",
+        "uses_uma: test exercises a UMA pretrained checkpoint. Required for "
+        "tests to be selected under --uma-checkpoint sweep mode.",
+    )
+    config.addinivalue_line(
+        "markers",
+        "checkpoint_specific: test asserts values calibrated to a specific "
+        "UMA checkpoint and is skipped under --uma-checkpoint sweep mode.",
+    )
+
+
+@pytest.fixture(scope="session")
+def uma_checkpoint(request):
+    """
+    Name or path of the UMA checkpoint under test.
+
+    Resolves to the value of --uma-checkpoint when set, otherwise to
+    'uma-s-1p2' (the first key in pretrained_models.json). Accepts either
+    a registered model name or a filesystem path; both forms work with
+    pretrained_mlip.get_predict_unit().
+    """
+    return request.config.getoption("--uma-checkpoint") or "uma-s-1p2"
+
+
+UMA_MODEL_NAMES_DEFAULT = ("uma-s-1p1", "uma-s-1p2")
+
+
+def pytest_generate_tests(metafunc):
+    """
+    Provide values for the `uma_model_name` parameter:
+    - default: every UMA-S checkpoint in UMA_MODEL_NAMES_DEFAULT
+    - --uma-checkpoint=...: just the override
+
+    Tests opt in by taking `uma_model_name` as an argument (no @parametrize
+    decorator needed). Tests that need a custom set should use a different
+    argname (e.g. `model_name`) and parametrize directly.
+    """
+    if "uma_model_name" not in metafunc.fixturenames:
+        return
+    override = metafunc.config.getoption("--uma-checkpoint")
+    values = [override] if override else list(UMA_MODEL_NAMES_DEFAULT)
+    metafunc.parametrize("uma_model_name", values)
 
 
 def pytest_runtest_setup(item):
@@ -100,6 +154,26 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "inference_check" in item.keywords:
                 item.add_marker(skip_inference_check)
+
+    # Sweep mode: --uma-checkpoint deselects non-UMA tests and skips
+    # checkpoint_specific tests so the named checkpoint runs against the
+    # full set of model-agnostic UMA tests.
+    uma_override = config.getoption("--uma-checkpoint")
+    if uma_override is not None:
+        skip_specific = pytest.mark.skip(
+            reason=f"checkpoint_specific test skipped under --uma-checkpoint={uma_override}"
+        )
+        keep, deselect = [], []
+        for item in items:
+            if not item.get_closest_marker("uses_uma"):
+                deselect.append(item)
+                continue
+            if item.get_closest_marker("checkpoint_specific"):
+                item.add_marker(skip_specific)
+            keep.append(item)
+        if deselect:
+            config.hook.pytest_deselected(items=deselect)
+            items[:] = keep
 
 
 def seed_everywhere(seed=0):

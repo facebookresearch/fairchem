@@ -119,21 +119,22 @@ def test_runner_catches_oom(tmp_path):
 
 @pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
-def test_run_inference_predictions_and_perf():
+@pytest.mark.uses_uma()
+def test_run_inference_predictions_and_perf(uma_checkpoint):
     """
     Verify inference returns correct predictions and perf metrics on GPU.
     """
     system = make_benchmark_system(name="tiny", natoms=8, task_name="omat")
 
     # Baseline mode: predictions only, no perf
-    baseline = run_inference("uma-s-1p2", system, BASELINE_SETTINGS, device="cuda")
+    baseline = run_inference(uma_checkpoint, system, BASELINE_SETTINGS, device="cuda")
     assert baseline.forces.shape == (8, 3)
     assert baseline.forces.dtype == np.float64
     assert baseline.qps is None
 
     # Perf mode: predictions + metrics
     result = run_inference(
-        "uma-s-1p2",
+        uma_checkpoint,
         system,
         InferenceSettings(tf32=False, compile=False),
         device="cuda",
@@ -147,14 +148,15 @@ def test_run_inference_predictions_and_perf():
 
 @pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
-def test_benchmark_runner_end_to_end(tmp_path):
+@pytest.mark.uses_uma()
+def test_benchmark_runner_end_to_end(tmp_path, uma_checkpoint):
     """
     Full pipeline: baseline -> evaluate -> compare -> JSON report.
     """
     from omegaconf import OmegaConf
 
     runner = PerfCheckRunner(
-        checkpoint="uma-s-1p2",
+        checkpoint=uma_checkpoint,
         device="cuda",
         warmup_iters=2,
         timed_iters=3,
