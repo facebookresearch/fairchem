@@ -207,9 +207,7 @@ class BatchPredictServerMixin:
                 # CPU-only Ray worker) can deserialize the result without
                 # requiring CUDA.
                 if hasattr(system_predictions[key], "detach"):
-                    system_predictions[key] = (
-                        system_predictions[key].detach().cpu()
-                    )
+                    system_predictions[key] = system_predictions[key].detach().cpu()
 
             split_preds.append(system_predictions)
 
