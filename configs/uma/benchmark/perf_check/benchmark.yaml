@@ -17,7 +17,8 @@ defaults:
 
 checkpoint:
   _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
-  model_name: "uma-s-1p2"
+  # uma-s-1p2 was retired (size-extensivity bug); switch to uma-s-1p2p1 once available.
+  model_name: "uma-s-1p1"
 
 runner:
   _target_: fairchem.core.components.benchmark.perf_check.PerfCheckRunner

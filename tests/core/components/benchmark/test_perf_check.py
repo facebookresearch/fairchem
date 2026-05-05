@@ -126,14 +126,14 @@ def test_run_inference_predictions_and_perf():
     system = make_benchmark_system(name="tiny", natoms=8, task_name="omat")
 
     # Baseline mode: predictions only, no perf
-    baseline = run_inference("uma-s-1p2", system, BASELINE_SETTINGS, device="cuda")
+    baseline = run_inference("uma-s-1p1", system, BASELINE_SETTINGS, device="cuda")
     assert baseline.forces.shape == (8, 3)
     assert baseline.forces.dtype == np.float64
     assert baseline.qps is None
 
     # Perf mode: predictions + metrics
     result = run_inference(
-        "uma-s-1p2",
+        "uma-s-1p1",
         system,
         InferenceSettings(tf32=False, compile=False),
         device="cuda",
@@ -154,7 +154,7 @@ def test_benchmark_runner_end_to_end(tmp_path):
     from omegaconf import OmegaConf
 
     runner = PerfCheckRunner(
-        checkpoint="uma-s-1p2",
+        checkpoint="uma-s-1p1",
         device="cuda",
         warmup_iters=2,
         timed_iters=3,
