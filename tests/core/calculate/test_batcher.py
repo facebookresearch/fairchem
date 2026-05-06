@@ -25,7 +25,11 @@ from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
 # uses_uma flags every test for the --uma-checkpoint sweep mode.
-pytestmark = [pytest.mark.serial, pytest.mark.uses_uma]
+pytestmark = [
+    pytest.mark.serial,
+    pytest.mark.uses_uma,
+    pytest.mark.uma_models("uma-s-1p1"),
+]
 
 
 @pytest.fixture(scope="module")

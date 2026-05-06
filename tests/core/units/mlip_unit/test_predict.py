@@ -35,6 +35,7 @@ from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
+pytestmark = pytest.mark.uma_models("uma-s-1p1")
 
 
 def _resolve_checkpoint_path(name_or_path: str) -> str:
@@ -45,7 +46,6 @@ def _resolve_checkpoint_path(name_or_path: str) -> str:
     if os.path.exists(name_or_path):
         return name_or_path
     return pretrained_checkpoint_path_from_name(name_or_path)
-
 
 
 _REPRESENTATIVE_ELEMENTS = [
@@ -299,7 +299,9 @@ def test_parallel_predict_unit_gpu(
     )
 
 
-def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing, uma_checkpoint):
+def _test_parallel_predict_unit_batch_impl(
+    workers, device, checkpointing, uma_checkpoint
+):
     """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
@@ -375,7 +377,9 @@ def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing, uma_c
 )
 @pytest.mark.uses_uma()
 def test_parallel_predict_unit_batch(workers, checkpointing, uma_checkpoint):
-    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing, uma_checkpoint)
+    _test_parallel_predict_unit_batch_impl(
+        workers, "cpu", checkpointing, uma_checkpoint
+    )
 
 
 @pytest.mark.gpu()
@@ -390,7 +394,9 @@ def test_parallel_predict_unit_batch(workers, checkpointing, uma_checkpoint):
 )
 @pytest.mark.uses_uma()
 def test_parallel_predict_unit_batch_gpu(workers, checkpointing, uma_checkpoint):
-    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing, uma_checkpoint)
+    _test_parallel_predict_unit_batch_impl(
+        workers, "cuda", checkpointing, uma_checkpoint
+    )
 
 
 @pytest.mark.gpu()
@@ -731,6 +737,7 @@ def test_merge_mole_composition_check(uma_checkpoint):
 
 @pytest.mark.gpu()
 @pytest.mark.uses_uma()
+@pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")
 def test_merge_mole_vs_non_merged_consistency(uma_model_name):
     """Test that merged and non-merged versions produce identical results."""
     atoms = bulk("MgO", "rocksalt", a=4.213)
@@ -1760,6 +1767,7 @@ def test_direct_force_model_untrained_validation(direct_mole_checkpoint):
 
 @pytest.mark.gpu()
 @pytest.mark.uses_uma()
+@pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")
 def test_execution_mode_auto_set_umas_fast_gpu(uma_model_name):
     """Test that UMA-S models automatically use umas_fast_gpu on GPU with compatible settings.
 
@@ -1780,6 +1788,7 @@ def test_execution_mode_auto_set_umas_fast_gpu(uma_model_name):
 
 @pytest.mark.gpu()
 @pytest.mark.uses_uma()
+@pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")
 def test_execution_mode_not_overridden_when_explicit(uma_model_name):
     """Test that explicitly set execution_mode is not overridden."""
     from fairchem.core.models.uma.nn.execution_backends import ExecutionMode

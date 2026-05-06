@@ -40,9 +40,12 @@ from fairchem.core.calculate import pretrained_mlip
 # mark all tests in this module as gpu tests
 # uses_uma flags every test for the --uma-checkpoint sweep mode. The single
 # non-UMA test (test_formation_energy_calculator_non_fairchemcalculator) is
-# fast and harmless to include — accepting that minor over-collection in
-# exchange for simpler module-level marking.
-pytestmark = [pytest.mark.gpu, pytest.mark.uses_uma]
+# fast and harmless to include in exchange for simpler module-level marking.
+pytestmark = [
+    pytest.mark.gpu,
+    pytest.mark.uses_uma,
+    pytest.mark.uma_models("uma-s-1p1"),
+]
 
 
 @pytest.fixture(scope="session")

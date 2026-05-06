@@ -20,7 +20,7 @@ from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 
-pytestmark = pytest.mark.uses_uma
+pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
 
 
 def run_ase_langevin(uma_checkpoint):

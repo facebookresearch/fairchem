@@ -33,7 +33,7 @@ from fairchem.core.components.calculate.recipes.omol import (
     spin_gap,
 )
 
-pytestmark = pytest.mark.uses_uma
+pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
 
 
 class TestOmolRecipes(unittest.TestCase):

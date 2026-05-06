@@ -12,9 +12,10 @@ from pathlib import Path
 
 import pytest
 
+from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from tests.core.testing_utils import launch_main
 
-pytestmark = pytest.mark.uses_uma
+pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p2")]
 
 COMMON_ARGS = [
     "job.device_type=CPU",
@@ -26,13 +27,23 @@ COMMON_ARGS = [
 ]
 
 
-def test_uma_speed_benchmark_natoms_list():
+def _checkpoint_override(uma_checkpoint: str) -> str:
+    checkpoint_path = (
+        uma_checkpoint
+        if Path(uma_checkpoint).exists()
+        else pretrained_checkpoint_path_from_name(uma_checkpoint)
+    )
+    return f"runner.model_checkpoints.uma_s_1p2={checkpoint_path}"
+
+
+def test_uma_speed_benchmark_natoms_list(uma_checkpoint):
     """Run the UMA speed benchmark via CLI using natoms_list override."""
     with tempfile.TemporaryDirectory() as run_root:
         sys_args = [
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
+            _checkpoint_override(uma_checkpoint),
             f"job.run_dir={run_root}",
             "runner.natoms_list=[20]",
         ]
@@ -41,7 +52,7 @@ def test_uma_speed_benchmark_natoms_list():
         assert entries, "Benchmark did not create a run directory"
 
 
-def test_uma_speed_benchmark_input_system(water_xyz_file):
+def test_uma_speed_benchmark_input_system(water_xyz_file, uma_checkpoint):
     """Run the UMA speed benchmark using an explicit input_system (water.xyz)."""
     with tempfile.TemporaryDirectory() as run_root:
         input_system_override = f"+runner.input_system={{water: {water_xyz_file}}}"
@@ -49,6 +60,7 @@ def test_uma_speed_benchmark_input_system(water_xyz_file):
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
+            _checkpoint_override(uma_checkpoint),
             f"job.run_dir={run_root}",
             input_system_override,
             "runner.natoms_list=null",

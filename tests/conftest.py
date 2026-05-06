@@ -76,42 +76,51 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
+        "uma_models(*names): UMA model names to run this test against when "
+        "--uma-checkpoint is not set.",
+    )
+    config.addinivalue_line(
+        "markers",
         "checkpoint_specific: test asserts values calibrated to a specific "
         "UMA checkpoint and is skipped under --uma-checkpoint sweep mode.",
     )
 
 
-@pytest.fixture(scope="session")
-def uma_checkpoint(request):
+@pytest.fixture(scope="module")
+def uma_checkpoint(uma_model_name):
     """
     Name or path of the UMA checkpoint under test.
 
-    Resolves to the value of --uma-checkpoint when set, otherwise to
-    'uma-s-1p2' (the first key in pretrained_models.json). Accepts either
-    a registered model name or a filesystem path; both forms work with
-    pretrained_mlip.get_predict_unit().
+    Tests declare their default checkpoints with @pytest.mark.uma_models(...).
+    Passing --uma-checkpoint activates sweep mode and overrides those defaults.
     """
-    return request.config.getoption("--uma-checkpoint") or "uma-s-1p2"
-
-
-UMA_MODEL_NAMES_DEFAULT = ("uma-s-1p1", "uma-s-1p2")
+    return uma_model_name
 
 
 def pytest_generate_tests(metafunc):
     """
     Provide values for the `uma_model_name` parameter:
-    - default: every UMA-S checkpoint in UMA_MODEL_NAMES_DEFAULT
+    - default: checkpoints declared by @pytest.mark.uma_models(...)
     - --uma-checkpoint=...: just the override
 
-    Tests opt in by taking `uma_model_name` as an argument (no @parametrize
-    decorator needed). Tests that need a custom set should use a different
-    argname (e.g. `model_name`) and parametrize directly.
+    Tests opt in by taking `uma_model_name` or `uma_checkpoint` as an argument.
     """
     if "uma_model_name" not in metafunc.fixturenames:
         return
+
     override = metafunc.config.getoption("--uma-checkpoint")
-    values = [override] if override else list(UMA_MODEL_NAMES_DEFAULT)
-    metafunc.parametrize("uma_model_name", values)
+    if override is not None:
+        values = [override]
+    else:
+        marker = metafunc.definition.get_closest_marker("uma_models")
+        if marker is None or not marker.args:
+            raise RuntimeError(
+                f"{metafunc.function.__name__} uses uma_model_name/uma_checkpoint "
+                "but does not declare @pytest.mark.uma_models(...)."
+            )
+        values = list(marker.args)
+
+    metafunc.parametrize("uma_model_name", values, scope="module")
 
 
 def pytest_runtest_setup(item):
