@@ -108,7 +108,20 @@ def uma_checkpoint(request):
     This fixture is parametrized by pytest_generate_tests from the test's
     @pytest.mark.uma_models(...) declaration, or by --uma-checkpoint in sweep mode.
     """
-    return request.param
+    if hasattr(request, "param"):
+        return request.param
+
+    override = request.config.getoption("--uma-checkpoint")
+    if override is not None:
+        return override
+
+    marker = request.node.get_closest_marker("uma_models")
+    if marker is None or not marker.args:
+        raise RuntimeError(
+            f"{request.node.nodeid} uses uma_checkpoint but does not declare "
+            "@pytest.mark.uma_models(...)."
+        )
+    return marker.args[0]
 
 
 def pytest_generate_tests(metafunc):
