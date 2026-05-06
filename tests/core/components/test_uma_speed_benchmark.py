@@ -27,13 +27,16 @@ COMMON_ARGS = [
 ]
 
 
-def _checkpoint_override(uma_checkpoint: str) -> str:
+def _checkpoint_overrides(uma_checkpoint: str) -> list[str]:
     checkpoint_path = (
         uma_checkpoint
         if Path(uma_checkpoint).exists()
         else pretrained_checkpoint_path_from_name(uma_checkpoint)
     )
-    return f"runner.model_checkpoints.uma_s_1p2={checkpoint_path}"
+    return [
+        "~uma_s_1p2",
+        f"runner.model_checkpoints.uma_s_1p2={checkpoint_path}",
+    ]
 
 
 def test_uma_speed_benchmark_natoms_list(uma_checkpoint):
@@ -43,7 +46,7 @@ def test_uma_speed_benchmark_natoms_list(uma_checkpoint):
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            _checkpoint_override(uma_checkpoint),
+            *_checkpoint_overrides(uma_checkpoint),
             f"job.run_dir={run_root}",
             "runner.natoms_list=[20]",
         ]
@@ -60,7 +63,7 @@ def test_uma_speed_benchmark_input_system(water_xyz_file, uma_checkpoint):
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            _checkpoint_override(uma_checkpoint),
+            *_checkpoint_overrides(uma_checkpoint),
             f"job.run_dir={run_root}",
             input_system_override,
             "runner.natoms_list=null",
