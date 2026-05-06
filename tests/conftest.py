@@ -86,41 +86,31 @@ def pytest_configure(config):
     )
 
 
-@pytest.fixture(scope="module")
-def uma_checkpoint(uma_model_name):
-    """
-    Name or path of the UMA checkpoint under test.
+def _uma_model_values(metafunc) -> list[str]:
+    override = metafunc.config.getoption("--uma-checkpoint")
+    if override is not None:
+        return [override]
 
-    Tests declare their default checkpoints with @pytest.mark.uma_models(...).
-    Passing --uma-checkpoint activates sweep mode and overrides those defaults.
-    """
-    return uma_model_name
+    marker = metafunc.definition.get_closest_marker("uma_models")
+    if marker is None or not marker.args:
+        raise RuntimeError(
+            f"{metafunc.function.__name__} uses uma_model_name/uma_checkpoint "
+            "but does not declare @pytest.mark.uma_models(...)."
+        )
+    return list(marker.args)
 
 
 def pytest_generate_tests(metafunc):
     """
-    Provide values for the `uma_model_name` parameter:
+    Provide values for UMA checkpoint parameters:
     - default: checkpoints declared by @pytest.mark.uma_models(...)
     - --uma-checkpoint=...: just the override
 
     Tests opt in by taking `uma_model_name` or `uma_checkpoint` as an argument.
     """
-    if "uma_model_name" not in metafunc.fixturenames:
-        return
-
-    override = metafunc.config.getoption("--uma-checkpoint")
-    if override is not None:
-        values = [override]
-    else:
-        marker = metafunc.definition.get_closest_marker("uma_models")
-        if marker is None or not marker.args:
-            raise RuntimeError(
-                f"{metafunc.function.__name__} uses uma_model_name/uma_checkpoint "
-                "but does not declare @pytest.mark.uma_models(...)."
-            )
-        values = list(marker.args)
-
-    metafunc.parametrize("uma_model_name", values, scope="module")
+    for argname in ("uma_model_name", "uma_checkpoint"):
+        if argname in metafunc.fixturenames:
+            metafunc.parametrize(argname, _uma_model_values(metafunc), scope="module")
 
 
 def pytest_runtest_setup(item):
