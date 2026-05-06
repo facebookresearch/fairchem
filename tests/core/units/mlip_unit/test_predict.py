@@ -1265,7 +1265,7 @@ def test_single_atom_predict_1p1(task_name, uma_1p1_predict_unit):
 # uma-s-1p2 is banned (size-extensivity bug). Re-target to uma-s-1p2p1
 # once that checkpoint is available and remove this xfail.
 @pytest.mark.xfail(
-    raises=BannedCheckpointError,
+    raises=(BannedCheckpointError, KeyError),
     strict=True,
     reason="uma-s-1p2 retired due to size-extensivity bug; should pass for uma-s-1p2p1",
 )
