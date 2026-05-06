@@ -100,6 +100,17 @@ def _uma_model_values(metafunc) -> list[str]:
     return list(marker.args)
 
 
+@pytest.fixture(scope="module")
+def uma_checkpoint(request):
+    """
+    Name or path of the UMA checkpoint under test.
+
+    This fixture is parametrized by pytest_generate_tests from the test's
+    @pytest.mark.uma_models(...) declaration, or by --uma-checkpoint in sweep mode.
+    """
+    return request.param
+
+
 def pytest_generate_tests(metafunc):
     """
     Provide values for UMA checkpoint parameters:
@@ -108,9 +119,17 @@ def pytest_generate_tests(metafunc):
 
     Tests opt in by taking `uma_model_name` or `uma_checkpoint` as an argument.
     """
-    for argname in ("uma_model_name", "uma_checkpoint"):
-        if argname in metafunc.fixturenames:
-            metafunc.parametrize(argname, _uma_model_values(metafunc), scope="module")
+    if "uma_model_name" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "uma_model_name", _uma_model_values(metafunc), scope="module"
+        )
+    if "uma_checkpoint" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "uma_checkpoint",
+            _uma_model_values(metafunc),
+            indirect=True,
+            scope="module",
+        )
 
 
 def pytest_runtest_setup(item):
