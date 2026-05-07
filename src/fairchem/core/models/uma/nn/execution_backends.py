@@ -25,6 +25,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastCPUBackend",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
@@ -41,6 +42,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FAST_CPU = "umas_fast_cpu"
 
 
 class ExecutionBackend:
@@ -422,10 +424,51 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class UMASFastCPUBackend(ExecutionBackend):
+    """
+    CPU-optimized backend for UMA-S inference.
+
+    Hard invariants for this backend:
+        - activation_checkpointing must be False
+        - merge_mole must be True
+
+    The CPU calculator never benefits from activation checkpointing
+    (memory is plentiful, compute is the bottleneck) and the production
+    inference path always merges MOLE experts. Both invariants are also
+    required by every optimization stacked on top of this backend
+    (precomputed weight repacks, contiguous fused buffers, single-call
+    SO2 GEMMs, etc.) — silently allowing them off would invalidate the
+    fast path's correctness, not just its speed.
+
+    The first revision of this class is intentionally a thin shell over
+    the default :class:`ExecutionBackend` so that we can confirm
+    dispatch wiring and the perf-check harness end-to-end produce
+    identical numerics to ``execution_mode="general"`` before any real
+    optimization lands. Subsequent revisions will override the rotation
+    and scatter primitives with CPU-tuned implementations.
+    """
+
+    @staticmethod
+    def validate(
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
+    ) -> None:
+        if settings is None:
+            return
+        if settings.activation_checkpointing:
+            raise ValueError(
+                "UMASFastCPUBackend requires activation_checkpointing=False"
+            )
+        if not settings.merge_mole:
+            raise ValueError("UMASFastCPUBackend requires merge_mole=True")
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FAST_CPU: UMASFastCPUBackend,
 }
 
 
