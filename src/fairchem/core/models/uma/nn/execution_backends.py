@@ -469,14 +469,35 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
     ) -> torch.Tensor:
         # Fused gather + cat-free + bmm in a single OMP-parallel C++
         # kernel. Forward is bit-exact vs the default ExecutionBackend
-        # implementation; backward is the eager PyTorch formula. The
-        # kernel JIT-compiles on first call (~15s) into the torch
-        # extensions cache; subsequent process starts hit the cache.
+        # implementation; backward is also a fused C++ kernel pair
+        # (grad_x_full + grad_wigner). The extension JIT-compiles on
+        # first call (~15s) into the torch extensions cache; subsequent
+        # process starts hit the cache.
         from fairchem.core.models.uma.nn.cpu_kernels import (
             fused_node_to_edge_wigner_permute,
         )
 
         return fused_node_to_edge_wigner_permute(x_full, edge_index, wigner)
+
+    @staticmethod
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        # Symmetric C++ kernel for the edge->node Wigner-inverse rotate
+        # + scatter. Forward uses per-thread accumulator slabs;
+        # backward (grad_x_message + grad_wigner_inv) is per-edge with
+        # gather of grad_out at edge_index[1] — no scatter contention.
+        from fairchem.core.models.uma.nn.cpu_kernels import (
+            fused_permute_wigner_inv_edge_to_node,
+        )
+
+        return fused_permute_wigner_inv_edge_to_node(
+            x_message, wigner_inv, edge_index, num_nodes, node_offset
+        )
 
 
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {

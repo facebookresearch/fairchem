@@ -295,6 +295,224 @@ at::Tensor fused_node_to_edge_grad_wigner(
 }
 
 
+// permute_wigner_inv_edge_to_node:
+//   rotated[e, l, c] = sum_m wigner_inv[e, l, m] * x_message[e, m, c]
+//   output[dst[e] - node_offset, l, c] += rotated[e, l, c]
+//
+// Concurrent scatter into the same output node would race, so each
+// thread accumulates into its own [num_nodes, L, C] scratch slab.
+at::Tensor fused_permute_wigner_inv_edge_to_node(
+    at::Tensor x_message,     // [E, M, C]
+    at::Tensor wigner_inv,    // [E, L, M]
+    at::Tensor edge_index,    // [2, E]
+    int64_t num_nodes,
+    int64_t node_offset)
+{
+    TORCH_CHECK(x_message.dim() == 3 && wigner_inv.dim() == 3,
+                "x_message and wigner_inv must be 3D");
+    TORCH_CHECK(edge_index.dim() == 2 && edge_index.size(0) == 2,
+                "edge_index must be [2, E]");
+    TORCH_CHECK(x_message.is_contiguous() && wigner_inv.is_contiguous()
+                && edge_index.is_contiguous(),
+                "all inputs must be contiguous");
+    TORCH_CHECK(x_message.scalar_type() == at::kFloat
+                && wigner_inv.scalar_type() == at::kFloat,
+                "x_message and wigner_inv must be float32");
+    TORCH_CHECK(edge_index.scalar_type() == at::kLong,
+                "edge_index must be int64");
+
+    const int64_t E = x_message.size(0);
+    const int64_t M = x_message.size(1);
+    const int64_t C = x_message.size(2);
+    const int64_t L = wigner_inv.size(1);
+    TORCH_CHECK(wigner_inv.size(0) == E && wigner_inv.size(2) == M,
+                "wigner_inv must be [E, L, M] matching x_message");
+    TORCH_CHECK(edge_index.size(1) == E,
+                "edge_index E must equal x_message E");
+
+    auto out = at::zeros({num_nodes, L, C}, x_message.options());
+    if (E == 0) return out;
+
+    const float* X = x_message.data_ptr<float>();
+    const float* W = wigner_inv.data_ptr<float>();
+    const int64_t* EI = edge_index.data_ptr<int64_t>();
+    float* Y = out.data_ptr<float>();
+
+    const int64_t x_e_stride = M * C;
+    const int64_t w_e_stride = L * M;
+    const int64_t y_n_stride = L * C;
+
+    const int max_threads = omp_get_max_threads();
+    auto scratch = at::zeros({(int64_t)max_threads, num_nodes, L, C},
+                             x_message.options());
+    float* SB = scratch.data_ptr<float>();
+    const int64_t s_t_stride = num_nodes * L * C;
+
+    #pragma omp parallel
+    {
+        const int tid = omp_get_thread_num();
+        float* myout = SB + (int64_t)tid * s_t_stride;
+
+        #pragma omp for schedule(static)
+        for (int64_t e = 0; e < E; ++e) {
+            const int64_t dst = EI[E + e] - node_offset;
+            const float* Xe = X + e * x_e_stride;       // [M, C]
+            const float* We = W + e * w_e_stride;       // [L, M]
+            float* dst_row = myout + dst * y_n_stride;  // [L, C]
+
+            for (int64_t l = 0; l < L; ++l) {
+                const float* Wl = We + l * M;
+                float* drow = dst_row + l * C;
+                for (int64_t m = 0; m < M; ++m) {
+                    const float wlm = Wl[m];
+                    const float* Xm = Xe + m * C;
+                    #pragma GCC ivdep
+                    for (int64_t c = 0; c < C; ++c) {
+                        drow[c] += wlm * Xm[c];
+                    }
+                }
+            }
+        }
+    }
+
+    const int64_t total = num_nodes * L * C;
+    #pragma omp parallel for schedule(static)
+    for (int64_t i = 0; i < total; ++i) {
+        float s = 0.0f;
+        for (int t = 0; t < max_threads; ++t) {
+            s += SB[(int64_t)t * s_t_stride + i];
+        }
+        Y[i] = s;
+    }
+    return out;
+}
+
+// Backward of fused_permute_wigner_inv_edge_to_node, grad_x_message path.
+// grad_x_message[e, m, c] = sum_l wigner_inv[e, l, m] * grad_out[dst[e], l, c]
+// Per-edge GEMM, no scatter contention.
+at::Tensor fused_permute_wigner_inv_grad_x_message(
+    at::Tensor wigner_inv,    // [E, L, M]
+    at::Tensor edge_index,    // [2, E]
+    at::Tensor grad_out,      // [N, L, C]
+    int64_t node_offset)
+{
+    TORCH_CHECK(wigner_inv.dim() == 3 && grad_out.dim() == 3,
+                "wigner_inv and grad_out must be 3D");
+    TORCH_CHECK(wigner_inv.is_contiguous() && grad_out.is_contiguous()
+                && edge_index.is_contiguous(),
+                "all inputs must be contiguous");
+    TORCH_CHECK(wigner_inv.scalar_type() == at::kFloat
+                && grad_out.scalar_type() == at::kFloat,
+                "wigner_inv and grad_out must be float32");
+    TORCH_CHECK(edge_index.scalar_type() == at::kLong,
+                "edge_index must be int64");
+
+    const int64_t E = wigner_inv.size(0);
+    const int64_t L = wigner_inv.size(1);
+    const int64_t M = wigner_inv.size(2);
+    const int64_t C = grad_out.size(2);
+    TORCH_CHECK(grad_out.size(1) == L,
+                "grad_out L must match wigner_inv L");
+
+    auto out = at::empty({E, M, C}, wigner_inv.options());
+    if (E == 0) return out;
+
+    const float* G = grad_out.data_ptr<float>();
+    const float* W = wigner_inv.data_ptr<float>();
+    const int64_t* EI = edge_index.data_ptr<int64_t>();
+    float* Y = out.data_ptr<float>();
+
+    const int64_t g_n_stride = L * C;
+    const int64_t w_e_stride = L * M;
+    const int64_t y_e_stride = M * C;
+
+    #pragma omp parallel for schedule(static)
+    for (int64_t e = 0; e < E; ++e) {
+        const int64_t dst = EI[E + e] - node_offset;
+        const float* Gd = G + dst * g_n_stride;     // [L, C]
+        const float* We = W + e * w_e_stride;        // [L, M]
+        float* Ye = Y + e * y_e_stride;              // [M, C]
+
+        // grad_x_message[m, c] = sum_l W[l, m] * Gd[l, c]
+        for (int64_t m = 0; m < M; ++m) {
+            float* yrow = Ye + m * C;
+            // zero-init
+            for (int64_t c = 0; c < C; ++c) yrow[c] = 0.0f;
+            for (int64_t l = 0; l < L; ++l) {
+                const float wlm = We[l * M + m];
+                const float* gd_l = Gd + l * C;
+                #pragma GCC ivdep
+                for (int64_t c = 0; c < C; ++c) {
+                    yrow[c] += wlm * gd_l[c];
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// Backward of fused_permute_wigner_inv_edge_to_node, grad_wigner_inv path.
+// grad_wigner_inv[e, l, m] = sum_c grad_out[dst[e], l, c] * x_message[e, m, c]
+// Per-edge GEMM, no scatter contention.
+at::Tensor fused_permute_wigner_inv_grad_wigner(
+    at::Tensor x_message,     // [E, M, C]
+    at::Tensor edge_index,    // [2, E]
+    at::Tensor grad_out,      // [N, L, C]
+    int64_t node_offset)
+{
+    TORCH_CHECK(x_message.dim() == 3 && grad_out.dim() == 3,
+                "x_message and grad_out must be 3D");
+    TORCH_CHECK(x_message.is_contiguous() && grad_out.is_contiguous()
+                && edge_index.is_contiguous(),
+                "all inputs must be contiguous");
+    TORCH_CHECK(x_message.scalar_type() == at::kFloat
+                && grad_out.scalar_type() == at::kFloat,
+                "x_message and grad_out must be float32");
+    TORCH_CHECK(edge_index.scalar_type() == at::kLong,
+                "edge_index must be int64");
+
+    const int64_t E = x_message.size(0);
+    const int64_t M = x_message.size(1);
+    const int64_t C = x_message.size(2);
+    const int64_t L = grad_out.size(1);
+
+    auto out = at::empty({E, L, M}, x_message.options());
+    if (E == 0) return out;
+
+    const float* X = x_message.data_ptr<float>();
+    const float* G = grad_out.data_ptr<float>();
+    const int64_t* EI = edge_index.data_ptr<int64_t>();
+    float* Y = out.data_ptr<float>();
+
+    const int64_t x_e_stride = M * C;
+    const int64_t g_n_stride = L * C;
+    const int64_t y_e_stride = L * M;
+
+    #pragma omp parallel for schedule(static)
+    for (int64_t e = 0; e < E; ++e) {
+        const int64_t dst = EI[E + e] - node_offset;
+        const float* Xe = X + e * x_e_stride;      // [M, C]
+        const float* Gd = G + dst * g_n_stride;    // [L, C]
+        float* Ye = Y + e * y_e_stride;             // [L, M]
+
+        for (int64_t l = 0; l < L; ++l) {
+            const float* gd_l = Gd + l * C;
+            float* yrow = Ye + l * M;               // [M]
+            for (int64_t m = 0; m < M; ++m) {
+                const float* xm = Xe + m * C;
+                float acc = 0.0f;
+                #pragma GCC ivdep
+                for (int64_t c = 0; c < C; ++c) {
+                    acc += gd_l[c] * xm[c];
+                }
+                yrow[m] = acc;
+            }
+        }
+    }
+    return out;
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("fused_node_to_edge_wigner_permute",
           &fused_node_to_edge_wigner_permute,
@@ -305,6 +523,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("fused_node_to_edge_grad_wigner",
           &fused_node_to_edge_grad_wigner,
           "Backward: per-edge bmm(grad_out, x_message^T) split into halves");
+    m.def("fused_permute_wigner_inv_edge_to_node",
+          &fused_permute_wigner_inv_edge_to_node,
+          "Fused per-edge bmm + scatter for edge->node Wigner inverse rotation");
+    m.def("fused_permute_wigner_inv_grad_x_message",
+          &fused_permute_wigner_inv_grad_x_message,
+          "Backward: per-edge wigner_inv^T @ grad_out[dst]");
+    m.def("fused_permute_wigner_inv_grad_wigner",
+          &fused_permute_wigner_inv_grad_wigner,
+          "Backward: per-edge grad_out[dst] @ x_message^T");
 }
 """
 
@@ -402,3 +629,69 @@ def fused_node_to_edge_wigner_permute(
     wigner: torch.Tensor,
 ) -> torch.Tensor:
     return _FusedNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
+
+
+class _FusedPermuteWignerInvEdgeToNode(torch.autograd.Function):
+    """
+    autograd.Function: C++ forward + C++ backward for the symmetric
+    edge->node Wigner inverse rotation + scatter.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int,
+    ) -> torch.Tensor:
+        kernels = _build()
+        x_message_c = x_message.contiguous()
+        wigner_inv_c = wigner_inv.contiguous()
+        edge_index_c = edge_index.contiguous()
+        ctx.save_for_backward(x_message_c, wigner_inv_c, edge_index_c)
+        ctx.node_offset = int(node_offset)
+        return kernels.fused_permute_wigner_inv_edge_to_node(
+            x_message_c,
+            wigner_inv_c,
+            edge_index_c,
+            int(num_nodes),
+            int(node_offset),
+        )
+
+    @staticmethod
+    def backward(ctx, grad_out: torch.Tensor):
+        x_message, wigner_inv, edge_index = ctx.saved_tensors
+        node_offset = ctx.node_offset
+        kernels = _build()
+
+        need_x = ctx.needs_input_grad[0]
+        need_w = ctx.needs_input_grad[1]
+
+        grad_x_message: Optional[torch.Tensor] = None
+        grad_wigner_inv: Optional[torch.Tensor] = None
+
+        grad_out_c = grad_out.contiguous()
+        if need_x:
+            grad_x_message = kernels.fused_permute_wigner_inv_grad_x_message(
+                wigner_inv, edge_index, grad_out_c, node_offset
+            )
+        if need_w:
+            grad_wigner_inv = kernels.fused_permute_wigner_inv_grad_wigner(
+                x_message, edge_index, grad_out_c, node_offset
+            )
+
+        return grad_x_message, grad_wigner_inv, None, None, None
+
+
+def fused_permute_wigner_inv_edge_to_node(
+    x_message: torch.Tensor,
+    wigner_inv: torch.Tensor,
+    edge_index: torch.Tensor,
+    num_nodes: int,
+    node_offset: int = 0,
+) -> torch.Tensor:
+    return _FusedPermuteWignerInvEdgeToNode.apply(
+        x_message, wigner_inv, edge_index, num_nodes, node_offset
+    )
