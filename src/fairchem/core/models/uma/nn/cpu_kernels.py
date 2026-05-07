@@ -546,11 +546,12 @@ def _build() -> object:
         from torch.utils import cpp_extension
 
         _KERNELS_BOX[0] = cpp_extension.load_inline(
-            name="fairchem_uma_cpu_kernels",
+            name="fairchem_uma_cpu_kernels_v2",
             cpp_sources=[_CPP_SRC],
             extra_cflags=[
                 "-O3",
                 "-march=native",
+                "-mprefer-vector-width=512",
                 "-fopenmp",
                 "-ffast-math",
                 "-funroll-loops",
