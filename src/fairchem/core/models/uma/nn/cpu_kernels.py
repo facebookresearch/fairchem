@@ -9,13 +9,28 @@ JIT-compiled C++ kernels for UMASFastCPUBackend.
 The C++ source is built lazily on first use via
 torch.utils.cpp_extension.load_inline (ninja-backed). Output is cached
 under ~/.cache/torch_extensions, so subsequent process starts hit cache
-instantly. The first build pays ~15s of compile time which lands in the
-backend's lazy_init / first prepare_for_inference call.
+instantly. The first build pays ~15 s of compile time which lands in
+the backend's lazy_init / first prepare_for_inference call.
 
-Only forward kernels live in C++. Backward stays in PyTorch eager so
-autograd correctness mirrors the default ExecutionBackend exactly; the
-forward path is what dominates per-iteration wall time, and the backward
-of an inverse-rotation + scatter is already well-served by ATen ops.
+The extension exposes forward + backward kernels for both backend
+hooks that dominated CPU self-time on the original profile:
+
+    fused_node_to_edge_wigner_permute            (exp8  forward)
+    fused_node_to_edge_grad_x_full               (exp10 backward)
+    fused_node_to_edge_grad_wigner               (exp10 backward)
+    fused_permute_wigner_inv_edge_to_node        (exp11 forward)
+    fused_permute_wigner_inv_grad_x_message      (exp11 backward)
+    fused_permute_wigner_inv_grad_wigner         (exp11 backward)
+
+All inner loops auto-vectorize to AVX-512 fmadd via -O3 -march=native
+-mprefer-vector-width=512 (exp13 — GCC 11.5 was emitting %ymm on Zen 4
+without the explicit prefer-vector-width hint). Outer parallelism is
+OMP across edges. Scatter kernels use per-thread accumulator slabs
+followed by a parallel reduction to avoid concurrent-write races.
+
+Each kernel's forward is bit-exact (or within fp32 reduction-order
+ULPs) of the corresponding ExecutionBackend implementation; gradients
+match within ~1e-5 of the eager backward.
 """
 
 from __future__ import annotations
