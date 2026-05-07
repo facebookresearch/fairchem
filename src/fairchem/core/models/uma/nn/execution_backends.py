@@ -461,6 +461,23 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
         if not settings.merge_mole:
             raise ValueError("UMASFastCPUBackend requires merge_mole=True")
 
+    @staticmethod
+    def node_to_edge_wigner_permute(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        # Fused gather + cat-free + bmm in a single OMP-parallel C++
+        # kernel. Forward is bit-exact vs the default ExecutionBackend
+        # implementation; backward is the eager PyTorch formula. The
+        # kernel JIT-compiles on first call (~15s) into the torch
+        # extensions cache; subsequent process starts hit the cache.
+        from fairchem.core.models.uma.nn.cpu_kernels import (
+            fused_node_to_edge_wigner_permute,
+        )
+
+        return fused_node_to_edge_wigner_permute(x_full, edge_index, wigner)
+
 
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
