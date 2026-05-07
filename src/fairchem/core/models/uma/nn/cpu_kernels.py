@@ -195,21 +195,32 @@ class _FusedNodeToEdgeWignerPermute(torch.autograd.Function):
         grad_x_full: Optional[torch.Tensor] = None
         grad_wigner: Optional[torch.Tensor] = None
 
-        # grad x_message = wigner^T @ grad_out
-        # grad x_src = grad_x_message[..., :C]
-        # grad x_tgt = grad_x_message[..., C:]
+        # Both branches deliberately avoid re-materializing the
+        # [E, L, 2C] cat that the eager forward built. The bmm splits
+        # below have identical FLOP counts to the all-at-once bmms but
+        # skip the [E, L, 2C] / [E, M, 2C] intermediate allocations,
+        # which is the whole point of the C++ forward kernel — we don't
+        # want to give those savings back in backward.
         if need_x:
-            grad_message = torch.bmm(wigner.transpose(1, 2), grad_out)
+            wigner_T = wigner.transpose(1, 2)  # [E, L, M]
+            # grad_x_src = wigner^T @ grad_out[..., :C]   -> [E, L, C]
+            # grad_x_tgt = wigner^T @ grad_out[..., C:]   -> [E, L, C]
+            grad_src = torch.bmm(wigner_T, grad_out[..., :C].contiguous())
+            grad_tgt = torch.bmm(wigner_T, grad_out[..., C:].contiguous())
             grad_x_full = torch.zeros_like(x_full)
-            grad_x_full.index_add_(0, edge_index[0], grad_message[..., :C])
-            grad_x_full.index_add_(0, edge_index[1], grad_message[..., C:])
+            grad_x_full.index_add_(0, edge_index[0], grad_src)
+            grad_x_full.index_add_(0, edge_index[1], grad_tgt)
 
-        # grad wigner = grad_out @ x_message^T
         if need_w:
-            x_src = x_full.index_select(0, edge_index[0])
-            x_tgt = x_full.index_select(0, edge_index[1])
-            x_message = torch.cat([x_src, x_tgt], dim=2)
-            grad_wigner = torch.bmm(grad_out, x_message.transpose(1, 2))
+            # grad_wigner = grad_out_src @ x_src^T + grad_out_tgt @ x_tgt^T
+            x_src = x_full.index_select(0, edge_index[0])  # [E, L, C]
+            x_tgt = x_full.index_select(0, edge_index[1])  # [E, L, C]
+            grad_wigner = torch.bmm(
+                grad_out[..., :C].contiguous(), x_src.transpose(1, 2)
+            )
+            grad_wigner = grad_wigner.add_(
+                torch.bmm(grad_out[..., C:].contiguous(), x_tgt.transpose(1, 2))
+            )
 
         return grad_x_full, None, grad_wigner
 
