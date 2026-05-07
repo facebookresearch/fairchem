@@ -64,7 +64,11 @@ class BatchPredictServerMixin:
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
 
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
-        return getattr(self.predict_unit, attribute_name)
+        # Move the returned value to CPU so that callers running on
+        # CPU-only Ray workers can deserialize it without requiring CUDA
+        # (e.g. ``atom_refs`` typically contains tensors stored on the
+        # server's device).
+        return _to_cpu(getattr(self.predict_unit, attribute_name))
 
     def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
