@@ -61,6 +61,7 @@ def test_runner_catches_oom(tmp_path):
     Verify OOM is caught and non-OOM errors are re-raised.
     """
     runner = PerfCheckRunner(checkpoint="x", device="cpu")
+    num_systems = len(runner.systems)
 
     from omegaconf import OmegaConf
 
@@ -76,7 +77,7 @@ def test_runner_catches_oom(tmp_path):
 
     def mock_run(checkpoint, system, inference_settings, **kw):
         call_count["n"] += 1
-        if call_count["n"] <= 3:  # baseline calls
+        if call_count["n"] <= num_systems:  # baseline calls
             return InferenceResult(
                 energy=-10.0, forces=np.zeros((len(system.atoms), 3))
             )
@@ -100,7 +101,7 @@ def test_runner_catches_oom(tmp_path):
 
     def mock_run_bad(checkpoint, system, inference_settings, **kw):
         call_count["n"] += 1
-        if call_count["n"] <= 3:
+        if call_count["n"] <= num_systems:
             return InferenceResult(
                 energy=-10.0, forces=np.zeros((len(system.atoms), 3))
             )
@@ -168,8 +169,8 @@ def test_benchmark_runner_end_to_end(tmp_path):
 
     result = runner.run()
 
-    # All 3 default systems benchmarked
-    for name in ("small_molecule", "medium_bulk", "large_bulk"):
+    # All 4 default systems benchmarked
+    for name in ("small_molecule", "medium_bulk", "large_bulk", "slab_adsorbate"):
         assert name in result["baseline"]
         assert name in result["results"]
         assert result["results"][name]["force_mae"] < 0.01
