@@ -424,7 +424,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
-class UMASFastCPUBackend(ExecutionBackend):
+class UMASFastCPUBackend(UMASFastPytorchBackend):
     """
     CPU-optimized backend for UMA-S inference.
 
@@ -440,12 +440,13 @@ class UMASFastCPUBackend(ExecutionBackend):
     SO2 GEMMs, etc.) — silently allowing them off would invalidate the
     fast path's correctness, not just its speed.
 
-    The first revision of this class is intentionally a thin shell over
-    the default :class:`ExecutionBackend` so that we can confirm
-    dispatch wiring and the perf-check harness end-to-end produce
-    identical numerics to ``execution_mode="general"`` before any real
-    optimization lands. Subsequent revisions will override the rotation
-    and scatter primitives with CPU-tuned implementations.
+    Inherits :meth:`UMASFastPytorchBackend.prepare_model_for_inference`
+    (SO2 block-diagonal GEMM swap + ``UnifiedRadialMLP`` batched radials)
+    and :meth:`UMASFastPytorchBackend.get_layer_radial_emb`. Rotation
+    and scatter primitives still come from :class:`ExecutionBackend`'s
+    default PyTorch implementations (the Triton kernels in
+    :class:`UMASFastGPUBackend` are GPU-only). Subsequent revisions will
+    override these primitives with CPU-tuned implementations.
     """
 
     @staticmethod
@@ -454,12 +455,9 @@ class UMASFastCPUBackend(ExecutionBackend):
         mmax: int,
         settings: InferenceSettings,
     ) -> None:
+        UMASFastPytorchBackend.validate(lmax, mmax, settings)
         if settings is None:
             return
-        if settings.activation_checkpointing:
-            raise ValueError(
-                "UMASFastCPUBackend requires activation_checkpointing=False"
-            )
         if not settings.merge_mole:
             raise ValueError("UMASFastCPUBackend requires merge_mole=True")
 
