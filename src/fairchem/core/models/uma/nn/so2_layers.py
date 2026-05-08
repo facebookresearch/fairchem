@@ -21,6 +21,16 @@ if TYPE_CHECKING:
     from fairchem.core.models.uma.common.so3 import CoefficientMapping
 
 
+# Edge-count threshold for the fused SO2 conv fast path. Empirical:
+# small_molecule (E=3202) and slab_adsorbate (E=2190) regressed -10..-12%
+# under the fused path because the autograd.Function frame overhead
+# exceeded the cat-allocation savings; medium_bulk (E=9998) and
+# large_bulk (E=54000) gained +8% / +3%. Setting the gate at 5000 keeps
+# the small systems on the eager path and the larger ones on the fused
+# path. Tunable per-deployment if hardware/profile shifts.
+_FUSED_E_THRESHOLD: int = 5000
+
+
 class _FusedConv1Func(torch.autograd.Function):
     """
     Fused autograd.Function for SO2_Conv1_WithRadialBlock.forward (UMA-S
@@ -598,7 +608,19 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         # Fast path: UMA-S lmax = mmax = 2 — fused autograd.Function with
         # manual backward, writes per-m results directly into pre-allocated
         # output buffers (skips the trailing torch.cat allocation).
-        if self.lmax == 2 and self.mmax == 2:
+        # Fused fast path is gated on E >= _FUSED_E_THRESHOLD. The fused
+        # autograd.Function trades ~5 ATen op dispatches per conv for 1
+        # autograd.Function dispatch (saving ~200 us per call) plus the
+        # cat allocation, but pays a Python frame setup cost (~1 ms per
+        # call). The break-even is around E ~ 4000-6000 on this Zen 4
+        # box (at 16 OMP threads): below that, the per-call overhead
+        # exceeds the cat savings, and we lose ~10% on small systems.
+        # Above that, we win up to ~8% on medium-edge-count systems.
+        if (
+            self.lmax == 2
+            and self.mmax == 2
+            and x.shape[0] >= _FUSED_E_THRESHOLD
+        ):
             E = x.shape[0]
             if (
                 self._out_buf is None
@@ -730,7 +752,19 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
         Returns:
             Output features [E, coeffs, m_output_channels]
         """
-        if self.lmax == 2 and self.mmax == 2:
+        # Fused fast path is gated on E >= _FUSED_E_THRESHOLD. The fused
+        # autograd.Function trades ~5 ATen op dispatches per conv for 1
+        # autograd.Function dispatch (saving ~200 us per call) plus the
+        # cat allocation, but pays a Python frame setup cost (~1 ms per
+        # call). The break-even is around E ~ 4000-6000 on this Zen 4
+        # box (at 16 OMP threads): below that, the per-call overhead
+        # exceeds the cat savings, and we lose ~10% on small systems.
+        # Above that, we win up to ~8% on medium-edge-count systems.
+        if (
+            self.lmax == 2
+            and self.mmax == 2
+            and x.shape[0] >= _FUSED_E_THRESHOLD
+        ):
             E = x.shape[0]
             if (
                 self._out_buf is None
