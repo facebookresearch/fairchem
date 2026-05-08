@@ -21,6 +21,342 @@ if TYPE_CHECKING:
     from fairchem.core.models.uma.common.so3 import CoefficientMapping
 
 
+class _FusedConv1Func(torch.autograd.Function):
+    """
+    Fused autograd.Function for SO2_Conv1_WithRadialBlock.forward (UMA-S
+    lmax = mmax = 2). Equivalent computation to the eager forward but
+    writes per-m results directly into a caller-owned pre-allocated
+    output buffer, skipping the trailing torch.cat allocation. Backward
+    is derived manually so the cat reshuffle does not reappear there.
+
+    Same precision (fp32 throughout) and bit-exact forward + gradients
+    vs. eager (verified on a synthetic prototype before wiring in).
+
+    Hardcoded for mmax = 2: exactly two block-GEMM weights (W_block_1
+    for m=1, W_block_2 for m=2). If lmax/mmax ever change, this kernel
+    needs to be regenerated for the new m-loop count.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        x_edge: torch.Tensor,
+        fc_m0_w: torch.Tensor,
+        fc_m0_b: torch.Tensor,
+        W_block_1: torch.Tensor,
+        W_block_2: torch.Tensor,
+        out_buf: torch.Tensor,
+        gating_buf: torch.Tensor,
+        m_split_sizes: tuple,
+        edge_split_sizes: tuple,
+        lmax: int,
+        m_out: int,
+        extra: int,
+    ):
+        E = x.shape[0]
+        m0_size = m_split_sizes[0]
+        num_l_1 = lmax  # = lmax - 1 + 1
+        num_l_2 = lmax - 1  # = lmax - 2 + 1
+
+        with torch.no_grad():
+            x_edge_0 = x_edge.narrow(1, 0, edge_split_sizes[0])
+            x_edge_1 = x_edge.narrow(1, edge_split_sizes[0], edge_split_sizes[1])
+            x_edge_2 = x_edge.narrow(
+                1,
+                edge_split_sizes[0] + edge_split_sizes[1],
+                edge_split_sizes[2],
+            )
+
+            # m=0: radial mul + Linear; split out gating
+            x_0_flat = x.narrow(1, 0, m0_size).reshape(E, -1).contiguous()
+            x_0_radial = x_0_flat * x_edge_0
+            z_0 = torch.addmm(fc_m0_b, x_0_radial, fc_m0_w.T)
+            gating_buf.copy_(z_0[:, :extra])
+            out_buf[:, 0:m0_size, :].copy_(
+                z_0[:, extra:].view(E, m0_size, m_out)
+            )
+
+            # m=1: radial mul + block GEMM
+            offset_1 = m0_size
+            x_1_view = x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, 2, -1)
+            x_1_scaled = x_1_view * x_edge_1.unsqueeze(1)
+            x_1_cat = x_1_scaled.reshape(E, -1).contiguous()
+            out_cat_1 = x_1_cat @ W_block_1.T
+            out_buf[:, offset_1 : offset_1 + num_l_1, :].copy_(
+                out_cat_1[:, : num_l_1 * m_out].view(E, num_l_1, m_out)
+            )
+            out_buf[:, offset_1 + num_l_1 : offset_1 + 2 * num_l_1, :].copy_(
+                out_cat_1[:, num_l_1 * m_out :].view(E, num_l_1, m_out)
+            )
+
+            # m=2
+            offset_2 = offset_1 + m_split_sizes[1]
+            x_2_view = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, 2, -1)
+            x_2_scaled = x_2_view * x_edge_2.unsqueeze(1)
+            x_2_cat = x_2_scaled.reshape(E, -1).contiguous()
+            out_cat_2 = x_2_cat @ W_block_2.T
+            out_buf[:, offset_2 : offset_2 + num_l_2, :].copy_(
+                out_cat_2[:, : num_l_2 * m_out].view(E, num_l_2, m_out)
+            )
+            out_buf[:, offset_2 + num_l_2 : offset_2 + 2 * num_l_2, :].copy_(
+                out_cat_2[:, num_l_2 * m_out :].view(E, num_l_2, m_out)
+            )
+
+        ctx.save_for_backward(
+            x, x_edge, fc_m0_w, W_block_1, W_block_2,
+            x_0_radial, x_1_cat, x_2_cat,
+        )
+        ctx.m_split_sizes = m_split_sizes
+        ctx.edge_split_sizes = edge_split_sizes
+        ctx.lmax = lmax
+        ctx.m_out = m_out
+        ctx.extra = extra
+        return out_buf, gating_buf
+
+    @staticmethod
+    def backward(ctx, grad_out, grad_gating):
+        (
+            x, x_edge, fc_m0_w, W_block_1, W_block_2,
+            x_0_radial, x_1_cat, x_2_cat,
+        ) = ctx.saved_tensors
+        m_split_sizes = ctx.m_split_sizes
+        edge_split_sizes = ctx.edge_split_sizes
+        lmax = ctx.lmax
+        E = x.shape[0]
+        C = x.shape[2]
+        m0_size = m_split_sizes[0]
+        num_l_1 = lmax
+        num_l_2 = lmax - 1
+
+        need_x = ctx.needs_input_grad[0]
+        need_x_edge = ctx.needs_input_grad[1]
+        need_w0 = ctx.needs_input_grad[2]
+        need_b0 = ctx.needs_input_grad[3]
+        need_w1 = ctx.needs_input_grad[4]
+        need_w2 = ctx.needs_input_grad[5]
+
+        grad_x = torch.empty_like(x) if need_x else None
+        grad_x_edge = torch.empty_like(x_edge) if need_x_edge else None
+        grad_fc_m0_w = grad_fc_m0_b = None
+        grad_W_block_1 = grad_W_block_2 = None
+
+        # ---- m=0 backward ----
+        grad_z_0_main = grad_out[:, 0:m0_size, :].reshape(E, -1)
+        grad_z_0 = torch.cat([grad_gating, grad_z_0_main], dim=1)
+
+        if need_x or need_x_edge:
+            grad_x_0_radial = grad_z_0 @ fc_m0_w
+        if need_w0:
+            grad_fc_m0_w = grad_z_0.T @ x_0_radial
+        if need_b0:
+            grad_fc_m0_b = grad_z_0.sum(0)
+
+        if need_x or need_x_edge:
+            x_edge_0 = x_edge.narrow(1, 0, edge_split_sizes[0])
+        if need_x:
+            grad_x_0_flat = grad_x_0_radial * x_edge_0
+            grad_x[:, 0:m0_size, :].copy_(grad_x_0_flat.view(E, m0_size, C))
+        if need_x_edge:
+            x_0_flat = x.narrow(1, 0, m0_size).reshape(E, -1)
+            grad_x_edge[:, 0 : edge_split_sizes[0]].copy_(
+                grad_x_0_radial * x_0_flat
+            )
+
+        # ---- m=1 backward ----
+        offset_1 = m0_size
+        grad_real_1 = grad_out[:, offset_1 : offset_1 + num_l_1, :].reshape(E, -1)
+        grad_imag_1 = grad_out[
+            :, offset_1 + num_l_1 : offset_1 + 2 * num_l_1, :
+        ].reshape(E, -1)
+        grad_out_cat_1 = torch.cat([grad_real_1, grad_imag_1], dim=1)
+
+        if need_x or need_x_edge:
+            grad_x_1_cat = grad_out_cat_1 @ W_block_1
+            grad_x_1_scaled = grad_x_1_cat.view(E, 2, -1)
+        if need_w1:
+            grad_W_block_1 = grad_out_cat_1.T @ x_1_cat
+
+        if need_x or need_x_edge:
+            x_edge_1 = x_edge.narrow(1, edge_split_sizes[0], edge_split_sizes[1])
+        if need_x:
+            grad_x_1_view = grad_x_1_scaled * x_edge_1.unsqueeze(1)
+            grad_x[:, offset_1 : offset_1 + m_split_sizes[1], :].copy_(
+                grad_x_1_view.view(E, m_split_sizes[1], C)
+            )
+        if need_x_edge:
+            x_1_view = x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, 2, -1)
+            grad_x_edge[
+                :, edge_split_sizes[0] : edge_split_sizes[0] + edge_split_sizes[1]
+            ].copy_((grad_x_1_scaled * x_1_view).sum(dim=1))
+
+        # ---- m=2 backward ----
+        offset_2 = offset_1 + m_split_sizes[1]
+        grad_real_2 = grad_out[:, offset_2 : offset_2 + num_l_2, :].reshape(E, -1)
+        grad_imag_2 = grad_out[
+            :, offset_2 + num_l_2 : offset_2 + 2 * num_l_2, :
+        ].reshape(E, -1)
+        grad_out_cat_2 = torch.cat([grad_real_2, grad_imag_2], dim=1)
+
+        if need_x or need_x_edge:
+            grad_x_2_cat = grad_out_cat_2 @ W_block_2
+            grad_x_2_scaled = grad_x_2_cat.view(E, 2, -1)
+        if need_w2:
+            grad_W_block_2 = grad_out_cat_2.T @ x_2_cat
+
+        if need_x or need_x_edge:
+            x_edge_2 = x_edge.narrow(
+                1,
+                edge_split_sizes[0] + edge_split_sizes[1],
+                edge_split_sizes[2],
+            )
+        if need_x:
+            grad_x_2_view = grad_x_2_scaled * x_edge_2.unsqueeze(1)
+            grad_x[:, offset_2 : offset_2 + m_split_sizes[2], :].copy_(
+                grad_x_2_view.view(E, m_split_sizes[2], C)
+            )
+        if need_x_edge:
+            x_2_view = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, 2, -1)
+            grad_x_edge[
+                :, edge_split_sizes[0] + edge_split_sizes[1] :
+            ].copy_((grad_x_2_scaled * x_2_view).sum(dim=1))
+
+        return (
+            grad_x, grad_x_edge,
+            grad_fc_m0_w, grad_fc_m0_b,
+            grad_W_block_1, grad_W_block_2,
+            None, None,  # buffers (no grad)
+            None, None, None, None, None,  # static metadata
+        )
+
+
+class _FusedConv2Func(torch.autograd.Function):
+    """
+    Same pattern as _FusedConv1Func but for SO2_Conv2_InternalBlock — no
+    radial multiplication, no gating split. Shorter input list.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        fc_m0_w: torch.Tensor,
+        fc_m0_b: torch.Tensor,
+        W_block_1: torch.Tensor,
+        W_block_2: torch.Tensor,
+        out_buf: torch.Tensor,
+        m_split_sizes: tuple,
+        lmax: int,
+        m_out: int,
+    ):
+        E = x.shape[0]
+        m0_size = m_split_sizes[0]
+        num_l_1 = lmax
+        num_l_2 = lmax - 1
+
+        with torch.no_grad():
+            x_0 = x.narrow(1, 0, m0_size).reshape(E, -1).contiguous()
+            z_0 = torch.addmm(fc_m0_b, x_0, fc_m0_w.T)
+            out_buf[:, 0:m0_size, :].copy_(z_0.view(E, m0_size, m_out))
+
+            offset_1 = m0_size
+            x_1_cat = x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, -1).contiguous()
+            out_cat_1 = x_1_cat @ W_block_1.T
+            out_buf[:, offset_1 : offset_1 + num_l_1, :].copy_(
+                out_cat_1[:, : num_l_1 * m_out].view(E, num_l_1, m_out)
+            )
+            out_buf[:, offset_1 + num_l_1 : offset_1 + 2 * num_l_1, :].copy_(
+                out_cat_1[:, num_l_1 * m_out :].view(E, num_l_1, m_out)
+            )
+
+            offset_2 = offset_1 + m_split_sizes[1]
+            x_2_cat = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, -1).contiguous()
+            out_cat_2 = x_2_cat @ W_block_2.T
+            out_buf[:, offset_2 : offset_2 + num_l_2, :].copy_(
+                out_cat_2[:, : num_l_2 * m_out].view(E, num_l_2, m_out)
+            )
+            out_buf[:, offset_2 + num_l_2 : offset_2 + 2 * num_l_2, :].copy_(
+                out_cat_2[:, num_l_2 * m_out :].view(E, num_l_2, m_out)
+            )
+
+        ctx.save_for_backward(x, fc_m0_w, W_block_1, W_block_2)
+        ctx.m_split_sizes = m_split_sizes
+        ctx.lmax = lmax
+        ctx.m_out = m_out
+        return out_buf
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        x, fc_m0_w, W_block_1, W_block_2 = ctx.saved_tensors
+        m_split_sizes = ctx.m_split_sizes
+        lmax = ctx.lmax
+        E = x.shape[0]
+        C = x.shape[2]
+        m0_size = m_split_sizes[0]
+        num_l_1 = lmax
+        num_l_2 = lmax - 1
+
+        need_x = ctx.needs_input_grad[0]
+        need_w0 = ctx.needs_input_grad[1]
+        need_b0 = ctx.needs_input_grad[2]
+        need_w1 = ctx.needs_input_grad[3]
+        need_w2 = ctx.needs_input_grad[4]
+
+        grad_x = torch.empty_like(x) if need_x else None
+        grad_fc_m0_w = grad_fc_m0_b = None
+        grad_W_block_1 = grad_W_block_2 = None
+
+        # m=0
+        grad_z_0 = grad_out[:, 0:m0_size, :].reshape(E, -1)
+        if need_x:
+            grad_x_0_flat = grad_z_0 @ fc_m0_w
+            grad_x[:, 0:m0_size, :].copy_(grad_x_0_flat.view(E, m0_size, C))
+        if need_w0:
+            grad_fc_m0_w = grad_z_0.T @ x.narrow(1, 0, m0_size).reshape(E, -1)
+        if need_b0:
+            grad_fc_m0_b = grad_z_0.sum(0)
+
+        # m=1
+        offset_1 = m0_size
+        grad_real_1 = grad_out[:, offset_1 : offset_1 + num_l_1, :].reshape(E, -1)
+        grad_imag_1 = grad_out[
+            :, offset_1 + num_l_1 : offset_1 + 2 * num_l_1, :
+        ].reshape(E, -1)
+        grad_out_cat_1 = torch.cat([grad_real_1, grad_imag_1], dim=1)
+        if need_x:
+            grad_x_1_cat = grad_out_cat_1 @ W_block_1
+            grad_x[:, offset_1 : offset_1 + m_split_sizes[1], :].copy_(
+                grad_x_1_cat.view(E, m_split_sizes[1], C)
+            )
+        if need_w1:
+            x_1_cat = x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, -1)
+            grad_W_block_1 = grad_out_cat_1.T @ x_1_cat
+
+        # m=2
+        offset_2 = offset_1 + m_split_sizes[1]
+        grad_real_2 = grad_out[:, offset_2 : offset_2 + num_l_2, :].reshape(E, -1)
+        grad_imag_2 = grad_out[
+            :, offset_2 + num_l_2 : offset_2 + 2 * num_l_2, :
+        ].reshape(E, -1)
+        grad_out_cat_2 = torch.cat([grad_real_2, grad_imag_2], dim=1)
+        if need_x:
+            grad_x_2_cat = grad_out_cat_2 @ W_block_2
+            grad_x[:, offset_2 : offset_2 + m_split_sizes[2], :].copy_(
+                grad_x_2_cat.view(E, m_split_sizes[2], C)
+            )
+        if need_w2:
+            x_2_cat = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, -1)
+            grad_W_block_2 = grad_out_cat_2.T @ x_2_cat
+
+        return (
+            grad_x,
+            grad_fc_m0_w, grad_fc_m0_b,
+            grad_W_block_1, grad_W_block_2,
+            None,  # buffer
+            None, None, None,  # static metadata
+        )
+
+
 class SO2_m_Conv(torch.nn.Module):
     """
     SO(2) Conv: Perform an SO(2) convolution on features corresponding to +- m
@@ -146,6 +482,11 @@ class SO2_m_Conv_Block(torch.nn.Module):
             dim=0,
         ).contiguous()
 
+    def _maybe_build_w_block(self) -> None:
+        """No-op if _w_block is already materialized; otherwise builds it."""
+        if self._w_block is None:
+            self._build_w_block()
+
     def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass using block matrix GEMM.
@@ -232,6 +573,11 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         self.edge_split_sizes = [self.fc_m0.in_features] + [
             mod.fc.in_features for mod in self.so2_m_conv
         ]
+        # Cached output buffers reused across the 50 timed iters.
+        # Re-allocated only when E or dtype/device changes.
+        self._out_buf: torch.Tensor | None = None
+        self._gating_buf: torch.Tensor | None = None
+        self._total_coeffs = sum(self.m_split_sizes)
 
     def forward(
         self,
@@ -249,11 +595,53 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
             (output, gating): output [E, coeffs, m_output_channels],
                 gating [E, extra_m0_output_channels]
         """
+        # Fast path: UMA-S lmax = mmax = 2 — fused autograd.Function with
+        # manual backward, writes per-m results directly into pre-allocated
+        # output buffers (skips the trailing torch.cat allocation).
+        if self.lmax == 2 and self.mmax == 2:
+            E = x.shape[0]
+            if (
+                self._out_buf is None
+                or self._out_buf.shape[0] != E
+                or self._out_buf.dtype != x.dtype
+                or self._out_buf.device != x.device
+            ):
+                self._out_buf = torch.empty(
+                    E,
+                    self._total_coeffs,
+                    self.m_output_channels,
+                    dtype=x.dtype,
+                    device=x.device,
+                )
+                self._gating_buf = torch.empty(
+                    E,
+                    self.extra_m0_output_channels,
+                    dtype=x.dtype,
+                    device=x.device,
+                )
+            self.so2_m_conv[0]._maybe_build_w_block()
+            self.so2_m_conv[1]._maybe_build_w_block()
+            return _FusedConv1Func.apply(
+                x,
+                x_edge,
+                self.fc_m0.weight,
+                self.fc_m0.bias,
+                self.so2_m_conv[0]._w_block,
+                self.so2_m_conv[1]._w_block,
+                self._out_buf,
+                self._gating_buf,
+                tuple(self.m_split_sizes),
+                tuple(self.edge_split_sizes),
+                self.lmax,
+                self.m_output_channels,
+                self.extra_m0_output_channels,
+            )
+
+        # Generic fallback: original eager forward (for other lmax/mmax).
         x_edge_by_m = x_edge.split(self.edge_split_sizes, dim=1)
         x_by_m = x.split(self.m_split_sizes, dim=1)
         num_edges = x.shape[0]
 
-        # m=0: apply radial, linear, split gating
         x_0 = x_by_m[0].view(num_edges, -1) * x_edge_by_m[0]
         x_0 = self.fc_m0(x_0)
         x_0_extra, x_0 = x_0.split(
@@ -265,7 +653,6 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         )
         out = [x_0.view(num_edges, -1, self.m_output_channels)]
 
-        # m>0: apply radial, block GEMM
         for m in range(1, self.mmax + 1):
             x_m = x_by_m[m].view(num_edges, 2, -1)
             x_m = x_m * x_edge_by_m[m].unsqueeze(1)
@@ -324,6 +711,8 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
         self.m_split_sizes = [mappingReduced.m_size[0]] + (
             torch.tensor(mappingReduced.m_size[1:]) * 2
         ).tolist()
+        self._out_buf: torch.Tensor | None = None
+        self._total_coeffs = sum(self.m_split_sizes)
 
     def forward(
         self,
@@ -341,15 +730,43 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
         Returns:
             Output features [E, coeffs, m_output_channels]
         """
+        if self.lmax == 2 and self.mmax == 2:
+            E = x.shape[0]
+            if (
+                self._out_buf is None
+                or self._out_buf.shape[0] != E
+                or self._out_buf.dtype != x.dtype
+                or self._out_buf.device != x.device
+            ):
+                self._out_buf = torch.empty(
+                    E,
+                    self._total_coeffs,
+                    self.m_output_channels,
+                    dtype=x.dtype,
+                    device=x.device,
+                )
+            self.so2_m_conv[0]._maybe_build_w_block()
+            self.so2_m_conv[1]._maybe_build_w_block()
+            return _FusedConv2Func.apply(
+                x,
+                self.fc_m0.weight,
+                self.fc_m0.bias,
+                self.so2_m_conv[0]._w_block,
+                self.so2_m_conv[1]._w_block,
+                self._out_buf,
+                tuple(self.m_split_sizes),
+                self.lmax,
+                self.m_output_channels,
+            )
+
+        # Generic fallback for other lmax/mmax.
         x_by_m = x.split(self.m_split_sizes, dim=1)
         num_edges = x.shape[0]
 
-        # m=0: just linear
         x_0 = x_by_m[0].view(num_edges, -1)
         x_0 = self.fc_m0(x_0)
         out = [x_0.view(num_edges, -1, self.m_output_channels)]
 
-        # m>0: block GEMM
         for m in range(1, self.mmax + 1):
             x_m = x_by_m[m].view(num_edges, 2, -1)
             x_m = self.so2_m_conv[m - 1](x_m)
