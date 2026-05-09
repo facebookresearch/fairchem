@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+import os
 from typing import TYPE_CHECKING
 
 import torch
@@ -30,6 +31,13 @@ from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 if TYPE_CHECKING:
     from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
     from fairchem.core.models.uma.nn.execution_backends import ExecutionBackend
+
+
+# exp42: opt-in fused SO2 conv1 + GateActivation(m_prime=True) + conv2 block.
+# Set FAIRCHEM_FUSED_SO2_BLOCK=1 to enable. Eligibility is also gated on
+# the runtime structure (post-prepare_for_inference modules, lmax=mmax=2,
+# act_type=gate). Anything else falls through to the eager 3-call sequence.
+_FUSED_SO2_BLOCK_ENV = os.environ.get("FAIRCHEM_FUSED_SO2_BLOCK", "0") == "1"
 
 
 def set_mole_ac_start_index(module: nn.Module, index: int) -> None:
@@ -108,6 +116,39 @@ class Edgewise(torch.nn.Module):
             edge_channels_list=None,
             extra_m0_output_channels=None,
         )
+
+        # exp42: fused-block eligibility cache, populated lazily on
+        # the first forward call (after prepare_for_inference has run).
+        self._fused_so2_block_eligible: bool | None = None
+
+    def _check_fused_so2_block_eligible(self) -> bool:
+        if self._fused_so2_block_eligible is not None:
+            return self._fused_so2_block_eligible
+        # Defer import to avoid module-load cost on training paths.
+        from fairchem.core.models.uma.nn.so2_layers import (
+            SO2_Conv1_WithRadialBlock,
+            SO2_Conv2_InternalBlock,
+        )
+
+        eligible = (
+            self.lmax == 2
+            and self.mmax == 2
+            and self.act_type == "gate"
+            and isinstance(self.so2_conv_1, SO2_Conv1_WithRadialBlock)
+            and isinstance(self.so2_conv_2, SO2_Conv2_InternalBlock)
+            and isinstance(self.act, GateActivation)
+            and self.act.m_prime
+        )
+        if eligible:
+            # The block-diag weights (_w_block) are built lazily inside
+            # SO2_m_Conv_Block on first forward; we need them materialized
+            # before the fused kernel runs.
+            for sub in self.so2_conv_1.so2_m_conv:
+                sub._maybe_build_w_block()
+            for sub in self.so2_conv_2.so2_m_conv:
+                sub._maybe_build_w_block()
+        self._fused_so2_block_eligible = eligible
+        return eligible
 
     def forward(
         self,
@@ -190,9 +231,33 @@ class Edgewise(torch.nn.Module):
             x_message = self.backend.node_to_edge_wigner_permute(
                 x_full, edge_index, wigner
             )
-            x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
-            x_message = self.act(x_0_gating, x_message)
-            x_message = self.so2_conv_2(x_message)
+            if _FUSED_SO2_BLOCK_ENV and self._check_fused_so2_block_eligible():
+                from fairchem.core.models.uma.nn.fused_so2_block import (
+                    fused_so2_block,
+                )
+
+                x_message = fused_so2_block(
+                    x_message,
+                    x_edge,
+                    self.so2_conv_1.fc_m0.weight,
+                    self.so2_conv_1.fc_m0.bias,
+                    self.so2_conv_1.so2_m_conv[0]._w_block,
+                    self.so2_conv_1.so2_m_conv[1]._w_block,
+                    self.so2_conv_2.fc_m0.weight,
+                    self.so2_conv_2.fc_m0.bias,
+                    self.so2_conv_2.so2_m_conv[0]._w_block,
+                    self.so2_conv_2.so2_m_conv[1]._w_block,
+                    tuple(self.so2_conv_1.m_split_sizes),
+                    tuple(self.so2_conv_1.edge_split_sizes),
+                    self.lmax * self.hidden_channels,  # extra_m0
+                    self.lmax,
+                    self.hidden_channels,  # m_out_1
+                    self.sphere_channels,  # m_out_2
+                )
+            else:
+                x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
+                x_message = self.act(x_0_gating, x_message)
+                x_message = self.so2_conv_2(x_message)
             new_embedding = self.backend.permute_wigner_inv_edge_to_node(
                 x_message,
                 wigner_inv_envelope,
