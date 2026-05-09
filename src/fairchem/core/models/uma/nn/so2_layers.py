@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 from typing import TYPE_CHECKING
 
 import torch
@@ -25,10 +26,16 @@ if TYPE_CHECKING:
 # small_molecule (E=3202) and slab_adsorbate (E=2190) regressed -10..-12%
 # under the fused path because the autograd.Function frame overhead
 # exceeded the cat-allocation savings; medium_bulk (E=9998) and
-# large_bulk (E=54000) gained +8% / +3%. Setting the gate at 5000 keeps
-# the small systems on the eager path and the larger ones on the fused
-# path. Tunable per-deployment if hardware/profile shifts.
-_FUSED_E_THRESHOLD: int = 5000
+# large_bulk (E=54000) gained +8% / +3%. Setting the default at 5000
+# keeps the small systems on the eager path and the larger ones on the
+# fused path on the standard 4-system perf_check.
+#
+# For deployments whose live workload is bounded (e.g. atom counts
+# <= 170, edges in 3500-7500), the eager path is uniformly faster: an
+# end-to-end size sweep shows +11-14% qps at N=120-170 with the fused
+# path disabled. Override via env var FAIRCHEM_FUSED_E_THRESHOLD; set
+# it to a large value (e.g. 999999) to force eager always.
+_FUSED_E_THRESHOLD: int = int(os.environ.get("FAIRCHEM_FUSED_E_THRESHOLD", "5000"))
 
 
 class _FusedConv1Func(torch.autograd.Function):
@@ -83,9 +90,7 @@ class _FusedConv1Func(torch.autograd.Function):
             x_0_radial = x_0_flat * x_edge_0
             z_0 = torch.addmm(fc_m0_b, x_0_radial, fc_m0_w.T)
             gating_buf.copy_(z_0[:, :extra])
-            out_buf[:, 0:m0_size, :].copy_(
-                z_0[:, extra:].view(E, m0_size, m_out)
-            )
+            out_buf[:, 0:m0_size, :].copy_(z_0[:, extra:].view(E, m0_size, m_out))
 
             # m=1: radial mul + block GEMM
             offset_1 = m0_size
@@ -114,8 +119,14 @@ class _FusedConv1Func(torch.autograd.Function):
             )
 
         ctx.save_for_backward(
-            x, x_edge, fc_m0_w, W_block_1, W_block_2,
-            x_0_radial, x_1_cat, x_2_cat,
+            x,
+            x_edge,
+            fc_m0_w,
+            W_block_1,
+            W_block_2,
+            x_0_radial,
+            x_1_cat,
+            x_2_cat,
         )
         ctx.m_split_sizes = m_split_sizes
         ctx.edge_split_sizes = edge_split_sizes
@@ -127,8 +138,14 @@ class _FusedConv1Func(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_out, grad_gating):
         (
-            x, x_edge, fc_m0_w, W_block_1, W_block_2,
-            x_0_radial, x_1_cat, x_2_cat,
+            x,
+            x_edge,
+            fc_m0_w,
+            W_block_1,
+            W_block_2,
+            x_0_radial,
+            x_1_cat,
+            x_2_cat,
         ) = ctx.saved_tensors
         m_split_sizes = ctx.m_split_sizes
         edge_split_sizes = ctx.edge_split_sizes
@@ -169,9 +186,7 @@ class _FusedConv1Func(torch.autograd.Function):
             grad_x[:, 0:m0_size, :].copy_(grad_x_0_flat.view(E, m0_size, C))
         if need_x_edge:
             x_0_flat = x.narrow(1, 0, m0_size).reshape(E, -1)
-            grad_x_edge[:, 0 : edge_split_sizes[0]].copy_(
-                grad_x_0_radial * x_0_flat
-            )
+            grad_x_edge[:, 0 : edge_split_sizes[0]].copy_(grad_x_0_radial * x_0_flat)
 
         # ---- m=1 backward ----
         offset_1 = m0_size
@@ -227,16 +242,24 @@ class _FusedConv1Func(torch.autograd.Function):
             )
         if need_x_edge:
             x_2_view = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, 2, -1)
-            grad_x_edge[
-                :, edge_split_sizes[0] + edge_split_sizes[1] :
-            ].copy_((grad_x_2_scaled * x_2_view).sum(dim=1))
+            grad_x_edge[:, edge_split_sizes[0] + edge_split_sizes[1] :].copy_(
+                (grad_x_2_scaled * x_2_view).sum(dim=1)
+            )
 
         return (
-            grad_x, grad_x_edge,
-            grad_fc_m0_w, grad_fc_m0_b,
-            grad_W_block_1, grad_W_block_2,
-            None, None,  # buffers (no grad)
-            None, None, None, None, None,  # static metadata
+            grad_x,
+            grad_x_edge,
+            grad_fc_m0_w,
+            grad_fc_m0_b,
+            grad_W_block_1,
+            grad_W_block_2,
+            None,
+            None,  # buffers (no grad)
+            None,
+            None,
+            None,
+            None,
+            None,  # static metadata
         )
 
 
@@ -270,7 +293,9 @@ class _FusedConv2Func(torch.autograd.Function):
             out_buf[:, 0:m0_size, :].copy_(z_0.view(E, m0_size, m_out))
 
             offset_1 = m0_size
-            x_1_cat = x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, -1).contiguous()
+            x_1_cat = (
+                x.narrow(1, offset_1, m_split_sizes[1]).reshape(E, -1).contiguous()
+            )
             out_cat_1 = x_1_cat @ W_block_1.T
             out_buf[:, offset_1 : offset_1 + num_l_1, :].copy_(
                 out_cat_1[:, : num_l_1 * m_out].view(E, num_l_1, m_out)
@@ -280,7 +305,9 @@ class _FusedConv2Func(torch.autograd.Function):
             )
 
             offset_2 = offset_1 + m_split_sizes[1]
-            x_2_cat = x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, -1).contiguous()
+            x_2_cat = (
+                x.narrow(1, offset_2, m_split_sizes[2]).reshape(E, -1).contiguous()
+            )
             out_cat_2 = x_2_cat @ W_block_2.T
             out_buf[:, offset_2 : offset_2 + num_l_2, :].copy_(
                 out_cat_2[:, : num_l_2 * m_out].view(E, num_l_2, m_out)
@@ -360,10 +387,14 @@ class _FusedConv2Func(torch.autograd.Function):
 
         return (
             grad_x,
-            grad_fc_m0_w, grad_fc_m0_b,
-            grad_W_block_1, grad_W_block_2,
+            grad_fc_m0_w,
+            grad_fc_m0_b,
+            grad_W_block_1,
+            grad_W_block_2,
             None,  # buffer
-            None, None, None,  # static metadata
+            None,
+            None,
+            None,  # static metadata
         )
 
 
@@ -616,11 +647,7 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         # box (at 16 OMP threads): below that, the per-call overhead
         # exceeds the cat savings, and we lose ~10% on small systems.
         # Above that, we win up to ~8% on medium-edge-count systems.
-        if (
-            self.lmax == 2
-            and self.mmax == 2
-            and x.shape[0] >= _FUSED_E_THRESHOLD
-        ):
+        if self.lmax == 2 and self.mmax == 2 and x.shape[0] >= _FUSED_E_THRESHOLD:
             E = x.shape[0]
             if (
                 self._out_buf is None
@@ -760,11 +787,7 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
         # box (at 16 OMP threads): below that, the per-call overhead
         # exceeds the cat savings, and we lose ~10% on small systems.
         # Above that, we win up to ~8% on medium-edge-count systems.
-        if (
-            self.lmax == 2
-            and self.mmax == 2
-            and x.shape[0] >= _FUSED_E_THRESHOLD
-        ):
+        if self.lmax == 2 and self.mmax == 2 and x.shape[0] >= _FUSED_E_THRESHOLD:
             E = x.shape[0]
             if (
                 self._out_buf is None
