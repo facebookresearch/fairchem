@@ -170,26 +170,23 @@ jobs:
         run: |
           pip install packages/fairchem-core[torchsim]
 
-      - name: Start resource monitors
-        run: |
-          nvidia-smi dmon -s mu -d 5 | tee gpu_stats.log &
-          echo $! > /tmp/gpu_monitor_pid
-          vmstat 5 | tee cpu_stats.log &
-          echo $! > /tmp/cpu_monitor_pid
-
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PYTHONUNBUFFERED: "1"
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml --log-cli-level=INFO
+          nvidia-smi dmon -s mu -d 5 | tee gpu_stats.log &
+          GPU_MONITOR_PID=$!
+          vmstat 5 | tee cpu_stats.log &
+          CPU_MONITOR_PID=$!
 
-      - name: Stop resource monitors
-        if: always()
-        run: |
-          kill $(cat /tmp/gpu_monitor_pid) || true
-          kill $(cat /tmp/cpu_monitor_pid) || true
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml --log-cli-level=INFO
+          EXIT_CODE=$?
+
+          kill $GPU_MONITOR_PID || true
+          kill $CPU_MONITOR_PID || true
+          exit $EXIT_CODE
 
       - name: Upload resource stats
         if: always()
