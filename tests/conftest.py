@@ -127,12 +127,26 @@ def _memory_summary() -> str:
     return " | ".join(parts)
 
 
+_test_counts: dict[str, int] = {"current": 0, "total": 0}
+
+
+def pytest_collection_finish(session):
+    _test_counts["total"] = len(session.items)
+
+
 def pytest_runtest_logreport(report):
     if report.when != "teardown":
         return
+    _test_counts["current"] += 1
+    current = _test_counts["current"]
+    total = _test_counts["total"]
+    pct = int(100 * current / total) if total else 0
     summary = _memory_summary()
     if summary:
-        print(f"\n[mem] {report.nodeid}: {summary}", flush=True)
+        print(
+            f"\n[mem] [{current}/{total} {pct:3d}%] {report.nodeid}: {summary}",
+            flush=True,
+        )
 
 
 @pytest.fixture()

@@ -173,10 +173,15 @@ jobs:
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          PYTHONUNBUFFERED: "1"
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m "gpu and not compile_gpu" -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml
+
+      - name: Core GPU compile tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m compile_gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile.xml
 
       - name: Cleanup
         if: always()
