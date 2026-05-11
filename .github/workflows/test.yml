@@ -176,26 +176,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          nvidia-smi dmon -s mu -d 5 | tee gpu_stats.log &
-          GPU_MONITOR_PID=$!
-          vmstat 5 | tee cpu_stats.log &
-          CPU_MONITOR_PID=$!
-
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml --log-cli-level=INFO
-          EXIT_CODE=$?
-
-          kill $GPU_MONITOR_PID || true
-          kill $CPU_MONITOR_PID || true
-          exit $EXIT_CODE
-
-      - name: Upload resource stats
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-cpu-stats
-          path: |
-            gpu_stats.log
-            cpu_stats.log
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml
 
       - name: Cleanup
         if: always()

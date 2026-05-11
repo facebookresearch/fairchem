@@ -115,6 +115,26 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+def _memory_summary() -> str:
+    parts = []
+    if torch.cuda.is_available():
+        free_gpu, total_gpu = torch.cuda.mem_get_info()
+        parts.append(f"GPU free {free_gpu / 1024**3:.2f}/{total_gpu / 1024**3:.2f} GB")
+    import psutil
+
+    vm = psutil.virtual_memory()
+    parts.append(f"CPU free {vm.available / 1024**3:.2f}/{vm.total / 1024**3:.2f} GB")
+    return " | ".join(parts)
+
+
+def pytest_runtest_logreport(report):
+    if report.when != "teardown":
+        return
+    summary = _memory_summary()
+    if summary:
+        print(f"\n[mem] {report.nodeid}: {summary}", flush=True)
+
+
 @pytest.fixture()
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
