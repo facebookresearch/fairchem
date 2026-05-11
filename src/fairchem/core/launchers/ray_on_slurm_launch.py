@@ -191,12 +191,12 @@ class SPMDController(Runner):
         pass
 
 
-def ray_entrypoint(config: DictConfig):
+def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
     runner = hydra.utils.instantiate(
-        config.runner,
-        _recursive_=config.job.recursive_instantiate_runner,
+        runner_config,
+        _recursive_=job_config.recursive_instantiate_runner,
     )
-    runner.job_config = config
+    runner.job_config = job_config
     runner.run()
 
 
@@ -218,6 +218,6 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         name=config.job.run_name,
         requirements=cluster_reqs,
         payload=ray_entrypoint,
-        config=config,
-        recursive_instantiate_runner=config.job.recursive_instantiate_runner,
+        job_config=config.job,
+        runner_config=config.runner,
     )
