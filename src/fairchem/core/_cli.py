@@ -125,6 +125,7 @@ def main(
             runner: Runner = hydra.utils.instantiate(
                 cfg.runner, _recursive_=cfg.job.recursive_instantiate_runner
             )
+            runner.job_config = cfg
             runner.run()
         else:
             from fairchem.core.launchers.slurm_launch import local_launch
