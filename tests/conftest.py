@@ -52,6 +52,10 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
         "markers",
+        "compile_gpu: GPU test that uses torch.compile — run in a separate pytest session to avoid cross-test memory accumulation",
+    )
+    config.addinivalue_line(
+        "markers",
         "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
     )
     config.addinivalue_line(
@@ -64,6 +68,8 @@ def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
     if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
+    if "compile_gpu" in item.keywords and not torch.cuda.is_available():
+        pytest.skip("CUDA not available, skipping compile_gpu test")
     if "dgl" in item.keywords:
         # check dgl is installed
         fairchem_cpp_found = False
@@ -116,9 +122,17 @@ def seed_fixture():
 
 @pytest.fixture()
 def compile_reset_state():
+    import gc
+
     torch.compiler.reset()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     yield
     torch.compiler.reset()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 @pytest.fixture(scope="session")
