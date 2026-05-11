@@ -183,7 +183,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml --log-cli-level=INFO
 
       - name: Stop resource monitors
         if: always()
