@@ -172,9 +172,9 @@ jobs:
 
       - name: Start resource monitors
         run: |
-          nvidia-smi dmon -s mu -d 5 > gpu_stats.log &
+          nvidia-smi dmon -s mu -d 5 | tee gpu_stats.log &
           echo $! > /tmp/gpu_monitor_pid
-          vmstat 5 > cpu_stats.log &
+          vmstat 5 | tee cpu_stats.log &
           echo $! > /tmp/cpu_monitor_pid
 
       - name: Core GPU tests
