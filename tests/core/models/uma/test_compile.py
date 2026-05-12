@@ -33,11 +33,12 @@ def seed_everywhere(seed=0):
 
 
 def ase_to_graph(atoms, neighbors: int, cutoff: float):
-    data_object = AtomicData.from_ase(atoms,
-            max_neigh=neighbors,
-            radius=cutoff,
-            r_edges=True,
-        )
+    data_object = AtomicData.from_ase(
+        atoms,
+        max_neigh=neighbors,
+        radius=cutoff,
+        r_edges=True,
+    )
     data_object.natoms = torch.tensor(len(atoms))
     data_object.charge = torch.LongTensor([0])
     data_object.spin = torch.LongTensor([0])
@@ -113,8 +114,8 @@ def get_escn_md_full(
 # compile tests take a long time
 @pytest.mark.skip()
 @pytest.mark.gpu()
-def test_compile_backbone_gpu():
-    torch.compiler.reset()
+@pytest.mark.compile_gpu()
+def test_compile_backbone_gpu(compile_reset_state):
     device = "cuda"
     cutoff = 6.0
     model = get_escn_md_backbone(cutoff=cutoff, device=device)
@@ -134,8 +135,8 @@ def test_compile_backbone_gpu():
 
 
 @pytest.mark.gpu()
-def test_compile_full_gpu():
-    torch.compiler.reset()
+@pytest.mark.compile_gpu()
+def test_compile_full_gpu(compile_reset_state):
     device = "cuda"
     cutoff = 6.0
     model = get_escn_md_full(cutoff=cutoff, device=device)
