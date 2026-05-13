@@ -317,7 +317,7 @@ def _match_pymatgen(row, target_xtals, ltol=0.2, stol=0.3, angle_tol=5, ignore_H
     logger = get_central_logger()
 
     try:
-        pred_structure = Structure.from_str(row.relaxed_cif, fmt="cif")
+        pred_structure = Structure.from_str(row.cif_relaxed, fmt="cif")
     except Exception as e:
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None

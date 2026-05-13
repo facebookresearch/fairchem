@@ -81,6 +81,7 @@ def deduplicate_structures(
     angle_tol: float = 5,
     remove_duplicates: bool = False,
     n_jobs: int = 70,
+    structure_col: str = "structure",
 ):
     """
     Implements a two-stage deduplication algorithm that combines hash-based pre-filtering
@@ -93,9 +94,9 @@ def deduplicate_structures(
     logger.debug(f"Hashing settings - Density: {hash_density}, Volume: {hash_volume}")
     logger.debug(f"Total structures to process: {len(structures_df)}")
     logger.debug(f"Structure DataFrame head:\n{structures_df.head()}")
-    hashes = structures_df[["structure", "z"]].apply(
+    hashes = structures_df[[structure_col, "z"]].apply(
         lambda x: get_structure_hash(
-            x["structure"],
+            x[structure_col],
             x["z"],
             hash_density,  # Use density for geometric similarity grouping
             hash_volume,  # Use volume for size-based grouping
@@ -115,7 +116,7 @@ def deduplicate_structures(
     for _, indices in hash_groups:
         # Extract structures for this hash group
         groups_to_process.append(
-            (indices, structures_df["structure"].to_numpy()[indices])
+            (indices, structures_df[structure_col].to_numpy()[indices])
         )
 
     # Stage 3: Parallel crystallographic deduplication within hash groups

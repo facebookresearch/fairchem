@@ -121,7 +121,7 @@ def filter_and_deduplicate_structures_single(
     # Most likely this was performed at the relaxation stage already
     if root_unrelaxed is not None:
         structures_df_unrelaxed = pd.read_parquet(
-            root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif"]
+            root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif_generated"]
         )
         # Merge with unrelaxed data if requested for comparison studies
         structures_df = structures_df.merge(
@@ -133,7 +133,7 @@ def filter_and_deduplicate_structures_single(
 
         # Convert CIF strings to atomic structures for connectivity analysis
         final_atoms = structures_df["cif_relaxed"].apply(cif_to_atoms)
-        initial_atoms = structures_df["cif"].apply(cif_to_atoms)
+        initial_atoms = structures_df["cif_generated"].apply(cif_to_atoms)
 
         # Validate bonding network preservation during relaxation
 
@@ -158,17 +158,19 @@ def filter_and_deduplicate_structures_single(
 
     # 2. Separate problematic structures for retention
     problematic_structures_df = structures_df[
-        ~structures_df["converged"] | ~structures_df["connectivity_unchanged"]
+        ~structures_df["optimizer_converged"]
+        | ~structures_df["validity.connectivity_unchanged"]
     ]
     structures_df_filtered = structures_df[
-        structures_df["converged"] & structures_df["connectivity_unchanged"]
+        structures_df["optimizer_converged"]
+        & structures_df["validity.connectivity_unchanged"]
     ]
 
     # 3. Apply multi-stage filtering workflow
     if density_cutoff is not None:
         logger.info(f"Before filtering by density: {structures_df.shape}")
         structures_df = structures_df[
-            structures_df["density"] <= density_cutoff
+            structures_df["density_relaxed"] <= density_cutoff
         ]  # Remove unphysically dense structures
         logger.info(f"After filtering by density: {structures_df.shape}")
 

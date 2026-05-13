@@ -245,10 +245,11 @@ def process_genarris_outputs_single(
     if assign_groups:
         structures_df = deduplicate_structures(
             structures_df,
-            remove_duplicates,
+            remove_duplicates=remove_duplicates,
             ltol=ltol,
             stol=stol,
             angle_tol=angle_tol,
+            structure_col="structure_generated",
         )
     structures_df = structures_df.drop(columns=["structure_generated"])
     structures_df.to_parquet(
