@@ -95,15 +95,16 @@ class BatchPredictServerMixin:
         self.predict_unit.validate_atoms_data(stub, task_name)
         return stub.info
 
-    def update_predict_unit(self, predict_unit_ref) -> None:
+    def update_predict_unit(self, predict_unit) -> None:
         """
         Update the predict unit with a new checkpoint.
 
         Args:
-            predict_unit_ref: Ray object reference to a new MLIPPredictUnit instance
+            predict_unit: New MLIPPredictUnit instance (Ray resolves any ObjectRef
+                before invoking this method, so the argument is always the actual object)
         """
-        self.predict_unit = ray.get(predict_unit_ref)
-        logging.info("predict_unit updated from object store")
+        self.predict_unit = predict_unit
+        logging.info("predict_unit updated")
 
     @serve.batch(
         batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
