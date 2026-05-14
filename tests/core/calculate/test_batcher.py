@@ -19,7 +19,7 @@ import torch
 from ase.build import bulk
 from ray import serve
 
-from fairchem.core import FAIRChemCalculator
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate._batch import InferenceBatcher
 from fairchem.core.datasets.atomic_data import AtomicData
 
@@ -27,24 +27,26 @@ from fairchem.core.datasets.atomic_data import AtomicData
 pytestmark = pytest.mark.serial
 
 
-_LOCAL_CHECKPOINT = "/checkpoint/ocp/shared/uma_checkpoints/uma_sm_1p2.pt"
-
-
 @pytest.fixture(scope="module")
 def uma_predict_unit():
-    """Get a UMA predict unit for testing."""
-    from fairchem.core.units.mlip_unit import load_predict_unit
+    """Module-scoped predict unit using the first available UMA model."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    if not uma_models:
+        pytest.skip("No UMA models available")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    return load_predict_unit(_LOCAL_CHECKPOINT, device="cpu")
+    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
 
 
 @pytest.fixture(scope="module")
 def uma_predict_unit_alt():
-    """Get a different UMA predict unit for testing checkpoint swaps."""
-    pytest.skip(
-        "uma_predict_unit_alt requires a second distinct checkpoint; "
-        "skipping checkpoint-swap tests in local-checkpoint mode."
-    )
+    """Module-scoped predict unit using the first available UMA model."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    if not uma_models:
+        pytest.skip("No UMA models available")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
 
 
 def setup_ray():
