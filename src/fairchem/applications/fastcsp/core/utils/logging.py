@@ -14,7 +14,10 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from fairchem.applications.fastcsp.core.utils.configs import LoggingConfig
 
 
 def setup_fastcsp_logger(
@@ -23,16 +26,30 @@ def setup_fastcsp_logger(
     level: str = "INFO",
     console_output: bool = True,
     append: bool = True,
+    format_str: str | None = None,
 ) -> logging.Logger:
-    """Set up the centralized FastCSP logger."""
+    """
+    Set up the centralized FastCSP logger.
+
+    Args:
+        name: Logger name (default: "fastcsp").
+        log_file: Path to log file (default: None = no file logging).
+        level: Logging level (default: "INFO").
+        console_output: Whether to output to console (default: True).
+        append: Whether to append to existing log file (default: True).
+        format_str: Log message format string (default: standard format).
+
+    Returns:
+        Configured logging.Logger instance.
+    """
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
     logger.handlers.clear()
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    if format_str is None:
+        format_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    formatter = logging.Formatter(format_str, datefmt="%Y-%m-%d %H:%M:%S")
 
     if console_output:
         console_handler = logging.StreamHandler(sys.stdout)
@@ -49,16 +66,40 @@ def setup_fastcsp_logger(
     return logger
 
 
+def setup_fastcsp_logger_from_config(
+    config: LoggingConfig, name: str = "fastcsp"
+) -> logging.Logger:
+    """
+    Set up the centralized FastCSP logger from a LoggingConfig dataclass.
+
+    Args:
+        config: LoggingConfig instance with logging parameters.
+        name: Logger name (default: "fastcsp").
+
+    Returns:
+        Configured logging.Logger instance.
+    """
+    return setup_fastcsp_logger(
+        name=name,
+        log_file=config.log_file,
+        level=config.level,
+        console_output=config.console_output,
+        append=config.append,
+        format_str=config.format,
+    )
+
+
 def ensure_all_modules_use_central_logger() -> None:
     """Configure all FastCSP modules to use the central logger."""
     central_logger = logging.getLogger("fastcsp")
 
     # All module patterns to redirect
+    # Note: submitit is excluded because its DEBUG output contains carriage returns
+    # for progress bars which create long garbled lines in log files
     module_patterns = [
         "fastcsp",
         "fairchem.applications.fastcsp",
         "genarris",
-        "submitit",
     ]
 
     # Find and configure all matching modules

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import tempfile
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import ase.io
@@ -25,6 +26,9 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 
 from fairchem.core.components.calculate import (
+    BerendsenNPT,
+    BussiThermostat,
+    LangevinThermostat,
     MDRunner,
     NoseHooverNVT,
     ParquetTrajectoryWriter,
@@ -71,6 +75,7 @@ def _create_mock_job_config(
 @pytest.fixture()
 def cu_atoms():
     atoms = bulk("Cu", cubic=True) * (2, 2, 2)
+    atoms.info["sid"] = 123
     np.random.seed(42)
     MaxwellBoltzmannDistribution(atoms, temperature_K=300)
     return atoms
@@ -107,7 +112,7 @@ class TestMDRunner:
             steps=steps,
             trajectory_interval=interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 100},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=100),
         )
         runner._job_config = _create_mock_job_config(str(mdrunner_dir))
         results = runner.calculate(job_num=0, num_jobs=1)
@@ -124,6 +129,7 @@ class TestMDRunner:
         traj_df = pd.read_parquet(results["trajectory_file"])
         ase_frames = Trajectory(str(ase_traj_file), "r")
         assert len(traj_df) == len(ase_frames)
+        assert (mdrunner_dir / "init_atoms.extxyz").exists()
 
         for i, ase_atoms in enumerate(ase_frames):
             row = traj_df.iloc[i]
@@ -137,7 +143,24 @@ class TestMDRunner:
                 row["energy"], ase_atoms.get_potential_energy(), atol=1e-10
             )
 
-    def test_checkpoint_resume(self, cu_atoms, results_dir):
+    @pytest.mark.parametrize(
+        "thermostat",
+        [
+            VelocityVerletThermostat(),
+            NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0),
+            BussiThermostat(temperature_K=300.0, taut_fs=25.0),
+            LangevinThermostat(temperature_K=300.0, friction_per_fs=0.01),
+            BerendsenNPT(
+                temperature_K=300.0,
+                pressure_bar=1.0,
+                taut_fs=500.0,
+                taup_fs=1000.0,
+                compressibility_bar=1.0 / 140e9,
+            ),
+        ],
+        ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin", "BerendsenNPT"],
+    )
+    def test_checkpoint_resume(self, cu_atoms, results_dir, thermostat):
         """
         Interrupt at a non-aligned step, checkpoint, resume, and verify
         trajectory alignment across runs.
@@ -152,8 +175,6 @@ class TestMDRunner:
         interrupt_at_step = 36
         total_steps = 100
 
-        thermostat = NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0)
-
         runner1 = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
@@ -162,7 +183,7 @@ class TestMDRunner:
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner1._job_config = _create_mock_job_config(str(results_dir1))
 
@@ -177,7 +198,7 @@ class TestMDRunner:
         try:
             runner1._atoms.calc = runner1.calculator
             runner1._dyn = thermostat.build(runner1._atoms, timestep_fs=1.0)
-            parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
+            parquet_file1 = results_dir1 / "trajectory.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
                 parquet_file1, flush_interval=1000
             )
@@ -203,9 +224,9 @@ class TestMDRunner:
         assert steps1 == [0, 10, 20, 30]
 
         # Verify checkpoint files
-        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "checkpoint.extxyz").exists()
         assert (checkpoint_dir / "thermostat_state.json").exists()
-        checkpoint_atoms = ase.io.read(str(checkpoint_dir / "checkpoint.xyz"))
+        checkpoint_atoms = ase.io.read(str(checkpoint_dir / "checkpoint.extxyz"))
         assert checkpoint_atoms.info["md_step"] == interrupt_at_step
 
         # Run 2: resume from checkpoint
@@ -217,7 +238,7 @@ class TestMDRunner:
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner2._job_config = _create_mock_job_config(str(results_dir2))
         runner2.load_state(str(checkpoint_dir))
@@ -229,12 +250,56 @@ class TestMDRunner:
         )
 
         results2 = runner2.calculate(job_num=0, num_jobs=1)
+        runner2.write_results(results2, str(results_dir2), job_num=0, num_jobs=1)
         df2 = pd.read_parquet(results2["trajectory_file"])
         steps2 = list(df2["step"])
 
         all_steps = sorted(steps1 + steps2)
         expected = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         assert all_steps == expected, f"Expected {expected}, got {all_steps}"
+
+        # Verify write_results produced valid metadata JSON
+        metadata_file = results_dir2 / "metadata.json"
+        assert metadata_file.exists()
+        with open(metadata_file) as f:
+            metadata = json.load(f)
+        assert metadata["structure_id"] == cu_atoms.info["sid"]
+        assert metadata["total_steps"] == total_steps
+
+    def test_load_state_beyond_total_steps(self, cu_atoms, results_dir):
+        """
+        When checkpoint step >= total steps, load_state should warn
+        and the simulation should end immediately without error.
+        """
+        checkpoint_dir = results_dir / "checkpoint"
+        checkpoint_dir.mkdir()
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        # Create a fake checkpoint with current_step beyond what we'll configure
+        atoms = cu_atoms.copy()
+        atoms.info["md_step"] = 50
+        ase.io.write(str(checkpoint_dir / "checkpoint.extxyz"), atoms, format="extxyz")
+
+        with open(checkpoint_dir / "md_state.json", "w") as f:
+            json.dump({"current_step": 50, "total_steps": 100}, f)
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=30,  # less than checkpoint step of 50
+            trajectory_interval=10,
+            log_interval=10,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+
+        # load_state should not raise, just warn
+        runner.load_state(str(checkpoint_dir))
+        assert runner._start_step == 50
+        assert runner._already_calculated
 
     def test_stopfair_graceful_stop(self, cu_atoms, results_dir):
         """
@@ -255,7 +320,7 @@ class TestMDRunner:
             trajectory_interval=10,
             heartbeat_interval=20,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner._job_config = _create_mock_job_config(
             str(md_results_dir), checkpoint_dir=str(checkpoint_dir)
@@ -267,7 +332,7 @@ class TestMDRunner:
         results = runner.calculate(job_num=0, num_jobs=1)
 
         assert results["stopped_by_stopfair"] is True
-        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "checkpoint.extxyz").exists()
         assert (checkpoint_dir / "md_state.json").exists()
         assert not stopfair_path.exists()
 
@@ -277,3 +342,121 @@ class TestMDRunner:
 
         traj_df = pd.read_parquet(results["trajectory_file"])
         assert list(traj_df["step"]) == [0, 10, 20]
+
+    def test_npt_cell_changes(self, cu_atoms, results_dir):
+        """
+        Verify that NPT simulation changes the cell volume.
+        """
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        atoms = cu_atoms.copy()
+        initial_volume = atoms.get_volume()
+
+        # Use a large pressure to drive a noticeable volume change
+        thermostat = BerendsenNPT(
+            temperature_K=300.0,
+            pressure_bar=1e5,
+            taut_fs=100.0,
+            taup_fs=100.0,
+            compressibility_bar=1.0 / 140e9,
+        )
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=atoms,
+            thermostat=thermostat,
+            timestep_fs=1.0,
+            steps=200,
+            trajectory_interval=50,
+            log_interval=50,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+        runner.calculate(job_num=0, num_jobs=1)
+
+        final_volume = atoms.get_volume()
+        assert initial_volume != pytest.approx(final_volume, rel=1e-6)
+
+
+class TestTrajectoryFrame:
+    def test_round_trip_oc20_slab_adsorbate(self, results_dir):
+        """
+        Run MD on an OC20-style slab+adsorbate and verify the parquet
+        trajectory preserves tags, FixAtoms constraints, and charge/spin.
+        """
+        from ase.constraints import FixAtoms
+
+        from fairchem.core.datasets.common_structures import get_slab_adsorbate
+
+        atoms = get_slab_adsorbate()
+
+        assert np.any(atoms.get_tags() != 0)
+        assert len(atoms.constraints) > 0
+        assert "charge" in atoms.info
+        assert "spin" in atoms.info
+
+        original_tags = atoms.get_tags().copy()
+        original_fixed_indices = sorted(atoms.constraints[0].index)
+
+        atoms.calc = EMT()
+
+        md_results_dir = results_dir / "results"
+        md_results_dir.mkdir()
+
+        runner = MDRunner(
+            calculator=atoms.calc,
+            atoms=atoms,
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=10,
+            trajectory_interval=5,
+            log_interval=5,
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=100),
+        )
+        runner._job_config = _create_mock_job_config(str(md_results_dir))
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        assert len(traj_df) > 0
+
+        for _, row in traj_df.iterrows():
+            d = row.to_dict()
+
+            # Reconstruct atoms directly from parquet row
+            def _to_array(val, dtype=float):
+                if isinstance(val, np.ndarray) and val.dtype == object:
+                    return np.stack(val).astype(dtype)
+                return np.asarray(val, dtype=dtype)
+
+            from ase import Atoms as _Atoms
+
+            reconstructed = _Atoms(
+                numbers=_to_array(d["atomic_numbers"], dtype=int),
+                positions=_to_array(d["positions"]),
+                cell=_to_array(d["cell"]),
+                pbc=_to_array(d["pbc"], dtype=bool),
+            )
+            if d.get("tags") is not None:
+                reconstructed.set_tags(_to_array(d["tags"], dtype=int))
+            if d.get("velocities") is not None:
+                reconstructed.set_velocities(_to_array(d["velocities"]))
+            if d.get("fixed") is not None:
+                reconstructed.constraints = [
+                    FixAtoms(indices=np.where(_to_array(d["fixed"], dtype=bool))[0])
+                ]
+            if d.get("charge") is not None:
+                reconstructed.info["charge"] = d["charge"]
+            if d.get("spin") is not None:
+                reconstructed.info["spin"] = d["spin"]
+
+            npt.assert_array_equal(reconstructed.get_tags(), original_tags)
+
+            assert len(reconstructed.constraints) == 1
+            assert isinstance(reconstructed.constraints[0], FixAtoms)
+            npt.assert_array_equal(
+                sorted(reconstructed.constraints[0].index), original_fixed_indices
+            )
+
+            assert reconstructed.info["charge"] == atoms.info["charge"]
+            assert reconstructed.info["spin"] == atoms.info["spin"]

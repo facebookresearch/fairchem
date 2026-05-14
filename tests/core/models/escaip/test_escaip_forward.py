@@ -1,4 +1,9 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
 Modified from tests/core/models/uma/test_compile.py
 """
 
@@ -125,9 +130,9 @@ def get_escaip_full(
 
 
 @pytest.mark.gpu()
-def test_compile_full_gpu():
+@pytest.mark.compile_gpu()
+def test_compile_full_gpu(compile_reset_state):
     # make_deterministic()
-    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     model_compile = get_escaip_full(cutoff=cutoff, use_compile=True, device=device)
@@ -149,9 +154,8 @@ def test_compile_full_gpu():
 
 
 @pytest.mark.gpu()
-def test_fixed_forward_full_gpu():
+def test_fixed_forward_full_gpu(compile_reset_state):
     # make_deterministic()
-    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     seed_everywhere()

@@ -106,7 +106,7 @@ jobs:
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
           files: ./coverage.xml,./gpu-coverage.xml
@@ -175,7 +175,14 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m "gpu and not compile_gpu" -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu.xml
+
+      - name: Core GPU compile tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m compile_gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile.xml
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -195,7 +202,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created

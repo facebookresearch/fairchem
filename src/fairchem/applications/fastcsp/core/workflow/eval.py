@@ -128,7 +128,6 @@ cif_path = Path(r"{cif_path}")
 try:
     cif_content = cif_path.read_text()
     crystal = Crystal.from_string(cif_content, "cif")
-    print(str(crystal))
 except Exception as e:
     print(f"Error loading structure: {{e}}", file=sys.stderr)
     sys.exit(1)
@@ -163,7 +162,7 @@ def _match_csd(row, target_xtals, shell_size=30):
         raise ImportError("CSD Python API required for CCDC matching.") from e
 
     try:
-        gen_xtal = Crystal.from_string(row.relaxed_cif, "cif")
+        gen_xtal = Crystal.from_string(row.cif_relaxed, "cif")
     except Exception as e:
         logger.error(f"Error parsing CSD structure {row.structure_id}: {e}")
         return None, None
@@ -226,7 +225,7 @@ def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
 # Replicate _match_csd function locally
 def match_csd_local(row, target_xtals, shell_size=30):
     try:
-        gen_xtal = Crystal.from_string(row.relaxed_cif, "cif")
+        gen_xtal = Crystal.from_string(row.cif_relaxed, "cif")
     except Exception as e:
         return None, None
 
@@ -250,7 +249,7 @@ def match_csd_local(row, target_xtals, shell_size=30):
     return best_match_refcode, best_rmsd
 
 # Simple objects to match function interface
-Row = namedtuple("Row", ["structure_id", "relaxed_cif"])
+Row = namedtuple("Row", ["structure_id", "cif_relaxed"])
 
 # Parse input and reconstruct target structures
 data = json.loads(sys.stdin.read())
@@ -272,7 +271,7 @@ else:
 """
 
     input_data = {
-        "structure_cif": row.relaxed_cif,
+        "structure_cif": row.cif_relaxed,
         "target_cifs": target_cifs,
         "shell_size": shell_size,
         "structure_id": row.structure_id,
@@ -318,7 +317,7 @@ def _match_pymatgen(row, target_xtals, ltol=0.2, stol=0.3, angle_tol=5, ignore_H
     logger = get_central_logger()
 
     try:
-        pred_structure = Structure.from_str(row.relaxed_cif, fmt="cif")
+        pred_structure = Structure.from_str(row.cif_relaxed, fmt="cif")
     except Exception as e:
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
@@ -361,7 +360,7 @@ def match_structures(row, target_structures, eval_method="csd", **kwargs):
     pymatgen StructureMatcher.
 
     Args:
-        row: DataFrame row containing structure data with 'relaxed_cif' column
+        row: DataFrame row containing structure data with 'cif_relaxed' column
         target_structures: Dictionary mapping reference codes to target structures
                           (CCDC Crystal objects for CSD, pymatgen Structure for pymatgen)
         method: Evaluation method ('csd' or 'pymatgen')

@@ -77,7 +77,10 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     match_config = config.get("pre_relaxation_filter", {})
     return {
-        "remove_duplicates": match_config.get("remove-duplicates", False),
+        "assign_groups": match_config.get(
+            "assign_groups", False
+        ),  # default assign group indices to similar structures
+        "remove_duplicates": match_config.get("remove_duplicates", False),
         "ltol": match_config.get("ltol", 0.2),  # default lattice tolerance
         "stol": match_config.get("stol", 0.3),  # default site tolerance
         "angle_tol": match_config.get(
@@ -102,6 +105,7 @@ def structure_to_row(
             - mol_id: Molecule identifier
             - conf_id: Conformer identifier
             - z: Number of formula units per unit cell
+            - spg_generated: Space group number
             - structure_id: Unique structure identifier
             - formula: Reduced chemical formula
             - n_atoms: Total number of atoms in unit cell
@@ -122,21 +126,24 @@ def structure_to_row(
     formula = structure.composition.reduced_formula
     n_atoms = len(structure)
     volume = structure.volume
+    density = structure.density
     cif_str = structure.to(fmt="cif")
-
-    hash_id_ = f"{hash_id}_{mol_id}_{conf_id}_{z_val}"
+    spg = int(atoms.info["spg"])
+    unique_structure_id = f"mol={mol_id}::conf={conf_id}::z={z_val}::hash={hash_id}"
 
     return {
         "mol_id": mol_id,
         "conf_id": conf_id,
         "z": z_val,
-        "structure_id": hash_id_,
+        "structure_id": unique_structure_id,
         "formula": formula,
         "n_atoms": n_atoms,
-        "volume": volume,
-        "cif": cif_str,
-        "partition_id": get_partition_id(hash_id_, npartitions),
-        "structure": structure,
+        "spg_generated": spg,
+        "density_generated": density,
+        "volume_generated": volume,
+        "cif_generated": cif_str,
+        "partition_id": get_partition_id(unique_structure_id, npartitions),
+        "structure_generated": structure,
     }
 
 
@@ -152,6 +159,7 @@ def process_genarris_outputs_single(
     angle_tol: float = 5,
     npartitions: int = 1000,
     num_cpus: int = 70,
+    assign_groups: bool = True,
 ):
     """
     Process Genarris output files from a single (mol_id, conf_id, z_val) directory.
@@ -200,20 +208,22 @@ def process_genarris_outputs_single(
     all_rows = p_map(_convert_item, all_items, num_cpus=num_cpus)
 
     structures_df = pd.DataFrame(all_rows)
-    structures_df = deduplicate_structures(
-        structures_df,
-        remove_duplicates,
-        ltol=ltol,
-        stol=stol,
-        angle_tol=angle_tol,
-    )
-    structures_df = structures_df.drop(columns=["structure"])
+    if assign_groups:
+        structures_df = deduplicate_structures(
+            structures_df,
+            remove_duplicates=remove_duplicates,
+            ltol=ltol,
+            stol=stol,
+            angle_tol=angle_tol,
+            structure_col="structure_generated",
+        )
+    structures_df = structures_df.drop(columns=["structure_generated"])
     structures_df.to_parquet(
         output_dir,
         compression="zstd",
         partition_cols=["partition_id"],
     )
-    logger.info(f"Saved {len(all_rows)} structures to {output_dir}")
+    logger.debug(f"Saved {len(structures_df)} structures to {output_dir}")
 
 
 def process_genarris_outputs(
@@ -225,6 +235,7 @@ def process_genarris_outputs(
     stol: float = 0.3,
     angle_tol: float = 5,
     npartitions: int = 1000,
+    assign_groups: bool = True,
 ):
     """
     Batch process multiple Genarris output directories using SLURM parallel execution.
@@ -294,6 +305,7 @@ def process_genarris_outputs(
                             angle_tol,
                             npartitions,
                             num_cpus,
+                            assign_groups,
                         ),
                         {},
                     )

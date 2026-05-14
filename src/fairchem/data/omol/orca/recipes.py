@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import os
@@ -25,7 +32,7 @@ def single_point_calculation(
     orcasimpleinput=None,
     orcablocks=None,
     nprocs=12,
-    outputdir=os.getcwd(),
+    outputdir=None,
     vertical=Vertical.Default,
     nbo=False,
     copy_files=None,
@@ -64,6 +71,8 @@ def single_point_calculation(
     """
     from quacc import SETTINGS
 
+    if outputdir is None:
+        outputdir = os.getcwd()
     SETTINGS.RESULTS_DIR = outputdir
 
     if orcasimpleinput is None:
@@ -107,7 +116,7 @@ def ase_relaxation(
     orcablocks=None,
     nprocs=12,
     opt_params=None,
-    outputdir=os.getcwd(),
+    outputdir=None,
     vertical=Vertical.Default,
     copy_files=None,
     nbo=False,
@@ -151,6 +160,8 @@ def ase_relaxation(
     """
     from quacc import SETTINGS
 
+    if outputdir is None:
+        outputdir = os.getcwd()
     SETTINGS.RESULTS_DIR = outputdir
 
     if orcasimpleinput is None:

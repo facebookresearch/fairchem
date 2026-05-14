@@ -44,55 +44,92 @@ Input: molecules.csv + config.yaml
         ↓
 [process_generated] → raw_structures/ (processed & deduplicated)
         ↓
-[relax] → relaxed/<calculator_and_optimizer_info>/relaxed_structures/ (ML-optimized)
+[relax] → relaxed/<calculator_and_optimizer_info>/raw_structures/ (ML-optimized parquet per conformer)
         ↓
-[filter] → relaxed/<calculator_and_optimizer_info>/filtered_structures/ (ranked by energy)
+[filter] → relaxed/<calculator_and_optimizer_info>/filtered_structures/ (one parquet per molecule)
         ↓
-[evaluate] → relaxed/<calculator_and_optimizer_info>/matched_structures/ (experimental comparison)
+[evaluate] → relaxed/<calculator_and_optimizer_info>/matched_structures_{csd,pmg_l*_s*_a*}/ (one parquet per molecule)
 ```
 
 ## Configuration Management
 
-FastCSP uses a hierarchical YAML configuration system:
+FastCSP uses a hierarchical YAML configuration system. The snippet below mirrors `core/configs/example_config.yaml` (which itself points at `core/configs/example_systems.csv`):
 
 ```yaml
 # Core workflow settings
 root: "/path/to/project"
 
-# Input molecules
-molecules: "molecules.csv"
+# Input molecules CSV (columns: name, conformers_path, [refcode, z, spg, cif_path])
+molecules: "configs/example_systems.csv"
 
 # generation stage
 genarris:
+  mpi_launcher: /path/to/mpirun
+  python_cmd: /path/to/python/with/genarris/installed
+  genarris_cli: /path/to/genarris_cli.py
+  genarris_base_config: configs/gnrs_base.conf
   vars:
-    Z: [1,2]
+    Z: [1, 2, 3, 4, 6, 8]
+    spg_distribution_type: standard   # "standard" or a list[int] of space-group numbers (per-Z lists also accepted)
     num_structures_per_spg: 500
+    read_z_from_file: false   # set true to read z from molecules.csv
+    read_spg_from_file: false # set true to read spg from molecules.csv
   slurm:
+    job-name: genarris
     nodes: 1
+    ntasks-per-node: 40
+    time: 10800
 
-# Structure comparison tolerances for Pymatgen's StructureMatcher
-# Deduplication parameters after structure generation with Genarris
-pre_relaxation_filter:        # Before ML relaxation
-  ltol: 0.2           # lattice tolerance
-  stol: 0.3           # site tolerance
-  angle_tol: 5        # angle tolerance (degrees)
+# Pre-ML deduplication on Genarris outputs
+pre_relaxation_filter:
+  assign_groups: true       # assign group indices via deduplication pass
+  remove_duplicates: true   # drop duplicates within each group
+  ltol: 0.3                 # lattice tolerance
+  stol: 0.4                 # site tolerance (Å)
+  angle_tol: 5              # angle tolerance (degrees)
+  npartitions: 1000         # number of output partitions / SLURM array size
 
-# ml relaxation
+# ML relaxation
 relax:
-  calculator: "uma_sm_1p1_omc"
-  optimizer: "bfgs"
+  calculator: uma_sm_1p1_omc   # or uma_sm_1p1_omol
+  optimizer: BFGS
   fmax: 0.01
   max_steps: 1000
+  fix_symmetry: false
+  relax_cell: true
+  write_traj: true
+  traj_interval: 1
   slurm:
-    gpus_per_node: 1
+    num_ranks: 1000
 
-# post-ml deduplication and ranking
-post_relaxation_filter:       # After ML relaxation
-  energy_cutoff: 20.0  # kJ/mol above minimum
-  density_cutoff: 0.1  # g/cm³ tolerance
+# Post-ML filtering + deduplication
+post_relaxation_filter:
+  remove_problematic: true   # drop structures that didn't converge or whose connectivity changed
+  energy_cutoff: 20          # kJ/mol above the global minimum (null = no filter)
+  density_cutoff: 10         # g/cm³ upper bound on relaxed density (null = no filter)
+  assign_groups: true
+  remove_duplicates: true
   ltol: 0.2
   stol: 0.3
   angle_tol: 5
+
+# (Optional) Experimental evaluation
+evaluate:
+  method: csd                                     # "csd" or "pymatgen"
+  target_xtals_dir: /path/to/experimental/cifs    # global directory of {refcode}.cif files
+  csd:
+    num_cpus: 60
+    python_cmd: /path/to/python/with/csd/api/installed
+  pymatgen:
+    match_params:
+      ltol: 0.2
+      stol: 0.3
+      angle_tol: 5
+    slurm:
+      job-name: eval_pymatgen
+      cpus_per_task: 1
+      mem_gb: 10
+      time: 1000
 ```
 
 ### Basic Usage

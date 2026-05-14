@@ -26,6 +26,7 @@ Filtering Process:
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -90,7 +91,7 @@ def filter_and_deduplicate_structures_single(
     z_val: int | None = None,
 ):
     """
-    Apply filtering and deduplication to a single dataset (typically one Z-value group).
+    Apply filtering and deduplication to a single parquet dataset.
 
     Args:
         input_filename: Path to input parquet file with structure data
@@ -129,7 +130,7 @@ def filter_and_deduplicate_structures_single(
     # Most likely this was performed at the relaxation stage already
     if root_unrelaxed is not None:
         structures_df_unrelaxed = pd.read_parquet(
-            root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif"]
+            root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif_generated"]
         )
         # Merge with unrelaxed data if requested for comparison studies
         structures_df = structures_df.merge(
@@ -140,11 +141,13 @@ def filter_and_deduplicate_structures_single(
         )
 
         # Convert CIF strings to atomic structures for connectivity analysis
-        final_atoms = structures_df["relaxed_cif"].apply(cif_to_atoms)
-        initial_atoms = structures_df["cif"].apply(cif_to_atoms)
+        final_atoms = structures_df["cif_relaxed"].apply(cif_to_atoms)
+        initial_atoms = structures_df["cif_generated"].apply(cif_to_atoms)
 
         # Validate bonding network preservation during relaxation
-        structures_df["connectivity_unchanged"] = p_map(
+
+        num_cpus = max(len(os.sched_getaffinity(0)), 1)
+        structures_df["validity.connectivity_unchanged"] = p_map(
             check_no_changes_in_covalent_matrix,
             initial_atoms,
             final_atoms,
@@ -164,17 +167,19 @@ def filter_and_deduplicate_structures_single(
 
     # 2. Separate problematic structures for retention
     problematic_structures_df = structures_df[
-        ~structures_df["converged"] | ~structures_df["connectivity_unchanged"]
+        ~structures_df["optimizer_converged"]
+        | ~structures_df["validity.connectivity_unchanged"]
     ]
     structures_df_filtered = structures_df[
-        structures_df["converged"] & structures_df["connectivity_unchanged"]
+        structures_df["optimizer_converged"]
+        & structures_df["validity.connectivity_unchanged"]
     ]
 
     # 3. Apply multi-stage filtering workflow
     if density_cutoff is not None:
         logger.info(f"Before filtering by density: {structures_df.shape}")
         structures_df = structures_df[
-            structures_df["density"] <= density_cutoff
+            structures_df["density_relaxed"] <= density_cutoff
         ]  # Remove unphysically dense structures
         logger.info(f"After filtering by density: {structures_df.shape}")
 
@@ -266,7 +271,7 @@ def filter_and_deduplicate_structures(
     root_unrelaxed: Path | None = None,
 ):
     """
-    Orchestrate parallel filtering and deduplication across multiple structure datasets.
+    Submit parallel filtering jobs for multiple datasets.
 
     Submits one SLURM job per (molecule, Z-value) combination. Structures with different
     Z values cannot match during deduplication, so per-Z splitting is semantically correct
@@ -287,7 +292,7 @@ def filter_and_deduplicate_structures(
         root_unrelaxed: Root directory with unrelaxed structures
 
     Returns:
-        List of submitit job objects for monitoring progress
+        List of submitit job objects.
     """
     logger = get_central_logger()
 

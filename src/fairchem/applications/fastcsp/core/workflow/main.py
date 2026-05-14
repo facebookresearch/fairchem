@@ -151,7 +151,7 @@ def main(args: argparse.Namespace) -> None:
 
     # 2. Read Genarris outputs, deduplicate, and create Parquet files
     if "process_generated" in args.stages:
-        logging.log_stage_start(logger, "deduplication of Genarris structures")
+        logging.log_stage_start(logger, "processing of Genarris structures")
         from fairchem.applications.fastcsp.core.workflow.process_generated import (
             get_pre_relax_filter_config,
             process_genarris_outputs,
@@ -167,15 +167,16 @@ def main(args: argparse.Namespace) -> None:
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
             npartitions=pre_relax_config["npartitions"],
+            assign_groups=pre_relax_config["assign_groups"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
-            logger, "deduplicating structures from Genarris", len(jobs)
+            logger, "processing of Genarris structures", len(jobs)
         )
 
     # 3. Relax structures using UMA MLIP
     if "relax" in args.stages:
-        logging.log_stage_start(logger, "ML-relaxation of deduplicated structures")
+        logging.log_stage_start(logger, "ML-relaxation of processed structures")
         from fairchem.applications.fastcsp.core.workflow.relax import (
             get_relax_config_and_dir,
             run_relax_jobs,
@@ -188,13 +189,13 @@ def main(args: argparse.Namespace) -> None:
             relax_config=relax_config,
         )
         wait_for_jobs(jobs)
-        logging.log_stage_complete(logger, "relaxing structures", len(jobs))
+        logging.log_stage_complete(
+            logger, "ML-relaxation of processed structures", len(jobs)
+        )
 
     # 4. Filter, deduplicate, and rank structures
     if "filter" in args.stages:
-        logging.log_stage_start(
-            logger, "filtering and deduplication of ML-relaxed structures"
-        )
+        logging.log_stage_start(logger, "filtering of ML-relaxed structures")
         from fairchem.applications.fastcsp.core.workflow.filter import (
             filter_and_deduplicate_structures,
             get_post_relax_config,
@@ -220,7 +221,7 @@ def main(args: argparse.Namespace) -> None:
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
-            logger, "filtering and deduplicating ML-relaxed structures", len(jobs)
+            logger, "filtering of ML-relaxed structures", len(jobs)
         )
 
     # 5. (Optional) Compare predicted structures to experimental

@@ -7,14 +7,14 @@ molecules: configs/example_systems.csv # File containing list of target molecule
 # Genarris configuration for structure generation
 genarris:
   # Execution environment
-  python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
-  genarris_script: /path/to/genarris_master.py        # Path to Genarris master script
   mpi_launcher: /path/to/mpirun                       # MPI launcher: mpirun, srun, or custom path
-  base_config: configs/gnrs_base.conf                 # Base Genarris configuration template
+  python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
+  genarris_cli: /path/to/genarris_cli.py              # Path to Genarris cli script
+  genarris_base_config: configs/gnrs_base.conf        # Base Genarris configuration template
   # Structure generation parameters
   vars:
     Z: [1, 2, 3, 4, 6, 8] # [1] by default
-    spg_info: standard # all compatible ("standard") by default
+    spg_distribution_type: standard # "standard" (= all compatible space groups) or list[int] of space-group numbers
     num_structures_per_spg: 500 # 500 by default
     read_z_from_file: false # read z from "molecules" file
     read_spg_from_file: false # read spg from "molecules" file
@@ -40,34 +40,34 @@ relax:
   calculator: uma_sm_1p1_omc # UMA model type (or uma_sm_1p1_omol)
   optimizer: BFGS            # Optimization algorithm
   fmax: 0.01                 # Force convergence criterion (eV/Å)
-  max-steps: 1000            # Maximum optimization steps
-  fix-symmetry: false        # Do not preserve crystal symmetry
-  relax-cell: true           # Allow unit cell relaxation
+  max_steps: 1000            # Maximum optimization steps
+  fix_symmetry: false        # Do not preserve crystal symmetry
+  relax_cell: true           # Allow unit cell relaxation
   write_traj: true           # Enable writing of trajectory files
-  traj-interval: 1           # Interval for writing trajectory frames
+  traj_interval: 1           # Interval for writing trajectory frames
   slurm:
     num_ranks: 1000
 
 # Filtering criteria and deduplication parameters after relaxation
 post_relaxation_filter:       # After ML relaxation
   remove_problematic: true     # Remove structures that failed to converge or connectivity check
-  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum or None
-  density_cutoff: 10           # Density cutoff in g/cm³ or None
-  assign_groups: true          # Assign groups to structures
-  ltol: 0.2
-  stol: 0.3
-  angle_tol: 5
-  remove_duplicates: true      # Enable duplicate removal
+  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum (null = no filter)
+  density_cutoff: 10           # Maximum density in g/cm³ (null = no filter)
+  assign_groups: true          # Assign group indices via deduplication
+  ltol: 0.2                    # Lattice parameter tolerance
+  stol: 0.3                    # Site tolerance (Angstrom)
+  angle_tol: 5                 # Angle tolerance (degrees)
+  remove_duplicates: true      # Drop all-but-one structure per group
 
 # (Optional) Experimental structure evaluation settings
 evaluate:
-  method: csd               # Either "csd" or "pymatgen"
   target_xtals_dir: /path/to/experimental/crystal/structures # Directory with experimental structures (CIF format)
   # NOTE: Optional if molecules CSV file contains "cif_path" column
   # Alternative: Use molecules CSV file with cif_path column instead of target_xtals_dir
   # If molecules file contains "cif_path" column:
   #   - Single refcode: cif_path should point to a .cif file or directory containing {refcode}.cif
   #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
+  method: csd               # Either "csd" or "pymatgen"
   csd:
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
     python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
