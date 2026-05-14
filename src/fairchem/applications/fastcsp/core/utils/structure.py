@@ -34,6 +34,7 @@ import numpy as np
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
+from scipy.sparse import csgraph
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -113,6 +114,51 @@ def get_structure_hash(
 
     # Combine all components into single hash string
     return "_".join(hash_components)
+
+
+def check_correct_z(
+    structure_or_atoms: Structure | Atoms | None,
+    requested_z: int,
+) -> bool:
+    """
+    Check whether the number of connected molecular fragments in the cell
+    matches the requested number of formula units (Z).
+
+    Mirrors the algorithm in csp_benchmark's ``check_no_changes_in_Z``
+    (counts connected components of the JmolNN adjacency matrix), but
+    compares the observed count against an integer ``requested_z`` instead
+    of a second structure.
+
+    Args:
+        structure_or_atoms: Pymatgen ``Structure`` or ASE ``Atoms`` for the
+            generated unit cell. Returns ``False`` if ``None``.
+        requested_z: Integer Z value the generator was asked for.
+
+    Returns:
+        True if the JmolNN connected-component count equals ``requested_z``,
+        False otherwise (or if the input is ``None``).
+    """
+    # Handle error cases where the structure couldn't be processed
+    if structure_or_atoms is None:
+        return False
+
+    # Accept either a pymatgen Structure or an ASE Atoms; convert if needed
+    if isinstance(structure_or_atoms, Structure):
+        structure = structure_or_atoms
+    else:
+        structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
+
+    # Build adjacency matrix using Jmol bonding radii (same idiom as
+    # check_no_changes_in_covalent_matrix below).
+    nn_info = JmolNN().get_all_nn_info(structure)
+    nn_matrix = np.zeros((len(nn_info), len(nn_info)))
+    for i in range(len(nn_info)):
+        for j in range(len(nn_info[i])):
+            nn_matrix[i, nn_info[i][j]["site_index"]] = 1
+
+    # Connected-component count == observed number of molecular fragments
+    observed_z = csgraph.connected_components(nn_matrix)[0]
+    return observed_z == requested_z
 
 
 def check_no_changes_in_covalent_matrix(

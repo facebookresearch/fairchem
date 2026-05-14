@@ -38,7 +38,10 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     get_process_slurm_config,
     submit_slurm_jobs,
 )
-from fairchem.applications.fastcsp.core.utils.structure import get_partition_id
+from fairchem.applications.fastcsp.core.utils.structure import (
+    check_correct_z,
+    get_partition_id,
+)
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
@@ -143,6 +146,7 @@ def structure_to_row(
         "cif_generated": cif_str,
         "partition_id": get_partition_id(unique_structure_id, npartitions),
         "structure_generated": structure,
+        "validity.crystal_generated.correct_z": check_correct_z(structure, z_val),
     }
 
 
