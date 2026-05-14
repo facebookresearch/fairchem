@@ -124,9 +124,8 @@ def get_allscaip_full(
 
 
 @pytest.mark.gpu()
-def test_fixed_forward_full_gpu():
+def test_fixed_forward_full_gpu(compile_reset_state):
     # make_deterministic()
-    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     seed_everywhere()
