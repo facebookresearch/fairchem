@@ -37,7 +37,7 @@ from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
+    check_connectivity_changes,
 )
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -345,10 +345,24 @@ def relax_structures(
             atoms.info["converged"] for atoms in atoms_relaxed
         ]
 
-        # Validate structural integrity after relaxation
-        structures_df["validity.connectivity_unchanged"] = [
-            check_no_changes_in_covalent_matrix(atoms_initial, atoms_final)
+        # Validate structural integrity after relaxation: build the JmolNN bond
+        # matrix once per structure and derive both the Z-unchanged and the
+        # connectivity-unchanged flags from a single helper call.
+        connectivity_results = [
+            check_connectivity_changes(
+                atoms_initial,
+                atoms_final,
+                check_exact_bonds=True,
+                check_molecule_count=True,
+            )
             for atoms_initial, atoms_final in zip(atoms_list_original, atoms_relaxed)
+        ]
+        # Z (molecule count) check first, then full connectivity check
+        structures_df["validity.crystal_relaxed.z_unchanged"] = [
+            r["molecule_count_preserved"] for r in connectivity_results
+        ]
+        structures_df["validity.connectivity_unchanged"] = [
+            r["exact_bonds_preserved"] for r in connectivity_results
         ]
         # Save results to Parquet
         output_file.parent.mkdir(parents=True, exist_ok=True)

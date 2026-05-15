@@ -124,11 +124,6 @@ def check_correct_z(
     Check whether the number of connected molecular fragments in the cell
     matches the requested number of formula units (Z).
 
-    Mirrors the algorithm in csp_benchmark's ``check_no_changes_in_Z``
-    (counts connected components of the JmolNN adjacency matrix), but
-    compares the observed count against an integer ``requested_z`` instead
-    of a second structure.
-
     Args:
         structure_or_atoms: Pymatgen ``Structure`` or ASE ``Atoms`` for the
             generated unit cell. Returns ``False`` if ``None``.
@@ -148,8 +143,7 @@ def check_correct_z(
     else:
         structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
 
-    # Build adjacency matrix using Jmol bonding radii (same idiom as
-    # check_no_changes_in_covalent_matrix below).
+    # Build adjacency matrix using Jmol bonding radii
     nn_info = JmolNN().get_all_nn_info(structure)
     nn_matrix = np.zeros((len(nn_info), len(nn_info)))
     for i in range(len(nn_info)):
@@ -161,43 +155,140 @@ def check_correct_z(
     return observed_z == requested_z
 
 
+def check_connectivity_changes(
+    initial_atoms: Atoms | None,
+    final_atoms: Atoms | None,
+    check_exact_bonds: bool = True,
+    check_molecule_count: bool = True,
+) -> dict:
+    """
+    Compare connectivity between two structures with one bond-matrix build per
+    structure (no StructureMatcher / site reordering — sites are kept in their
+    natural order).
+
+    The JmolNN adjacency matrix is built once per input, then the requested
+    checks are derived from those matrices: (a) exact-bond preservation via
+    matrix equality and (b) molecule-count preservation via connected-component
+    counts.
+
+    Args:
+        initial_atoms: Structure before relaxation (ASE ``Atoms``).
+        final_atoms: Structure after relaxation (ASE ``Atoms``).
+        check_exact_bonds: Whether to compare the full adjacency matrices.
+        check_molecule_count: Whether to compare the connected-component counts.
+
+    Returns:
+        Dict with keys:
+            - ``no_changes``: True iff every requested check passed.
+            - ``exact_bonds_preserved``: True iff bond matrices are equal
+              (or check disabled, in which case True by default).
+            - ``molecule_count_preserved``: True iff component counts match
+              (or check disabled, in which case True by default).
+            - ``initial_molecule_count``: Component count in initial (0 if not checked).
+            - ``final_molecule_count``: Component count in final (0 if not checked).
+            - ``bonds_changed``: True iff exact-bond check ran and disagreed.
+            - ``error``: Optional error message if something failed.
+    """
+    result = {
+        "no_changes": True,
+        "exact_bonds_preserved": True,
+        "molecule_count_preserved": True,
+        "initial_molecule_count": 0,
+        "final_molecule_count": 0,
+        "bonds_changed": False,
+    }
+
+    if initial_atoms is None or final_atoms is None:
+        result.update(
+            no_changes=False,
+            exact_bonds_preserved=False,
+            molecule_count_preserved=False,
+            error="One or both input structures are None",
+        )
+        return result
+
+    try:
+        # Convert ASE Atoms to pymatgen Structures for neighbor analysis
+        initial_structure = AseAtomsAdaptor.get_structure(initial_atoms)
+        final_structure = AseAtomsAdaptor.get_structure(final_atoms)
+
+        # Build adjacency matrix for initial structure using Jmol bonding radii
+        initial_nn_info = JmolNN().get_all_nn_info(initial_structure)
+        initial_nn_matrix = np.zeros((len(initial_nn_info), len(initial_nn_info)))
+        for i in range(len(initial_nn_info)):
+            for j in range(len(initial_nn_info[i])):
+                initial_nn_matrix[i, initial_nn_info[i][j]["site_index"]] = 1
+
+        # Build adjacency matrix for final (relaxed) structure
+        final_nn_info = JmolNN().get_all_nn_info(final_structure)
+        final_nn_matrix = np.zeros((len(final_nn_info), len(final_nn_info)))
+        for i in range(len(final_nn_info)):
+            for j in range(len(final_nn_info[i])):
+                final_nn_matrix[i, final_nn_info[i][j]["site_index"]] = 1
+
+        if check_exact_bonds:
+            # Direct comparison in natural site order (no permutation)
+            exact_bonds_preserved = bool(
+                np.array_equal(initial_nn_matrix, final_nn_matrix)
+            )
+            result["exact_bonds_preserved"] = exact_bonds_preserved
+            result["bonds_changed"] = not exact_bonds_preserved
+            if not exact_bonds_preserved:
+                result["no_changes"] = False
+
+        if check_molecule_count:
+            initial_molecule_count = int(
+                csgraph.connected_components(initial_nn_matrix)[0]
+            )
+            final_molecule_count = int(csgraph.connected_components(final_nn_matrix)[0])
+            result["initial_molecule_count"] = initial_molecule_count
+            result["final_molecule_count"] = final_molecule_count
+            molecule_count_preserved = initial_molecule_count == final_molecule_count
+            result["molecule_count_preserved"] = molecule_count_preserved
+            if not molecule_count_preserved:
+                result["no_changes"] = False
+
+        return result
+
+    except Exception as e:
+        result.update(
+            no_changes=False,
+            exact_bonds_preserved=False,
+            molecule_count_preserved=False,
+            error=str(e),
+        )
+        return result
+
+
 def check_no_changes_in_covalent_matrix(
     initial_atoms: Atoms, final_atoms: Atoms
 ) -> bool:
     """
     Check if covalent bonding network is preserved after relaxation.
 
-    Args:
-        initial_atoms: Structure before relaxation.
-        final_atoms: Structure after relaxation.
-
-    Returns:
-        True if bonding network unchanged, False otherwise.
+    Thin wrapper around ``check_connectivity_changes``; kept for backwards
+    compatibility of the public API.
     """
-    # Handle error cases where structures couldn't be processed
-    if initial_atoms is None or final_atoms is None:
-        return False
+    return check_connectivity_changes(
+        initial_atoms,
+        final_atoms,
+        check_exact_bonds=True,
+        check_molecule_count=False,
+    )["exact_bonds_preserved"]
 
-    # Convert ASE Atoms to pymatgen Structures for neighbor analysis
-    initial_structure = AseAtomsAdaptor.get_structure(initial_atoms)
-    final_structure = AseAtomsAdaptor.get_structure(final_atoms)
 
-    # Build adjacency matrix for initial structure using Jmol bonding radii
-    initial_nn_info = JmolNN().get_all_nn_info(initial_structure)
-    initial_nn_matrix = np.zeros((len(initial_nn_info), len(initial_nn_info)))
-    for i in range(len(initial_nn_info)):
-        for j in range(len(initial_nn_info[i])):
-            # Mark bonded pairs in adjacency matrix
-            initial_nn_matrix[i, initial_nn_info[i][j]["site_index"]] = 1
+def check_no_changes_in_Z(
+    initial_atoms: Atoms | None, final_atoms: Atoms | None
+) -> bool:
+    """
+    Check if the number of connected molecular fragments (Z) is preserved
+    after relaxation.
 
-    # Build adjacency matrix for final (relaxed) structure
-    final_nn_info = JmolNN().get_all_nn_info(final_structure)
-    final_nn_matrix = np.zeros((len(final_nn_info), len(final_nn_info)))
-    for i in range(len(final_nn_info)):
-        for j in range(len(final_nn_info[i])):
-            # Mark bonded pairs in adjacency matrix
-            final_nn_matrix[i, final_nn_info[i][j]["site_index"]] = 1
-
-    # Check that both bonding networks are identical
-    # Any difference indicates bond formation/breaking during relaxation
-    return np.array_equal(initial_nn_matrix, final_nn_matrix)
+    Thin wrapper around ``check_connectivity_changes``.
+    """
+    return check_connectivity_changes(
+        initial_atoms,
+        final_atoms,
+        check_exact_bonds=False,
+        check_molecule_count=True,
+    )["molecule_count_preserved"]

@@ -37,7 +37,7 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
+    check_connectivity_changes,
     cif_to_atoms,
     cif_to_structure,
 )
@@ -138,12 +138,21 @@ def filter_and_deduplicate_structures_single(
         # Validate bonding network preservation during relaxation
 
         num_cpus = max(len(os.sched_getaffinity(0)), 1)
-        structures_df["validity.connectivity_unchanged"] = p_map(
-            check_no_changes_in_covalent_matrix,
+        # Single helper call per pair: builds each NN matrix once and returns
+        # both the Z-unchanged and connectivity-unchanged flags.
+        connectivity_results = p_map(
+            check_connectivity_changes,
             initial_atoms,
             final_atoms,
             num_cpus=num_cpus,
         )
+        # Z (molecule count) check first, then full connectivity check
+        structures_df["validity.crystal_relaxed.z_unchanged"] = [
+            r["molecule_count_preserved"] for r in connectivity_results
+        ]
+        structures_df["validity.connectivity_unchanged"] = [
+            r["exact_bonds_preserved"] for r in connectivity_results
+        ]
 
         # Save intermediate results with connectivity validation flags
         structures_df.to_parquet(
@@ -159,10 +168,12 @@ def filter_and_deduplicate_structures_single(
     # 2. Separate problematic structures for retention
     problematic_structures_df = structures_df[
         ~structures_df["optimizer_converged"]
+        | ~structures_df["validity.crystal_relaxed.z_unchanged"]
         | ~structures_df["validity.connectivity_unchanged"]
     ]
     structures_df_filtered = structures_df[
         structures_df["optimizer_converged"]
+        & structures_df["validity.crystal_relaxed.z_unchanged"]
         & structures_df["validity.connectivity_unchanged"]
     ]
 
