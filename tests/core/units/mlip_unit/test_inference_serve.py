@@ -31,7 +31,6 @@ from ray import serve
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
-from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.batch_server import (
     get_ray_connection_info,
     setup_batch_predict_server,
@@ -44,22 +43,6 @@ ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
-
-
-@pytest.fixture(scope="module")
-def uma_predict_unit():
-    """Module-scoped predict unit using the first available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
-        pytest.skip("No UMA models available")
-    settings = InferenceSettings(
-        merge_mole=False,
-        external_graph_gen=False,
-    )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(
-        uma_models[0], device=device, inference_settings=settings
-    )
 
 
 @pytest.fixture(scope="module")

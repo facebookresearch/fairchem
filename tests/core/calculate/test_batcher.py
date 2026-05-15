@@ -20,11 +20,23 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate._batch import InferenceBatcher
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
 pytestmark = pytest.mark.serial
+
+
+@pytest.fixture(scope="module")
+def uma_predict_unit_alt():
+    """Module-scoped predict unit using the first available UMA model."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    if not uma_models:
+        pytest.skip("No UMA models available")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
 
 
 def setup_ray():
