@@ -97,7 +97,7 @@ def load_update_config(
 
 
 def _build_cluster_config(
-    config: str | Path | None = None,
+    config: str | Path,
     head_file: str | Path | None = None,
     num_workers: int | None = None,
     partition: str | None = None,
