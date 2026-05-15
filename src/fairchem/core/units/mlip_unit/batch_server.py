@@ -599,7 +599,7 @@ def setup_multiplexed_batch_predict_server(
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
     deployment_name: str = "fairchem-inference",
-    route_prefix: str = "/predict",
+    route_prefix: str = "/multiplex-predict",
     autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
     """

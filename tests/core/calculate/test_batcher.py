@@ -19,34 +19,12 @@ import torch
 from ase.build import bulk
 from ray import serve
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate._batch import InferenceBatcher
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
 pytestmark = pytest.mark.serial
-
-
-@pytest.fixture(scope="module")
-def uma_predict_unit():
-    """Module-scoped predict unit using the first available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
-        pytest.skip("No UMA models available")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
-
-
-@pytest.fixture(scope="module")
-def uma_predict_unit_alt():
-    """Module-scoped predict unit using the first available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
-        pytest.skip("No UMA models available")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
 
 
 def setup_ray():
@@ -243,7 +221,6 @@ def test_checkpoint_swap_with_energy_verification(
             ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow room for swaps
         )
 
-        # Test atoms
         atoms_list = [bulk("Cu"), bulk("Al")]
 
         # Get energies with first checkpoint
@@ -256,9 +233,9 @@ def test_checkpoint_swap_with_energy_verification(
 
         # Swap to different checkpoint
         batcher.update_checkpoint(uma_predict_unit_alt)
-        time.sleep(0.2)  # Give time for checkpoint swap to complete
 
         # Get energies with swapped checkpoint - should be different
+        atoms_list = [bulk("Cu"), bulk("Al")]
         energies_swapped = []
         for atoms in atoms_list:
             atoms.calc = FAIRChemCalculator(
@@ -274,7 +251,6 @@ def test_checkpoint_swap_with_energy_verification(
 
         # Swap back to original checkpoint
         batcher.update_checkpoint(uma_predict_unit)
-        time.sleep(0.2)  # Give time for checkpoint swap to complete
 
         # Get energies with original checkpoint - should match initial
         energies_restored = []
