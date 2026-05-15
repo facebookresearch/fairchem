@@ -33,10 +33,6 @@ from fairchem.core.units.mlip_unit.batch_server import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_RAY_CLUSTER_YAML = (
-    Path(__file__).resolve().parents[4] / "ray_server_configs" / "ray_cluster.yaml"
-)
-
 
 def recursive_dict_merge(*dicts: dict) -> dict:
     """
@@ -59,7 +55,7 @@ def recursive_dict_merge(*dicts: dict) -> dict:
 
 
 def load_update_config(
-    config: str | Path | None = None,
+    config: str | Path,
     head_file: str | Path | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -70,8 +66,7 @@ def load_update_config(
     head_file path where connection info will be written.
 
     Args:
-        config: Path to YAML config file. Defaults to
-            ray_server_configs/ray_cluster.yaml in this repo.
+        config: Path to YAML config file.
         head_file: Path to head.json file for connecting to existing cluster
             or where to write connection info. If None, generates path based
             on cluster UUID.
@@ -83,9 +78,6 @@ def load_update_config(
         - cluster_id: Unique identifier for this cluster (if cluster_id generated)
         - head_file: Path to head.json with connection info
     """
-    if config is None:
-        config = _DEFAULT_RAY_CLUSTER_YAML
-
     with open(config) as f:
         default_config = yaml.safe_load(f)
 
