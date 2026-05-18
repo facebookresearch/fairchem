@@ -15,4 +15,4 @@ ray[serve]==2.55.1
 ipykernel==7.2.0
 jupyter_book==2.1.5
 pytest-xdist==3.8.0
-nvalchemi-toolkit-ops==0.3.0
+nvalchemi-toolkit-ops==0.3.1
