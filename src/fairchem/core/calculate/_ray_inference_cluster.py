@@ -47,7 +47,9 @@ def _find_free_localhost_port() -> int:
 
 
 def recursive_dict_merge(*dicts: dict) -> dict:
-    """Recursively merge dictionaries, later values override earlier ones."""
+    """
+    Recursively merge dictionaries, later values override earlier ones.
+    """
     result = {}
     for d in dicts:
         if d is None:
@@ -65,7 +67,7 @@ def recursive_dict_merge(*dicts: dict) -> dict:
 
 
 def load_update_config(
-    config: str | Path | None = None,
+    config: str | Path,
     head_file: str | Path | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -75,37 +77,25 @@ def load_update_config(
     Loads defaults from YAML, generates a unique cluster ID, and sets up the
     head_file path where connection info will be written.
 
-    Parameters
-    ----------
-    config : str | Path, optional
-        Path to YAML config file. Defaults to ray_cluster.yaml in this directory.
-    head_file : str | Path, optional
-        Path to head.json file for connecting to existing cluster or where to
-        write connection info. If None, generates path based on cluster UUID.
-    cluster_config_overrides : dict, optional
-        Additional config overrides to merge.
+    Args:
+        config: Path to YAML config file.
+        head_file: Path to head.json file for connecting to existing cluster
+            or where to write connection info. If None, generates path based
+            on cluster UUID.
+        cluster_config_overrides: Additional config overrides to merge.
 
-    Returns
-    -------
-    dict
+    Returns:
         Merged configuration with keys:
         - All settings from YAML (partition, time_minutes, cpus_per_node, etc.)
         - cluster_id: Unique identifier for this cluster (if cluster_id generated)
         - head_file: Path to head.json with connection info
     """
-    # Use default config in local directory if not present
-    if config is None:
-        config = Path(__file__).parent / "ray_cluster.yaml"
-
-    # Load the default config
     with open(config) as f:
         default_config = yaml.safe_load(f)
 
     auto_overrides = {}
 
-    # Set up head_file path
     if head_file is None:
-        # Generate cluster ID
         cluster_id = str(uuid.uuid4())
         logger.info(f"Specifying a Ray cluster with uuid {cluster_id}")
         auto_overrides["cluster_id"] = cluster_id
@@ -119,7 +109,7 @@ def load_update_config(
 
 
 def _build_cluster_config(
-    config: str | Path | None = None,
+    config: str | Path,
     head_file: str | Path | None = None,
     num_workers: int | None = None,
     partition: str | None = None,
@@ -136,47 +126,29 @@ def _build_cluster_config(
     cluster_config_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Build complete cluster configuration by merging defaults, explicit params, and overrides.
+    Build complete cluster configuration by merging defaults, explicit params,
+    and overrides.
 
-    Parameters
-    ----------
-    config : str | Path, optional
-        Path to YAML config file for defaults
-    head_file : str | Path, optional
-        Path to head.json file (if connecting to existing cluster or explicit path)
-    num_workers : int, optional
-        Total number of SLURM jobs to submit (1 head + remaining workers)
-    partition : str, optional
-        SLURM partition
-    gpus_per_node : int, optional
-        GPUs per node (0 for CPU-only)
-    cpus_per_node : int, optional
-        CPUs per node
-    time_minutes : int, optional
-        SLURM time limit in minutes
-    mem_gb : int, optional
-        Memory per node in GB
-    env_vars : dict, optional
-        Environment variables to set on workers
-    exclude_nodes : list, optional
-        SLURM nodes to exclude
-    slurm_constraint : str, optional
-        SLURM constraint (e.g., "volta32gb" for GPU type)
-    slurm_additional_parameters : dict, optional
-        Additional SLURM parameters passed to submitit
-    start_inference_server : bool, optional
-        If True, start FAIRChem inference server on cluster
-    serve_log_level : str, optional
-        Log level for Ray Serve inference server (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    cluster_config_overrides : dict, optional
-        Additional config overrides (merged last)
+    Args:
+        config: Path to YAML config file for defaults.
+        head_file: Path to head.json file.
+        num_workers: Total number of SLURM jobs to submit.
+        partition: SLURM partition.
+        gpus_per_node: GPUs per node (0 for CPU-only).
+        cpus_per_node: CPUs per node.
+        time_minutes: SLURM time limit in minutes.
+        mem_gb: Memory per node in GB.
+        env_vars: Environment variables to set on workers.
+        exclude_nodes: SLURM nodes to exclude.
+        slurm_constraint: SLURM constraint (e.g., "volta32gb").
+        slurm_additional_parameters: Additional SLURM parameters for submitit.
+        start_inference_server: If True, start FAIRChem inference server.
+        serve_log_level: Log level for Ray Serve inference server.
+        cluster_config_overrides: Additional config overrides (merged last).
 
-    Returns
-    -------
-    dict
-        Complete merged configuration
+    Returns:
+        Complete merged configuration.
     """
-    # Build overrides from explicit parameters
     explicit_overrides = {}
     if num_workers is not None:
         explicit_overrides["num_workers"] = num_workers
@@ -203,12 +175,10 @@ def _build_cluster_config(
     if serve_log_level is not None:
         explicit_overrides["serve_log_level"] = serve_log_level
 
-    # Merge explicit overrides with cluster_config_overrides
     merged_overrides = recursive_dict_merge(
         explicit_overrides, cluster_config_overrides
     )
 
-    # Load and merge all config
     return load_update_config(
         config=config,
         head_file=head_file,
@@ -220,15 +190,11 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     """
     Build SLURM requirements dict from config for submitit.
 
-    Parameters
-    ----------
-    config : dict
-        Cluster configuration
+    Args:
+        config: Cluster configuration.
 
-    Returns
-    -------
-    dict
-        Requirements dict for RayCluster
+    Returns:
+        Requirements dict for RayCluster.
     """
     requirements = {
         "slurm_partition": config["partition"],
@@ -243,47 +209,40 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     if config.get("exclude_nodes"):
         requirements["slurm_exclude"] = ",".join(config["exclude_nodes"])
 
-    # Add GPU/hardware constraint (e.g., volta32gb)
     if config.get("slurm_constraint"):
         requirements["slurm_constraint"] = config["slurm_constraint"]
 
-    # Merge any additional SLURM parameters
     if config.get("slurm_additional_parameters"):
         requirements.update(config["slurm_additional_parameters"])
 
     return requirements
 
 
-def _start_ray_cluster_internal(
+# TODO move this and other setup somewhere else
+def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
 ) -> str | tuple[str, Any]:
     """
     Start a Ray cluster with the given configuration.
 
-    Internal helper that handles cluster creation and waiting for head node.
+    Helper that handles cluster creation and waiting for head node.
 
-    Parameters
-    ----------
-    config : dict
-        Complete cluster configuration from _build_cluster_config
-    return_cluster : bool
-        If True, return (head_file, cluster) tuple for lifecycle management.
-        If False, return just head_file string.
+    Args:
+        config: Complete cluster configuration from _build_cluster_config.
+        return_cluster: If True, return (head_file, cluster) tuple for
+            lifecycle management. If False, return just head_file string.
 
-    Returns
-    -------
-    str or tuple
-        Path to head.json file, or (head_file, RayCluster) if return_cluster=True
+    Returns:
+        Path to head.json file, or (head_file, RayCluster) if
+        return_cluster=True.
     """
-
     log_dir = Path(
         os.environ.get("RAY_PREFECT_LOG_DIR", Path.home() / "ray_prefect_logs")
     )
 
     requirements = _build_slurm_requirements(config)
 
-    # Start cluster with the same cluster_id from config for consistency
     cluster = RayCluster(
         log_dir=log_dir,
         cluster_id=config.get("cluster_id"),
@@ -291,7 +250,6 @@ def _start_ray_cluster_internal(
         temp_dir_template=config.get("temp_dir_template"),
     )
 
-    # Start head node - uses native _ray_head_script which writes head.json
     cluster.start_head(
         requirements=requirements,
         name="ray_cluster",
@@ -305,7 +263,6 @@ def _start_ray_cluster_internal(
             name="ray_cluster",
         )
 
-    # Wait for head.json to be written by _ray_head_script
     head_file_path = cluster.state._head_json
     logger.info(f"Waiting for Ray cluster (head file: {head_file_path})...")
     while not cluster.state.is_head_ready():
@@ -340,7 +297,8 @@ def get_slurm_ray_cluster(
     cluster_config_overrides: dict[str, Any] | None = None,
 ):
     """
-    Context manager that starts a Ray cluster on SLURM and shuts it down on exit.
+    Context manager that starts a Ray cluster on SLURM and shuts it down on
+    exit.
 
     Starts a shared cluster that multiple jobs can connect to, and ensures
     clean shutdown when the context exits.
@@ -349,9 +307,9 @@ def get_slurm_ray_cluster(
     connects to that cluster instead of starting a new one (and does not
     shut it down on exit since we didn't create it).
 
-    Usage:
+    Usage::
+
         with get_slurm_ray_cluster(num_workers=32, gpus_per_node=1) as head_file:
-            # Use head_file to connect to the cluster
             import ray
             with open(head_file) as f:
                 head_info = json.load(f)
@@ -359,58 +317,38 @@ def get_slurm_ray_cluster(
             # ... do work ...
         # Cluster is automatically shut down when exiting the context
 
-    Parameters
-    ----------
-    config : str | Path, optional
-        Path to YAML config file for defaults
-    num_workers : int
-        Total number of SLURM jobs to submit (1 head + remaining workers)
-    partition : str, optional
-        SLURM partition
-    gpus_per_node : int, optional
-        GPUs per node (0 for CPU-only)
-    cpus_per_node : int, optional
-        CPUs per node
-    time_minutes : int, optional
-        SLURM time limit in minutes
-    mem_gb : int, optional
-        Memory per node in GB
-    env_vars : dict, optional
-        Environment variables to set on workers
-    exclude_nodes : list, optional
-        SLURM nodes to exclude
-    slurm_constraint : str, optional
-        SLURM constraint for node selection (e.g., "volta32gb" for GPU type)
-    slurm_additional_parameters : dict, optional
-        Additional SLURM parameters passed to submitit (for future flexibility)
-    start_inference_server : bool
-        If True, start FAIRChem inference server on cluster startup.
-        Requires ``predict_unit`` to be provided.
-    predict_unit : MLIPPredictUnit, optional
-        Predict unit to serve. Required when ``start_inference_server=True``.
-    serve_log_level : str, optional
-        Log level for Ray Serve inference server (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    deployment_name : str
-        Ray Serve application name. Default: ``"predict-server"``.
-    cluster_config_overrides : dict, optional
-        Additional config overrides
+    Args:
+        config: Path to YAML config file for defaults.
+        num_workers: Total number of SLURM jobs to submit.
+        partition: SLURM partition.
+        gpus_per_node: GPUs per node (0 for CPU-only).
+        cpus_per_node: CPUs per node.
+        time_minutes: SLURM time limit in minutes.
+        mem_gb: Memory per node in GB.
+        env_vars: Environment variables to set on workers.
+        exclude_nodes: SLURM nodes to exclude.
+        slurm_constraint: SLURM constraint for node selection.
+        slurm_additional_parameters: Additional SLURM parameters for submitit.
+        start_inference_server: If True, start FAIRChem inference server on
+            cluster startup. Requires ``predict_unit`` to be provided.
+        predict_unit: Predict unit to serve. Required when
+            ``start_inference_server=True``.
+        serve_log_level: Log level for Ray Serve inference server.
+        deployment_name: Ray Serve application name.
+        cluster_config_overrides: Additional config overrides.
 
-    Yields
-    ------
-    str
-        Path to head.json file for connecting to the cluster (namespace is stored in the file)
+    Yields:
+        Path to head.json file for connecting to the cluster.
     """
     cluster = None
     manage_cluster = True
 
-    # Check for existing cluster via environment variable
     env_head_file = os.environ.get("RAY_HEAD_FILE")
     if env_head_file and Path(env_head_file).exists():
         logger.info(f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}")
         manage_cluster = False
         head_file = env_head_file
     else:
-        # Build complete configuration using shared helper
         cluster_config = _build_cluster_config(
             config=config,
             num_workers=num_workers,
@@ -428,12 +366,8 @@ def get_slurm_ray_cluster(
             cluster_config_overrides=cluster_config_overrides,
         )
 
-        # Start cluster using shared helper with cluster reference for shutdown
-        head_file, cluster = _start_ray_cluster_internal(
-            cluster_config, return_cluster=True
-        )
+        head_file, cluster = start_ray_cluster(cluster_config, return_cluster=True)
 
-        # Read namespace from head.json for inference server startup
         with open(head_file) as f:
             head_info = json.load(f)
         namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
@@ -442,14 +376,17 @@ def get_slurm_ray_cluster(
         if cluster_config.get("start_inference_server", False):
             if predict_unit is None:
                 raise ValueError(
-                    "predict_unit is required when start_inference_server=True"
+                    "predict_unit is required when " "start_inference_server=True"
                 )
 
             import ray
 
-            client_address = f"ray://{head_info['hostname']}:{head_info['client_port']}"
+            client_address = (
+                f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
+            )
             logger.info(
-                f"Connecting to Ray cluster at {client_address} to start inference server..."
+                f"Connecting to Ray cluster at {client_address} "
+                "to start inference server..."
             )
             ray.init(client_address, namespace=namespace_serve_fairchem)
 
@@ -469,14 +406,15 @@ def get_slurm_ray_cluster(
             predict_unit_ref = ray.put(predict_unit)
             logger.info("Initializing FAIRChem inference server deployment...")
             ray.get(_setup_serve_remote.remote(predict_unit_ref, deployment_name))
-            logger.info("Inference server deployment complete, verifying readiness...")
+            logger.info(
+                "Inference server deployment complete, " "verifying readiness..."
+            )
             ray.get(_wait_for_serve_ready_remote.remote(deployment_name))
             logger.info("Inference server ready and accepting requests")
 
     try:
         yield head_file
     finally:
-        # Only shut down the cluster if we created it
         if cluster is not None and manage_cluster:
             logger.info("Shutting down Ray cluster...")
             try:
@@ -509,7 +447,8 @@ def get_local_ray_cluster(
     deployment_name: str = "predict-server",
 ):
     """
-    Context manager that starts a local Ray cluster with optional inference server.
+    Context manager that starts a local Ray cluster with optional inference
+    server.
 
     Similar to get_slurm_ray_cluster but for local/testing use. Automatically:
     - Detects available GPUs if num_gpus is None
@@ -518,7 +457,8 @@ def get_local_ray_cluster(
     - Writes head file for code that expects RAY_HEAD_FILE
     - Cleans up on exit
 
-    Usage:
+    Usage::
+
         with get_local_ray_cluster() as head_file:
             # Run code that uses Ray Serve inference
             ...
@@ -528,28 +468,21 @@ def get_local_ray_cluster(
             # Run CPU-only tests
             ...
 
-    Parameters
-    ----------
-    head_file : str | Path, optional
-        Path where head.json will be written. If None, creates a temp file.
-    num_cpus : int, optional
-        Number of CPUs for Ray. Defaults to 8.
-    num_gpus : int, optional
-        Number of GPUs for Ray. If None, auto-detects via torch.cuda.
-    start_inference_server : bool
-        If True (default), start FAIRChem Ray Serve inference server.
-        Requires ``predict_unit`` to be provided.
-    predict_unit : MLIPPredictUnit, optional
-        Predict unit to serve. Required when ``start_inference_server=True``.
-    log_level : str
-        Ray logging level. Default: "WARNING"
-    deployment_name : str
-        Ray Serve application name. Default: ``"predict-server"``.
+    Args:
+        head_file: Path where head.json will be written. If None, creates
+            a temp file.
+        num_cpus: Number of CPUs for Ray. Defaults to 8.
+        num_gpus: Number of GPUs for Ray. If None, auto-detects via
+            torch.cuda.
+        start_inference_server: If True (default), start FAIRChem Ray Serve
+            inference server. Requires ``predict_unit`` to be provided.
+        predict_unit: Predict unit to serve. Required when
+            ``start_inference_server=True``.
+        log_level: Ray logging level.
+        deployment_name: Ray Serve application name.
 
-    Yields
-    ------
-    str
-        Path to head.json file (namespace is stored in the file)
+    Yields:
+        Path to head.json file.
     """
     import ray
     from ray import serve
@@ -558,7 +491,6 @@ def get_local_ray_cluster(
     if num_cpus is None:
         num_cpus = 8
 
-    # Auto-detect GPUs if not specified
     if num_gpus is None:
         try:
             import torch
@@ -567,21 +499,18 @@ def get_local_ray_cluster(
         except ImportError:
             num_gpus = 0
 
-    # Generate head_file path and namespace if not provided
     if head_file is None:
         cluster_id = str(uuid.uuid4())
         head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
     else:
         head_file_path = Path(head_file).expanduser()
 
-    # Set namespace only when starting inference server
     namespace_serve_fairchem = "fairchem_inference" if start_inference_server else None
 
     # Find free ports for this cluster instance
     dashboard_port = _find_free_localhost_port()
 
     try:
-        # Initialize Ray locally with unique ports
         if not ray.is_initialized():
             init_kwargs = {
                 "num_cpus": num_cpus,
@@ -595,11 +524,16 @@ def get_local_ray_cluster(
             if num_gpus > 0:
                 init_kwargs["num_gpus"] = num_gpus
                 logger.info(
-                    f"Starting local Ray cluster with {num_cpus} CPUs and {num_gpus} GPUs (namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})"
+                    f"Starting local Ray cluster with {num_cpus} CPUs "
+                    f"and {num_gpus} GPUs (namespace: "
+                    f"{namespace_serve_fairchem}, dashboard port: "
+                    f"{dashboard_port})"
                 )
             else:
                 logger.info(
-                    f"Starting local Ray cluster with {num_cpus} CPUs (no GPUs, namespace: {namespace_serve_fairchem}, dashboard port: {dashboard_port})"
+                    f"Starting local Ray cluster with {num_cpus} CPUs "
+                    f"(no GPUs, namespace: {namespace_serve_fairchem}, "
+                    f"dashboard port: {dashboard_port})"
                 )
 
             ray.init(**init_kwargs)
@@ -607,11 +541,10 @@ def get_local_ray_cluster(
             hostname = socket.gethostname()
             logger.info(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
 
-        # Start Ray Serve if inference server requested
         if start_inference_server:
             if predict_unit is None:
                 raise ValueError(
-                    "predict_unit is required when start_inference_server=True"
+                    "predict_unit is required when " "start_inference_server=True"
                 )
 
             logger.info("Initializing FAIRChem inference server deployment...")
@@ -620,12 +553,12 @@ def get_local_ray_cluster(
                 deployment_name=deployment_name,
             )
 
-            logger.info("Inference server deployment complete, verifying readiness...")
+            logger.info(
+                "Inference server deployment complete, " "verifying readiness..."
+            )
             wait_for_serve_ready(app_name=deployment_name)
             logger.info("Inference server ready and accepting requests")
 
-        # Write head file for compatibility with code expecting RAY_HEAD_FILE
-        # Note: For local clusters, there's no Ray client port - use "local" flag instead
         head_file_path.parent.mkdir(parents=True, exist_ok=True)
         head_file_path.write_text(
             json.dumps(
@@ -649,10 +582,8 @@ def get_local_ray_cluster(
                 serve.shutdown()
         ray.shutdown()
 
-        # Clean up head file
         if head_file_path.exists():
             head_file_path.unlink()
-            # Try to remove parent dir if empty
             with suppress(OSError):
                 head_file_path.parent.rmdir()
 

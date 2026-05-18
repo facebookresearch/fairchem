@@ -4,7 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests for the Ray Serve inference server using get_local_ray_cluster.
+Tests for the Ray Serve inference server.
 
 Two testing modes:
 1. Ray remote tasks: Tests run as Ray remote tasks submitted to the cluster.
@@ -14,6 +14,11 @@ Two testing modes:
 """
 
 from __future__ import annotations
+
+import json
+import uuid
+from contextlib import suppress
+from pathlib import Path
 
 import numpy.testing as npt
 import pytest
@@ -25,10 +30,10 @@ from ray import serve
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.launchers.cluster.ray_cluster_utils import get_local_ray_cluster
-from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.batch_server import (
     get_ray_connection_info,
+    setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
     wait_for_serve_ready,
 )
@@ -37,37 +42,54 @@ from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
-
-
-@pytest.fixture(scope="module")
-def uma_predict_unit():
-    """Module-scoped predict unit using the first available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
-        pytest.skip("No UMA models available")
-    settings = InferenceSettings(
-        merge_mole=False,
-        external_graph_gen=False,
-    )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(
-        uma_models[0], device=device, inference_settings=settings
-    )
+NAMESPACE = "fairchem_inference_test"
 
 
 @pytest.fixture(scope="module")
 def local_ray_cluster_with_inference(uma_predict_unit):
-    """Set up a local Ray cluster with the FAIRChem inference server."""
+    """Start a local Ray instance with the FAIRChem inference server."""
+    num_gpus = 1 if torch.cuda.is_available() else 0
+    dashboard_port = find_free_port()
 
-    with get_local_ray_cluster(
+    ray.init(
         num_cpus=8,
-        num_gpus=1 if torch.cuda.is_available() else 0,
-        start_inference_server=True,
-        predict_unit=uma_predict_unit,
-        log_level="WARNING",
-        deployment_name=DEPLOYMENT_NAME,
-    ) as head_file:
-        yield head_file
+        num_gpus=num_gpus if num_gpus > 0 else None,
+        ignore_reinit_error=True,
+        log_to_driver=True,
+        logging_config=ray.LoggingConfig(log_level="WARNING"),
+        dashboard_port=dashboard_port,
+        namespace=NAMESPACE,
+    )
+
+    setup_batch_predict_server(uma_predict_unit, deployment_name=DEPLOYMENT_NAME)
+    wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
+
+    cluster_id = str(uuid.uuid4())
+    head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
+    head_file_path.parent.mkdir(parents=True, exist_ok=True)
+    head_file_path.write_text(
+        json.dumps(
+            {
+                "hostname": "localhost",
+                "dashboard_port": dashboard_port,
+                "local": True,
+                "num_cpus": 8,
+                "num_gpus": num_gpus,
+                "namespace_serve_fairchem": NAMESPACE,
+            }
+        )
+    )
+
+    yield str(head_file_path)
+
+    with suppress(Exception):
+        serve.shutdown()
+    ray.shutdown()
+
+    if head_file_path.exists():
+        head_file_path.unlink()
+        with suppress(OSError):
+            head_file_path.parent.rmdir()
 
 
 # ---------------------------------------------------------------------------
