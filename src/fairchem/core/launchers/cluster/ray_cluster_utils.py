@@ -34,6 +34,18 @@ from fairchem.core.units.mlip_unit.batch_server import (
 logger = logging.getLogger(__name__)
 
 
+def _find_free_localhost_port() -> int:
+    """Find an available port bound to localhost only.
+
+    Binding to 127.0.0.1 avoids exposing ephemeral probe sockets on all
+    network interfaces.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        return sock.getsockname()[1]
+
+
 def recursive_dict_merge(*dicts: dict) -> dict:
     """Recursively merge dictionaries, later values override earlier ones."""
     result = {}
@@ -475,6 +487,18 @@ def get_slurm_ray_cluster(
 
 
 @contextmanager
+def get_slurm_inference_cluster(*args, **kwargs):
+    """Descriptive alias for get_slurm_ray_cluster.
+
+    This helper makes intent explicit: it is primarily used to provision
+    inference-serving Ray clusters. Kept as a wrapper for backwards
+    compatibility while preserving the implementation in one place.
+    """
+    with get_slurm_ray_cluster(*args, **kwargs) as head_file:
+        yield head_file
+
+
+@contextmanager
 def get_local_ray_cluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
@@ -530,13 +554,6 @@ def get_local_ray_cluster(
     import ray
     from ray import serve
 
-    def find_free_port():
-        """Find an available port on localhost."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("", 0))
-            s.listen(1)
-            return s.getsockname()[1]
-
     # Set defaults
     if num_cpus is None:
         num_cpus = 8
@@ -561,7 +578,7 @@ def get_local_ray_cluster(
     namespace_serve_fairchem = "fairchem_inference" if start_inference_server else None
 
     # Find free ports for this cluster instance
-    dashboard_port = find_free_port()
+    dashboard_port = _find_free_localhost_port()
 
     try:
         # Initialize Ray locally with unique ports
@@ -638,3 +655,10 @@ def get_local_ray_cluster(
             # Try to remove parent dir if empty
             with suppress(OSError):
                 head_file_path.parent.rmdir()
+
+
+@contextmanager
+def get_local_inference_cluster(*args, **kwargs):
+    """Descriptive alias for get_local_ray_cluster."""
+    with get_local_ray_cluster(*args, **kwargs) as head_file:
+        yield head_file
