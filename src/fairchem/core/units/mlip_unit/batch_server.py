@@ -500,22 +500,23 @@ def _init_ray_and_serve(
     cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
     ray_actor_options["num_cpus"] = cpus_per_actor
 
+    # Ray Serve itself reserves ~2 CPUs for its controller and HTTP proxy on
+    # the head node.
+    requested_cpus = cpus_per_actor * num_replicas
+    serve_overhead_cpus = 2
+
     if not ray.is_initialized():
         ray.init(
             log_to_driver=False,
             logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=cpus_per_actor * num_replicas,
+            num_cpus=requested_cpus + serve_overhead_cpus,
         )
         logging.info("Ray initialized")
 
-    # Ray Serve itself reserves ~2 CPUs for its controller and HTTP proxy on
-    # the head node. If the deployment's CPU request plus that overhead
-    # consumes the whole cluster, downstream Ray tasks (and even Serve's own
-    # actors) will starve and silently hang. Fail fast with an actionable
-    # message instead.
-    requested_cpus = cpus_per_actor * num_replicas
+    # If the deployment's CPU request plus that overhead consumes the whole
+    # cluster, downstream Ray tasks (and even Serve's own actors) will starve
+    # and silently hang. Fail fast with an actionable message instead.
     cluster_cpus = ray.cluster_resources().get("CPU", 0)
-    serve_overhead_cpus = 2
     if requested_cpus + serve_overhead_cpus > cluster_cpus:
         raise RuntimeError(
             f"Ray Serve deployment requests {cpus_per_actor} CPU(s) x "

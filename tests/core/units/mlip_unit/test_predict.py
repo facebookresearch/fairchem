@@ -901,7 +901,7 @@ def batch_server_handle(uma_predict_unit):
         num_replicas=1,
         ray_actor_options={
             "num_gpus": 1 if torch.cuda.is_available() else 0,
-            "num_cpus": 10,
+            "num_cpus": 2,
         },
     )
 
