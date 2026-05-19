@@ -102,9 +102,13 @@ def test_conserving_mole_inference_modes(
     [
         (False, False, False, False, True),  # test external graph gen
         (False, False, False, False, False),  # test internal graph gen
-        (True, False, True, True, True),  # test compile and merge
-        # with acvitation checkpointing
-        (True, True, True, True, True),  # test external model graph gen + compile
+        pytest.param(
+            True, False, True, True, True, marks=pytest.mark.compile_gpu
+        ),  # test compile and merge
+        # with activation checkpointing
+        pytest.param(
+            True, True, True, True, True, marks=pytest.mark.compile_gpu
+        ),  # test external model graph gen + compile
         (True, True, True, False, True),  # test merge but no compile
         (True, True, False, False, True),  # test no merge or compile
     ],
@@ -294,9 +298,11 @@ def mole_inference(
             if "energy" in k:
                 assert output_baseline[k].isclose(output[k], rtol=energy_rtol).all()
             else:
-                assert output_baseline[k].isclose(
-                    output[k], rtol=forces_rtol, atol=forces_atol
-                ).all()
+                assert (
+                    output_baseline[k]
+                    .isclose(output[k], rtol=forces_rtol, atol=forces_atol)
+                    .all()
+                )
             assert output[k].device.type == device
             assert output_baseline[k].device.type == device
 
