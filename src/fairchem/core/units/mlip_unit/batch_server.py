@@ -508,6 +508,24 @@ def _init_ray_and_serve(
         )
         logging.info("Ray initialized")
 
+    # Ray Serve itself reserves ~2 CPUs for its controller and HTTP proxy on
+    # the head node. If the deployment's CPU request plus that overhead
+    # consumes the whole cluster, downstream Ray tasks (and even Serve's own
+    # actors) will starve and silently hang. Fail fast with an actionable
+    # message instead.
+    requested_cpus = cpus_per_actor * num_replicas
+    cluster_cpus = ray.cluster_resources().get("CPU", 0)
+    serve_overhead_cpus = 2
+    if requested_cpus + serve_overhead_cpus > cluster_cpus:
+        raise RuntimeError(
+            f"Ray Serve deployment requests {cpus_per_actor} CPU(s) x "
+            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), plus "
+            f"~{serve_overhead_cpus} CPU(s) for the Serve controller/proxy, "
+            f"but the Ray cluster only has {cluster_cpus:g} CPU(s). "
+            "Reduce ray_actor_options['num_cpus'] / num_replicas, or grow "
+            "the cluster (e.g. ray.init(num_cpus=...))."
+        )
+
     try:
         serve.status()
         logging.info("Ray Serve already running")
@@ -648,6 +666,7 @@ def setup_multiplexed_batch_predict_server(
 def wait_for_serve_ready(
     app_name: str = "fairchem-inference",
     poll_interval_seconds: float = 2,
+    timeout_seconds: float = 600,
 ) -> bool:
     """
     Wait for Ray Serve to be fully ready to accept requests.
@@ -658,13 +677,26 @@ def wait_for_serve_ready(
     Args:
         app_name: Name of the Ray Serve application to wait for.
         poll_interval_seconds: How often to check status.
+        timeout_seconds: Maximum total time to wait before raising
+            ``TimeoutError``. Prevents indefinite hangs when a deployment
+            cannot be scheduled (e.g. no free GPU).
 
     Returns:
         True if server is ready.
 
     Raises:
         RuntimeError: If server fails to deploy.
+        TimeoutError: If the application does not reach RUNNING within
+            ``timeout_seconds``.
     """
+    deadline = time.monotonic() + timeout_seconds
+
+    def _check_deadline(phase: str) -> None:
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for Ray Serve "
+                f"({phase}) for app {app_name!r}."
+            )
 
     # Phase 1: Wait for Ray Serve controller
     logging.info("Waiting for Ray Serve controller to start...")
@@ -680,6 +712,7 @@ def wait_for_serve_ready(
                 or "Failed to look up actor" in error_msg
             ):
                 logging.debug(f"Ray Serve controller not ready yet: {error_msg}")
+                _check_deadline("controller startup")
                 time.sleep(poll_interval_seconds)
             else:
                 raise
@@ -687,6 +720,7 @@ def wait_for_serve_ready(
     # Phase 2: Wait for the application to be deployed and running
     logging.info(f"Waiting for application '{app_name}' to be ready...")
     while True:
+        _check_deadline("application RUNNING")
         try:
             status = serve.status()
 

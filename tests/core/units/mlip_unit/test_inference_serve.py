@@ -45,9 +45,15 @@ MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def local_ray_cluster_with_inference(uma_predict_unit):
-    """Start a local Ray instance with the FAIRChem inference server."""
+    """Start a local Ray instance with the FAIRChem inference server.
+
+    Function-scoped: a fresh Ray cluster and Serve deployment is created
+    for every test and fully torn down afterwards. This avoids GPU/actor
+    contention between tests (important on single-GPU CI runners) at the
+    cost of one Ray init per test.
+    """
     num_gpus = 1 if torch.cuda.is_available() else 0
     dashboard_port = find_free_port()
 
@@ -61,7 +67,14 @@ def local_ray_cluster_with_inference(uma_predict_unit):
         namespace=NAMESPACE,
     )
 
-    setup_batch_predict_server(uma_predict_unit, deployment_name=DEPLOYMENT_NAME)
+    setup_batch_predict_server(
+        uma_predict_unit,
+        deployment_name=DEPLOYMENT_NAME,
+        ray_actor_options={
+            "num_cpus": 1,
+            "num_gpus": 1 if num_gpus > 0 else 0,
+        },
+    )
     wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
 
     cluster_id = str(uuid.uuid4())
@@ -81,6 +94,10 @@ def local_ray_cluster_with_inference(uma_predict_unit):
     )
 
     yield str(head_file_path)
+
+    # Cached handles point at the now-dead deployment; clear so the next
+    # test's fresh deployment isn't shadowed by a stale handle.
+    BatchServerPredictUnit._handle_cache.clear()
 
     with suppress(Exception):
         serve.shutdown()
@@ -332,25 +349,37 @@ def uma_multiplexed_model_id():
     return f"{uma_models[0]}:default"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def local_multiplexed_cluster():
-    """Set up a local Ray cluster with a multiplexed inference server."""
+    """Set up a local Ray cluster with a multiplexed inference server.
 
-    if not ray.is_initialized():
-        ray.init(
-            log_to_driver=False,
-            logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=8,
-            num_gpus=1 if torch.cuda.is_available() else 0,
-        )
+    Function-scoped: full Ray + Serve teardown after each test so the GPU
+    and actor resources are returned to the pool before the next test
+    runs.
+    """
+    ray.init(
+        log_to_driver=False,
+        logging_config=ray.LoggingConfig(log_level="WARNING"),
+        num_cpus=8,
+        num_gpus=1 if torch.cuda.is_available() else 0,
+        ignore_reinit_error=True,
+    )
 
     setup_multiplexed_batch_predict_server(
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
-        ray_actor_options={"num_gpus": 1 if torch.cuda.is_available() else 0},
+        ray_actor_options={
+            "num_cpus": 1,
+            "num_gpus": 1 if torch.cuda.is_available() else 0,
+        },
     )
     wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)
+
     yield
-    serve.delete(MULTIPLEXED_DEPLOYMENT_NAME)
+
+    BatchServerPredictUnit._handle_cache.clear()
+    with suppress(Exception):
+        serve.shutdown()
+    ray.shutdown()
 
 
 @pytest.mark.gpu()
