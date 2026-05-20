@@ -162,6 +162,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_problematic=pre_relax_config["remove_problematic"],
             remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],

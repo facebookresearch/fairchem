@@ -82,6 +82,7 @@ genarris:
 
 # Pre-ML deduplication on Genarris outputs
 pre_relaxation_filter:
+  remove_problematic: false # drop structures whose generation-time validity flags are False (default: false)
   assign_groups: true       # assign group indices via deduplication pass
   remove_duplicates: true   # drop duplicates within each group
   ltol: 0.3                 # lattice tolerance

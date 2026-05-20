@@ -84,6 +84,9 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     match_config = config.get("pre_relaxation_filter", {})
     return {
+        "remove_problematic": match_config.get(
+            "remove_problematic", False
+        ),  # default keep problematic structures (matches post_relaxation_filter)
         "assign_groups": match_config.get(
             "assign_groups", False
         ),  # default assign group indices to similar structures
@@ -162,6 +165,7 @@ def structure_to_row(
 def process_genarris_outputs_single(
     input_dir: Path,
     output_dir: Path,
+    remove_problematic: bool = False,
     remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
@@ -182,6 +186,10 @@ def process_genarris_outputs_single(
                  Expected structure: mol_id/conf_id/z_val/symm_rigid_press/structures.json
         output_dir: Directory where processed parquet files will be saved
         npartitions: Number of partitions for distributed processing (default: 1000)
+        remove_problematic: Whether to drop structures that failed the generation-time
+                            validity checks (correct_z, molecule_matches_reference)
+                            before deduplication. When False (default), problematic rows
+                            are retained with ``group_index=-1`` (matches post-relax). (default: False)
         remove_duplicates: Whether to perform deduplication (default: False)
         ltol: Lattice parameter tolerance for structure deduplication (default: 0.2)
         stol: Site tolerance for structure deduplication (default: 0.3)
@@ -285,15 +293,43 @@ def process_genarris_outputs_single(
                 )
 
     structures_df = pd.DataFrame(all_rows)
-    if assign_groups:
-        structures_df = deduplicate_structures(
-            structures_df,
+
+    # Separate structures that failed the generation-time validity checks.
+    valid_mask = (
+        structures_df["validity.crystal_generated.correct_z"]
+        & structures_df["validity.crystal_generated.molecule_matches_reference"]
+    )
+    problematic_structures_df = structures_df[~valid_mask]
+    structures_df_filtered = structures_df[valid_mask]
+    logger.info(
+        f"Pre-relax validity split for {input_dir}: "
+        f"{len(structures_df_filtered)} valid / {len(problematic_structures_df)} problematic "
+        f"(of {len(structures_df)} total)"
+    )
+
+    if assign_groups and not structures_df_filtered.empty:
+        structures_df_filtered = deduplicate_structures(
+            structures_df_filtered,
             remove_duplicates=remove_duplicates,
             ltol=ltol,
             stol=stol,
             angle_tol=angle_tol,
             structure_col="structure_generated",
         )
+    if assign_groups:
+        problematic_structures_df[
+            "group_index"
+        ] = -1  # Mark problematic structures with group -1
+
+    if not remove_problematic:
+        # Reintegrate problematic structures if not removing them
+        logger.info("Reintegrating problematic structures")
+        structures_df = pd.concat(
+            [structures_df_filtered, problematic_structures_df], ignore_index=True
+        )
+    else:
+        structures_df = structures_df_filtered
+
     structures_df = structures_df.drop(columns=["structure_generated"])
     structures_df.to_parquet(
         output_dir,
@@ -307,6 +343,7 @@ def process_genarris_outputs(
     input_dir: Path,
     output_dir: Path,
     pre_relax_config: dict[str, Any],
+    remove_problematic: bool = False,
     remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
@@ -321,6 +358,8 @@ def process_genarris_outputs(
         input_dir: Root directory containing multiple molecule directories
         output_dir: Output directory where processed results will be saved
         pre_relax_config: Configuration dictionary containing SLURM and processing parameters
+        remove_problematic: Whether to drop structures that failed the generation-time
+                            validity checks before deduplication (default: False)
         remove_duplicates: Whether to perform deduplication (default: False)
         ltol: Lattice parameter tolerance for structure deduplication
         stol: Site tolerance for structure deduplication
@@ -355,6 +394,7 @@ def process_genarris_outputs(
                     (
                         conf_dir,
                         processed_dir,
+                        remove_problematic,
                         remove_duplicates,
                         ltol,
                         stol,

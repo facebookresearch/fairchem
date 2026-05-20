@@ -28,6 +28,7 @@ genarris:
 # Structure comparison tolerances for Pymatgen's StructureMatcher
 # Deduplication parameters after structure generation with Genarris
 pre_relaxation_filter:        # Before ML relaxation
+  remove_problematic: false    # Remove structures that failed generation-time validity checks (correct_z, molecule_matches_reference)
   assign_groups: true          # Assign groups to structures
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)

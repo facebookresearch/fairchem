@@ -198,7 +198,7 @@ FastCSP uses YAML configuration files to control all workflow parameters. Exampl
 - `root`: Base directory for all outputs
 - `molecules`: Path to input molecule CSV file
 - `genarris`: Structure generation parameters and SLURM configuration
-- `pre_relaxation_filter`: Pre-relaxation deduplication (`assign_groups`, `remove_duplicates`, `ltol`/`stol`/`angle_tol`, `npartitions`)
+- `pre_relaxation_filter`: Pre-relaxation deduplication and validity filtering (`remove_problematic`, `assign_groups`, `remove_duplicates`, `ltol`/`stol`/`angle_tol`, `npartitions`). Set `remove_problematic: true` to drop structures whose generation-time validity flags (`correct_z`, `molecule_matches_reference`) are False before relaxation.
 - `relax`: ML relaxation settings and SLURM configuration
 - `post_relaxation_filter`: Property cutoffs (`energy_cutoff`, `density_cutoff`) and deduplication tolerances (`ltol`/`stol`/`angle_tol`, `remove_duplicates`)
 - `evaluate`: Experimental comparison method (`csd` or `pymatgen`) and parameters
