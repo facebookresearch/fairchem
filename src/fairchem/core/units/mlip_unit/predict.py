@@ -873,7 +873,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     @classmethod
     def from_deployment_connection_info(
         cls,
-        deployment_name: str = "fairchem-inference",
+        deployment_name: str = "predict-server",
         ray_address: str | None = None,
         namespace: str | None = None,
         multiplexed_model_id: str | None = None,

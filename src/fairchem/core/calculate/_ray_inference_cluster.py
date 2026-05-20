@@ -377,7 +377,7 @@ def get_slurm_ray_cluster(
     start_inference_server: bool = False,
     predict_unit: Any = None,
     serve_log_level: str | None = None,
-    deployment_name: str = "predict-server",
+    deployment_name: str | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ):
     """
@@ -491,6 +491,17 @@ def get_slurm_ray_cluster(
 
                 deployment_config, batch_config = _resolve_serve_configs(cluster_config)
 
+                # Single-model and multiplexed deployments use distinct app
+                # names so a consumer can target the right one and the
+                # readiness wait is unambiguous.
+                resolved_deployment_name = deployment_name
+                if resolved_deployment_name is None:
+                    resolved_deployment_name = (
+                        "multiplexed-predict-server"
+                        if predict_unit is None
+                        else "predict-server"
+                    )
+
                 if _skip_serve_setup:
                     pass
                 elif predict_unit is None:
@@ -509,7 +520,7 @@ def get_slurm_ray_cluster(
                     )
                     ray.get(
                         _setup_multiplexed_serve_remote.remote(
-                            deployment_name,
+                            resolved_deployment_name,
                             deployment_config,
                             batch_config,
                         )
@@ -531,7 +542,7 @@ def get_slurm_ray_cluster(
                     ray.get(
                         _setup_serve_remote.remote(
                             predict_unit_ref,
-                            deployment_name,
+                            resolved_deployment_name,
                             deployment_config,
                             batch_config,
                         )
@@ -545,7 +556,7 @@ def get_slurm_ray_cluster(
                     logger.info(
                         "Inference server deployment complete, " "verifying readiness..."
                     )
-                    ray.get(_wait_for_serve_ready_remote.remote(deployment_name))
+                    ray.get(_wait_for_serve_ready_remote.remote(resolved_deployment_name))
                     logger.info("Inference server ready and accepting requests")
 
         yield head_file
@@ -586,7 +597,7 @@ def get_local_ray_cluster(
     start_inference_server: bool = True,
     predict_unit: Any = None,
     log_level: str = "WARNING",
-    deployment_name: str = "predict-server",
+    deployment_name: str | None = None,
     deployment_config: dict[str, Any] | None = None,
     batch_config: dict[str, Any] | None = None,
 ):
@@ -686,6 +697,16 @@ def get_local_ray_cluster(
             logger.info(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
 
         if start_inference_server:
+            # Multiplexed vs single-model deployments get distinct app
+            # names so consumers and readiness waits target the right one.
+            resolved_deployment_name = deployment_name
+            if resolved_deployment_name is None:
+                resolved_deployment_name = (
+                    "multiplexed-predict-server"
+                    if predict_unit is None
+                    else "predict-server"
+                )
+
             if predict_unit is None:
                 logger.info(
                     "Initializing multiplexed FAIRChem inference server "
@@ -694,7 +715,7 @@ def get_local_ray_cluster(
                 setup_multiplexed_batch_predict_server(
                     deployment_config=deployment_config,
                     batch_config=batch_config,
-                    deployment_name=deployment_name,
+                    deployment_name=resolved_deployment_name,
                 )
             else:
                 logger.info("Initializing FAIRChem inference server deployment...")
@@ -702,13 +723,13 @@ def get_local_ray_cluster(
                     predict_unit,
                     deployment_config=deployment_config,
                     batch_config=batch_config,
-                    deployment_name=deployment_name,
+                    deployment_name=resolved_deployment_name,
                 )
 
             logger.info(
                 "Inference server deployment complete, " "verifying readiness..."
             )
-            wait_for_serve_ready(app_name=deployment_name)
+            wait_for_serve_ready(app_name=resolved_deployment_name)
             logger.info("Inference server ready and accepting requests")
 
         head_file_path.parent.mkdir(parents=True, exist_ok=True)

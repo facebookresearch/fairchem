@@ -604,7 +604,7 @@ def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
     deployment_config: dict | None = None,
     batch_config: dict | None = None,
-    deployment_name: str = "fairchem-inference",
+    deployment_name: str = "predict-server",
     route_prefix: str = "/predict",
 ) -> serve.handle.DeploymentHandle:
     """
@@ -649,7 +649,7 @@ def setup_batch_predict_server(
 def setup_multiplexed_batch_predict_server(
     deployment_config: dict | None = None,
     batch_config: dict | None = None,
-    deployment_name: str = "fairchem-inference",
+    deployment_name: str = "multiplexed-predict-server",
     route_prefix: str = "/multiplex-predict",
 ) -> serve.handle.DeploymentHandle:
     """
@@ -686,7 +686,7 @@ def setup_multiplexed_batch_predict_server(
 
 
 def wait_for_serve_ready(
-    app_name: str = "fairchem-inference",
+    app_name: str,
     poll_interval_seconds: float = 2,
     timeout_seconds: float = 600,
 ) -> bool:
