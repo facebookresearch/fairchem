@@ -150,7 +150,7 @@ def filter_and_deduplicate_structures_single(
         structures_df["validity.crystal_relaxed.z_unchanged"] = [
             r["molecule_count_preserved"] for r in connectivity_results
         ]
-        structures_df["validity.connectivity_unchanged"] = [
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
             r["exact_bonds_preserved"] for r in connectivity_results
         ]
 
@@ -169,12 +169,12 @@ def filter_and_deduplicate_structures_single(
     problematic_structures_df = structures_df[
         ~structures_df["optimizer_converged"]
         | ~structures_df["validity.crystal_relaxed.z_unchanged"]
-        | ~structures_df["validity.connectivity_unchanged"]
+        | ~structures_df["validity.crystal_relaxed.connectivity_unchanged"]
     ]
     structures_df_filtered = structures_df[
         structures_df["optimizer_converged"]
         & structures_df["validity.crystal_relaxed.z_unchanged"]
-        & structures_df["validity.connectivity_unchanged"]
+        & structures_df["validity.crystal_relaxed.connectivity_unchanged"]
     ]
 
     # 3. Apply multi-stage filtering workflow

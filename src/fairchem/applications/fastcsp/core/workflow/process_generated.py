@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+import ase.io
 import pandas as pd
 from ase.io.jsonio import decode
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
@@ -40,13 +41,17 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_correct_z,
+    check_molecule_matches_reference,
     get_partition_id,
+    reference_graph_from_atoms,
 )
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import networkx as nx
 
 
 def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +106,7 @@ def structure_to_row(
     conf_id: str,
     z_val: int,
     npartitions: int = 1000,
+    reference_graph: nx.Graph | None = None,
 ) -> dict:
     """
     Convert structure data to standardized DataFrame row format.
@@ -147,6 +153,9 @@ def structure_to_row(
         "partition_id": get_partition_id(unique_structure_id, npartitions),
         "structure_generated": structure,
         "validity.crystal_generated.correct_z": check_correct_z(structure, z_val),
+        "validity.crystal_generated.molecule_matches_reference": check_molecule_matches_reference(
+            structure, reference_graph
+        ),
     }
 
 
@@ -198,6 +207,30 @@ def process_genarris_outputs_single(
     """
     logger = get_central_logger()
     logger.info(f"Processing {input_dir}")
+
+    # Build the reference-molecule graph once per conformer dir.
+    # Accept .xyz, .sdf, and .mol references.
+    conf_id = input_dir.name
+    reference_path = None
+    for ext in (".xyz", ".sdf", ".mol"):
+        candidate = input_dir / f"{conf_id}{ext}"
+        if candidate.is_file():
+            reference_path = candidate
+            break
+
+    reference_graph = None
+    if reference_path is not None:
+        try:
+            reference_atoms = ase.io.read(reference_path)
+            reference_graph = reference_graph_from_atoms(reference_atoms)
+        except Exception as e:
+            logger.warning(f"Failed to read reference geometry {reference_path}: {e}")
+    else:
+        logger.warning(
+            f"No reference geometry (.xyz/.sdf/.mol) for conf_id={conf_id} "
+            f"in {input_dir}; molecule_matches_reference flag will be False."
+        )
+
     json_files = list(input_dir.glob("**/symm_rigid_press/structures.json"))
     generation_method = "genarris"
     # in case Genarris version is different
@@ -237,7 +270,13 @@ def process_genarris_outputs_single(
         ):
             try:
                 row = structure_to_row(
-                    hash_id, struct_dict, mol_id, conf_id, z_val, npartitions
+                    hash_id,
+                    struct_dict,
+                    mol_id,
+                    conf_id,
+                    z_val,
+                    npartitions,
+                    reference_graph=reference_graph,
                 )
                 all_rows.append(row)
             except Exception as e:

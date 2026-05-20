@@ -30,7 +30,9 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+import networkx as nx
 import numpy as np
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -153,6 +155,114 @@ def check_correct_z(
     # Connected-component count == observed number of molecular fragments
     observed_z = csgraph.connected_components(nn_matrix)[0]
     return observed_z == requested_z
+
+
+def reference_graph_from_atoms(
+    reference_atoms: Atoms | None,
+) -> nx.Graph | None:
+    """
+    Build a NetworkX graph from a reference molecular conformer.
+
+    Nodes carry an ``atomic_num`` attribute; edges are JmolNN-derived covalent
+    bonds (bond order discarded). The reference ``.xyz`` is assumed to be a
+    single-molecule conformer (as produced by the Genarris seed pipeline).
+
+    Args:
+        reference_atoms: ASE ``Atoms`` for the reference single-molecule
+            conformer (typically read from the .xyz that seeded Genarris).
+
+    Returns:
+        ``nx.Graph`` for the reference molecule, or ``None`` if the input is
+        ``None``/empty or the adjacency cannot be built.
+    """
+    if reference_atoms is None:
+        return None
+
+    try:
+        structure = AseAtomsAdaptor.get_structure(reference_atoms)
+
+        # Build adjacency matrix using Jmol bonding radii (same pattern as
+        # check_correct_z and check_connectivity_changes).
+        nn_info = JmolNN().get_all_nn_info(structure)
+        n = len(nn_info)
+        if n < 1:
+            return None
+
+        # Build the nx.Graph (atomic_num node attr; undirected edges
+        graph = nx.Graph()
+        for i in range(n):
+            graph.add_node(i, atomic_num=structure[i].specie.number)
+        for i in range(n):
+            for entry in nn_info[i]:
+                j = entry["site_index"]
+                if i < j:
+                    graph.add_edge(i, j)
+        return graph
+    except Exception as e:
+        logger = get_central_logger()
+        logger.warning(f"Failed to build reference graph: {e}")
+        return None
+
+
+def check_molecule_matches_reference(
+    structure: Structure | None,
+    reference_graph: nx.Graph | None,
+) -> bool:
+    """
+    Check whether every connected molecular fragment in the cell is
+    isomorphic to the reference molecule.
+
+    For each connected component of the JmolNN adjacency, a small
+    ``nx.Graph`` is built with ``atomic_num`` node attributes and the
+    induced covalent edges. Each fragment graph is then compared to the
+    reference via ``nx.is_isomorphic`` with a categorical match on atomic
+    number. This catches topology errors (tautomers, rearranged rings,
+    wrong functional groups) that the count-only ``check_correct_z`` and
+    bond-matrix ``check_connectivity_changes`` cannot detect.
+
+    Args:
+        structure: Pymatgen ``Structure`` for the generated unit cell.
+        reference_graph: Reference molecular graph built via
+            ``reference_graph_from_atoms``.
+
+    Returns:
+        ``True`` iff every fragment in the cell is isomorphic to the
+        reference. ``False`` if any fragment mismatches, if either input is
+        ``None``, or on exception.
+    """
+    if structure is None or reference_graph is None:
+        return False
+
+    try:
+        nn_info = JmolNN().get_all_nn_info(structure)
+        n = len(nn_info)
+        nn_matrix = np.zeros((n, n))
+        for i in range(n):
+            for j in range(len(nn_info[i])):
+                nn_matrix[i, nn_info[i][j]["site_index"]] = 1
+
+        n_components, labels = csgraph.connected_components(nn_matrix)
+        node_match = nx.algorithms.isomorphism.categorical_node_match("atomic_num", 0)
+
+        for comp in range(n_components):
+            indices = [i for i, lbl in enumerate(labels) if lbl == comp]
+            fragment_graph = nx.Graph()
+            for i in indices:
+                fragment_graph.add_node(i, atomic_num=structure[i].specie.number)
+            for i in indices:
+                for entry in nn_info[i]:
+                    j = entry["site_index"]
+                    if j in indices and i < j:
+                        fragment_graph.add_edge(i, j)
+            if not nx.is_isomorphic(
+                fragment_graph, reference_graph, node_match=node_match
+            ):
+                return False
+        return True
+    except Exception as e:
+        logger = get_central_logger()
+        logger.warning(f"Failed molecule-matches-reference check: {e}")
+        return False
 
 
 def check_connectivity_changes(

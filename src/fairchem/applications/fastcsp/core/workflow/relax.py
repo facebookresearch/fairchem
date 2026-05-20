@@ -361,7 +361,7 @@ def relax_structures(
         structures_df["validity.crystal_relaxed.z_unchanged"] = [
             r["molecule_count_preserved"] for r in connectivity_results
         ]
-        structures_df["validity.connectivity_unchanged"] = [
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
             r["exact_bonds_preserved"] for r in connectivity_results
         ]
         # Save results to Parquet
