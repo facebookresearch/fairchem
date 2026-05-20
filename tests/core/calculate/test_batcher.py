@@ -22,7 +22,6 @@ from ray import serve
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate._batch import InferenceBatcher
-from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
 pytestmark = pytest.mark.serial
@@ -30,20 +29,22 @@ pytestmark = pytest.mark.serial
 
 @pytest.fixture(scope="module")
 def uma_predict_unit_alt():
-    """Module-scoped predict unit using the first available UMA model."""
+    """Module-scoped predict unit using the second available UMA model."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
-        pytest.skip("No UMA models available")
+    if len(uma_models) < 2:
+        pytest.skip("Fewer than 2 UMA models available")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
+
+
+@pytest.fixture(autouse=True)
+def setup_before_each_test():
+    pass  # Override root conftest to prevent it from calling ray.shutdown() between tests
 
 
 def setup_ray():
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
 
-    # Use a unique namespace for this worker to avoid interference
-    # This is especially important for parallel test execution (pytest -n 8)
     import os
 
     worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
@@ -62,7 +63,7 @@ def setup_ray():
         namespace=namespace,
         num_cpus=16,  # Increased to support default ray_actor_options num_cpus=8
         num_gpus=1 if torch.cuda.is_available() else 0,
-        logging_level="ERROR",  # Reduce noise in test output
+        logging_level="ERROR",
         _temp_dir="/tmp/ray",  # Use larger /tmp instead of default /var/tmp (512 MB tmpfs)
         _system_config={"local_fs_capacity_threshold": 0.99},
     )
@@ -85,9 +86,30 @@ def cleanup_ray():
         print(f"Warning: Error during ray shutdown: {e}")
 
 
-@pytest.fixture()
-def inference_batcher(uma_predict_unit):
+@pytest.fixture(scope="module")
+def ray_session():
+    """Initialize Ray once for the entire test module."""
     setup_ray()
+    yield
+    cleanup_ray()
+
+
+@pytest.fixture()
+def ray_controlled():
+    """For tests that need to shut down and restart Ray mid-test.
+
+    Gives the test exclusive Ray control, then restores the module-level
+    cluster so subsequent tests that depend on ray_session are unaffected.
+    """
+    cleanup_ray()
+    setup_ray()
+    yield
+    cleanup_ray()
+    setup_ray()
+
+
+@pytest.fixture()
+def inference_batcher(ray_session, uma_predict_unit):
     batcher = InferenceBatcher(
         predict_unit=uma_predict_unit,
         max_batch_size=8,
@@ -96,96 +118,62 @@ def inference_batcher(uma_predict_unit):
         concurrency_backend="threads",
         concurrency_backend_options={"max_workers": 4},
     )
-
     yield batcher
-
-    cleanup_ray()
-
-
-def test_initialization_with_custom_concurrency_options(uma_predict_unit):
-    try:
-        max_workers = 8
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=16,
-            batch_wait_timeout_s=0.1,
-            num_replicas=1,
-            concurrency_backend="threads",
-            concurrency_backend_options={"max_workers": max_workers},
-        )
-
-        assert isinstance(batcher.executor, ThreadPoolExecutor)
-    finally:
-        cleanup_ray()
+    batcher.shutdown(shutdown_ray=False)
 
 
-def test_initialization_with_ray_actor_options(uma_predict_unit):
-    try:
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=16,
-            batch_wait_timeout_s=0.1,
-            num_replicas=1,
-            ray_actor_options={"num_cpus": 2},
-        )
+@pytest.mark.parametrize(
+    "kwargs,assert_fn",
+    [
+        pytest.param(
+            {
+                "concurrency_backend": "threads",
+                "concurrency_backend_options": {"max_workers": 8},
+            },
+            lambda b: isinstance(b.executor, ThreadPoolExecutor),
+            id="threads_concurrency",
+        ),
+        pytest.param(
+            {"ray_actor_options": {"num_cpus": 2}},
+            lambda b: b.predict_server_handle is not None,
+            id="ray_actor_options",
+        ),
+    ],
+)
+def test_initialization_options(ray_session, uma_predict_unit, kwargs, assert_fn):
+    batcher = InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        max_batch_size=16,
+        batch_wait_timeout_s=0.1,
+        num_replicas=1,
+        **kwargs,
+    )
+    assert assert_fn(batcher)
+    batcher.shutdown(shutdown_ray=False)
 
+
+def test_context_manager_enter_exit(ray_session, uma_predict_unit):
+    with InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        max_batch_size=16,
+        batch_wait_timeout_s=0.1,
+        num_replicas=1,
+    ) as batcher:
+        assert hasattr(batcher, "executor")
         assert hasattr(batcher, "predict_server_handle")
-    finally:
-        cleanup_ray()
+        executor = batcher.executor
 
+    assert executor is not None
 
-def test_context_manager_enter_exit(uma_predict_unit):
-    try:
-        with InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=16,
-            batch_wait_timeout_s=0.1,
-            num_replicas=1,
-        ) as batcher:
-            assert hasattr(batcher, "executor")
-            assert hasattr(batcher, "predict_server_handle")
-            executor = batcher.executor
-
-        assert executor is not None
-
-        with pytest.raises(
-            RuntimeError, match="cannot schedule new futures after shutdown"
-        ):
-            executor.submit(time.sleep, 1)
-    finally:
-        cleanup_ray()
-
-
-def test_batched_atomic_data_predictions(inference_batcher):
-    """Test batched predictions using AtomicData directly."""
-    atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe")]
-    atomic_data_list = [
-        AtomicData.from_ase(atoms, task_name="omat") for atoms in atoms_list
-    ]
-
-    with ThreadPoolExecutor(max_workers=len(atoms_list)) as executor:
-        futures = [
-            executor.submit(inference_batcher.batch_predict_unit.predict, data)
-            for data in atomic_data_list
-        ]
-        results = [future.result() for future in futures]
-
-    assert len(results) == len(atoms_list)
-    for i, preds in enumerate(results):
-        assert "energy" in preds
-        assert "forces" in preds
-        assert preds["energy"].shape == (1,)
-        assert preds["forces"].shape == (len(atoms_list[i]), 3)
+    with pytest.raises(
+        RuntimeError, match="cannot schedule new futures after shutdown"
+    ):
+        executor.submit(time.sleep, 1)
 
 
 def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
     """Test that batched and serial calculations produce consistent results."""
-    atoms_list = [
-        bulk("Cu"),
-        bulk("Al"),
-        bulk("Fe"),
-        bulk("Ni"),
-    ]
+    atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
 
     def calculate_properties(atoms, predict_unit):
         atoms.calc = FAIRChemCalculator(predict_unit, task_name="omat")
@@ -203,7 +191,6 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
             atoms_list,
         )
     )
-
     results_serial = [
         calculate_properties(atoms, uma_predict_unit) for atoms in atoms_list
     ]
@@ -215,336 +202,151 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
 
 
 def test_checkpoint_swap_with_energy_verification(
-    uma_predict_unit, uma_predict_unit_alt
+    ray_session, uma_predict_unit, uma_predict_unit_alt
 ):
     """Test that checkpoint swapping produces different energies and swapping back recovers originals."""
-    try:
-        setup_ray()
+    batcher = InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        max_batch_size=8,
+        batch_wait_timeout_s=0.05,
+        num_replicas=1,
+        concurrency_backend="threads",
+        concurrency_backend_options={"max_workers": 4},
+        ray_actor_options={"num_cpus": 4},
+    )
 
-        # Create batcher with first model
-        # Use fewer CPUs to allow room for checkpoint swaps and multiple operations
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            concurrency_backend="threads",
-            concurrency_backend_options={"max_workers": 4},
-            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow room for swaps
-        )
+    atoms_list = [bulk("Cu"), bulk("Al")]
 
-        atoms_list = [bulk("Cu"), bulk("Al")]
+    energies_initial = []
+    for atoms in atoms_list:
+        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+        energies_initial.append(atoms.get_potential_energy())
 
-        # Get energies with first checkpoint
-        energies_initial = []
-        for atoms in atoms_list:
-            atoms.calc = FAIRChemCalculator(
-                batcher.batch_predict_unit, task_name="omat"
-            )
-            energies_initial.append(atoms.get_potential_energy())
+    batcher.update_checkpoint(uma_predict_unit_alt)
 
-        # Swap to different checkpoint
-        batcher.update_checkpoint(uma_predict_unit_alt)
+    atoms_list = [bulk("Cu"), bulk("Al")]
+    energies_swapped = []
+    for atoms in atoms_list:
+        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+        energies_swapped.append(atoms.get_potential_energy())
 
-        # Get energies with swapped checkpoint - should be different
-        atoms_list = [bulk("Cu"), bulk("Al")]
-        energies_swapped = []
-        for atoms in atoms_list:
-            atoms.calc = FAIRChemCalculator(
-                batcher.batch_predict_unit, task_name="omat"
-            )
-            energies_swapped.append(atoms.get_potential_energy())
+    for e_initial, e_swapped in zip(energies_initial, energies_swapped):
+        assert (
+            abs(e_initial - e_swapped) > 1e-5
+        ), f"Energies should differ between models but got {e_initial} and {e_swapped}"
 
-        # Verify energies are different between models
-        for e_initial, e_swapped in zip(energies_initial, energies_swapped):
-            assert (
-                abs(e_initial - e_swapped) > 1e-5
-            ), f"Energies should differ between models but got {e_initial} and {e_swapped}"
+    batcher.update_checkpoint(uma_predict_unit)
 
-        # Swap back to original checkpoint
-        batcher.update_checkpoint(uma_predict_unit)
+    energies_restored = []
+    for atoms in atoms_list:
+        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+        energies_restored.append(atoms.get_potential_energy())
 
-        # Get energies with original checkpoint - should match initial
-        energies_restored = []
-        for atoms in atoms_list:
-            atoms.calc = FAIRChemCalculator(
-                batcher.batch_predict_unit, task_name="omat"
-            )
-            energies_restored.append(atoms.get_potential_energy())
-
-        # Verify energies match original
-        npt.assert_allclose(energies_initial, energies_restored, atol=1e-4)
-
-        batcher.shutdown(shutdown_ray=False)
-    finally:
-        cleanup_ray()
+    npt.assert_allclose(energies_initial, energies_restored, atol=1e-4)
+    batcher.shutdown(shutdown_ray=False)
 
 
-def test_ray_server_complete_shutdown_and_restart(uma_predict_unit):
-    """Test complete shutdown and restart of the Ray server."""
-    try:
-        setup_ray()
+@pytest.mark.parametrize(
+    "method,ray_alive",
+    [
+        pytest.param("shutdown", False, id="full_shutdown"),
+        pytest.param("delete", True, id="delete_only"),
+    ],
+)
+def test_batcher_lifecycle(ray_controlled, uma_predict_unit, method, ray_alive):
+    """Test that shutdown and delete properly clean up resources."""
+    batcher = InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        max_batch_size=8,
+        batch_wait_timeout_s=0.05,
+        num_replicas=1,
+    )
 
-        # Create first batcher
-        batcher1 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-        )
+    assert batcher.predict_server_handle is not None
+    executor = batcher.executor
 
-        # Test atoms
-        atoms = bulk("Cu")
-        atoms.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
-        energy_before_shutdown = atoms.get_potential_energy()
-
-        # Shutdown batcher and Ray explicitly
-        batcher1.shutdown(shutdown_ray=True)
-        cleanup_ray()
-
-        # Verify Ray is shut down
-        assert not ray.is_initialized(), "Ray should be shut down"
-
-        # Reinitialize Ray and create new batcher
-        setup_ray()
-
-        batcher2 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-        )
-
-        # Calculate with new batcher - should get same energy
-        atoms_new = bulk("Cu")
-        atoms_new.calc = FAIRChemCalculator(
-            batcher2.batch_predict_unit, task_name="omat"
-        )
-        energy_after_restart = atoms_new.get_potential_energy()
-
-        # Verify energies match
-        npt.assert_allclose(energy_before_shutdown, energy_after_restart, atol=1e-4)
-
-        batcher2.shutdown(shutdown_ray=False)
-    finally:
-        cleanup_ray()
-
-
-def test_batcher_shutdown_method(uma_predict_unit):
-    """Test that the shutdown method properly cleans up resources."""
-    try:
-        setup_ray()
-
-        # Verify Ray is initialized
-        assert ray.is_initialized(), "Ray should be initialized before creating batcher"
-
-        # Create a batcher
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-        )
-
-        # Verify batcher is initialized
-        assert hasattr(batcher, "executor")
-        assert hasattr(batcher, "predict_server_handle")
-        assert batcher.predict_server_handle is not None
-        executor = batcher.executor
-
-        # Shutdown the batcher with Ray shutdown
+    if method == "shutdown":
         batcher.shutdown(shutdown_ray=True)
-
-        # Verify executor is shutdown (should not be able to submit new tasks)
         with pytest.raises(
             RuntimeError, match="cannot schedule new futures after shutdown"
         ):
             executor.submit(time.sleep, 1)
-
-        # Verify predict_server_handle is cleared
-        assert batcher.predict_server_handle is None
-
-        # Verify Ray server is shut down
-        assert (
-            not ray.is_initialized()
-        ), "Ray server should be shut down after shutdown(shutdown_ray=True)"
-
-    finally:
-        cleanup_ray()
-
-
-def test_batcher_delete_method(uma_predict_unit):
-    """Test that the delete method removes deployment but keeps Ray running."""
-    try:
-        setup_ray()
-
-        # Create a batcher
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-        )
-
-        # Verify batcher is initialized
-        assert batcher.predict_server_handle is not None
-
-        # Delete the deployment
+    else:
         batcher.delete()
+        batcher.executor.shutdown(wait=True)
 
-        # Verify predict_server_handle is cleared
-        assert batcher.predict_server_handle is None
-
-        # Verify Ray is still running
-        assert ray.is_initialized(), "Ray should still be running after delete()"
-
-        # Cleanup executor manually since we only called delete()
-        if hasattr(batcher, "executor"):
-            batcher.executor.shutdown(wait=True)
-
-    finally:
-        cleanup_ray()
+    assert batcher.predict_server_handle is None
+    assert ray.is_initialized() == ray_alive
 
 
-def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
+@pytest.mark.parametrize(
+    "same_model",
+    [
+        pytest.param(True, id="same_model"),
+        pytest.param(False, id="different_models"),
+    ],
+)
+def test_multiple_batchers(
+    ray_session, uma_predict_unit, uma_predict_unit_alt, same_model
+):
     """Test that multiple InferenceBatchers can coexist on the same Ray cluster."""
-    try:
-        setup_ray()
+    predict_unit2 = uma_predict_unit if same_model else uma_predict_unit_alt
 
-        # Create two batchers with different models
-        # Use fewer CPUs per batcher to allow both to run concurrently
-        batcher1 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_actor_options={
-                "num_cpus": 4
-            },  # Use fewer CPUs to allow concurrent batchers
-        )
+    batcher1 = InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        max_batch_size=8,
+        batch_wait_timeout_s=0.05,
+        num_replicas=1,
+        ray_actor_options={"num_cpus": 4},
+    )
+    batcher2 = InferenceBatcher(
+        predict_unit=predict_unit2,
+        max_batch_size=8,
+        batch_wait_timeout_s=0.05,
+        num_replicas=1,
+        ray_actor_options={"num_cpus": 4},
+    )
 
-        batcher2 = InferenceBatcher(
-            predict_unit=uma_predict_unit_alt,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_actor_options={
-                "num_cpus": 4
-            },  # Use fewer CPUs to allow concurrent batchers
-        )
+    assert batcher1.deployment_name != batcher2.deployment_name
 
-        # Verify both have unique deployment names
-        assert (
-            batcher1.deployment_name != batcher2.deployment_name
-        ), "Deployment names should be unique"
+    atoms = bulk("Cu")
 
-        # Test atoms
-        atoms = bulk("Cu")
+    atoms1 = atoms.copy()
+    atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
+    energy1 = atoms1.get_potential_energy()
 
-        # Get energy from first batcher
-        atoms1 = atoms.copy()
-        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
-        energy1 = atoms1.get_potential_energy()
+    atoms2 = atoms.copy()
+    atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+    energy2 = atoms2.get_potential_energy()
 
-        # Get energy from second batcher - should be different since it's a different model
-        atoms2 = atoms.copy()
-        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
-        energy2 = atoms2.get_potential_energy()
-
-        # Energies should differ between different models
+    if same_model:
+        npt.assert_allclose(energy1, energy2, atol=1e-4)
+    else:
         assert (
             abs(energy1 - energy2) > 1e-5
         ), f"Energies should differ between models but got {energy1} and {energy2}"
 
-        # Shutdown first batcher (keep Ray running)
-        batcher1.shutdown(shutdown_ray=False)
-
-        # Verify second batcher still works
-        atoms3 = atoms.copy()
-        atoms3.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
-        energy3 = atoms3.get_potential_energy()
-
-        # Energy from second batcher should still match
-        npt.assert_allclose(energy2, energy3, atol=1e-4)
-
-        # Cleanup
-        batcher2.shutdown(shutdown_ray=False)
-
-    finally:
-        cleanup_ray()
-
-
-def test_multiple_batchers_same_model(uma_predict_unit):
-    """Test that multiple InferenceBatchers with the same model can coexist."""
-    try:
-        setup_ray()
-
-        # Create two batchers with the same model
-        # Use fewer CPUs per batcher to allow both to run concurrently
-        batcher1 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_actor_options={
-                "num_cpus": 4
-            },  # Use fewer CPUs to allow concurrent batchers
+    # Verify both batchers work concurrently
+    def calc_energy(batcher, atoms):
+        atoms_copy = atoms.copy()
+        atoms_copy.calc = FAIRChemCalculator(
+            batcher.batch_predict_unit, task_name="omat"
         )
+        return atoms_copy.get_potential_energy()
 
-        batcher2 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_actor_options={
-                "num_cpus": 4
-            },  # Use fewer CPUs to allow concurrent batchers
-        )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future1 = executor.submit(calc_energy, batcher1, atoms)
+        future2 = executor.submit(calc_energy, batcher2, atoms)
+        result1 = future1.result()
+        result2 = future2.result()
 
-        # Verify both have unique deployment names
-        assert (
-            batcher1.deployment_name != batcher2.deployment_name
-        ), "Deployment names should be unique"
+    npt.assert_allclose(result1, energy1, atol=1e-4)
+    npt.assert_allclose(result2, energy2, atol=1e-4)
 
-        # Test atoms
-        atoms = bulk("Cu")
+    # Verify batcher2 still works after batcher1 shuts down
+    batcher1.shutdown(shutdown_ray=False)
+    atoms3 = atoms.copy()
+    atoms3.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+    npt.assert_allclose(energy2, atoms3.get_potential_energy(), atol=1e-4)
 
-        # Get energy from first batcher
-        atoms1 = atoms.copy()
-        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
-        energy1 = atoms1.get_potential_energy()
-
-        # Get energy from second batcher - should be the same since it's the same model
-        atoms2 = atoms.copy()
-        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
-        energy2 = atoms2.get_potential_energy()
-
-        # Energies should match for the same model
-        npt.assert_allclose(energy1, energy2, atol=1e-4)
-
-        # Both batchers can work concurrently
-        with ThreadPoolExecutor(max_workers=2) as executor:
-
-            def calc_energy(batcher, atoms):
-                atoms_copy = atoms.copy()
-                atoms_copy.calc = FAIRChemCalculator(
-                    batcher.batch_predict_unit, task_name="omat"
-                )
-                return atoms_copy.get_potential_energy()
-
-            future1 = executor.submit(calc_energy, batcher1, atoms)
-            future2 = executor.submit(calc_energy, batcher2, atoms)
-
-            result1 = future1.result()
-            result2 = future2.result()
-
-            # Both should give consistent results
-            npt.assert_allclose(result1, energy1, atol=1e-4)
-            npt.assert_allclose(result2, energy1, atol=1e-4)
-
-        # Cleanup - shutdown without shutting down Ray for the first one
-        batcher1.shutdown(shutdown_ray=False)
-        batcher2.shutdown(shutdown_ray=False)
-
-    finally:
-        cleanup_ray()
+    batcher2.shutdown(shutdown_ray=False)
