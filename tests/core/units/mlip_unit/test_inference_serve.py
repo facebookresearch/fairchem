@@ -340,13 +340,13 @@ def test_multiplexed_single_model(
     npt.assert_allclose(stress_mux, stress_local, atol=ATOL)
 
 
-def test_multiplexed_switch_models(local_multiplexed_cluster):
+def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_model_id):
     """Test switching between two different model keys."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
-    key_a = f"{uma_models[0]}:default"
+    key_a = uma_multiplexed_model_id
     key_b = f"{uma_models[1]}:default"
 
     unit_a = BatchServerPredictUnit.from_deployment_connection_info(
@@ -358,17 +358,17 @@ def test_multiplexed_switch_models(local_multiplexed_cluster):
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
     )
 
-    atoms = bulk("Cu")
-
-    data = AtomicData.from_ase(atoms, task_name="omat")
+    data = AtomicData.from_ase(bulk("Cu"), task_name="omat")
     result_a = unit_a.predict(data)
     result_b = unit_b.predict(data)
 
-    # Both should produce valid results (not necessarily equal)
     assert "energy" in result_a
-    assert "energy" in result_b
     assert "forces" in result_a
+    assert "energy" in result_b
     assert "forces" in result_b
+    assert not torch.allclose(
+        result_a["energy"], result_b["energy"]
+    ), "Different models should produce different energies"
 
 
 def test_multiplexed_concurrent_requests(
