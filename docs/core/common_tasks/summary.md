@@ -19,6 +19,11 @@ Efficiently run predictions on many structures using batched inference.
 Run many independent ASE simulations with concurrent batched inference for improved GPU utilization.
 :::
 
+:::{card} Ray Serve Inference
+:link: ray_serve_inference
+Deploy a centralized inference server with Ray Serve for distributed, multi-client batched inference.
+:::
+
 :::{card} Dataset Creation
 :link: ase_dataset_creation
 Create custom datasets from ASE databases, CIF files, trajectories, and other formats.
