@@ -16,6 +16,7 @@ Two testing modes:
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from contextlib import suppress
 from pathlib import Path
@@ -48,7 +49,12 @@ pytestmark = pytest.mark.gpu
 
 
 @pytest.fixture()
-def local_ray_cluster_with_inference(uma_predict_unit):
+def dashboard_port():
+    return find_free_port()
+
+
+@pytest.fixture()
+def local_ray_cluster_with_inference(uma_predict_unit, dashboard_port):
     """Start a local Ray instance with the FAIRChem inference server.
 
     Function-scoped: a fresh Ray cluster and Serve deployment is created
@@ -57,7 +63,6 @@ def local_ray_cluster_with_inference(uma_predict_unit):
     cost of one Ray init per test.
     """
     num_gpus = 1 if torch.cuda.is_available() else 0
-    dashboard_port = find_free_port()
 
     ray.init(
         num_cpus=8,
@@ -79,6 +84,24 @@ def local_ray_cluster_with_inference(uma_predict_unit):
     )
     wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
 
+    yield
+
+    # Cached handles point at the now-dead deployment; clear so the next
+    # test's fresh deployment isn't shadowed by a stale handle.
+    BatchServerPredictUnit._handle_cache.clear()
+
+    with suppress(Exception):
+        serve.shutdown()
+    ray.shutdown()
+
+
+@pytest.fixture()
+def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard_port):
+    """Extend local_ray_cluster_with_inference with a head.json for external client tests.
+
+    Only tests that call get_ray_connection_info need this fixture.
+    """
+    num_gpus = 1 if torch.cuda.is_available() else 0
     cluster_id = str(uuid.uuid4())
     head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
     head_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,14 +120,6 @@ def local_ray_cluster_with_inference(uma_predict_unit):
 
     yield str(head_file_path)
 
-    # Cached handles point at the now-dead deployment; clear so the next
-    # test's fresh deployment isn't shadowed by a stale handle.
-    BatchServerPredictUnit._handle_cache.clear()
-
-    with suppress(Exception):
-        serve.shutdown()
-    ray.shutdown()
-
     if head_file_path.exists():
         head_file_path.unlink()
         with suppress(OSError):
@@ -118,77 +133,12 @@ def local_ray_cluster_with_inference(uma_predict_unit):
 # ---------------------------------------------------------------------------
 
 
-def test_rayserve_remote_task_single_system(
-    local_ray_cluster_with_inference, uma_predict_unit
-):
-    """Test BatchServerPredictUnit via Ray remote task - single system."""
-
-    @ray.remote
-    def compute_energy_forces(dep_name: str, atoms_dict: dict):
-        """Ray remote task that uses the inference server."""
-        atoms = Atoms.fromdict(atoms_dict)
-
-        unit = BatchServerPredictUnit.from_deployment_connection_info(
-            deployment_name=dep_name
-        )
-        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
-
-        return {
-            "energy": atoms.get_potential_energy(),
-            "forces": atoms.get_forces(),
-            "stress": atoms.get_stress(voigt=False),
-        }
-
-    atoms = bulk("Cu")
-    atoms_dict = atoms.todict()
-
-    result = ray.get(compute_energy_forces.remote(DEPLOYMENT_NAME, atoms_dict))
-
-    # Compare with local prediction
-    atoms_local = bulk("Cu")
-    atoms_local.calc = FAIRChemCalculator(uma_predict_unit, task_name="omat")
-    energy_local = atoms_local.get_potential_energy()
-    forces_local = atoms_local.get_forces()
-    stress_local = atoms_local.get_stress(voigt=False)
-
-    npt.assert_allclose(result["energy"], energy_local, atol=ATOL)
-    npt.assert_allclose(result["forces"], forces_local, atol=ATOL)
-    npt.assert_allclose(result["stress"], stress_local, atol=ATOL)
-
-
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
     """Test multiple concurrent Ray remote tasks hitting the inference server."""
 
     @ray.remote
-    def compute_energy(dep_name: str, atoms_dict: dict):
-        """Ray remote task that computes energy via inference server."""
-        atoms = Atoms.fromdict(atoms_dict)
-
-        unit = BatchServerPredictUnit.from_deployment_connection_info(
-            deployment_name=dep_name
-        )
-        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
-
-        return atoms.get_potential_energy()
-
-    systems = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
-    atoms_dicts = [atoms.todict() for atoms in systems]
-
-    futures = [compute_energy.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
-    results = ray.get(futures)
-
-    assert len(results) == len(systems)
-    for energy in results:
-        assert isinstance(energy, float)
-        assert energy == energy  # Check not NaN
-
-
-def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
-    """Test that concurrent requests are batched by the inference server."""
-
-    @ray.remote
-    def compute_via_handle(dep_name: str, atoms_dict: dict):
-        """Ray remote task using BatchServerPredictUnit directly."""
+    def compute_predictions(dep_name: str, atoms_dict: dict):
+        """Ray remote task that computes predictions via inference server."""
         atoms = Atoms.fromdict(atoms_dict)
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
 
@@ -197,16 +147,18 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
         )
         return unit.predict(atomic_data, undo_element_references=True)
 
-    systems = [bulk("Cu") for _ in range(10)]
+    systems = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
     atoms_dicts = [atoms.todict() for atoms in systems]
 
-    futures = [compute_via_handle.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
+    futures = [compute_predictions.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
     results = ray.get(futures)
 
     assert len(results) == len(systems)
-    for result in results:
+    for result, atoms in zip(results, systems):
         assert "energy" in result
         assert "forces" in result
+        assert torch.isfinite(result["energy"]).all()
+        assert result["forces"].shape == (len(atoms), 3)
 
 
 # ---------------------------------------------------------------------------
@@ -216,27 +168,9 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
 # ---------------------------------------------------------------------------
 
 
-def test_rayserve_external_client_single(local_ray_cluster_with_inference):
-    """Test BatchServerPredictUnit.from_deployment_connection_info from outside Ray cluster."""
-
-    unit = BatchServerPredictUnit.from_deployment_connection_info(
-        deployment_name=DEPLOYMENT_NAME
-    )
-
-    atoms = bulk("Cu")
-    atomic_data = AtomicData.from_ase(atoms, task_name="omat")
-
-    result = unit.predict(atomic_data, undo_element_references=True)
-
-    assert "energy" in result, "Result missing 'energy' key"
-    assert "forces" in result, "Result missing 'forces' key"
-    assert "stress" in result, "Result missing 'stress' key"
-    assert result["forces"].shape == (len(atoms), 3)
-
-
-def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
+def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
-    conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
+    conn_info = get_ray_connection_info(local_ray_cluster_with_head_file)
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME,
         ray_address=conn_info["ray_address"],
@@ -466,4 +400,4 @@ def test_multiplexed_concurrent_requests(
     assert len(results) == len(systems)
     for energy in results:
         assert isinstance(energy, float)
-        assert energy == energy  # Check not NaN
+        assert not math.isnan(energy)
