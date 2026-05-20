@@ -24,7 +24,7 @@ from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate._batch import InferenceBatcher
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
-pytestmark = pytest.mark.serial
+pytestmark = [pytest.mark.serial, pytest.mark.gpu]
 
 
 @pytest.fixture(scope="module")

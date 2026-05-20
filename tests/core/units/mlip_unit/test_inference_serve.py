@@ -44,8 +44,10 @@ DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
 
+pytestmark = pytest.mark.gpu
 
-@pytest.fixture
+
+@pytest.fixture()
 def local_ray_cluster_with_inference(uma_predict_unit):
     """Start a local Ray instance with the FAIRChem inference server.
 
@@ -116,7 +118,6 @@ def local_ray_cluster_with_inference(uma_predict_unit):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.gpu()
 def test_rayserve_remote_task_single_system(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
@@ -155,7 +156,6 @@ def test_rayserve_remote_task_single_system(
     npt.assert_allclose(result["stress"], stress_local, atol=ATOL)
 
 
-@pytest.mark.gpu()
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
     """Test multiple concurrent Ray remote tasks hitting the inference server."""
 
@@ -183,7 +183,6 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
         assert energy == energy  # Check not NaN
 
 
-@pytest.mark.gpu()
 def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
     """Test that concurrent requests are batched by the inference server."""
 
@@ -217,7 +216,6 @@ def test_rayserve_remote_task_batching(local_ray_cluster_with_inference):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.gpu()
 def test_rayserve_external_client_single(local_ray_cluster_with_inference):
     """Test BatchServerPredictUnit.from_deployment_connection_info from outside Ray cluster."""
 
@@ -236,7 +234,6 @@ def test_rayserve_external_client_single(local_ray_cluster_with_inference):
     assert result["forces"].shape == (len(atoms), 3)
 
 
-@pytest.mark.gpu()
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
     conn_info = get_ray_connection_info(local_ray_cluster_with_inference)
@@ -271,7 +268,6 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_inference):
         ), f"Stress shape mismatch for {atoms.get_chemical_formula()}"
 
 
-@pytest.mark.gpu()
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     """Test that BatchServerPredictUnit correctly fetches model metadata."""
 
@@ -288,7 +284,6 @@ def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     ), f"Expected 'omat' in tasks, got: {list(dataset_to_tasks.keys())}"
 
 
-@pytest.mark.gpu()
 def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
@@ -349,7 +344,7 @@ def uma_multiplexed_model_id():
     return f"{uma_models[0]}:default"
 
 
-@pytest.fixture
+@pytest.fixture()
 def local_multiplexed_cluster():
     """Set up a local Ray cluster with a multiplexed inference server.
 
@@ -382,7 +377,6 @@ def local_multiplexed_cluster():
     ray.shutdown()
 
 
-@pytest.mark.gpu()
 def test_multiplexed_single_model(
     local_multiplexed_cluster, uma_multiplexed_model_id, uma_predict_unit
 ):
@@ -410,7 +404,6 @@ def test_multiplexed_single_model(
     npt.assert_allclose(stress_mux, stress_local, atol=ATOL)
 
 
-@pytest.mark.gpu()
 def test_multiplexed_switch_models(local_multiplexed_cluster):
     """Test switching between two different model keys."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
@@ -442,7 +435,6 @@ def test_multiplexed_switch_models(local_multiplexed_cluster):
     assert "forces" in result_b
 
 
-@pytest.mark.gpu()
 def test_multiplexed_concurrent_requests(
     local_multiplexed_cluster, uma_multiplexed_model_id
 ):
