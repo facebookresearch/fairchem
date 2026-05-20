@@ -297,7 +297,7 @@ class BatchPredictServer(BatchPredictServerMixin):
             "BatchPredictServer initialized with predict_unit from object store"
         )
 
-    def is_multiplexed(self) -> bool:
+    async def is_multiplexed(self) -> bool:
         return False
 
 
@@ -349,7 +349,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         )
         logging.info("MultiplexedBatchPredictServer initialized")
 
-    def is_multiplexed(self) -> bool:
+    async def is_multiplexed(self) -> bool:
         return True
 
     async def _predict_impl(
