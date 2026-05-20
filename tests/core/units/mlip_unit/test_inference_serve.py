@@ -6,17 +6,17 @@ LICENSE file in the root directory of this source tree.
 
 Tests for the Ray Serve inference server.
 
-Two testing modes:
+Three testing modes:
 1. Ray remote tasks: Tests run as Ray remote tasks submitted to the cluster.
    These test the typical usage pattern where calculations are submitted as Ray tasks.
 2. External client: Tests run from outside Ray, connecting to the inference server.
    These test the client-side code that connects to an existing service.
+3. Multiplexed server: Tests for on-demand model loading via MultiplexedBatchPredictServer.
 """
 
 from __future__ import annotations
 
 import json
-import math
 import uuid
 from contextlib import suppress
 from pathlib import Path
@@ -269,7 +269,7 @@ def test_rayserve_external_vs_local_comparison(
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def uma_multiplexed_model_id():
     """Return the multiplexed model ID for the first available UMA model."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
@@ -286,11 +286,13 @@ def local_multiplexed_cluster():
     and actor resources are returned to the pool before the next test
     runs.
     """
+    num_gpus = 1 if torch.cuda.is_available() else 0
+
     ray.init(
         log_to_driver=False,
         logging_config=ray.LoggingConfig(log_level="WARNING"),
         num_cpus=8,
-        num_gpus=1 if torch.cuda.is_available() else 0,
+        num_gpus=num_gpus,
         ignore_reinit_error=True,
     )
 
@@ -298,7 +300,7 @@ def local_multiplexed_cluster():
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
         ray_actor_options={
             "num_cpus": 1,
-            "num_gpus": 1 if torch.cuda.is_available() else 0,
+            "num_gpus": num_gpus,
         },
     )
     wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)
@@ -375,22 +377,23 @@ def test_multiplexed_concurrent_requests(
     """Test concurrent requests to the multiplexed server."""
 
     @ray.remote
-    def compute_energy_mux(dep_name: str, multiplexed_model_id: str, atoms_dict: dict):
-        """Ray remote task using BatchServerPredictUnit."""
-
+    def compute_predictions_mux(
+        dep_name: str, multiplexed_model_id: str, atoms_dict: dict
+    ):
+        """Ray remote task using BatchServerPredictUnit directly."""
         atoms = Atoms.fromdict(atoms_dict)
+        atomic_data = AtomicData.from_ase(atoms, task_name="omat")
         unit = BatchServerPredictUnit.from_deployment_connection_info(
             multiplexed_model_id=multiplexed_model_id,
             deployment_name=dep_name,
         )
-        atoms.calc = FAIRChemCalculator(unit, task_name="omat")
-        return atoms.get_potential_energy()
+        return unit.predict(atomic_data, undo_element_references=True)
 
     systems = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
     atoms_dicts = [a.todict() for a in systems]
 
     futures = [
-        compute_energy_mux.remote(
+        compute_predictions_mux.remote(
             MULTIPLEXED_DEPLOYMENT_NAME, uma_multiplexed_model_id, d
         )
         for d in atoms_dicts
@@ -398,6 +401,8 @@ def test_multiplexed_concurrent_requests(
     results = ray.get(futures)
 
     assert len(results) == len(systems)
-    for energy in results:
-        assert isinstance(energy, float)
-        assert not math.isnan(energy)
+    for result, atoms in zip(results, systems):
+        assert "energy" in result
+        assert "forces" in result
+        assert torch.isfinite(result["energy"]).all()
+        assert result["forces"].shape == (len(atoms), 3)
