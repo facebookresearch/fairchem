@@ -839,6 +839,37 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         """
         return self._multiplexed_model_id
 
+    @staticmethod
+    def _get_app_handle_with_retry(
+        deployment_name: str,
+        timeout_seconds: float = 60.0,
+        poll_interval_seconds: float = 1.0,
+    ):
+        # The Serve controller is registered in the "serve" Ray namespace by
+        # the driver that called serve.start(). A consumer (e.g. a Ray task
+        # on a fresh worker) may race the GCS sync of that actor entry and
+        # see a transient "SERVE_CONTROLLER_ACTOR not found" failure. Retry
+        # the lookup for a bounded window before giving up.
+        import time
+
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                return serve.get_app_handle(deployment_name)
+            except Exception as exc:
+                msg = str(exc)
+                transient = (
+                    "SERVE_CONTROLLER_ACTOR" in msg
+                    or "There is no Serve instance" in msg
+                    or "Failed to look up actor" in msg
+                )
+                if not transient or time.monotonic() > deadline:
+                    raise
+                logging.debug(
+                    "Serve controller not visible yet (%s); retrying.", msg
+                )
+                time.sleep(poll_interval_seconds)
+
     @classmethod
     def from_deployment_connection_info(
         cls,
@@ -874,7 +905,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             if ray_address and not ray.is_initialized():
                 ray.init(ray_address, namespace=namespace)
 
-            handle = serve.get_app_handle(deployment_name)
+            handle = cls._get_app_handle_with_retry(deployment_name)
             cls._handle_cache[cache_key] = handle
 
         return cls(

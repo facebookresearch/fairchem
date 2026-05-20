@@ -70,9 +70,11 @@ def local_ray_cluster_with_inference(uma_predict_unit):
     setup_batch_predict_server(
         uma_predict_unit,
         deployment_name=DEPLOYMENT_NAME,
-        ray_actor_options={
-            "num_cpus": 1,
-            "num_gpus": 1 if num_gpus > 0 else 0,
+        deployment_config={
+            "ray_actor_options": {
+                "num_cpus": 1,
+                "num_gpus": 1 if num_gpus > 0 else 0,
+            },
         },
     )
     wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
@@ -367,9 +369,11 @@ def local_multiplexed_cluster():
 
     setup_multiplexed_batch_predict_server(
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
-        ray_actor_options={
-            "num_cpus": 1,
-            "num_gpus": 1 if torch.cuda.is_available() else 0,
+        deployment_config={
+            "ray_actor_options": {
+                "num_cpus": 1,
+                "num_gpus": 1 if torch.cuda.is_available() else 0,
+            },
         },
     )
     wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)

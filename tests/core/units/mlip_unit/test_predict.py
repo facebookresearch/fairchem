@@ -896,12 +896,16 @@ def batch_server_handle(uma_predict_unit):
     # Setup the batch server
     server_handle = setup_batch_predict_server(
         predict_unit=uma_predict_unit,
-        max_batch_size=8,
-        batch_wait_timeout_s=0.05,
-        num_replicas=1,
-        ray_actor_options={
-            "num_gpus": 1 if torch.cuda.is_available() else 0,
-            "num_cpus": 2,
+        deployment_config={
+            "num_replicas": 1,
+            "ray_actor_options": {
+                "num_gpus": 1 if torch.cuda.is_available() else 0,
+                "num_cpus": 2,
+            },
+        },
+        batch_config={
+            "max_batch_size": 8,
+            "batch_wait_timeout_s": 0.05,
         },
     )
 

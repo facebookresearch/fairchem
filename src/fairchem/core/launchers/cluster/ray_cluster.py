@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 # ruff: noqa
 from __future__ import annotations
 
+import atexit
 import dataclasses
 import json
 import logging
@@ -504,6 +505,12 @@ class RayCluster:
         self.jobs: list[submitit.Job] = []
         logger.info(f"logs will be in {self.log_dir.resolve()}")
 
+        # Safety net: scancel SLURM jobs at interpreter exit if the
+        # caller forgot to (or couldn't) call shutdown(). Avoids leaking
+        # allocations on crash, uncaught exception, or KeyboardInterrupt.
+        self._atexit_hook = self._atexit_shutdown
+        atexit.register(self._atexit_hook)
+
     def start_head_and_workers(
         self,
         requirements: dict[str, int | str],
@@ -617,6 +624,8 @@ class RayCluster:
         """
         Cancel all slurms jobs and get rid of rdv directory.
         """
+        if self.is_shutdown:
+            return
         self.is_shutdown = True
         scancel(self.state.list_job_ids())
         kill_proc_tree(
@@ -624,6 +633,18 @@ class RayCluster:
         )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
         logger.info(f"cluster {self.state.cluster_id} shutdown")
+        try:
+            atexit.unregister(self._atexit_hook)
+        except Exception:
+            pass
+
+    def _atexit_shutdown(self):
+        if self.is_shutdown:
+            return
+        try:
+            scancel(self.state.list_job_ids())
+        except Exception:
+            pass
 
     def __enter__(self):
         # only use as a context if you have something blocking waiting on the driver
