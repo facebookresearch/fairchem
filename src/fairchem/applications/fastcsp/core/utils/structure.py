@@ -179,6 +179,16 @@ def reference_graph_from_atoms(
         return None
 
     try:
+        # XYZ-loaded molecules have no unit cell (cell rank < 3), which makes
+        # AseAtomsAdaptor.get_structure raise LinAlgError on the singular
+        # lattice. Pad with a generously large cubic box so the molecule sits
+        # well inside and pymatgen can build a periodic Structure for JmolNN.
+        if np.linalg.matrix_rank(np.array(reference_atoms.cell)) < 3:
+            reference_atoms = reference_atoms.copy()
+            reference_atoms.cell = np.eye(3) * 30.0
+            reference_atoms.center()
+            reference_atoms.pbc = True
+
         structure = AseAtomsAdaptor.get_structure(reference_atoms)
 
         # Build adjacency matrix using Jmol bonding radii (same pattern as
