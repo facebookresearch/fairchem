@@ -236,7 +236,11 @@ class HydraInterfaceMixin:
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
         self.backbone.validate_tasks(self._dataset_to_tasks)
 
-    def add_tasks(self, tasks: Sequence[Task]) -> None:
+    def add_tasks(
+        self,
+        tasks: Sequence[Task],
+        inference_settings: InferenceSettings | None = None,
+    ) -> None:
         """
         Add additional tasks to the model.
 
@@ -248,6 +252,8 @@ class HydraInterfaceMixin:
 
         Args:
             tasks: List of Task objects to add
+            inference_settings: Optional inference settings used to configure
+                gradient computation options (e.g. hessian_vmap).
 
         Raises:
             RuntimeError: If setup_tasks() has not been called
@@ -264,12 +270,16 @@ class HydraInterfaceMixin:
             self._validate_task_compatibility(task)
             self.tasks[task.name] = task
             if task.inference_only:
-                self._configure_gradient_for_task(task)
+                self._configure_gradient_for_task(task, inference_settings)
 
         self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
         self.backbone.validate_tasks(self._dataset_to_tasks)
 
-    def _configure_gradient_for_task(self, task: Task) -> None:
+    def _configure_gradient_for_task(
+        self,
+        task: Task,
+        inference_settings: InferenceSettings | None = None,
+    ) -> None:
         """
         Configure backbone gradient settings for a single inference-only task.
 
@@ -278,6 +288,8 @@ class HydraInterfaceMixin:
 
         Args:
             task: The inference-only task to configure gradients for
+            inference_settings: Optional inference settings used to configure
+                gradient computation options (e.g. hessian_vmap).
         """
         derivative_properties = ("forces", "stress", "hessian")
         if task.property not in derivative_properties:
@@ -300,7 +312,11 @@ class HydraInterfaceMixin:
 
         elif task.property == "hessian":
             regress_config.hessian = True
-            regress_config.hessian_vmap = True
+            regress_config.hessian_vmap = (
+                inference_settings.hessian_vmap
+                if inference_settings is not None
+                else True
+            )
             # Hessian requires forces with create_graph=True
             if not regress_config.direct_forces:
                 regress_config.forces = True

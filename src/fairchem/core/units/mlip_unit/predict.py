@@ -187,7 +187,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"Adding {len(untrained_tasks)} untrained task(s): "
                 f"{[t.name for t in untrained_tasks]}"
             )
-            self.model.module.add_tasks(untrained_tasks)
+            self.model.module.add_tasks(untrained_tasks, self.inference_settings)
 
         self._setup_device(device)
 
