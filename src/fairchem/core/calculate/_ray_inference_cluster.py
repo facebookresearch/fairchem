@@ -156,12 +156,20 @@ def load_update_config(
 
     auto_overrides = {}
 
+    # Resolve rdv_dir up-front (overrides > yaml > ~/.fairray) so it can
+    # drive the default head_file location.
+    rdv_dir = (cluster_config_overrides or {}).get("rdv_dir") or default_config.get(
+        "rdv_dir"
+    ) or (Path.home() / ".fairray")
+    rdv_dir = Path(rdv_dir)
+    auto_overrides["rdv_dir"] = str(rdv_dir)
+
     if head_file is None:
         cluster_id = str(uuid.uuid4())
         logger.info(f"Specifying a Ray cluster with uuid {cluster_id}")
         auto_overrides["cluster_id"] = cluster_id
 
-        head_file = Path.home() / ".fairray" / cluster_id / "head.json"
+        head_file = rdv_dir / cluster_id / "head.json"
     auto_overrides["head_file"] = str(head_file)
 
     return recursive_dict_merge(
@@ -327,8 +335,10 @@ def start_ray_cluster(
 
     requirements = _build_slurm_requirements(config)
 
+    rdv_dir_cfg = config.get("rdv_dir")
     cluster = RayCluster(
         log_dir=log_dir,
+        rdv_dir=Path(rdv_dir_cfg) if rdv_dir_cfg else None,
         cluster_id=config.get("cluster_id"),
         worker_wait_timeout_seconds=config.get("worker_wait_timeout_seconds", 300),
         temp_dir_template=config.get("temp_dir_template"),
