@@ -212,9 +212,10 @@ def filter_and_deduplicate_structures_single(
             hash_density=False,
             hash_volume=False,
         )
-        problematic_structures_df[
-            "group_index"
-        ] = -1  # Mark problematic structures with group -1
+        problematic_structures_df["group_index"] = (
+            "-1"  # Mark problematic structures with group "-1" (string to match
+        )
+        #         deduplicate_structures' f"{hash}_{subgroup}" dtype)
 
     structures_df_filtered = structures_df_filtered.drop(columns=["structure"])
 

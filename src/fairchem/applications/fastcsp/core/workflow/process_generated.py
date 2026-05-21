@@ -317,9 +317,10 @@ def process_genarris_outputs_single(
             structure_col="structure_generated",
         )
     if assign_groups:
-        problematic_structures_df[
-            "group_index"
-        ] = -1  # Mark problematic structures with group -1
+        problematic_structures_df["group_index"] = (
+            "-1"  # Mark problematic structures with group "-1" (string to match
+        )
+        #         deduplicate_structures' f"{hash}_{subgroup}" dtype)
 
     if not remove_problematic:
         # Reintegrate problematic structures if not removing them
