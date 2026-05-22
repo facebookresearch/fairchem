@@ -43,11 +43,13 @@ def get_eval_config_and_method(
     """Extract evaluation configuration from config dictionary."""
     logger = get_central_logger()
     eval_config = config.get("evaluate", {})
-    eval_method = eval_config.get("method", "csd").lower()
+    eval_method = eval_config.get("method").lower()
 
     if eval_method not in ["csd", "ccdc", "pymatgen", "pmg"]:
         logger.error(f"Invalid evaluation method '{eval_method}' specified.")
-        raise ValueError("Evaluation method must be 'csd', 'ccdc', or 'pymatgen'.")
+        raise ValueError(
+            "Evaluation method must be 'csd', 'ccdc', 'pymatgen', or 'pmg'."
+        )
 
     if eval_method in ["csd", "ccdc"]:
         eval_method = "csd"

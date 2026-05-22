@@ -157,22 +157,27 @@ def filter_and_deduplicate_structures_single(
         )
 
     # 2. Separate problematic structures for retention
+    validity_cols = [
+        col for col in structures_df.columns if col.startswith("validity.")
+    ]
+    all_valid = structures_df[validity_cols].all(axis=1)
     problematic_structures_df = structures_df[
-        ~structures_df["optimizer_converged"]
-        | ~structures_df["validity.connectivity_unchanged"]
+        ~structures_df["optimizer_converged"] | ~all_valid
     ]
     structures_df_filtered = structures_df[
-        structures_df["optimizer_converged"]
-        & structures_df["validity.connectivity_unchanged"]
+        structures_df["optimizer_converged"] & all_valid
     ]
 
     # 3. Apply multi-stage filtering workflow
     if density_cutoff is not None:
-        logger.info(f"Before filtering by density: {structures_df.shape}")
-        structures_df = structures_df[
-            structures_df["density_relaxed"] <= density_cutoff
+        logger.info(f"Before filtering by density: {structures_df_filtered.shape}")
+        structures_df_filtered = structures_df_filtered[
+            structures_df_filtered["density_relaxed"] <= density_cutoff
         ]  # Remove unphysically dense structures
-        logger.info(f"After filtering by density: {structures_df.shape}")
+        problematic_structures_df = problematic_structures_df[
+            problematic_structures_df["density_relaxed"] <= density_cutoff
+        ]
+        logger.info(f"After filtering by density: {structures_df_filtered.shape}")
 
     # Apply energy-based cutoff relative to global minimum
     if energy_cutoff is not None:
@@ -180,6 +185,10 @@ def filter_and_deduplicate_structures_single(
         min_energy = structures_df_filtered["energy_relaxed_per_molecule"].min()
         structures_df_filtered = structures_df_filtered[
             structures_df_filtered["energy_relaxed_per_molecule"]
+            <= min_energy + energy_cutoff
+        ]
+        problematic_structures_df = problematic_structures_df[
+            problematic_structures_df["energy_relaxed_per_molecule"]
             <= min_energy + energy_cutoff
         ]
         logger.info(f"After filtering by energy: {structures_df_filtered.shape}")
