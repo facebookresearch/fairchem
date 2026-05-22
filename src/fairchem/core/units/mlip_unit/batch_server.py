@@ -500,29 +500,26 @@ def _init_ray_and_serve(
     cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
     ray_actor_options["num_cpus"] = cpus_per_actor
 
-    # Ray Serve itself reserves ~2 CPUs for its controller and HTTP proxy on
-    # the head node.
     requested_cpus = cpus_per_actor * num_replicas
-    serve_overhead_cpus = 2
 
     if not ray.is_initialized():
         ray.init(
             log_to_driver=False,
             logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=requested_cpus + serve_overhead_cpus,
+            num_cpus=requested_cpus,
         )
         logging.info("Ray initialized")
 
-    # If the deployment's CPU request plus that overhead consumes the whole
-    # cluster, downstream Ray tasks (and even Serve's own actors) will starve
-    # and silently hang. Fail fast with an actionable message instead.
-    cluster_cpus = ray.cluster_resources().get("CPU", 0)
-    if requested_cpus + serve_overhead_cpus > cluster_cpus:
+    # If the deployment's CPU request exceeds available CPUs, the actor will
+    # silently hang waiting for resources. Fail fast with an actionable message.
+    # Use available_resources() (not cluster_resources()) so that CPUs already
+    # consumed by the Serve controller/proxy are accounted for.
+    available_cpus = ray.available_resources().get("CPU", 0)
+    if requested_cpus > available_cpus:
         raise RuntimeError(
             f"Ray Serve deployment requests {cpus_per_actor} CPU(s) x "
-            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), plus "
-            f"~{serve_overhead_cpus} CPU(s) for the Serve controller/proxy, "
-            f"but the Ray cluster only has {cluster_cpus:g} CPU(s). "
+            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), but the "
+            f"Ray cluster only has {available_cpus:g} CPU(s) currently available. "
             "Reduce ray_actor_options['num_cpus'] / num_replicas, or grow "
             "the cluster (e.g. ray.init(num_cpus=...))."
         )

@@ -410,3 +410,13 @@ def uma_predict_unit():
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
+
+
+@pytest.fixture(scope="session")
+def uma_predict_unit_alt():
+    """Predict unit using the second available UMA model."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    if len(uma_models) < 2:
+        pytest.skip("Fewer than 2 UMA models available")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)

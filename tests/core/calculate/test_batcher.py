@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import contextlib
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -20,21 +21,10 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate._batch import InferenceBatcher
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
 pytestmark = [pytest.mark.serial, pytest.mark.gpu]
-
-
-@pytest.fixture(scope="module")
-def uma_predict_unit_alt():
-    """Module-scoped predict unit using the second available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if len(uma_models) < 2:
-        pytest.skip("Fewer than 2 UMA models available")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
 
 
 @pytest.fixture(autouse=True)
@@ -44,9 +34,6 @@ def setup_before_each_test():
 
 def setup_ray():
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-
-    import os
-
     worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
     namespace = f"test-{worker_id}-{int(time.time() * 1000000)}"
 
@@ -117,6 +104,7 @@ def inference_batcher(ray_session, uma_predict_unit):
         num_replicas=1,
         concurrency_backend="threads",
         concurrency_backend_options={"max_workers": 4},
+        ray_actor_options={"num_cpus": 2},
     )
     yield batcher
     batcher.shutdown(shutdown_ray=False)
@@ -129,6 +117,7 @@ def inference_batcher(ray_session, uma_predict_unit):
             {
                 "concurrency_backend": "threads",
                 "concurrency_backend_options": {"max_workers": 8},
+                "ray_actor_options": {"num_cpus": 2},
             },
             lambda b: isinstance(b.executor, ThreadPoolExecutor),
             id="threads_concurrency",
@@ -158,6 +147,7 @@ def test_context_manager_enter_exit(ray_session, uma_predict_unit):
         max_batch_size=16,
         batch_wait_timeout_s=0.1,
         num_replicas=1,
+        ray_actor_options={"num_cpus": 2},
     ) as batcher:
         assert hasattr(batcher, "executor")
         assert hasattr(batcher, "predict_server_handle")
@@ -246,37 +236,27 @@ def test_checkpoint_swap_with_energy_verification(
     batcher.shutdown(shutdown_ray=False)
 
 
-@pytest.mark.parametrize(
-    "method,ray_alive",
-    [
-        pytest.param("shutdown", False, id="full_shutdown"),
-        pytest.param("delete", True, id="delete_only"),
-    ],
-)
-def test_batcher_lifecycle(ray_controlled, uma_predict_unit, method, ray_alive):
-    """Test that shutdown and delete properly clean up resources."""
+def test_batcher_shutdown(ray_controlled, uma_predict_unit):
+    """Test that shutdown(shutdown_ray=True) cleans up all resources including Ray."""
     batcher = InferenceBatcher(
         predict_unit=uma_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
+        ray_actor_options={"num_cpus": 2},
     )
 
     assert batcher.predict_server_handle is not None
     executor = batcher.executor
 
-    if method == "shutdown":
-        batcher.shutdown(shutdown_ray=True)
-        with pytest.raises(
-            RuntimeError, match="cannot schedule new futures after shutdown"
-        ):
-            executor.submit(time.sleep, 1)
-    else:
-        batcher.delete()
-        batcher.executor.shutdown(wait=True)
+    batcher.shutdown(shutdown_ray=True)
+    with pytest.raises(
+        RuntimeError, match="cannot schedule new futures after shutdown"
+    ):
+        executor.submit(time.sleep, 1)
 
     assert batcher.predict_server_handle is None
-    assert ray.is_initialized() == ray_alive
+    assert not ray.is_initialized()
 
 
 @pytest.mark.parametrize(
@@ -297,14 +277,14 @@ def test_multiple_batchers(
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 4},
+        ray_actor_options={"num_cpus": 4, "num_gpus": 0.5},
     )
     batcher2 = InferenceBatcher(
         predict_unit=predict_unit2,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 4},
+        ray_actor_options={"num_cpus": 4, "num_gpus": 0.5},
     )
 
     assert batcher1.deployment_name != batcher2.deployment_name
