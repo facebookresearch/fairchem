@@ -70,12 +70,12 @@ CHECKPOINTS = {
         "task_name": "omol",
     },
     "uma_sm_1p2_omc": {  # UMA 1p2 w/ OMC task
-        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "checkpoint": None,
         "model": "uma-s-1p2",
         "task_name": "omc",
     },
     "uma_sm_1p2_omol": {  # UMA 1p2 w/ OMol task
-        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "checkpoint": None,
         "model": "uma-s-1p2",
         "task_name": "omol",
     },

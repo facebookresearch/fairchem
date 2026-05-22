@@ -61,6 +61,12 @@ def cif_to_structure(cif: str) -> Structure | None:
 def cif_to_atoms(cif: str) -> Atoms | None:
     """
     Convert CIF string to ASE Atoms object.
+
+    Args:
+        cif: CIF format string containing crystal structure data
+
+    Returns:
+        ASE Atoms object if conversion successful, None if cif is empty/invalid
     """
     return AseAtomsAdaptor.get_atoms(cif_to_structure(cif)) if cif else None
 
