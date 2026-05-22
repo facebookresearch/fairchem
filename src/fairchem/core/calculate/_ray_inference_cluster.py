@@ -156,12 +156,19 @@ def load_update_config(
 
     auto_overrides = {}
 
-    # Resolve rdv_dir up-front (overrides > yaml > ~/.fairray) so it can
-    # drive the default head_file location.
-    rdv_dir = (cluster_config_overrides or {}).get("rdv_dir") or default_config.get(
-        "rdv_dir"
-    ) or (Path.home() / ".fairray")
+    # Resolve rdv_dir up-front (overrides > yaml > RAY_FAIRRAY_DIR env >
+    # ~/.fairray) so it can drive the default head_file location. The env
+    # var lets prefect worker subprocesses and other indirect callers pin
+    # the rendezvous dir to a writable shared path (e.g. CI runner temp)
+    # without having to plumb it through every call site.
+    rdv_dir = (
+        (cluster_config_overrides or {}).get("rdv_dir")
+        or default_config.get("rdv_dir")
+        or os.environ.get("RAY_FAIRRAY_DIR")
+        or (Path.home() / ".fairray")
+    )
     rdv_dir = Path(rdv_dir)
+    rdv_dir.mkdir(parents=True, exist_ok=True)
     auto_overrides["rdv_dir"] = str(rdv_dir)
 
     if head_file is None:
