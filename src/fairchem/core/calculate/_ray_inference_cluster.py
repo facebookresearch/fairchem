@@ -497,7 +497,28 @@ def get_slurm_ray_cluster(
                         f"Connecting to Ray cluster at {client_address} "
                         "to start inference server..."
                     )
-                    ray.init(client_address, namespace=namespace_serve_fairchem)
+                    import backoff
+
+                    max_tries = int(os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8"))
+                    base_delay = float(os.environ.get("FAIRCHEM_RAY_INIT_BASE_DELAY", "2.0"))
+
+                    @backoff.on_exception(
+                        backoff.expo,
+                        (ConnectionAbortedError, ConnectionError, RuntimeError),
+                        max_tries=max_tries,
+                        factor=base_delay,
+                        max_value=60.0,
+                        jitter=backoff.full_jitter,
+                        logger=logger,
+                    )
+                    def _do_init() -> None:
+                        ray.init(
+                            client_address,
+                            ignore_reinit_error=True,
+                            namespace=namespace_serve_fairchem,
+                        )
+
+                    _do_init()
                     # Remember that we own this connection so the finally
                     # block can release it; otherwise a subsequent
                     # get_slurm_ray_cluster() call in the same process would
