@@ -26,8 +26,8 @@ Filtering Process:
 
 from __future__ import annotations
 
-import os
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
@@ -37,14 +37,11 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_connectivity_changes,
-    cif_to_atoms,
+    check_correct_z,
+    check_molecule_matches_reference,
     cif_to_structure,
+    load_reference_graph,
 )
-from p_tqdm import p_map
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -86,6 +83,7 @@ def filter_and_deduplicate_structures_single(
     angle_tol: float = 5,
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
+    generated_structures_dir: Path | None = None,
 ):
     """
     Apply filtering and deduplication to a single parquet dataset.
@@ -93,7 +91,8 @@ def filter_and_deduplicate_structures_single(
     Args:
         input_filename: Path to input parquet file with structure data
         output_filename: Path to output parquet file for filtered results
-        remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
+        remove_problematic: Whether to remove problematic structures
+            (non-converged, wrong Z, or reference-mismatched after relax)
         energy_cutoff: Maximum energy above minimum (kJ/mol)
         density_cutoff: Maximum allowed density (g/cm³) for filtering
         assign_groups: Whether to assign group IDs to similar structures
@@ -101,11 +100,22 @@ def filter_and_deduplicate_structures_single(
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
         remove_duplicates: Whether to enable structure deduplication
-        root_unrelaxed: Path to unrelaxed structures for comparison
+        root_unrelaxed: Optional path to the matching unrelaxed parquet.
+            When provided, the filter recomputes the post-relax validity
+            columns (``validity.crystal_relaxed.correct_z`` and
+            ``validity.crystal_relaxed.molecule_matches_reference``) on the
+            *relaxed* CIF. Use this when those checks were not done at the
+            relax stage.
+        generated_structures_dir: Optional path to the workspace's
+            ``generated_structures/`` directory. Required (alongside
+            ``root_unrelaxed``) when the ``molecule_matches_reference``
+            recompute needs to load the per-conformer reference XYZ.
 
     Filtering Workflow:
-        1. Validate connectivity preservation during relaxation
-        2. Deal with problematic structures (non-converged or connectivity changed)
+        1. (Optional) Recompute post-relax validity flags on the relaxed CIF
+           when ``root_unrelaxed`` is provided
+        2. Deal with problematic structures (non-converged, wrong Z, or
+           fragments not isomorphic to the reference molecule)
         3. Apply density cutoff to remove unphysical structures
         4. Energy-based filtering relative to global minimum
         5. Deduplication with pymatgen StructureMatcher
@@ -116,14 +126,17 @@ def filter_and_deduplicate_structures_single(
     # Load structure dataset from parquet format
     structures_df = pd.read_parquet(input_filename, engine="pyarrow")
 
-    # 1. Validate connectivity preservation during ML relaxation
-    # This is done only if unrelaxed structures are provided
-    # Most likely this was performed at the relaxation stage already
+    # 1. Optional fallback: when ``root_unrelaxed`` is provided, recompute the
+    # post-relax validity flags on the RELAXED structure.
+    # Use this when those checks were not done at the
+    # relax stage. The unrelaxed parquet is also merged in so cif_generated
+    # is available downstream.
     if root_unrelaxed is not None:
         structures_df_unrelaxed = pd.read_parquet(
             root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif_generated"]
         )
-        # Merge with unrelaxed data if requested for comparison studies
+        # Merge so cif_generated is available even if the relaxed parquet
+        # dropped it. Suffix prevents collisions when both sides carry it.
         structures_df = structures_df.merge(
             structures_df_unrelaxed,
             on="structure_id",
@@ -131,30 +144,27 @@ def filter_and_deduplicate_structures_single(
             suffixes=("", "_unrelaxed"),
         )
 
-        # Convert CIF strings to atomic structures for connectivity analysis
-        final_atoms = structures_df["cif_relaxed"].apply(cif_to_atoms)
-        initial_atoms = structures_df["cif_generated"].apply(cif_to_atoms)
-
-        # Validate bonding network preservation during relaxation
-
-        num_cpus = max(len(os.sched_getaffinity(0)), 1)
-        # Single helper call per pair: builds each NN matrix once and returns
-        # both the Z-unchanged and connectivity-unchanged flags.
-        connectivity_results = p_map(
-            check_connectivity_changes,
-            initial_atoms,
-            final_atoms,
-            num_cpus=num_cpus,
+        # Build the per-conformer reference graph once (one mol/conf per parquet).
+        mol_id = str(structures_df["mol_id"].iloc[0])
+        conf_id = str(structures_df["conf_id"].iloc[0])
+        generated_conf_dir = (
+            Path(generated_structures_dir) / mol_id / conf_id
+            if generated_structures_dir is not None
+            else None
         )
-        # Z (molecule count) check first, then full connectivity check
-        structures_df["validity.crystal_relaxed.z_unchanged"] = [
-            r["molecule_count_preserved"] for r in connectivity_results
+        reference_graph = load_reference_graph(generated_conf_dir, conf_id)
+
+        relaxed_structures = structures_df["cif_relaxed"].apply(cif_to_structure)
+        structures_df["validity.crystal_relaxed.correct_z"] = [
+            check_correct_z(s, int(z))
+            for s, z in zip(relaxed_structures, structures_df["z"])
         ]
-        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
-            r["exact_bonds_preserved"] for r in connectivity_results
+        structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
+            check_molecule_matches_reference(s, reference_graph)
+            for s in relaxed_structures
         ]
 
-        # Save intermediate results with connectivity validation flags
+        # Save intermediate results with the recomputed validity columns
         structures_df.to_parquet(
             input_filename.parent.with_suffix(".updated") / input_filename.name,
             engine="pyarrow",
@@ -168,13 +178,13 @@ def filter_and_deduplicate_structures_single(
     # 2. Separate problematic structures for retention
     problematic_structures_df = structures_df[
         ~structures_df["optimizer_converged"]
-        | ~structures_df["validity.crystal_relaxed.z_unchanged"]
-        | ~structures_df["validity.crystal_relaxed.connectivity_unchanged"]
+        | ~structures_df["validity.crystal_relaxed.correct_z"]
+        | ~structures_df["validity.crystal_relaxed.molecule_matches_reference"]
     ]
     structures_df_filtered = structures_df[
         structures_df["optimizer_converged"]
-        & structures_df["validity.crystal_relaxed.z_unchanged"]
-        & structures_df["validity.crystal_relaxed.connectivity_unchanged"]
+        & structures_df["validity.crystal_relaxed.correct_z"]
+        & structures_df["validity.crystal_relaxed.molecule_matches_reference"]
     ]
 
     # 3. Apply multi-stage filtering workflow
@@ -247,6 +257,7 @@ def filter_and_deduplicate_structures(
     angle_tol: float,
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
+    generated_structures_dir: Path | None = None,
 ):
     """
     Submit parallel filtering jobs for multiple datasets.
@@ -255,7 +266,8 @@ def filter_and_deduplicate_structures(
         input_dir: Root directory containing multiple dataset directories
         output_dir: Base directory for filtered output files
         post_relax_config: Configuration dictionary containing SLURM and filtering parameters
-        remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
+        remove_problematic: Whether to remove problematic structures
+            (non-converged, wrong Z, or reference-mismatched after relax)
         energy_cutoff: Energy threshold above minimum (kJ/mol)
         density_cutoff: Maximum density threshold (g/cm³)
         assign_groups: Whether to assign group indices during deduplication
@@ -263,7 +275,16 @@ def filter_and_deduplicate_structures(
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
         remove_duplicates: Whether to enable deduplication
-        root_unrelaxed: Root directory with unrelaxed structures
+        root_unrelaxed: Optional root directory containing the matching
+            unrelaxed parquets. When provided, each worker recomputes the
+            post-relax validity columns
+            (``validity.crystal_relaxed.{correct_z, molecule_matches_reference}``)
+            on the relaxed CIF. Use this when those checks were not done
+            at the relax stage.
+        generated_structures_dir: Optional path to the workspace's
+            ``generated_structures/`` directory. Required (alongside
+            ``root_unrelaxed``) so each worker can locate the per-conformer
+            reference XYZ for the molecule-matches-reference recompute.
 
     Returns:
         List of submitit job objects.
@@ -306,6 +327,7 @@ def filter_and_deduplicate_structures(
                     angle_tol,
                     remove_duplicates,
                     unrelaxed_path,
+                    generated_structures_dir,
                 ),
                 {},
             )

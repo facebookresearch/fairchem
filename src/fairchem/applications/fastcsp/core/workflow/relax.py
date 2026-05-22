@@ -37,7 +37,7 @@ from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_connectivity_changes,
+    check_correct_z,
     check_molecule_matches_reference,
     load_reference_graph,
 )
@@ -309,8 +309,6 @@ def relax_structures(
             )
             .to_numpy()
         )
-        # Deep copy atoms for connectivity validation (relaxation modifies in-place)
-        atoms_list_original = [atoms.copy() for atoms in atoms_list]
         structure_ids_list = structures_df["structure_id"].to_numpy().astype(str)
 
         # Create traj folder
@@ -371,27 +369,14 @@ def relax_structures(
             atoms.info["converged"] for atoms in atoms_relaxed
         ]
 
-        # Validate structural integrity after relaxation: build the JmolNN bond
-        # matrix once per structure and derive both the Z-unchanged and the
-        # connectivity-unchanged flags from a single helper call.
-        connectivity_results = [
-            check_connectivity_changes(
-                atoms_initial,
-                atoms_final,
-                check_exact_bonds=True,
-                check_molecule_count=True,
-            )
-            for atoms_initial, atoms_final in zip(atoms_list_original, atoms_relaxed)
+        # Validate structural integrity after relaxation using reference-anchored
+        # checks on the relaxed structure: (a) Z (molecule count) matches the
+        # canonical Z value, and (b) every fragment is isomorphic to the
+        # reference molecular graph.
+        structures_df["validity.crystal_relaxed.correct_z"] = [
+            check_correct_z(structure, int(z))
+            for structure, z in zip(structures_relaxed, structures_df["z"])
         ]
-        # Z (molecule count) check first, then full connectivity check
-        structures_df["validity.crystal_relaxed.z_unchanged"] = [
-            r["molecule_count_preserved"] for r in connectivity_results
-        ]
-        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
-            r["exact_bonds_preserved"] for r in connectivity_results
-        ]
-
-        # Reference-based validity flag on the RELAXED structure
         structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
             check_molecule_matches_reference(structure, reference_graph)
             for structure in structures_relaxed

@@ -220,6 +220,8 @@ def main(args: argparse.Namespace) -> None:
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
             remove_duplicates=post_relax_config["remove_duplicates"],
+            root_unrelaxed=root / "raw_structures",
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(

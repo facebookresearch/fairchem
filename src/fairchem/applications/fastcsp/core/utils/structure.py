@@ -18,8 +18,9 @@ Key Features:
 - Quality control checks for structural integrity
 
 Structure Validation:
-- Atomic composition conservation (Z-number preservation)
-- Covalent bonding network analysis using coordination environments
+- Atomic composition conservation (Z-number preservation via ``check_correct_z``)
+- Reference-anchored molecular topology check via
+  ``check_molecule_matches_reference``
 
 The module is designed for both individual structure operations and batch processing
 of large crystal structure datasets common in high-throughput materials discovery.
@@ -149,10 +150,11 @@ def check_correct_z(
 
     # Build adjacency matrix using Jmol bonding radii
     nn_info = JmolNN().get_all_nn_info(structure)
-    nn_matrix = np.zeros((len(nn_info), len(nn_info)))
-    for i in range(len(nn_info)):
-        for j in range(len(nn_info[i])):
-            nn_matrix[i, nn_info[i][j]["site_index"]] = 1
+    n = len(nn_info)
+    nn_matrix = np.zeros((n, n), dtype=int)
+    for i in range(n):
+        for entry in nn_info[i]:
+            nn_matrix[i, entry["site_index"]] = 1
 
     # Connected-component count == observed number of molecular fragments
     observed_z = csgraph.connected_components(nn_matrix)[0]
@@ -194,21 +196,23 @@ def reference_graph_from_atoms(
         structure = AseAtomsAdaptor.get_structure(reference_atoms)
 
         # Build adjacency matrix using Jmol bonding radii (same pattern as
-        # check_correct_z and check_connectivity_changes).
+        # check_correct_z).
         nn_info = JmolNN().get_all_nn_info(structure)
         n = len(nn_info)
         if n < 1:
             return None
 
-        # Build the nx.Graph (atomic_num node attr; undirected edges
-        graph = nx.Graph()
-        for i in range(n):
-            graph.add_node(i, atomic_num=structure[i].specie.number)
+        nn_matrix = np.zeros((n, n), dtype=int)
         for i in range(n):
             for entry in nn_info[i]:
-                j = entry["site_index"]
-                if i < j:
-                    graph.add_edge(i, j)
+                nn_matrix[i, entry["site_index"]] = 1
+
+        # Build undirected nx.Graph from the adjacency matrix and attach
+        # atomic_num as a per-node attribute (used by the categorical node
+        # match in check_molecule_matches_reference).
+        graph = nx.from_numpy_array(nn_matrix)
+        for i in range(n):
+            graph.nodes[i]["atomic_num"] = structure[i].specie.number
         return graph
     except Exception as e:
         logger = get_central_logger()
@@ -225,9 +229,7 @@ def load_reference_graph(
 
     Searches ``conf_dir`` for ``<conf_id>.xyz``, ``.sdf``, or ``.mol`` (in that
     order), reads the first match with ASE, and converts it to a NetworkX
-    graph via :func:`reference_graph_from_atoms`. Warnings are emitted via the
-    central logger when the conformer directory is missing, when no candidate
-    file exists, or when reading the file fails.
+    graph via :func:`reference_graph_from_atoms`.
 
     Args:
         conf_dir: Directory containing ``<conf_id>.{xyz,sdf,mol}``. May be
@@ -275,13 +277,12 @@ def check_molecule_matches_reference(
     Check whether every connected molecular fragment in the cell is
     isomorphic to the reference molecule.
 
-    For each connected component of the JmolNN adjacency, a small
-    ``nx.Graph`` is built with ``atomic_num`` node attributes and the
-    induced covalent edges. Each fragment graph is then compared to the
-    reference via ``nx.is_isomorphic`` with a categorical match on atomic
-    number. This catches topology errors (tautomers, rearranged rings,
-    wrong functional groups) that the count-only ``check_correct_z`` and
-    bond-matrix ``check_connectivity_changes`` cannot detect.
+    For each connected component of the JmolNN adjacency, a subgraph view
+    is taken from the full-cell ``nx.Graph`` (which carries ``atomic_num``
+    per node). Each fragment is then compared to the reference via
+    ``nx.is_isomorphic`` with a categorical match on atomic number. This
+    catches topology errors (tautomers, rearranged rings, wrong functional
+    groups) that the count-only ``check_correct_z`` cannot detect.
 
     Args:
         structure: Pymatgen ``Structure`` for the generated unit cell.
@@ -299,24 +300,20 @@ def check_molecule_matches_reference(
     try:
         nn_info = JmolNN().get_all_nn_info(structure)
         n = len(nn_info)
-        nn_matrix = np.zeros((n, n))
+        nn_matrix = np.zeros((n, n), dtype=int)
         for i in range(n):
-            for j in range(len(nn_info[i])):
-                nn_matrix[i, nn_info[i][j]["site_index"]] = 1
+            for entry in nn_info[i]:
+                nn_matrix[i, entry["site_index"]] = 1
 
-        n_components, labels = csgraph.connected_components(nn_matrix)
+        # Build the full-cell graph once with atomic_num node attributes;
+        # take per-fragment subgraph views for the isomorphism comparison.
+        graph = nx.from_numpy_array(nn_matrix)
+        for i in range(n):
+            graph.nodes[i]["atomic_num"] = structure[i].specie.number
         node_match = nx.algorithms.isomorphism.categorical_node_match("atomic_num", 0)
 
-        for comp in range(n_components):
-            indices = [i for i, lbl in enumerate(labels) if lbl == comp]
-            fragment_graph = nx.Graph()
-            for i in indices:
-                fragment_graph.add_node(i, atomic_num=structure[i].specie.number)
-            for i in indices:
-                for entry in nn_info[i]:
-                    j = entry["site_index"]
-                    if j in indices and i < j:
-                        fragment_graph.add_edge(i, j)
+        for comp_nodes in nx.connected_components(graph):
+            fragment_graph = graph.subgraph(comp_nodes)
             if not nx.is_isomorphic(
                 fragment_graph, reference_graph, node_match=node_match
             ):
@@ -326,142 +323,3 @@ def check_molecule_matches_reference(
         logger = get_central_logger()
         logger.warning(f"Failed molecule-matches-reference check: {e}")
         return False
-
-
-def check_connectivity_changes(
-    initial_atoms: Atoms | None,
-    final_atoms: Atoms | None,
-    check_exact_bonds: bool = True,
-    check_molecule_count: bool = True,
-) -> dict:
-    """
-    Compare connectivity between two structures with one bond-matrix build per
-    structure (no StructureMatcher / site reordering — sites are kept in their
-    natural order).
-
-    The JmolNN adjacency matrix is built once per input, then the requested
-    checks are derived from those matrices: (a) exact-bond preservation via
-    matrix equality and (b) molecule-count preservation via connected-component
-    counts.
-
-    Args:
-        initial_atoms: Structure before relaxation (ASE ``Atoms``).
-        final_atoms: Structure after relaxation (ASE ``Atoms``).
-        check_exact_bonds: Whether to compare the full adjacency matrices.
-        check_molecule_count: Whether to compare the connected-component counts.
-
-    Returns:
-        Dict with keys:
-            - ``no_changes``: True iff every requested check passed.
-            - ``exact_bonds_preserved``: True iff bond matrices are equal
-              (or check disabled, in which case True by default).
-            - ``molecule_count_preserved``: True iff component counts match
-              (or check disabled, in which case True by default).
-            - ``initial_molecule_count``: Component count in initial (0 if not checked).
-            - ``final_molecule_count``: Component count in final (0 if not checked).
-            - ``bonds_changed``: True iff exact-bond check ran and disagreed.
-            - ``error``: Optional error message if something failed.
-    """
-    result = {
-        "no_changes": True,
-        "exact_bonds_preserved": True,
-        "molecule_count_preserved": True,
-        "initial_molecule_count": 0,
-        "final_molecule_count": 0,
-        "bonds_changed": False,
-    }
-
-    if initial_atoms is None or final_atoms is None:
-        result.update(
-            no_changes=False,
-            exact_bonds_preserved=False,
-            molecule_count_preserved=False,
-            error="One or both input structures are None",
-        )
-        return result
-
-    try:
-        # Convert ASE Atoms to pymatgen Structures for neighbor analysis
-        initial_structure = AseAtomsAdaptor.get_structure(initial_atoms)
-        final_structure = AseAtomsAdaptor.get_structure(final_atoms)
-
-        # Build adjacency matrix for initial structure using Jmol bonding radii
-        initial_nn_info = JmolNN().get_all_nn_info(initial_structure)
-        initial_nn_matrix = np.zeros((len(initial_nn_info), len(initial_nn_info)))
-        for i in range(len(initial_nn_info)):
-            for j in range(len(initial_nn_info[i])):
-                initial_nn_matrix[i, initial_nn_info[i][j]["site_index"]] = 1
-
-        # Build adjacency matrix for final (relaxed) structure
-        final_nn_info = JmolNN().get_all_nn_info(final_structure)
-        final_nn_matrix = np.zeros((len(final_nn_info), len(final_nn_info)))
-        for i in range(len(final_nn_info)):
-            for j in range(len(final_nn_info[i])):
-                final_nn_matrix[i, final_nn_info[i][j]["site_index"]] = 1
-
-        if check_exact_bonds:
-            # Direct comparison in natural site order (no permutation)
-            exact_bonds_preserved = bool(
-                np.array_equal(initial_nn_matrix, final_nn_matrix)
-            )
-            result["exact_bonds_preserved"] = exact_bonds_preserved
-            result["bonds_changed"] = not exact_bonds_preserved
-            if not exact_bonds_preserved:
-                result["no_changes"] = False
-
-        if check_molecule_count:
-            initial_molecule_count = int(
-                csgraph.connected_components(initial_nn_matrix)[0]
-            )
-            final_molecule_count = int(csgraph.connected_components(final_nn_matrix)[0])
-            result["initial_molecule_count"] = initial_molecule_count
-            result["final_molecule_count"] = final_molecule_count
-            molecule_count_preserved = initial_molecule_count == final_molecule_count
-            result["molecule_count_preserved"] = molecule_count_preserved
-            if not molecule_count_preserved:
-                result["no_changes"] = False
-
-        return result
-
-    except Exception as e:
-        result.update(
-            no_changes=False,
-            exact_bonds_preserved=False,
-            molecule_count_preserved=False,
-            error=str(e),
-        )
-        return result
-
-
-def check_no_changes_in_covalent_matrix(
-    initial_atoms: Atoms, final_atoms: Atoms
-) -> bool:
-    """
-    Check if covalent bonding network is preserved after relaxation.
-
-    Thin wrapper around ``check_connectivity_changes``; kept for backwards
-    compatibility of the public API.
-    """
-    return check_connectivity_changes(
-        initial_atoms,
-        final_atoms,
-        check_exact_bonds=True,
-        check_molecule_count=False,
-    )["exact_bonds_preserved"]
-
-
-def check_no_changes_in_Z(
-    initial_atoms: Atoms | None, final_atoms: Atoms | None
-) -> bool:
-    """
-    Check if the number of connected molecular fragments (Z) is preserved
-    after relaxation.
-
-    Thin wrapper around ``check_connectivity_changes``.
-    """
-    return check_connectivity_changes(
-        initial_atoms,
-        final_atoms,
-        check_exact_bonds=False,
-        check_molecule_count=True,
-    )["molecule_count_preserved"]
