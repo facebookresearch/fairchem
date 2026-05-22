@@ -188,6 +188,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
             relax_config=relax_config,
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(

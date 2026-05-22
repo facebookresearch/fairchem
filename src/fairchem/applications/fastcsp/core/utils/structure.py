@@ -39,6 +39,8 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from scipy.sparse import csgraph
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ase import Atoms
 
 
@@ -212,6 +214,57 @@ def reference_graph_from_atoms(
         logger = get_central_logger()
         logger.warning(f"Failed to build reference graph: {e}")
         return None
+
+
+def load_reference_graph(
+    conf_dir: Path | None,
+    conf_id: str,
+) -> nx.Graph | None:
+    """
+    Locate and load the per-conformer reference-molecule graph.
+
+    Searches ``conf_dir`` for ``<conf_id>.xyz``, ``.sdf``, or ``.mol`` (in that
+    order), reads the first match with ASE, and converts it to a NetworkX
+    graph via :func:`reference_graph_from_atoms`. Warnings are emitted via the
+    central logger when the conformer directory is missing, when no candidate
+    file exists, or when reading the file fails.
+
+    Args:
+        conf_dir: Directory containing ``<conf_id>.{xyz,sdf,mol}``. May be
+            ``None`` (e.g., when a caller failed to derive a path); in that
+            case the function logs and returns ``None``.
+        conf_id: Conformer identifier. Used as the filename stem.
+
+    Returns:
+        ``nx.Graph`` for the reference molecule, or ``None`` if the file
+        could not be located / parsed / converted to a graph.
+    """
+    import ase.io
+
+    logger = get_central_logger()
+
+    if conf_dir is None or not conf_dir.is_dir():
+        logger.warning(
+            f"No reference geometry directory for conf_id={conf_id} "
+            f"(conf_dir={conf_dir}); reference graph will be None."
+        )
+        return None
+
+    for ext in (".xyz", ".sdf", ".mol"):
+        candidate = conf_dir / f"{conf_id}{ext}"
+        if candidate.is_file():
+            try:
+                reference_atoms = ase.io.read(candidate)
+                return reference_graph_from_atoms(reference_atoms)
+            except Exception as e:
+                logger.warning(f"Failed to read reference geometry {candidate}: {e}")
+                return None
+
+    logger.warning(
+        f"No reference geometry (.xyz/.sdf/.mol) for conf_id={conf_id} "
+        f"in {conf_dir}; reference graph will be None."
+    )
+    return None
 
 
 def check_molecule_matches_reference(

@@ -30,7 +30,6 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-import ase.io
 import pandas as pd
 from ase.io.jsonio import decode
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
@@ -43,7 +42,7 @@ from fairchem.applications.fastcsp.core.utils.structure import (
     check_correct_z,
     check_molecule_matches_reference,
     get_partition_id,
-    reference_graph_from_atoms,
+    load_reference_graph,
 )
 from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
@@ -217,27 +216,8 @@ def process_genarris_outputs_single(
     logger.info(f"Processing {input_dir}")
 
     # Build the reference-molecule graph once per conformer dir.
-    # Accept .xyz, .sdf, and .mol references.
     conf_id = input_dir.name
-    reference_path = None
-    for ext in (".xyz", ".sdf", ".mol"):
-        candidate = input_dir / f"{conf_id}{ext}"
-        if candidate.is_file():
-            reference_path = candidate
-            break
-
-    reference_graph = None
-    if reference_path is not None:
-        try:
-            reference_atoms = ase.io.read(reference_path)
-            reference_graph = reference_graph_from_atoms(reference_atoms)
-        except Exception as e:
-            logger.warning(f"Failed to read reference geometry {reference_path}: {e}")
-    else:
-        logger.warning(
-            f"No reference geometry (.xyz/.sdf/.mol) for conf_id={conf_id} "
-            f"in {input_dir}; molecule_matches_reference flag will be False."
-        )
+    reference_graph = load_reference_graph(input_dir, conf_id)
 
     json_files = list(input_dir.glob("**/symm_rigid_press/structures.json"))
     generation_method = "genarris"

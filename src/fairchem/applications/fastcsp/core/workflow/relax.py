@@ -38,6 +38,8 @@ from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_connectivity_changes,
+    check_molecule_matches_reference,
+    load_reference_graph,
 )
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -259,7 +261,11 @@ def relax_atoms(atoms, relax_config, calc):
 
 
 def relax_structures(
-    input_files, output_dir, relax_config, column_name="cif_generated"
+    input_files,
+    output_dir,
+    relax_config,
+    column_name="cif_generated",
+    generated_structures_dir=None,
 ):
     """Relax crystal structures from Parquet files using ML potentials."""
     logger = get_central_logger()
@@ -276,6 +282,26 @@ def relax_structures(
         logger.debug(f"Relaxing structures from {input_file}")
 
         structures_df = pd.read_parquet(input_file)
+
+        # Build the reference-molecule graph once per (mol, conf). The reference
+        # XYZ lives at <generated_structures>/<mol>/<conf>/<conf>.xyz (.sdf, .mol
+        # also accepted). When generated_structures_dir is not provided, fall
+        # back to deriving it from input_file's location.
+        mol_id = str(structures_df["mol_id"].iloc[0])
+        conf_id = str(structures_df["conf_id"].iloc[0])
+        if generated_structures_dir is None:
+            # input_file: <root>/raw_structures/<mol>/<conf>/partition_id=*/*.parquet
+            try:
+                derived_root = input_file.parents[4]
+                generated_conf_dir = (
+                    derived_root / "generated_structures" / mol_id / conf_id
+                )
+            except IndexError:
+                generated_conf_dir = None
+        else:
+            generated_conf_dir = Path(generated_structures_dir) / mol_id / conf_id
+        reference_graph = load_reference_graph(generated_conf_dir, conf_id)
+
         atoms_list = (
             structures_df[column_name]
             .apply(
@@ -364,6 +390,12 @@ def relax_structures(
         structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
             r["exact_bonds_preserved"] for r in connectivity_results
         ]
+
+        # Reference-based validity flag on the RELAXED structure
+        structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
+            check_molecule_matches_reference(structure, reference_graph)
+            for structure in structures_relaxed
+        ]
         # Save results to Parquet
         output_file.parent.mkdir(parents=True, exist_ok=True)
         structures_df.to_parquet(output_file, compression="zstd")
@@ -372,8 +404,25 @@ def relax_structures(
         )
 
 
-def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif_generated"):
-    """Submit parallel structure relaxation jobs to SLURM."""
+def run_relax_jobs(
+    input_dir,
+    output_dir,
+    relax_config,
+    column_name="cif_generated",
+    generated_structures_dir=None,
+):
+    """Submit parallel structure relaxation jobs to SLURM.
+
+    Args:
+        input_dir: Directory containing input parquet files (e.g., raw_structures/).
+        output_dir: Destination for relaxed parquet output.
+        relax_config: Relaxation parameters.
+        column_name: Name of the input CIF column.
+        generated_structures_dir: Optional path to the workspace's
+            generated_structures/ directory; used by each worker to locate the
+            per-conformer reference XYZ for the relaxed-side validity flags.
+            If None, the worker derives it from input_file.parents[4].
+    """
 
     logger = get_central_logger()
 
@@ -409,6 +458,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif_generat
                 output_dir,
                 relax_config,
                 column_name,
+                generated_structures_dir,
             )
             jobs.append(job)
 
@@ -454,6 +504,7 @@ if __name__ == "__main__":
         output_dir=relax_output_dir / "relaxed_structures",
         relax_config=relax_config,
         column_name="cif_generated",
+        generated_structures_dir=root / "generated_structures",
     )
     logger = get_central_logger()
     logger.info(f"Started {len(jobs)} relaxation jobs")
