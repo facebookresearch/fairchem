@@ -1,16 +1,9 @@
-"""End-to-end conformer generation for FastCSP.
-
-Copyright (c) Meta Platforms, Inc. and affiliates.
+"""Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-RDKit pool -> FAIR-Chem UMA relaxation (via ``fastcsp.core.workflow.relax``)
--> Butina RMSD clustering -> energy-window filtering -> per-conformer
-geometry files. Submitted as a SLURM array, one task per molecule.
-
-See ``README.md`` (alongside this module) for usage, config schema,
-and outputs.
+End-to-end conformer generation for FastCSP
 """
 
 from __future__ import annotations
@@ -28,10 +21,18 @@ import numpy as np
 import pandas as pd
 import yaml
 from ase import Atoms, units
+from fairchem.applications.fastcsp.core.utils.slurm import (
+    get_slurm_config,
+    submit_slurm_jobs,
+    wait_for_jobs,
+)
+from fairchem.applications.fastcsp.core.workflow.relax import (
+    create_calculator,
+    relax_atoms,
+)
 from rdkit import Chem
 from rdkit.Chem import (
     AllChem,
-    Descriptors3D,
     rdDetermineBonds,
     rdMolAlign,
     rdMolTransforms,
@@ -51,7 +52,7 @@ EV_TO_KJMOL = units.mol / units.kJ
 # Single source of truth for stage defaults. Anything not provided by the
 # user falls back here. Printed verbatim at the start of every worker task
 # so it's clear what was used.
-RDKIT_DEFAULTS: dict = {
+CONF_GEN_DEFAULTS: dict = {
     # Target size of the seed pool RDKit embeds before any filtering.
     # The actual ETKDGv3 call uses ceil(initial_pool_size / 2.5) because
     # ``generate_conformers`` blends 4 seeding strategies internally.
@@ -59,8 +60,7 @@ RDKIT_DEFAULTS: dict = {
     "seed": 42,
     "rmsd_thresh": 0.25,  # Angstrom
     "cluster_energy_thresh": 1.5,  # kJ/mol
-    "ignore_hydrogens": False,  # if True, best-RMSD on heavy atoms only
-    "with_descriptors": True,
+    "include_hydrogens": True,  # if False, best-RMSD on heavy atoms only
     "output_format": "xyz",  # xyz | mol | sdf
 }
 
@@ -80,7 +80,7 @@ RELAX_DEFAULTS: dict = {
 def _split_row_overrides(row: dict) -> tuple[dict, dict]:
     """Pick per-molecule overrides out of a CSV row.
 
-    Columns whose names match a key in ``RDKIT_DEFAULTS`` / ``RELAX_DEFAULTS``
+    Columns whose names match a key in ``CONF_GEN_DEFAULTS`` / ``RELAX_DEFAULTS``
     are treated as per-molecule overrides. Empty / NaN cells fall through.
     Values are coerced to the same Python type as the default.
     """
@@ -100,7 +100,7 @@ def _split_row_overrides(row: dict) -> tuple[dict, dict]:
             if k in row and not pd.isna(row[k])
         }
 
-    return _pick(RDKIT_DEFAULTS), _pick(RELAX_DEFAULTS)
+    return _pick(CONF_GEN_DEFAULTS), _pick(RELAX_DEFAULTS)
 
 
 def _resolve_config(
@@ -113,7 +113,7 @@ def _resolve_config(
     """Merge defaults < YAML overrides < per-row CSV overrides; print all."""
     rdkit_row = rdkit_row or {}
     relax_row = relax_row or {}
-    rdkit_cfg = {**RDKIT_DEFAULTS, **rdkit_user, **rdkit_row}
+    rdkit_cfg = {**CONF_GEN_DEFAULTS, **rdkit_user, **rdkit_row}
     relax_cfg = {**RELAX_DEFAULTS, **relax_user, **relax_row}
     if rdkit_user or relax_user:
         print(f"[{tag}] yaml overrides: rdkit={rdkit_user!r} relax={relax_user!r}")
@@ -162,6 +162,13 @@ def load_conformer_generation_config(
 
 
 def _rotatable_bonds(mol: Chem.Mol) -> list[tuple[int, int, int, int]]:
+    """
+    Get the atom indices of the rotatable bonds in the molecule.
+
+    :param mol: Molecule to find torsions in
+    :return: atom indices defining the torsion, with preference given to
+             highest atomic weight atoms for the first and last atom
+    """
     tors_smarts = Chem.MolFromSmarts("[!$(*#*)&!D1]-&!@[!$(*#*)&!D1]")
     bonds: list[tuple[int, int, int, int]] = []
     for at1, at2 in mol.GetSubstructMatches(tors_smarts):
@@ -187,6 +194,9 @@ def _generate_rdkit_confs(
     ff_opt: bool,
     random_coords: bool = False,
 ) -> Chem.Mol:
+    """
+    Generate conformers with RDKit (ETKDGv3, optional MMFF relax).
+    """
     conf_mol = Chem.Mol(mol)
     params = AllChem.ETKDGv3()
     params.clearConfs = True
@@ -203,6 +213,9 @@ def _generate_rdkit_confs(
 def _generate_random_torsion_confs(
     mol: Chem.Mol, num_confs: int, seed: int
 ) -> Chem.Mol:
+    """
+    Generate conformers by randomizing the rotatable torsion angles.
+    """
     rng = np.random.default_rng(seed)
     conf_mol = Chem.Mol(mol)
     if AllChem.EmbedMolecule(conf_mol, maxAttempts=50) == -1:
@@ -218,7 +231,11 @@ def _generate_random_torsion_confs(
     return conf_mol
 
 
-def _check_for_collisions(mol: Chem.Mol, thresh: float = 0.6) -> None:
+def remove_collisions(mol: Chem.Mol, thresh: float = 0.6) -> None:
+    """
+    Remove conformers in which any pair of atoms is closer than ``thresh``
+    Angstroms.
+    """
     bad = [
         c.GetId()
         for c in mol.GetConformers()
@@ -282,7 +299,7 @@ def generate_conformers(mol: Chem.Mol, n_confs: int = 10, seed: int = 42) -> Che
     for src in sources:
         for conf in src.GetConformers():
             out.AddConformer(conf, assignId=True)
-    _check_for_collisions(out)
+    remove_collisions(out)
     remove_graph_changed(out)
     return out
 
@@ -300,6 +317,11 @@ def mol_to_atoms(mol: Chem.Mol) -> list[Atoms]:
 
 
 def _apply_results(mol: Chem.Mol, results: list[dict | None]) -> None:
+    """
+    Write per-conformer relaxation results (positions + energy) back into
+    ``mol`` in place. Conformers whose result is ``None`` (failed relax /
+    single-point) are dropped from ``mol``.
+    """
     bad = []
     for conf, res in zip(list(mol.GetConformers()), results):
         if res is None:
@@ -318,7 +340,6 @@ def _apply_results(mol: Chem.Mol, results: list[dict | None]) -> None:
 
 def relax_conformers(
     mol: Chem.Mol,
-    *,
     optimize: bool,
     relax_cfg: dict,
     calc,
@@ -331,8 +352,6 @@ def relax_conformers(
     ``relax_cell`` handling all match the rest of fastcsp. Failed conformers
     are removed from ``mol``.
     """
-    from fairchem.applications.fastcsp.core.workflow.relax import relax_atoms
-
     atoms_list = mol_to_atoms(mol)
     if not atoms_list:
         return
@@ -383,16 +402,15 @@ def cluster_conformers(
     mol: Chem.Mol,
     rmsd_thresh: float = 0.25,
     energy_thresh: float = 1.5,
-    *,
-    ignore_hydrogens: bool = False,
+    include_hydrogens: bool = True,
     ref_stereo: dict | None = None,
 ) -> Chem.Mol:
     """Butina-cluster on best-RMSD, gated by an energy window.
 
     Pairs with an energy gap >= ``energy_thresh`` are assigned a sentinel
     large distance (and so are not merged). All conformers must already
-    have a recorded energy. Set ``ignore_hydrogens=True`` to compute RMSD
-    over heavy atoms only.
+    have a recorded energy. Set ``include_hydrogens=False`` to compute
+    RMSD over heavy atoms only.
 
     If ``ref_stereo`` is provided, the per-cluster representative is the
     first **stereo-correct** member (CIP signature matches
@@ -404,7 +422,7 @@ def cluster_conformers(
     if n <= 1:
         return mol
     ids = [c.GetId() for c in mol.GetConformers()]
-    rmsd_mol = Chem.RemoveHs(mol) if ignore_hydrogens else mol
+    rmsd_mol = mol if include_hydrogens else Chem.RemoveHs(mol)
     dists: list[float] = []
     for i, c1 in enumerate(ids):
         for c2 in ids[:i]:
@@ -428,7 +446,11 @@ def cluster_conformers(
                     _stereo_signature_from_3d(mol, cid),
                     labels,
                 )
-            except Exception:
+            except (ValueError, RuntimeError, KeyError) as exc:
+                print(
+                    f"  conf {cid}: stereo signature failed: {exc}",
+                    file=sys.stderr,
+                )
                 stereo_ok[cid] = True  # signature failed: don't penalize
 
     def _pick_rep(clust: tuple[int, ...]) -> int:
@@ -570,7 +592,6 @@ def _write_conformer(
     conf_id: int,
     out_dir: Path,
     prefix: str,
-    *,
     output_format: str,
     pad: int,
 ) -> None:
@@ -599,8 +620,6 @@ def write_artifacts(
     mol: Chem.Mol,
     out_dir: Path,
     prefix: str,
-    *,
-    with_descriptors: bool = True,
     output_format: str = "xyz",
     ref_stereo: dict | None = None,
 ) -> None:
@@ -651,17 +670,14 @@ def write_artifacts(
                 row["stereo_signature"] = _format_signature(cur, labels)
                 row["stereo_changed"] = bool(diffs)
                 row["stereo_diff"] = ";".join(diffs)
-            except Exception:
+            except (ValueError, RuntimeError, KeyError) as exc:
+                print(
+                    f"  conf {cid}: stereo signature failed: {exc}",
+                    file=sys.stderr,
+                )
                 row["stereo_signature"] = ""
                 row["stereo_changed"] = None
                 row["stereo_diff"] = ""
-        if with_descriptors:
-            try:  # noqa: SIM105
-                row.update(
-                    Descriptors3D.CalcMolDescriptors3D(Chem.Mol(mol, False, confId=cid))
-                )
-            except Exception:
-                pass
         rows.append(row)
         _write_conformer(
             mol,
@@ -697,28 +713,30 @@ def _select_for_fastcsp(
 ) -> tuple[int, int]:
     """Populate ``conformers_fastcsp/<name>/`` with up to ``n_target`` files.
 
-    Relaxed conformers (lower index = lower energy) are preferred; the
-    remainder is topped up from generated conformers. Each copied file
-    keeps its original stem and gains a ``_relaxed`` / ``_generated``
-    suffix before the extension, so origin is unambiguous downstream.
-    Returns ``(n_relaxed, n_generated)``.
+    Relaxed conformers (lower index = lower energy) are preferred. Generated
+    conformers are used **only as a complete fallback** when no relaxed
+    conformers exist (e.g. tiny rigid molecules where every relaxation
+    failed connectivity/energy filters). We do not top up a partial relaxed
+    set with generated conformers, since mixing relaxed and unrelaxed
+    geometries produces redundancy.
+
+    Each copied file keeps its original stem and gains a ``_relaxed`` /
+    ``_generated`` suffix before the extension, so origin is unambiguous
+    downstream. Returns ``(n_relaxed, n_generated)``.
     """
     relaxed_files = sorted(rel_dir.glob(f"*_conf_*.{output_format}"))[:n_target]
-    remaining = n_target - len(relaxed_files)
-    generated_files = (
-        sorted(gen_dir.glob(f"*_conf_*.{output_format}"))[:remaining]
-        if remaining > 0
-        else []
-    )
+    if relaxed_files:
+        generated_files: list[Path] = []
+    else:
+        generated_files = sorted(gen_dir.glob(f"*_conf_*.{output_format}"))[:n_target]
     chosen = [(f, "relaxed") for f in relaxed_files] + [
         (f, "generated") for f in generated_files
     ]
-    if not chosen:
-        return 0, 0
-    sel_dir.mkdir(parents=True, exist_ok=True)
-    for src, origin in chosen:
-        dst = sel_dir / f"{src.stem}_{origin}{src.suffix}"
-        shutil.copy2(src, dst)
+    if chosen:
+        sel_dir.mkdir(parents=True, exist_ok=True)
+        for src, origin in chosen:
+            dst = sel_dir / f"{src.stem}_{origin}{src.suffix}"
+            shutil.copy2(src, dst)
     return len(relaxed_files), len(generated_files)
 
 
@@ -726,7 +744,6 @@ def process_molecule(
     mol: Chem.Mol,
     name: str,
     output_dir: str | Path,
-    *,
     rdkit_cfg: dict,
     relax_cfg: dict,
     select_for_fastcsp: int | None = None,
@@ -734,7 +751,7 @@ def process_molecule(
     """Run the full workflow for one molecule.
 
     ``rdkit_cfg`` and ``relax_cfg`` should already be merged with
-    ``RDKIT_DEFAULTS`` / ``RELAX_DEFAULTS`` (see ``_process_one``).
+    ``CONF_GEN_DEFAULTS`` / ``RELAX_DEFAULTS`` (see ``_process_one``).
 
     Two output directories are always written under ``<output_dir>/<name>/``:
 
@@ -744,16 +761,14 @@ def process_molecule(
       post-cluster, post-energy-window).
 
     If ``select_for_fastcsp`` is given (>0), an additional folder
-    ``conformers_fastcsp/<name>/`` is populated with that many conformers,
-    drawn first from the relaxed pool and topped up from the generated pool
-    if needed. Filenames carry a ``_relaxed`` or ``_generated`` suffix.
+    ``conformers_fastcsp/<name>/`` is populated with up to that many
+    conformers, drawn from the relaxed pool. Generated conformers are
+    used only as a complete fallback when the relaxed pool is empty
+    (no mixing of relaxed and unrelaxed geometries). Filenames carry
+    a ``_relaxed`` or ``_generated`` suffix.
 
     Returns a JSON-serialisable summary.
     """
-    from fairchem.applications.fastcsp.core.workflow.relax import (
-        create_calculator,
-    )
-
     output_dir = Path(output_dir)
     gen_dir = output_dir / "conformers_generated" / name
     rel_dir = output_dir / "conformers_relaxed" / name
@@ -800,7 +815,7 @@ def process_molecule(
         conf_mol,
         rmsd_thresh=rdkit_cfg["rmsd_thresh"],
         energy_thresh=rdkit_cfg["cluster_energy_thresh"],
-        ignore_hydrogens=rdkit_cfg["ignore_hydrogens"],
+        include_hydrogens=rdkit_cfg["include_hydrogens"],
     )
     summary["after_precluster"] = conf_mol.GetNumConformers()
     print(f"[{name}] {summary['after_precluster']} distinct after pre-relax cluster")
@@ -818,7 +833,6 @@ def process_molecule(
         generated_mol,
         gen_dir,
         prefix,
-        with_descriptors=rdkit_cfg["with_descriptors"],
         output_format=rdkit_cfg["output_format"],
         ref_stereo=ref_stereo,
     )
@@ -851,7 +865,7 @@ def process_molecule(
         relaxed_mol,
         rmsd_thresh=rdkit_cfg["rmsd_thresh"],
         energy_thresh=rdkit_cfg["cluster_energy_thresh"],
-        ignore_hydrogens=rdkit_cfg["ignore_hydrogens"],
+        include_hydrogens=rdkit_cfg["include_hydrogens"],
         ref_stereo=ref_stereo,
     )
     remove_high_energy(relaxed_mol, relax_cfg["energy_window"])
@@ -860,7 +874,6 @@ def process_molecule(
         relaxed_mol,
         rel_dir,
         prefix,
-        with_descriptors=rdkit_cfg["with_descriptors"],
         output_format=rdkit_cfg["output_format"],
         ref_stereo=ref_stereo,
     )
@@ -944,40 +957,35 @@ def _process_one(
     return summary
 
 
-def submit_array(
+def submit_confgen_jobs(
     input_csv: str | Path,
     output_dir: str | Path,
-    rdkit: dict | None = None,
-    relax: dict | None = None,
-    config: dict | None = None,
-    *,
+    rdkit_overrides: dict | None = None,
+    relax_overrides: dict | None = None,
     config_path: str | Path | None = None,
     wait: bool = True,
 ) -> tuple[list, list[dict] | None]:
     """Submit a SLURM array — one task per molecule.
 
-    SLURM parameters are resolved from ``config`` via
-    ``fastcsp.core.utils.slurm.get_slurm_config``. ``rdkit`` and ``relax``
-    are passed as-is and merged onto ``RDKIT_DEFAULTS`` / ``RELAX_DEFAULTS``
-    inside each worker (and printed there).
+    SLURM parameters are read from the YAML at ``config_path`` via
+    ``fastcsp.core.utils.slurm.get_slurm_config``. ``rdkit_overrides`` and
+    ``relax_overrides`` are passed as-is and merged onto
+    ``CONF_GEN_DEFAULTS`` / ``RELAX_DEFAULTS`` inside each worker (and
+    printed there).
 
     If ``config_path`` is given, the YAML file is copied verbatim into
-    ``<output_dir>/_scripts/`` alongside the resolved-config snapshot, the
-    input CSV, job ids, and final summary — so the whole run is
-    reproducible from one folder.
+    ``<output_dir>/`` alongside the input CSV, job ids, and final summary
+    — so the whole run is reproducible from one folder.
 
     Returns ``(jobs, results)``. ``results`` is ``None`` if ``wait=False``,
     else a list (one per task) of per-molecule summaries.
     """
-    from fairchem.applications.fastcsp.core.utils.slurm import (
-        get_slurm_config,
-        submit_slurm_jobs,
-        wait_for_jobs,
-    )
-
-    rdkit = dict(rdkit or {})
-    relax = dict(relax or {})
-    config = dict(config or {})
+    rdkit_overrides = dict(rdkit_overrides or {})
+    relax_overrides = dict(relax_overrides or {})
+    raw_config: dict = {}
+    if config_path is not None:
+        with open(config_path) as fh:
+            raw_config = yaml.safe_load(fh) or {}
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     log_dir = output_dir / "slurm"  # submitit stdout/stderr only
@@ -1009,9 +1017,12 @@ def submit_array(
                 print(f"[submit] overwriting existing {cfg_dst}")
             shutil.copy2(cfg_src, cfg_dst)
 
-    executor_params = get_slurm_config(config, "relax", "submitit_executor")
+    executor_params = get_slurm_config(raw_config, "relax", "submitit_executor")
     out_dir_str = str(output_dir)
-    job_args = [(_process_one, (row, out_dir_str, rdkit, relax), {}) for row in rows]
+    job_args = [
+        (_process_one, (row, out_dir_str, rdkit_overrides, relax_overrides), {})
+        for row in rows
+    ]
     jobs = submit_slurm_jobs(
         job_args,
         log_dir,
@@ -1038,6 +1049,23 @@ def submit_array(
     n_ok = sum(1 for s in results if s.get("status") == "ok")
     print(f"Done: {n_ok}/{len(results)} molecules ok, {failed} task-level failures.")
     (output_dir / "summary.json").write_text(json.dumps(results, indent=2))
+
+    # Per-molecule selection counts (one row per molecule).
+    selection_cols = (
+        "name",
+        "status",
+        "generated",
+        "after_precluster",
+        "after_sp",
+        "after_relax",
+        "final",
+        "selected_relaxed",
+        "selected_generated",
+        "elapsed_s",
+    )
+    pd.DataFrame([{k: s.get(k) for k in selection_cols} for s in results]).to_csv(
+        output_dir / "selection_summary.csv", index=False
+    )
 
     # Aggregate per-molecule CSVs into top-level combined files.
     for stage in ("conformers_generated", "conformers_relaxed"):
@@ -1081,12 +1109,11 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     out = (root / "conformers").resolve()
-    _, summaries = submit_array(
+    _, summaries = submit_confgen_jobs(
         molecules,
         out,
-        rdkit=rdkit,
-        relax=relax,
-        config=raw_config,
+        rdkit_overrides=rdkit,
+        relax_overrides=relax,
         config_path=args.config,
         wait=True,
     )

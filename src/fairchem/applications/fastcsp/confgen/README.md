@@ -8,8 +8,8 @@ End-to-end conformer generation for FastCSP. Per molecule:
 2. **Pre-cluster** on best-RMSD (Butina) — geometry only, before paying
    for any MLIP cost. All energies are 0 at this point, so the energy
    gate is inactive and clustering is purely geometric. RMSD basis is
-   all atoms by default (`ignore_hydrogens: false`); set
-   `ignore_hydrogens: true` to use heavy atoms only.
+   all atoms by default (`include_hydrogens: true`); set
+   `include_hydrogens: false` to use heavy atoms only.
 3. **Single-point + relax** every survivor with a FAIR-Chem UMA MLIP via
    `fastcsp.core.workflow.relax` (calculator, optimizer, trajectory
    writing all delegated there).
@@ -51,7 +51,7 @@ The YAML carries:
 - `slurm:` — submitit/SLURM settings for the per-molecule array job
   (resolved via `fastcsp.core.utils.slurm.get_slurm_config`).
 
-Precedence for any setting: `RDKIT_DEFAULTS` / `RELAX_DEFAULTS` (lowest)
+Precedence for any setting: `CONF_GEN_DEFAULTS` / `RELAX_DEFAULTS` (lowest)
 < YAML `rdkit:` / `relax:` block < per-row CSV column (highest).
 The worker prints both the YAML-level and the CSV-level overrides at
 the start of its task.
@@ -69,8 +69,7 @@ molecule. Empty / NaN cells fall back to the YAML default.
 | `seed` | rdkit | 42 | ETKDG random seed |
 | `rmsd_thresh` | rdkit | 0.25 | Butina cluster radius (Å) |
 | `cluster_energy_thresh` | rdkit | 1.5 | energy gate inside Butina (kJ/mol) |
-| `ignore_hydrogens` | rdkit | false | heavy-atom RMSD only (bool; `true/false/1/0/yes/no`) |
-| `with_descriptors` | rdkit | true | write PMI / SASA / etc. into `<name>_confs.csv` |
+| `include_hydrogens` | rdkit | true | include hydrogens in best-RMSD (bool; `true/false/1/0/yes/no`) |
 | `output_format` | rdkit | `xyz` | `xyz`, `mol`, or `sdf` |
 | `calculator` | relax | `uma_sm_1p1_omol` | FAIR-Chem MLIP |
 | `optimizer` | relax | `BFGS` | ASE optimizer name |
@@ -105,10 +104,10 @@ from fairchem.applications.fastcsp.confgen.main import (
     process_molecule,
     generate_conformers,
     relax_conformers,
-    submit_array,
+    submit_confgen_jobs,
 )
 
-rdkit = {"initial_pool_size": 250, "ignore_hydrogens": True}
+rdkit = {"initial_pool_size": 250, "include_hydrogens": False}
 relax = {"calculator": "uma_sm_1p1_omol"}
 full_cfg = {
     "rdkit": rdkit,
@@ -122,7 +121,7 @@ full_cfg = {
         "mem_gb": 32,
     },
 }
-jobs, results = submit_array(
+jobs, results = submit_confgen_jobs(
     "molecules.csv",
     "runs/2026_conformers",
     rdkit=rdkit,
@@ -194,7 +193,6 @@ Each `<name>_confs.csv` has:
 | `stereo_signature` | atom/bond CIP signature inferred from 3D coords |
 | `stereo_changed` | bool vs. reference (from input SMILES) |
 | `stereo_diff` | semicolon-joined list of flipped atoms/bonds |
-| descriptors | PMI, asphericity, SASA, ... (if `with_descriptors`) |
 
 The top-level `conformers_generated.csv` / `conformers_relaxed.csv`
 are the per-molecule `<name>_confs.csv` files concatenated across all
@@ -207,7 +205,7 @@ best-RMSD distance matrix with an **energy gate**:
 
 - For every pair of conformers, if `|ΔE| < cluster_energy_thresh`
   (default **1.5 kJ/mol**) the distance is the real best-fit RMSD
-  (heavy-atom only if `ignore_hydrogens: true`). Otherwise the
+  (heavy-atom only if `include_hydrogens: false`). Otherwise the
   distance is set to a sentinel `1000.0` so Butina will never merge
   the pair, no matter how geometrically similar.
 - Butina (`reordering=True`) then groups conformers within
