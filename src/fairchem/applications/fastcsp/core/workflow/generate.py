@@ -77,13 +77,23 @@ def create_gnrs_submit_script(
     for key, value in genarris_slurm_config.items():
         slurm_script += f"#SBATCH --{key}={value}\n"
 
+    # SBATCH directives and MPI binding flags are cluster-specific (SMT layout,
+    # cgroup behavior, OpenMPI version), so we don't inject defaults here.
+    # Put any extra `#SBATCH --foo=bar` directives in `genarris.slurm` and any
+    # mpirun flags (e.g. "--bind-to none/hwthread/core --map-by core") in
+    # `genarris.mpi_extra_args` in the YAML config.
+    mpi_extra_args = gnrs_config.get("mpi_extra_args", "")
+    np_ranks = (
+        genarris_slurm_config.get("nodes", 1) * genarris_slurm_config["ntasks-per-node"]
+    )
+
     slurm_script += f"""#SBATCH --output={single_gnrs_folder}/slurm.out
 #SBATCH --error={single_gnrs_folder}/slurm.err
 
 ulimit -s unlimited
 export OMP_NUM_THREADS=1
 
-{gnrs_config.get("mpi_launcher", "mpirun")} -np {genarris_slurm_config.get("nodes", 1) * genarris_slurm_config["ntasks-per-node"]} \\
+{gnrs_config.get("mpi_launcher", "mpirun")} {mpi_extra_args} -np {np_ranks} \\
     {gnrs_config.get("python_cmd", "python")} {gnrs_config.get("genarris_cli", "cli.py")} --config {single_gnrs_folder}/ui.conf > {single_gnrs_folder}/Genarris.out
 """
 
@@ -163,6 +173,19 @@ def create_genarris_jobs(
     z_list = [str(z) for z in gnrs_vars.get("Z", [1])]
     num_structures_per_spg = gnrs_vars.get("num_structures_per_spg", 500)
     spg_distribution_type = gnrs_vars.get("spg_distribution_type", "standard")
+
+    # Per-row override: if the molecules.csv contains a `num_structures_per_spg`
+    # column with a non-empty value for this molecule, it overrides the global default.
+    row_n = mol_info.get("num_structures_per_spg")
+    if (
+        row_n is not None
+        and not (isinstance(row_n, float) and pd.isna(row_n))
+        and str(row_n).strip() != ""
+    ):
+        num_structures_per_spg = int(float(row_n))
+        logger.info(
+            f"Overriding num_structures_per_spg={num_structures_per_spg} for {mol_info['name']} from CSV."
+        )
 
     # molecule specific spg and z_list info from csv file if provided
     # mol_info["z"] is a list of z_values
