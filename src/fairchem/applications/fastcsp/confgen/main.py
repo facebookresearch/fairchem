@@ -279,7 +279,8 @@ def remove_graph_changed(mol: Chem.Mol) -> int:
 def generate_conformers(mol: Chem.Mol, n_confs: int = 10, seed: int = 42) -> Chem.Mol:
     """Generate a diverse pool of conformers using four complementary strategies.
 
-    Inspired by https://doi.org/10.48550/arXiv.2302.07061:
+    Inspired by https://doi.org/10.48550/arXiv.2302.07061
+    and https://gist.github.com/ZhouGengmo/5b565f51adafcd911c0bc115b2ef027c:
 
     1. ETKDGv3 + MMFF
     2. ETKDGv3 + random-coords + MMFF
