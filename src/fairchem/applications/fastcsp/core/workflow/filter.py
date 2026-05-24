@@ -37,6 +37,7 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
+    check_connectivity_unchanged,
     check_correct_z,
     check_molecule_matches_reference,
     cif_to_structure,
@@ -102,8 +103,9 @@ def filter_and_deduplicate_structures_single(
         remove_duplicates: Whether to enable structure deduplication
         root_unrelaxed: Optional path to the matching unrelaxed parquet.
             When provided, the filter recomputes the post-relax validity
-            columns (``validity.crystal_relaxed.correct_z`` and
-            ``validity.crystal_relaxed.molecule_matches_reference``) on the
+            columns (``validity.crystal_relaxed.correct_z``,
+            ``validity.crystal_relaxed.molecule_matches_reference``
+            and ``validity.crystal_relaxed.connectivity_unchanged``) on the
             *relaxed* CIF. Use this when those checks were not done at the
             relax stage.
         generated_structures_dir: Optional path to the workspace's
@@ -155,6 +157,7 @@ def filter_and_deduplicate_structures_single(
         reference_graph = load_reference_graph(generated_conf_dir, conf_id)
 
         relaxed_structures = structures_df["cif_relaxed"].apply(cif_to_structure)
+        initial_structures = structures_df["cif_generated"].apply(cif_to_structure)
         structures_df["validity.crystal_relaxed.correct_z"] = [
             check_correct_z(s, int(z))
             for s, z in zip(relaxed_structures, structures_df["z"])
@@ -162,6 +165,12 @@ def filter_and_deduplicate_structures_single(
         structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
             check_molecule_matches_reference(s, reference_graph)
             for s in relaxed_structures
+        ]
+        # Strict init↔final bond-matrix equality from the merged-in
+        # cif_generated and the existing cif_relaxed columns.
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
+            check_connectivity_unchanged(s_initial, s_final)
+            for s_initial, s_final in zip(initial_structures, relaxed_structures)
         ]
 
         # Save intermediate results with the recomputed validity columns

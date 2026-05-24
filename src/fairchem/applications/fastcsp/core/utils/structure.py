@@ -127,6 +127,36 @@ def get_structure_hash(
     return "_".join(hash_components)
 
 
+def jmolnn_adjacency(
+    structure_or_atoms: Structure | Atoms,
+) -> np.ndarray:
+    """
+    Build the JmolNN bond adjacency matrix for a single cell.
+    Shared by ``check_correct_z``,
+    ``reference_graph_from_atoms``, ``check_molecule_matches_reference``,
+    and ``check_connectivity_unchanged``.
+
+    Args:
+        structure_or_atoms: Pymatgen ``Structure`` or ASE ``Atoms`` for the
+            cell. ASE inputs are converted via ``AseAtomsAdaptor`` first.
+
+    Returns:
+        Square ``np.ndarray`` of dtype ``int`` with shape ``(n, n)`` where
+        ``adj[i, j] == 1`` iff ``j`` is a JmolNN neighbor of ``i``.
+    """
+    if isinstance(structure_or_atoms, Structure):
+        structure = structure_or_atoms
+    else:
+        structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
+    nn_info = JmolNN().get_all_nn_info(structure)
+    n = len(nn_info)
+    adj = np.zeros((n, n), dtype=int)
+    for i in range(n):
+        for entry in nn_info[i]:
+            adj[i, entry["site_index"]] = 1
+    return adj
+
+
 def check_correct_z(
     structure_or_atoms: Structure | Atoms | None,
     requested_z: int,
@@ -155,12 +185,7 @@ def check_correct_z(
         structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
 
     # Build adjacency matrix using Jmol bonding radii
-    nn_info = JmolNN().get_all_nn_info(structure)
-    n = len(nn_info)
-    nn_matrix = np.zeros((n, n), dtype=int)
-    for i in range(n):
-        for entry in nn_info[i]:
-            nn_matrix[i, entry["site_index"]] = 1
+    nn_matrix = jmolnn_adjacency(structure)
 
     # Connected-component count == observed number of molecular fragments
     observed_z = csgraph.connected_components(nn_matrix)[0]
@@ -203,15 +228,10 @@ def reference_graph_from_atoms(
 
         # Build adjacency matrix using Jmol bonding radii (same pattern as
         # check_correct_z).
-        nn_info = JmolNN().get_all_nn_info(structure)
-        n = len(nn_info)
+        nn_matrix = jmolnn_adjacency(structure)
+        n = nn_matrix.shape[0]
         if n < 1:
             return None
-
-        nn_matrix = np.zeros((n, n), dtype=int)
-        for i in range(n):
-            for entry in nn_info[i]:
-                nn_matrix[i, entry["site_index"]] = 1
 
         # Build undirected nx.Graph from the adjacency matrix and attach
         # atomic_num as a per-node attribute (used by the categorical node
@@ -304,12 +324,8 @@ def check_molecule_matches_reference(
         return False
 
     try:
-        nn_info = JmolNN().get_all_nn_info(structure)
-        n = len(nn_info)
-        nn_matrix = np.zeros((n, n), dtype=int)
-        for i in range(n):
-            for entry in nn_info[i]:
-                nn_matrix[i, entry["site_index"]] = 1
+        nn_matrix = jmolnn_adjacency(structure)
+        n = nn_matrix.shape[0]
 
         # Build the full-cell graph once with atomic_num node attributes;
         # take per-fragment subgraph views for the isomorphism comparison.
@@ -328,4 +344,37 @@ def check_molecule_matches_reference(
     except Exception as e:
         logger = get_central_logger()
         logger.warning(f"Failed molecule-matches-reference check: {e}")
+        return False
+
+
+def check_connectivity_unchanged(
+    initial_structure_or_atoms: Structure | Atoms | None,
+    final_structure_or_atoms: Structure | Atoms | None,
+) -> bool:
+    """
+    Check whether the JmolNN bond matrix is exactly preserved between two
+    structures (pre-relax vs post-relax).
+
+    Args:
+        initial_structure_or_atoms: Pre-relax cell as pymatgen ``Structure``
+            or ASE ``Atoms``. Returns ``False`` if ``None``.
+        final_structure_or_atoms: Post-relax cell, same type accepted.
+            Returns ``False`` if ``None``.
+
+    Returns:
+        ``True`` iff the two JmolNN adjacency matrices are element-wise
+        equal. ``False`` if either input is ``None``, if the structures
+        differ in atom count, or on exception.
+    """
+    if initial_structure_or_atoms is None or final_structure_or_atoms is None:
+        return False
+    try:
+        initial_adj = jmolnn_adjacency(initial_structure_or_atoms)
+        final_adj = jmolnn_adjacency(final_structure_or_atoms)
+        if initial_adj.shape != final_adj.shape:
+            return False
+        return bool(np.array_equal(initial_adj, final_adj))
+    except Exception as e:
+        logger = get_central_logger()
+        logger.warning(f"Failed connectivity-unchanged check: {e}")
         return False

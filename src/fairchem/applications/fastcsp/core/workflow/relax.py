@@ -37,6 +37,7 @@ from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
+    check_connectivity_unchanged,
     check_correct_z,
     check_molecule_matches_reference,
     load_reference_graph,
@@ -309,6 +310,10 @@ def relax_structures(
             )
             .to_numpy()
         )
+        # Deep-copy the pre-relax atoms so the post-relax bond-matrix
+        # comparison (check_connectivity_unchanged) has the original
+        # JmolNN adjacency on hand. relax_atoms() mutates atoms in place.
+        atoms_list_original = [atoms.copy() for atoms in atoms_list]
         structure_ids_list = structures_df["structure_id"].to_numpy().astype(str)
 
         # Create traj folder
@@ -380,6 +385,13 @@ def relax_structures(
         structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
             check_molecule_matches_reference(structure, reference_graph)
             for structure in structures_relaxed
+        ]
+        # Strict init↔final bond-matrix equality (no site permutation).
+        # Catches any bond broken / formed during relax, independent of the
+        # reference-anchored checks above.
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
+            check_connectivity_unchanged(atoms_initial, atoms_final)
+            for atoms_initial, atoms_final in zip(atoms_list_original, atoms_relaxed)
         ]
         # Save results to Parquet
         output_file.parent.mkdir(parents=True, exist_ok=True)
