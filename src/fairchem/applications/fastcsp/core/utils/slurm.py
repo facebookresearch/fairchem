@@ -231,12 +231,17 @@ def get_slurm_config(
 
         elif module_name == "relax":
             # Relax-specific parameter mapping
+            #
+            # `slurm_use_srun: False` makes submitit run python directly inside
+            # the SLURM allocation instead of wrapping it in `srun python ...`.
+            # A user yaml can still override via `slurm.use_srun: true`.
             base_params = {
                 "slurm_job_name": normalized_config.get("job_name", "relax"),
                 "timeout_min": normalized_config.get("time", 1000),
                 "gpus_per_node": normalized_config.get("gpus_per_node", 1),
                 "cpus_per_task": normalized_config.get("cpus_per_task", 10),
                 "mem_gb": normalized_config.get("mem_gb", 50),
+                "slurm_use_srun": False,
                 "slurm_array_parallelism": normalized_config.get(
                     "array_parallelism", 0
                 ),

@@ -179,17 +179,27 @@ def best_match(gen, targets, matcher, shell):
 
 payload = json.loads(sys.stdin.read())
 target_xtals = {}
+target_parse_errors = []
 for rc, cif in payload["target_cifs"].items():
     try:
         target_xtals[rc] = Crystal.from_string(cif, "cif")
-    except Exception:
-        pass
+    except Exception as e:
+        target_parse_errors.append((rc, repr(e)[:200]))
+
+if target_parse_errors:
+    sys.stderr.write(
+        "target_cif_parse_error: %d/%d targets failed: %s\n"
+        % (len(target_parse_errors),
+           len(payload["target_cifs"]),
+           "; ".join("%s=%s" % (rc, msg) for rc, msg in target_parse_errors))
+    )
 
 m15 = make_matcher(15)
 m20 = make_matcher(20)
 m30 = make_matcher(30)
 
 out = []
+parse_errors = []
 for r in payload["rows"]:
     rec = {"__orig_idx": r["__orig_idx"],
            "match15": None, "rmsd15": None,
@@ -197,16 +207,27 @@ for r in payload["rows"]:
            "match30": None, "rmsd30": None}
     try:
         gen = Crystal.from_string(r["cif_relaxed"], "cif")
-    except Exception:
-        out.append(rec); continue
+    except Exception as e:
+        parse_errors.append((r["__orig_idx"], repr(e)[:200]))
+        out.append(rec)
+        continue
     rec["match15"], rec["rmsd15"] = best_match(gen, target_xtals, m15, 15)
     if rec["match15"] is None:
-        out.append(rec); continue
+        out.append(rec)
+        continue
     rec["match20"], rec["rmsd20"] = best_match(gen, target_xtals, m20, 20)
     if rec["match20"] is None:
-        out.append(rec); continue
+        out.append(rec)
+        continue
     rec["match30"], rec["rmsd30"] = best_match(gen, target_xtals, m30, 30)
     out.append(rec)
+
+if parse_errors:
+    sys.stderr.write(
+        "ccdc_parse_error: %d/%d rows failed; first: idx=%s %s\n"
+        % (len(parse_errors), len(payload["rows"]),
+           parse_errors[0][0], parse_errors[0][1])
+    )
 
 print(json.dumps(out))
 """
@@ -238,6 +259,10 @@ def _csd_subprocess_chunk_worker(args):
         raise RuntimeError(
             f"[{mol_name} chunk {chunk_id}] rc={res.returncode}: {res.stderr[-2000:]}"
         )
+    if res.stderr:
+        get_central_logger().warning(
+            f"[{mol_name} chunk {chunk_id}] stderr: {res.stderr[-1000:].strip()}"
+        )
     return mol_name, chunk_id, pd.DataFrame.from_records(json.loads(res.stdout))
 
 
@@ -251,11 +276,22 @@ def _pmg_chunk_worker(args):
         os.environ.setdefault(k, v)
 
     targets: dict[str, Structure] = {}
+    target_parse_errors: list[tuple[str, str]] = []
     for rc, cif in target_cifs.items():
         try:
             targets[rc] = Structure.from_str(cif, fmt="cif")
-        except Exception:
+        except Exception as e:
+            target_parse_errors.append((rc, repr(e)[:200]))
             continue
+    if target_parse_errors:
+        get_central_logger().warning(
+            "pmg target_cif_parse_error: %d/%d targets failed: %s"
+            % (
+                len(target_parse_errors),
+                len(target_cifs),
+                "; ".join(f"{rc}={msg}" for rc, msg in target_parse_errors),
+            )
+        )
 
     ltol = match_params.get("ltol", 0.2)
     stol = match_params.get("stol", 0.3)
@@ -271,6 +307,7 @@ def _pmg_chunk_worker(args):
 
     cif_col = "cif_relaxed" if "cif_relaxed" in chunk_df.columns else "relaxed_cif"
     out = []
+    parse_errors: list[tuple[int, str]] = []
     for _, r in chunk_df.iterrows():
         rec = {
             "__orig_idx": int(r["__orig_idx"]),
@@ -279,7 +316,8 @@ def _pmg_chunk_worker(args):
         }
         try:
             pred = Structure.from_str(r[cif_col], fmt="cif")
-        except Exception:
+        except Exception as e:
+            parse_errors.append((rec["__orig_idx"], repr(e)[:200]))
             out.append(rec)
             continue
         best, best_rmsd = None, float("inf")
@@ -295,6 +333,11 @@ def _pmg_chunk_worker(args):
             rec["pymatgen_match"] = best
             rec["pymatgen_rmsd"] = best_rmsd
         out.append(rec)
+    if parse_errors:
+        get_central_logger().warning(
+            "pymatgen_parse_error: %d/%d rows failed; first: idx=%s %s"
+            % (len(parse_errors), len(chunk_df), parse_errors[0][0], parse_errors[0][1])
+        )
     return pd.DataFrame.from_records(out)
 
 
@@ -369,7 +412,7 @@ def evaluate_csd_streaming(
     target_cifs: dict[str, str],
     n_workers: int,
     csd_python_cmd: str,
-    chunk_timeout: int = 7200,
+    chunk_timeout: int | None = None,
     target_rows_per_chunk: int = 200,
 ) -> list[Path]:
     """CSD streaming evaluator: one global worker pool across all molecules.
@@ -518,9 +561,7 @@ def compute_structure_matches(
     """
     logger = get_central_logger()
 
-    parquet_files = [
-        p for p in input_dir.iterdir() if p.suffix == ".parquet" and "bkp" not in p.name
-    ]
+    parquet_files = [p for p in input_dir.iterdir() if p.suffix == ".parquet"]
     random.shuffle(parquet_files)
     logger.info(
         f"Evaluating structure matches: method={eval_method}, "
@@ -547,7 +588,8 @@ def compute_structure_matches(
         csd_python_cmd = eval_config.get(
             "csd_python_cmd", csd_cfg.get("python_cmd", "python")
         )
-        chunk_timeout = int(csd_cfg.get("chunk_timeout", 7200))
+        _ct = csd_cfg.get("chunk_timeout", None)
+        chunk_timeout = int(_ct) if _ct else None
         sys_cpus = os.cpu_count() or 1
         num_cpus_config = int(
             eval_config.get("num_cpus", csd_cfg.get("num_cpus", sys_cpus))

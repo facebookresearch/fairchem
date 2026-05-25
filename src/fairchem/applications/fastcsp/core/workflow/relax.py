@@ -97,9 +97,7 @@ def create_calculator(relax_config):
         )
     calc = FAIRChemCalculator(
         predictor,
-        task_name=CHECKPOINTS[relax_config.get("calculator", "uma_sm_1p1_omc")][
-            "task_name"
-        ],
+        task_name=CHECKPOINTS[relax_config.get("calculator")]["task_name"],
     )
     return calc
 
@@ -329,7 +327,7 @@ def relax_structures(
                 atoms.info["traj_path"] = str(traj_path)
 
         # Special handling for OMol tasks - setting spin and charge
-        if relax_config["calculator"] == "uma_sm_1p1_omol":
+        if "omol" in relax_config["calculator"]:
             for atoms in atoms_list:
                 atoms.info.update({"spin": 1, "charge": 0})
 
@@ -445,7 +443,7 @@ def run_relax_jobs(
     logger.info(f"Number of input parquet files to relax: {len(input_files)}")
 
     jobs = []
-    num_ranks = relax_slurm_config.get("num_ranks", 25000)
+    num_ranks = relax_slurm_config.get("num_ranks", 1)
     with executor.batch():
         for rank in range(min(num_ranks, len(input_files))):
             input_files_rank = input_files[rank::num_ranks]

@@ -139,7 +139,9 @@ def structure_to_row(
     density = structure.density
     cif_str = structure.to(fmt="cif")
     spg = int(atoms.info["spg"])
-    unique_structure_id = f"mol={mol_id}::conf={conf_id}::z={z_val}::hash={hash_id}"
+    unique_structure_id = (
+        f"mol={mol_id}::conf={conf_id}::z={z_val}::spg={spg}::hash={hash_id}"
+    )
 
     return {
         "mol_id": mol_id,
