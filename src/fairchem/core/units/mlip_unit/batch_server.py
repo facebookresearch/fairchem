@@ -520,16 +520,13 @@ def _init_ray_and_serve(
     cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
     ray_actor_options["num_cpus"] = cpus_per_actor
 
-    # Ray Serve itself reserves ~2 CPUs for its controller and HTTP proxy on
-    # the head node.
     requested_cpus = cpus_per_actor * num_replicas
-    serve_overhead_cpus = 2
 
     if not ray.is_initialized():
         ray.init(
             log_to_driver=False,
             logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=requested_cpus + serve_overhead_cpus,
+            num_cpus=requested_cpus,
         )
         logging.info("Ray initialized")
 
