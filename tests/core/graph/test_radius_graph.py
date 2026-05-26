@@ -1415,3 +1415,124 @@ def test_generate_graph_batch_partition(
 
     assert torch.allclose(combined_distances, edge_distance_no_partition)
     assert torch.allclose(combined_distance_vecs, edge_distance_vec_no_partition)
+
+
+# ==============================================================================
+# Tests for mixed-PBC batches (radius_graph_pbc_v2)
+# ==============================================================================
+
+
+def _extract_system_edges(graph_dict, atom_offset, natoms):
+    """Return edge_index and cell_offsets for one system in a batched graph.
+
+    Edges are included only when both endpoints belong to the system (indices
+    in [atom_offset, atom_offset + natoms)).  The returned edge_index has atom
+    indices re-zeroed to start from 0 so they can be compared directly with
+    the single-system graph.
+    """
+    lo, hi = atom_offset, atom_offset + natoms
+    src, dst = graph_dict["edge_index"]
+    mask = (src >= lo) & (src < hi) & (dst >= lo) & (dst < hi)
+    edge_index = graph_dict["edge_index"][:, mask] - atom_offset
+    cell_offsets = graph_dict["cell_offsets"][mask]
+    return edge_index, cell_offsets
+
+
+class TestMixedPBCBatch:
+    """Tests that radius_graph_pbc_v2 handles batches with mixed PBC correctly.
+
+    The fundamental invariant: running two systems with different PBC flags in
+    the same batch must produce exactly the same per-system graph as running
+    each system alone in its own batch.
+    """
+
+    CUTOFF = 6.0
+    MAX_NEIGHBORS = 300
+
+    def _gen(self, batch):
+        return generate_graph(
+            batch,
+            cutoff=self.CUTOFF,
+            max_neighbors=self.MAX_NEIGHBORS,
+            enforce_max_neighbors_strictly=False,
+            radius_pbc_version=2,
+            pbc=batch.pbc,
+        )
+
+    def test_three_systems_different_pbc(self):
+        """Three systems — 3D periodic, 2D periodic slab, 0D molecule — in one batch."""
+        # 3D periodic bulk
+        cu = build.bulk("Cu")
+        cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+        # 2D periodic slab (periodic in xy, not z)
+        slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+        slab.pbc = [True, True, False]
+        slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+        # 0D molecule
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        cu_graph = self._gen(atomicdata_list_to_batch([cu_data]))
+        slab_graph = self._gen(atomicdata_list_to_batch([slab_data]))
+        h2o_graph = self._gen(atomicdata_list_to_batch([h2o_data]))
+
+        mixed_batch = atomicdata_list_to_batch([cu_data, slab_data, h2o_data])
+        assert mixed_batch.pbc.shape == (3, 3)
+        mixed_graph = self._gen(mixed_batch)
+
+        cu_natoms = len(cu)
+        slab_natoms = len(slab)
+
+        ei_cu, co_cu = _extract_system_edges(mixed_graph, 0, cu_natoms)
+        ei_slab, co_slab = _extract_system_edges(mixed_graph, cu_natoms, slab_natoms)
+        ei_h2o, co_h2o = _extract_system_edges(
+            mixed_graph, cu_natoms + slab_natoms, len(h2o)
+        )
+
+        assert check_features_match(
+            cu_graph["edge_index"], cu_graph["cell_offsets"], ei_cu, co_cu
+        )
+        assert check_features_match(
+            slab_graph["edge_index"], slab_graph["cell_offsets"], ei_slab, co_slab
+        )
+        assert check_features_match(
+            h2o_graph["edge_index"], h2o_graph["cell_offsets"], ei_h2o, co_h2o
+        )
+
+    def test_periodic_system_has_more_edges_than_nonperiodic(self):
+        """Sanity check: bulk has more edges in mixed batch than if treated as non-periodic."""
+        pt = build.bulk("Pt")
+        pt_data_pbc = AtomicData.from_ase(pt, task_name="omat")
+
+        pt_nopbc = pt.copy()
+        pt_nopbc.pbc = False
+        pt_data_nopbc = AtomicData.from_ase(pt_nopbc, task_name="omat")
+
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        mixed_graph = self._gen(atomicdata_list_to_batch([pt_data_pbc, h2o_data]))
+        nopbc_graph = self._gen(atomicdata_list_to_batch([pt_data_nopbc, h2o_data]))
+
+        ei_pbc, _ = _extract_system_edges(mixed_graph, 0, len(pt))
+        ei_nopbc, _ = _extract_system_edges(nopbc_graph, 0, len(pt))
+
+        assert ei_pbc.shape[1] > ei_nopbc.shape[1]
+
+    def test_nonperiodic_molecule_has_no_periodic_images(self):
+        """In a mixed batch, a non-periodic molecule must have only zero cell offsets."""
+        pt = build.bulk("Pt")
+        pt_data = AtomicData.from_ase(pt, task_name="omat")
+
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        mixed_graph = self._gen(atomicdata_list_to_batch([pt_data, h2o_data]))
+        _, co_h2o = _extract_system_edges(mixed_graph, len(pt), len(h2o))
+
+        assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"

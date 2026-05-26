@@ -607,9 +607,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
             # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
             # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
