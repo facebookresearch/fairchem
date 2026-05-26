@@ -21,28 +21,11 @@ from ray import serve
 from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit.predict import move_tensors_to_cpu
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
-
-
-def _to_cpu(obj: Any) -> Any:
-    """
-    Return a CPU-resident copy of ``obj`` so that the result can be
-    deserialized on CPU-only Ray workers.
-
-    Uses ``torch.save`` + ``torch.load(map_location="cpu")`` which
-    transparently handles arbitrary object graphs containing tensors,
-    ``nn.Module`` instances, OmegaConf containers, etc., without needing
-    to walk and mutate the structure ourselves.
-    """
-    import io
-
-    buf = io.BytesIO()
-    torch.save(obj, buf)
-    buf.seek(0)
-    return torch.load(buf, map_location="cpu", weights_only=False)
 
 
 class BatchPredictServerMixin:
@@ -68,7 +51,7 @@ class BatchPredictServerMixin:
         # CPU-only Ray workers can deserialize it without requiring CUDA
         # (e.g. ``atom_refs`` typically contains tensors stored on the
         # server's device).
-        return _to_cpu(getattr(self.predict_unit, attribute_name))
+        return move_tensors_to_cpu(getattr(self.predict_unit, attribute_name))
 
     def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -452,7 +435,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         # Move any CUDA tensors to CPU before returning so callers (which
         # may be CPU-only Ray workers) can deserialize the result without
         # requiring CUDA.
-        return _to_cpu(attr)
+        return move_tensors_to_cpu(attr)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """

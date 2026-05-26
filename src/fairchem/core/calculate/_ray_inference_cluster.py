@@ -25,7 +25,12 @@ from typing import Any
 
 import yaml
 
-from fairchem.core.launchers.cluster.ray_cluster import RayCluster
+from fairchem.core.launchers.cluster.ray_cluster import (
+    DEFAULT_HEAD_FILE_DIR,
+    RayCluster,
+    find_free_port,
+)
+from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.units.mlip_unit.batch_server import (
     setup_batch_predict_server,
     wait_for_serve_ready,
@@ -37,33 +42,11 @@ logger = logging.getLogger(__name__)
 def _find_free_localhost_port() -> int:
     """Find an available port bound to localhost only.
 
-    Binding to 127.0.0.1 avoids exposing ephemeral probe sockets on all
-    network interfaces.
+    Thin wrapper around :func:`find_free_port` that scopes the probe to the
+    loopback interface (avoids exposing ephemeral probe sockets on all
+    network interfaces).
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        sock.listen(1)
-        return sock.getsockname()[1]
-
-
-def recursive_dict_merge(*dicts: dict) -> dict:
-    """
-    Recursively merge dictionaries, later values override earlier ones.
-    """
-    result = {}
-    for d in dicts:
-        if d is None:
-            continue
-        for key, value in d.items():
-            if (
-                key in result
-                and isinstance(result[key], dict)
-                and isinstance(value, dict)
-            ):
-                result[key] = recursive_dict_merge(result[key], value)
-            else:
-                result[key] = value
-    return result
+    return find_free_port(bind_address="127.0.0.1")
 
 
 def load_update_config(
@@ -100,7 +83,7 @@ def load_update_config(
         logger.info(f"Specifying a Ray cluster with uuid {cluster_id}")
         auto_overrides["cluster_id"] = cluster_id
 
-        head_file = Path.home() / ".fairray" / cluster_id / "head.json"
+        head_file = DEFAULT_HEAD_FILE_DIR / cluster_id / "head.json"
     auto_overrides["head_file"] = str(head_file)
 
     return recursive_dict_merge(
@@ -501,7 +484,7 @@ def get_local_ray_cluster(
 
     if head_file is None:
         cluster_id = str(uuid.uuid4())
-        head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
+        head_file_path = DEFAULT_HEAD_FILE_DIR / cluster_id / "head.json"
     else:
         head_file_path = Path(head_file).expanduser()
 

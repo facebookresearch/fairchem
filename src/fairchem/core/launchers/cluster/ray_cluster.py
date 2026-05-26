@@ -42,19 +42,30 @@ def kill_proc_tree(pid, including_parent=True):
         parent.wait(5)
 
 
-def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
+def find_free_port(
+    preferred: int = 0,
+    num_random_attempts: int = 10,
+    bind_address: str = "",
+) -> int:
     """
     Find an available port.
+
+    Random sampling in the ephemeral range is used (instead of relying on the
+    OS to pick) so that multiple raylets / object managers / client servers
+    started in tight succession on the same node don't collide.
 
     Args:
         preferred: Try this port first. If 0 or unavailable, try random ports.
         num_random_attempts: Number of random ports to try before letting OS pick.
+        bind_address: Interface to probe. Default ``""`` (all interfaces) for
+            Ray ports that must be reachable from other nodes. Pass
+            ``"127.0.0.1"`` for ports that only need local reachability.
     """
     if preferred:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(("", preferred))
+                s.bind((bind_address, preferred))
                 return preferred
         except OSError:
             pass
@@ -65,19 +76,22 @@ def find_free_port(preferred: int = 0, num_random_attempts: int = 10) -> int:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(("", port))
+                s.bind((bind_address, port))
                 return port
         except OSError:
             continue
 
     # Fall back to letting the OS pick
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        s.bind(("", 0))
+        s.bind((bind_address, 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
 
 RAY_DEFAULT_DASHBOARD_PORT = 8265
+
+# Default directory for per-cluster rendezvous / head.json files.
+DEFAULT_HEAD_FILE_DIR = Path.home() / ".fairray"
 
 
 def scancel(job_ids: list[str]):
@@ -135,7 +149,7 @@ class RayClusterState:
         cluster_id: Optional[str] = None,
     ):
         self.rendezvous_rootdir = (
-            rdv_dir if rdv_dir is not None else (Path.home() / ".fairray")
+            rdv_dir if rdv_dir is not None else DEFAULT_HEAD_FILE_DIR
         )
         self._cluster_id = (
             uuid.uuid4().hex if cluster_id is None else cluster_id
