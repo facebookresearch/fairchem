@@ -12,6 +12,7 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
+from dataclasses import asdict, dataclass
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,57 @@ if TYPE_CHECKING:
 # __init__s) so the two setup helpers can't drift apart silently.
 DEFAULT_MAX_BATCH_SIZE = 512
 DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
+
+
+@dataclass
+class DeploymentConfig:
+    """Typed mirror of the most common ``@serve.deployment`` / ``.options()`` kwargs.
+
+    Fields default to ``None`` and are dropped before being forwarded to
+    Ray Serve, so unspecified options inherit Ray Serve's own defaults
+    rather than this class re-asserting them.
+    """
+
+    num_replicas: int | None = None
+    ray_actor_options: dict | None = None
+    # ``autoscaling_config`` accepts a dict or a ``ray.serve.schema.AutoscalingConfig``;
+    # ``logging_config`` accepts a dict or ``ray.serve.schema.LoggingConfig``.
+    autoscaling_config: Any = None
+    max_ongoing_requests: int | None = None
+    max_queued_requests: int | None = None
+    max_replicas_per_node: int | None = None
+    graceful_shutdown_timeout_s: float | None = None
+    graceful_shutdown_wait_loop_s: float | None = None
+    health_check_period_s: float | None = None
+    health_check_timeout_s: float | None = None
+    logging_config: Any = None
+    user_config: dict | None = None
+    placement_group_bundles: list | None = None
+    placement_group_strategy: str | None = None
+    request_router_config: Any = None
+
+    def to_options_kwargs(self) -> dict[str, Any]:
+        """Return ``{name: value}`` for fields that were explicitly set (non-None)."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
+class BatchConfig:
+    """Typed mirror of kwargs accepted by ``BatchPredictServer.__init__`` and
+    ``MultiplexedBatchPredictServer.__init__``.
+    """
+
+    max_batch_size: int = DEFAULT_MAX_BATCH_SIZE
+    batch_wait_timeout_s: float = DEFAULT_BATCH_WAIT_TIMEOUT_S
+    split_oom_batch: bool = True
+    # None defers to Ray Serve's ``@serve.batch`` default.
+    max_concurrent_batches: int | None = None
+
+    def to_init_kwargs(self) -> dict[str, Any]:
+        d = asdict(self)
+        if d.get("max_concurrent_batches") is None:
+            d.pop("max_concurrent_batches")
+        return d
 
 
 class BatchPredictServerMixin:
@@ -570,26 +622,27 @@ def _effective_replicas(deployment_config: dict) -> int:
 
 
 def _prepare_deployment_config(
-    deployment_config: dict | None,
+    deployment_config: DeploymentConfig | dict | None,
     default_num_gpus_when_cuda: bool,
-) -> dict[str, Any]:
+) -> DeploymentConfig:
     """
-    Copy ``deployment_config`` and ensure ``ray_actor_options`` is a dict,
-    defaulting ``num_gpus=1`` when CUDA is wanted and the caller did not
-    pin a value.
+    Normalize ``deployment_config`` to a :class:`DeploymentConfig` and ensure
+    ``ray_actor_options`` is a dict, defaulting ``num_gpus=1`` when CUDA is
+    wanted and the caller did not pin a value.
     """
-    dc: dict[str, Any] = dict(deployment_config or {})
-    actor_opts = dict(dc.get("ray_actor_options") or {})
+    if not isinstance(deployment_config, DeploymentConfig):
+        deployment_config = DeploymentConfig(**(deployment_config or {}))
+    actor_opts = dict(deployment_config.ray_actor_options or {})
     if default_num_gpus_when_cuda and "num_gpus" not in actor_opts:
         actor_opts["num_gpus"] = 1
-    dc["ray_actor_options"] = actor_opts
-    return dc
+    deployment_config.ray_actor_options = actor_opts
+    return deployment_config
 
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    deployment_config: dict | None = None,
-    batch_config: dict | None = None,
+    deployment_config: DeploymentConfig | dict | None = None,
+    batch_config: BatchConfig | dict | None = None,
     deployment_name: str = "predict-server",
     route_prefix: str = "/predict",
 ) -> serve.handle.DeploymentHandle:
@@ -598,16 +651,17 @@ def setup_batch_predict_server(
 
     Args:
         predict_unit: An MLIPPredictUnit instance to use for inference.
-        deployment_config: Dict of kwargs forwarded directly to
-            ``BatchPredictServer.options(**deployment_config)``. Any key
-            accepted by ``@serve.deployment`` is valid (e.g. ``num_replicas``,
+        deployment_config: :class:`DeploymentConfig` (or equivalent dict) of
+            kwargs forwarded to ``BatchPredictServer.options(...)``. Any field
+            on :class:`DeploymentConfig` is valid (e.g. ``num_replicas``,
             ``autoscaling_config``, ``ray_actor_options``,
             ``max_ongoing_requests``, ``graceful_shutdown_timeout_s``,
             ``logging_config``).
-        batch_config: Dict of kwargs forwarded directly into
-            ``BatchPredictServer.__init__`` via ``.bind(**batch_config)``.
-            Accepts ``max_batch_size``, ``batch_wait_timeout_s``,
-            ``split_oom_batch``, ``max_concurrent_batches``.
+        batch_config: :class:`BatchConfig` (or equivalent dict) of kwargs
+            forwarded into ``BatchPredictServer.__init__`` via
+            ``.bind(**batch_config)``. Accepts ``max_batch_size``,
+            ``batch_wait_timeout_s``, ``split_oom_batch``,
+            ``max_concurrent_batches``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
 
@@ -618,16 +672,18 @@ def setup_batch_predict_server(
         deployment_config,
         default_num_gpus_when_cuda="cuda" in predict_unit.device,
     )
-    bc = dict(batch_config or {})
-    bc.setdefault("max_batch_size", DEFAULT_MAX_BATCH_SIZE)
-    bc.setdefault("batch_wait_timeout_s", DEFAULT_BATCH_WAIT_TIMEOUT_S)
+    if not isinstance(batch_config, BatchConfig):
+        batch_config = BatchConfig(**(batch_config or {}))
 
-    _init_ray_and_serve(dc["ray_actor_options"], _effective_replicas(dc))
+    dc_kwargs = dc.to_options_kwargs()
+    _init_ray_and_serve(dc_kwargs["ray_actor_options"], _effective_replicas(dc_kwargs))
 
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
 
-    deployment = BatchPredictServer.options(**dc).bind(predict_unit_ref, **bc)
+    deployment = BatchPredictServer.options(**dc_kwargs).bind(
+        predict_unit_ref, **batch_config.to_init_kwargs()
+    )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
     logging.info(f"BatchPredictServer deployed: name={deployment_name}")
@@ -635,8 +691,8 @@ def setup_batch_predict_server(
 
 
 def setup_multiplexed_batch_predict_server(
-    deployment_config: dict | None = None,
-    batch_config: dict | None = None,
+    deployment_config: DeploymentConfig | dict | None = None,
+    batch_config: BatchConfig | dict | None = None,
     deployment_name: str = "multiplexed-predict-server",
     route_prefix: str = "/multiplex-predict",
 ) -> serve.handle.DeploymentHandle:
@@ -647,10 +703,10 @@ def setup_multiplexed_batch_predict_server(
     ``multiplexed_model_id`` set on the handle.
 
     Args:
-        deployment_config: Dict of kwargs forwarded directly to
-            ``MultiplexedBatchPredictServer.options(**deployment_config)``.
-        batch_config: Dict of kwargs forwarded into
-            ``MultiplexedBatchPredictServer.__init__`` via
+        deployment_config: :class:`DeploymentConfig` (or equivalent dict)
+            forwarded to ``MultiplexedBatchPredictServer.options(...)``.
+        batch_config: :class:`BatchConfig` (or equivalent dict) forwarded
+            into ``MultiplexedBatchPredictServer.__init__`` via
             ``.bind(**batch_config)``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
@@ -662,13 +718,15 @@ def setup_multiplexed_batch_predict_server(
         deployment_config,
         default_num_gpus_when_cuda=torch.cuda.is_available(),
     )
-    bc = dict(batch_config or {})
-    bc.setdefault("max_batch_size", DEFAULT_MAX_BATCH_SIZE)
-    bc.setdefault("batch_wait_timeout_s", DEFAULT_BATCH_WAIT_TIMEOUT_S)
+    if not isinstance(batch_config, BatchConfig):
+        batch_config = BatchConfig(**(batch_config or {}))
 
-    _init_ray_and_serve(dc["ray_actor_options"], _effective_replicas(dc))
+    dc_kwargs = dc.to_options_kwargs()
+    _init_ray_and_serve(dc_kwargs["ray_actor_options"], _effective_replicas(dc_kwargs))
 
-    deployment = MultiplexedBatchPredictServer.options(**dc).bind(**bc)
+    deployment = MultiplexedBatchPredictServer.options(**dc_kwargs).bind(
+        **batch_config.to_init_kwargs()
+    )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
     logging.info(f"MultiplexedBatchPredictServer deployed: name={deployment_name}")
