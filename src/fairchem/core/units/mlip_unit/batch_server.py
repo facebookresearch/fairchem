@@ -21,28 +21,17 @@ from ray import serve
 from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit.predict import move_tensors_to_cpu
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
-def _to_cpu(obj: Any) -> Any:
-    """
-    Return a CPU-resident copy of ``obj`` so that the result can be
-    deserialized on CPU-only Ray workers.
-
-    Uses ``torch.save`` + ``torch.load(map_location="cpu")`` which
-    transparently handles arbitrary object graphs containing tensors,
-    ``nn.Module`` instances, OmegaConf containers, etc., without needing
-    to walk and mutate the structure ourselves.
-    """
-    import io
-
-    buf = io.BytesIO()
-    torch.save(obj, buf)
-    buf.seek(0)
-    return torch.load(buf, map_location="cpu", weights_only=False)
+# Centralized batching defaults. Kept here (not on the server class
+# __init__s) so the two setup helpers can't drift apart silently.
+DEFAULT_MAX_BATCH_SIZE = 512
+DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
 
 
 class BatchPredictServerMixin:
@@ -84,7 +73,7 @@ class BatchPredictServerMixin:
         # CPU-only Ray workers can deserialize it without requiring CUDA
         # (e.g. ``atom_refs`` typically contains tensors stored on the
         # server's device).
-        return _to_cpu(getattr(self.predict_unit, attribute_name))
+        return move_tensors_to_cpu(getattr(self.predict_unit, attribute_name))
 
     def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -269,8 +258,8 @@ class BatchPredictServer(BatchPredictServerMixin):
     def __init__(
         self,
         predict_unit_ref,
-        max_batch_size: int = 512,
-        batch_wait_timeout_s: float = 0.1,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
         max_concurrent_batches: int | None = None,
     ):
@@ -328,8 +317,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
 
     def __init__(
         self,
-        max_batch_size: int = 512,
-        batch_wait_timeout_s: float = 0.1,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
         max_concurrent_batches: int | None = None,
     ):
@@ -472,7 +461,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         # Move any CUDA tensors to CPU before returning so callers (which
         # may be CPU-only Ray workers) can deserialize the result without
         # requiring CUDA.
-        return _to_cpu(attr)
+        return move_tensors_to_cpu(attr)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -630,6 +619,8 @@ def setup_batch_predict_server(
         default_num_gpus_when_cuda="cuda" in predict_unit.device,
     )
     bc = dict(batch_config or {})
+    bc.setdefault("max_batch_size", DEFAULT_MAX_BATCH_SIZE)
+    bc.setdefault("batch_wait_timeout_s", DEFAULT_BATCH_WAIT_TIMEOUT_S)
 
     _init_ray_and_serve(dc["ray_actor_options"], _effective_replicas(dc))
 
@@ -672,6 +663,8 @@ def setup_multiplexed_batch_predict_server(
         default_num_gpus_when_cuda=torch.cuda.is_available(),
     )
     bc = dict(batch_config or {})
+    bc.setdefault("max_batch_size", DEFAULT_MAX_BATCH_SIZE)
+    bc.setdefault("batch_wait_timeout_s", DEFAULT_BATCH_WAIT_TIMEOUT_S)
 
     _init_ray_and_serve(dc["ray_actor_options"], _effective_replicas(dc))
 
