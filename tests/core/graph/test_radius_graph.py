@@ -1536,3 +1536,18 @@ class TestMixedPBCBatch:
         _, co_h2o = _extract_system_edges(mixed_graph, len(pt), len(h2o))
 
         assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
+
+
+def test_radius_graph_pbc_v1_raises_on_mixed_pbc():
+    """radius_graph_pbc (v1) must raise RuntimeError for mixed-PBC batches."""
+    pt = build.bulk("Pt")
+    pt_data = AtomicData.from_ase(pt, task_name="omat")
+
+    h2o = molecule("H2O")
+    h2o.cell = [[12, 0, 0], [0, 12, 0], [0, 0, 12]]
+    h2o.pbc = False
+    h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+    mixed_batch = atomicdata_list_to_batch([pt_data, h2o_data])
+    with pytest.raises(RuntimeError, match="mixed PBC"):
+        radius_graph_pbc(mixed_batch, radius=6.0, max_num_neighbors_threshold=300)

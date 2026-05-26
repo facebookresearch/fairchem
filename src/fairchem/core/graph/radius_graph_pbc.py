@@ -183,6 +183,19 @@ def radius_graph_pbc(
 ):
     pbc = canonical_pbc(data, pbc)
 
+    # v1 uses a single global PBC for the whole batch and cannot produce
+    # correct graphs for batches where some systems are periodic and others
+    # are not.  Use radius_graph_pbc_v2 for mixed-PBC batches.
+    if hasattr(data, "pbc") and torch.atleast_2d(data.pbc).shape[0] > 1:
+        sys_pbc = torch.atleast_2d(data.pbc)
+        for i in range(3):
+            col = sys_pbc[:, i]
+            if torch.any(col).item() and not torch.all(col).item():
+                raise RuntimeError(
+                    "radius_graph_pbc does not support batches with mixed PBC "
+                    "(some systems periodic, others not). Use radius_graph_pbc_v2 instead."
+                )
+
     device = data.pos.device
     batch_size = len(data.natoms)
 
