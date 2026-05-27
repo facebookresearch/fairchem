@@ -14,6 +14,27 @@ import numpy as np
 import torch
 
 
+def is_mixed_pbc(data) -> bool:
+    """
+    Check if a batch has mixed PBC (some systems periodic, others not).
+
+    Returns True if the batch contains systems with different PBC settings
+    across any of the 3 dimensions, which is not supported by radius_graph_pbc.
+    """
+    if not hasattr(data, "pbc"):
+        return False
+
+    sys_pbc = torch.atleast_2d(data.pbc)
+    if sys_pbc.shape[0] <= 1:
+        return False
+
+    # Check if any dimension has both True and False values
+    # (i.e., some systems periodic and others not in the same dimension)
+    any_periodic = torch.any(sys_pbc, dim=0)
+    all_periodic = torch.all(sys_pbc, dim=0)
+    return torch.any(any_periodic & ~all_periodic).item()
+
+
 def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
     """
     Sum values within partitions defined by indices.
@@ -186,15 +207,11 @@ def radius_graph_pbc(
     # v1 uses a single global PBC for the whole batch and cannot produce
     # correct graphs for batches where some systems are periodic and others
     # are not.  Use radius_graph_pbc_v2 for mixed-PBC batches.
-    if hasattr(data, "pbc") and torch.atleast_2d(data.pbc).shape[0] > 1:
-        sys_pbc = torch.atleast_2d(data.pbc)
-        for i in range(3):
-            col = sys_pbc[:, i]
-            if torch.any(col).item() and not torch.all(col).item():
-                raise RuntimeError(
-                    "radius_graph_pbc does not support batches with mixed PBC "
-                    "(some systems periodic, others not). Use radius_graph_pbc_v2 instead."
-                )
+    if is_mixed_pbc(data):
+        raise RuntimeError(
+            "radius_graph_pbc does not support batches with mixed PBC "
+            "(some systems periodic, others not). Use radius_graph_pbc_v2 instead."
+        )
 
     device = data.pos.device
     batch_size = len(data.natoms)
@@ -360,7 +377,7 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     # radius_graph_pbc_v2 uses per-system pbc from data.pbc for the actual
     # rep computation; this global pbc is only used by v1 and for warnings.
     if pbc.ndim > 1:
-        pbc = pbc.any(dim=0)
+        pbc = pbc[0]
     assert isinstance(pbc, torch.Tensor)
     assert pbc.ndim == 1
     assert pbc.shape[0] == 3
