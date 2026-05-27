@@ -7,8 +7,8 @@ LICENSE file in the root directory of this source tree.
 Ray cluster utilities for SLURM and local environments.
 
 This module provides context managers for starting and managing Ray clusters:
-- get_slurm_ray_cluster: Start a Ray cluster on SLURM with automatic cleanup
-- get_local_ray_cluster: Start a local Ray cluster for testing/development
+- get_slurm_fairchem_inference_raycluster: Start a Ray cluster on SLURM with automatic cleanup
+- get_local_fairchem_inference_raycluster: Start a local Ray cluster for testing/development
 """
 
 from __future__ import annotations
@@ -362,7 +362,7 @@ def start_ray_cluster(
 
 
 @contextmanager
-def get_slurm_ray_cluster(
+def get_slurm_fairchem_inference_raycluster(
     config: str | Path | None = None,
     num_workers: int = 1,
     partition: str | None = None,
@@ -393,7 +393,7 @@ def get_slurm_ray_cluster(
 
     Usage::
 
-        with get_slurm_ray_cluster(num_workers=32, gpus_per_node=1) as head_file:
+        with get_slurm_fairchem_inference_raycluster(num_workers=32, gpus_per_node=1) as head_file:
             import ray
             with open(head_file) as f:
                 head_info = json.load(f)
@@ -504,7 +504,7 @@ def get_slurm_ray_cluster(
                     _do_init()
                     # Remember that we own this connection so the finally
                     # block can release it; otherwise a subsequent
-                    # get_slurm_ray_cluster() call in the same process would
+                    # get_slurm_fairchem_inference_raycluster() call in the same process would
                     # fail with "client has already connected" when the dead
                     # connection from the prior cluster lingers.
                     ray_client_owned = True
@@ -599,19 +599,7 @@ def get_slurm_ray_cluster(
 
 
 @contextmanager
-def get_slurm_inference_cluster(*args, **kwargs):
-    """Descriptive alias for get_slurm_ray_cluster.
-
-    This helper makes intent explicit: it is primarily used to provision
-    inference-serving Ray clusters. Kept as a wrapper for backwards
-    compatibility while preserving the implementation in one place.
-    """
-    with get_slurm_ray_cluster(*args, **kwargs) as head_file:
-        yield head_file
-
-
-@contextmanager
-def get_local_ray_cluster(
+def get_local_fairchem_inference_raycluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
     num_gpus: int | None = None,
@@ -626,7 +614,7 @@ def get_local_ray_cluster(
     Context manager that starts a local Ray cluster with optional inference
     server.
 
-    Similar to get_slurm_ray_cluster but for local/testing use. Automatically:
+    Similar to get_slurm_fairchem_inference_raycluster but for local/testing use. Automatically:
     - Detects available GPUs if num_gpus is None
     - Starts Ray Serve
     - Deploys FAIRChem inference server
@@ -635,12 +623,12 @@ def get_local_ray_cluster(
 
     Usage::
 
-        with get_local_ray_cluster() as head_file:
+        with get_local_fairchem_inference_raycluster() as head_file:
             # Run code that uses Ray Serve inference
             ...
 
         # Or for testing, without inference server:
-        with get_local_ray_cluster(start_inference_server=False):
+        with get_local_fairchem_inference_raycluster(start_inference_server=False):
             # Run CPU-only tests
             ...
 
@@ -780,10 +768,3 @@ def get_local_ray_cluster(
             head_file_path.unlink()
             with suppress(OSError):
                 head_file_path.parent.rmdir()
-
-
-@contextmanager
-def get_local_inference_cluster(*args, **kwargs):
-    """Descriptive alias for get_local_ray_cluster."""
-    with get_local_ray_cluster(*args, **kwargs) as head_file:
-        yield head_file

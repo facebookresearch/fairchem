@@ -7,16 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from fairchem.core.launchers.cluster.ray_cluster_utils import (
-    get_local_inference_cluster,
-    get_local_ray_cluster,
-    get_slurm_inference_cluster,
-    get_slurm_ray_cluster,
+from fairchem.core.calculate._ray_inference_cluster import (
+    get_local_fairchem_inference_raycluster,
+    get_slurm_fairchem_inference_raycluster,
 )
 
 __all__ = [
-    "get_local_inference_cluster",
-    "get_local_ray_cluster",
-    "get_slurm_inference_cluster",
-    "get_slurm_ray_cluster",
+    "get_local_fairchem_inference_raycluster",
+    "get_slurm_fairchem_inference_raycluster",
 ]

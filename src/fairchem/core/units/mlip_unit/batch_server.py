@@ -163,11 +163,6 @@ class BatchPredictServerMixin:
         self.predict_unit = predict_unit
         logging.info("predict_unit updated")
 
-    @staticmethod
-    def _is_periodic(data: AtomicData) -> bool:
-        # AtomicData.pbc is shape (1, 3) all-True or all-False per system.
-        return bool(data.pbc.all().item())
-
     def _run_batched_inference(
         self,
         items: list[AtomicData],
@@ -175,9 +170,7 @@ class BatchPredictServerMixin:
         undo_element_references: bool,
     ) -> list[dict]:
         """
-        Run batched inference on a PBC-homogeneous list with OOM
-        splitting. Assumes every entry in ``items`` has the same PBC
-        kind so concatenation via ``atomicdata_list_to_batch`` is safe.
+        Run batched inference with OOM splitting.
         """
         data_deque: deque[list[AtomicData]] = deque([items])
         results: list[dict] = []
@@ -209,31 +202,6 @@ class BatchPredictServerMixin:
                 mid = len(current) // 2
                 data_deque.appendleft(current[mid:])
                 data_deque.appendleft(current[:mid])
-        return results
-
-    async def _predict_impl(
-        self, data_list: list[AtomicData], undo_element_references: bool = True
-    ) -> list[dict]:
-        """
-        Process a batch of AtomicData objects.
-
-        The model assumes all systems in a single forward pass share the
-        same PBC (all-periodic or all-non-periodic). Requests batched by
-        ``@serve.batch`` may mix the two, so we subgroup by PBC kind
-        before running inference and reassemble results in input order.
-        """
-        pbc_groups: dict[bool, list[tuple[int, AtomicData]]] = defaultdict(list)
-        for i, data in enumerate(data_list):
-            pbc_groups[self._is_periodic(data)].append((i, data))
-
-        results: list[dict | None] = [None] * len(data_list)
-        for indexed_items in pbc_groups.values():
-            indices, items = zip(*indexed_items)
-            group_results = self._run_batched_inference(
-                list(items), self.predict_unit, undo_element_references
-            )
-            for orig_idx, pred in zip(indices, group_results):
-                results[orig_idx] = pred
         return results
 
     async def __call__(
@@ -338,6 +306,13 @@ class BatchPredictServer(BatchPredictServerMixin):
             "BatchPredictServer initialized with predict_unit from object store"
         )
 
+    async def _predict_impl(
+        self, data_list: list[AtomicData], undo_element_references: bool = True
+    ) -> list[dict]:
+        return self._run_batched_inference(
+            data_list, self.predict_unit, undo_element_references
+        )
+
     async def is_multiplexed(self) -> bool:
         return False
 
@@ -436,19 +411,12 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         for model_id, indexed_items in groups.items():
             predict_unit = await self.get_model(model_id)  # LRU cache hit
 
-            # Subgroup by PBC homogeneity: the model rejects a batch
-            # containing both periodic and non-periodic systems.
-            pbc_subgroups: dict[bool, list[tuple[int, AtomicData]]] = defaultdict(list)
-            for orig_idx, data in indexed_items:
-                pbc_subgroups[self._is_periodic(data)].append((orig_idx, data))
-
-            for sub_indexed in pbc_subgroups.values():
-                indices, group_data = zip(*sub_indexed)
-                group_results = self._run_batched_inference(
-                    list(group_data), predict_unit, undo_refs
-                )
-                for orig_idx, pred in zip(indices, group_results):
-                    results[orig_idx] = pred
+            indices, group_data = zip(*indexed_items)
+            group_results = self._run_batched_inference(
+                list(group_data), predict_unit, undo_refs
+            )
+            for orig_idx, pred in zip(indices, group_results):
+                results[orig_idx] = pred
 
         return results
 
