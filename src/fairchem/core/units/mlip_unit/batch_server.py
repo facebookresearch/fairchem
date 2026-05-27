@@ -22,11 +22,25 @@ from ray import serve
 from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
-from fairchem.core.units.mlip_unit.predict import move_tensors_to_cpu
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
+
+
+def _to_cpu(obj: Any) -> Any:
+    """Return a CPU-resident copy of ``obj`` so it can be deserialized on CPU-only Ray workers.
+
+    Uses ``torch.save`` + ``torch.load(map_location="cpu")`` which transparently
+    handles arbitrary object graphs containing tensors, ``nn.Module`` instances,
+    OmegaConf containers, etc., without needing to walk and mutate the structure.
+    """
+    import io
+
+    buf = io.BytesIO()
+    torch.save(obj, buf)
+    buf.seek(0)
+    return torch.load(buf, map_location="cpu", weights_only=False)
 
 
 # Centralized batching defaults. Kept here (not on the server class
@@ -125,7 +139,7 @@ class BatchPredictServerMixin:
         # CPU-only Ray workers can deserialize it without requiring CUDA
         # (e.g. ``atom_refs`` typically contains tensors stored on the
         # server's device).
-        return move_tensors_to_cpu(getattr(self.predict_unit, attribute_name))
+        return _to_cpu(getattr(self.predict_unit, attribute_name))
 
     def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -481,7 +495,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         # Move any CUDA tensors to CPU before returning so callers (which
         # may be CPU-only Ray workers) can deserialize the result without
         # requiring CUDA.
-        return move_tensors_to_cpu(attr)
+        return _to_cpu(attr)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -557,14 +571,17 @@ def _init_ray_and_serve(
             "ray_actor_options['num_cpus'] / num_replicas."
         )
 
-    try:
-        serve.status()
-        logging.info("Ray Serve already running")
-    except Exception:
-        serve.start(
-            logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-        )
-        logging.info("Ray Serve started")
+    # ``serve.start`` is idempotent for matching options. We always call it so
+    # that ``proxy_location`` is enforced (``serve.status()`` returns OK even
+    # when serve isn't running yet, so it can't be used as a "started" probe).
+    # Clients use Python deployment handles (``serve.get_app_handle``), not HTTP,
+    # so disable the HTTP proxy entirely. This avoids ProxyActor startup
+    # failures on worker nodes where port 8000 is already bound.
+    serve.start(
+        proxy_location="Disabled",
+        logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    )
+    logging.info("Ray Serve started (proxy_location=Disabled)")
 
 
 def _effective_replicas(deployment_config: dict) -> int:

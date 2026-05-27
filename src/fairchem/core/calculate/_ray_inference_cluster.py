@@ -741,6 +741,12 @@ def get_local_fairchem_inference_raycluster(
             wait_for_serve_ready(app_name=resolved_deployment_name)
             logger.info("Inference server ready and accepting requests")
 
+        # Capture the bootstrap (GCS) address so consumers can connect
+        # explicitly. ``address="auto"`` relies on /tmp/ray/ray_current_cluster
+        # which races/thrashes when many local clusters are spawned in
+        # parallel (e.g. pytest-xdist + --forked).
+        bootstrap_address = ray.get_runtime_context().gcs_address
+
         head_file_path.parent.mkdir(parents=True, exist_ok=True)
         head_file_path.write_text(
             json.dumps(
@@ -748,6 +754,7 @@ def get_local_fairchem_inference_raycluster(
                     "hostname": "localhost",
                     "dashboard_port": dashboard_port,
                     "local": True,
+                    "bootstrap_address": bootstrap_address,
                     "num_cpus": num_cpus,
                     "num_gpus": num_gpus,
                     "namespace_serve_fairchem": namespace_serve_fairchem,
