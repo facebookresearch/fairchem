@@ -1558,6 +1558,101 @@ class TestMixedPBCBatch:
 
         assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
 
+    @pytest.mark.gpu()
+    def test_inference_results_match_mixed_vs_individual(self, radius_pbc_version):
+        """End-to-end inference on a mixed-PBC batch must match per-system individual results."""
+        from fairchem.core.calculate import pretrained_mlip
+
+        predictor = pretrained_mlip.get_predict_unit(
+            "uma-s-1p1",
+            overrides={"backbone": {"radius_pbc_version": radius_pbc_version}},
+        )
+
+        # 3D periodic bulk
+        cu = build.bulk("Cu")
+        cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+        # 2D periodic slab (periodic in xy, not z)
+        slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+        slab.pbc = [True, True, False]
+        slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+        cu_batch = atomicdata_list_to_batch([cu_data])
+        slab_batch = atomicdata_list_to_batch([slab_data])
+        mixed_batch = atomicdata_list_to_batch([cu_data, slab_data])
+
+        out_cu = predictor.predict(cu_batch)
+        out_slab = predictor.predict(slab_batch)
+        out_mixed = predictor.predict(mixed_batch)
+
+        energy_key = next(k for k in out_mixed if "energy" in k)
+        force_key = next((k for k in out_mixed if "force" in k), None)
+
+        assert torch.allclose(
+            out_mixed[energy_key][0], out_cu[energy_key][0], atol=1e-4
+        ), f"Mixed batch energy for Cu differs from individual: {out_mixed[energy_key][0]} vs {out_cu[energy_key][0]}"
+        assert torch.allclose(
+            out_mixed[energy_key][1], out_slab[energy_key][0], atol=1e-4
+        ), f"Mixed batch energy for slab differs from individual: {out_mixed[energy_key][1]} vs {out_slab[energy_key][0]}"
+
+        if force_key is not None:
+            cu_natoms = len(cu)
+            assert torch.allclose(
+                out_mixed[force_key][:cu_natoms], out_cu[force_key], atol=1e-4
+            ), "Mixed batch Cu forces differ from individual"
+            assert torch.allclose(
+                out_mixed[force_key][cu_natoms:], out_slab[force_key], atol=1e-4
+            ), "Mixed batch slab forces differ from individual"
+
+
+def test_v2_v3_mixed_pbc_produce_identical_edges():
+    """radius_pbc_version 2 and 3 must produce identical edges for mixed-PBC batches."""
+    if not nvalchemiops_installed():
+        pytest.skip("nvalchemiops not installed")
+
+    cu = build.bulk("Cu")
+    cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+    slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+    slab.pbc = [True, True, False]
+    slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+    h2o = molecule("H2O")
+    h2o.pbc = False
+    h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+    mixed_batch = atomicdata_list_to_batch([cu_data, slab_data, h2o_data])
+    cutoff = 6.0
+    max_neighbors = 300
+
+    graph_v2 = generate_graph(
+        mixed_batch,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=mixed_batch.pbc,
+    )
+    graph_v3 = generate_graph(
+        mixed_batch,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=3,
+        pbc=mixed_batch.pbc,
+    )
+
+    assert torch.equal(
+        graph_v2["neighbors"], graph_v3["neighbors"]
+    ), f"Neighbor counts differ: v2={graph_v2['neighbors']}, v3={graph_v3['neighbors']}"
+    edges_v2 = _graph_dict_to_edge_set(graph_v2)
+    edges_v3 = _graph_dict_to_edge_set(graph_v3)
+    assert edges_v2 == edges_v3, (
+        f"Edge sets differ between v2 and v3 for mixed-PBC batch.\n"
+        f"Only in v2: {edges_v2 - edges_v3}\n"
+        f"Only in v3: {edges_v3 - edges_v2}"
+    )
+
 
 def test_radius_graph_pbc_v1_raises_on_mixed_pbc():
     """radius_graph_pbc (v1) must raise RuntimeError for mixed-PBC batches."""
