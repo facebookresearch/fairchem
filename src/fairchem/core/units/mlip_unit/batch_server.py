@@ -576,6 +576,7 @@ def _init_ray_and_serve(
     # starve. Warn (don't raise) because multi-node Ray clusters can
     # auto-grow as workers join, and autoscaling deployments only need
     # capacity for ``min_replicas`` at startup.
+    serve_overhead_cpus = 2  # Serve controller + HTTP proxy
     cluster_cpus = ray.cluster_resources().get("CPU", 0)
     if requested_cpus + serve_overhead_cpus > cluster_cpus:
         logging.warning(
