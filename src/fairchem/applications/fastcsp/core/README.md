@@ -120,6 +120,8 @@ evaluate:
   csd:
     num_cpus: 60
     python_cmd: /path/to/python/with/csd/api/installed
+    target_rows_per_chunk: 200   # rows per CCDC subprocess chunk (default 200)
+    chunk_timeout: 3600          # per-chunk subprocess timeout in seconds (default 3600 = 60 min)
   pymatgen:
     match_params:
       ltol: 0.2

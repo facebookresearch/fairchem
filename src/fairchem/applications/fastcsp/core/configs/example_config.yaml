@@ -71,6 +71,8 @@ evaluate:
   csd:
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
     python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
+    target_rows_per_chunk: 200  # Rows per CCDC subprocess chunk (default 200)
+    chunk_timeout: 3600         # Per-chunk subprocess timeout in seconds (default 3600 = 60 min)
   pymatgen:
     match_params:           # Pymatgen matching tolerances if pymatgen method is used
       ltol: 0.2
