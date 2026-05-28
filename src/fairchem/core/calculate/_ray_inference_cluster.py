@@ -39,18 +39,8 @@ from fairchem.core.units.mlip_unit.batch_server import (
 logger = logging.getLogger(__name__)
 
 
-def _find_free_localhost_port() -> int:
-    """Find an available port bound to localhost only.
-
-    Thin wrapper around :func:`find_free_port` that scopes the probe to the
-    loopback interface (avoids exposing ephemeral probe sockets on all
-    network interfaces).
-    """
-    return find_free_port(bind_address="127.0.0.1")
-
-
 def load_update_config(
-    config: str | Path,
+    config_path: str | Path,
     head_file: str | Path | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -61,7 +51,7 @@ def load_update_config(
     head_file path where connection info will be written.
 
     Args:
-        config: Path to YAML config file.
+        config_path: Path to YAML config file.
         head_file: Path to head.json file for connecting to existing cluster
             or where to write connection info. If None, generates path based
             on cluster UUID.
@@ -73,7 +63,7 @@ def load_update_config(
         - cluster_id: Unique identifier for this cluster (if cluster_id generated)
         - head_file: Path to head.json with connection info
     """
-    with open(config) as f:
+    with open(config_path) as f:
         default_config = yaml.safe_load(f)
 
     auto_overrides = {}
@@ -163,7 +153,7 @@ def _build_cluster_config(
     )
 
     return load_update_config(
-        config=config,
+        config_path=config,
         head_file=head_file,
         cluster_config_overrides=merged_overrides,
     )
@@ -201,7 +191,6 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     return requirements
 
 
-# TODO move this and other setup somewhere else
 def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
@@ -408,18 +397,6 @@ def get_slurm_ray_cluster(
 
 
 @contextmanager
-def get_slurm_inference_cluster(*args, **kwargs):
-    """Descriptive alias for get_slurm_ray_cluster.
-
-    This helper makes intent explicit: it is primarily used to provision
-    inference-serving Ray clusters. Kept as a wrapper for backwards
-    compatibility while preserving the implementation in one place.
-    """
-    with get_slurm_ray_cluster(*args, **kwargs) as head_file:
-        yield head_file
-
-
-@contextmanager
 def get_local_ray_cluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
@@ -491,7 +468,7 @@ def get_local_ray_cluster(
     namespace_serve_fairchem = "fairchem_inference" if start_inference_server else None
 
     # Find free ports for this cluster instance
-    dashboard_port = _find_free_localhost_port()
+    dashboard_port = find_free_port(bind_address="127.0.0.1")
 
     try:
         if not ray.is_initialized():
