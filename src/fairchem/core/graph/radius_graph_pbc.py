@@ -21,18 +21,13 @@ def is_mixed_pbc(data) -> bool:
     Returns True if the batch contains systems with different PBC settings
     across any of the 3 dimensions, which is not supported by radius_graph_pbc.
     """
-    if not hasattr(data, "pbc"):
-        return False
-
-    sys_pbc = torch.atleast_2d(data.pbc)
-    if sys_pbc.shape[0] <= 1:
-        return False
-
-    # Check if any dimension has both True and False values
-    # (i.e., some systems periodic and others not in the same dimension)
-    any_periodic = torch.any(sys_pbc, dim=0)
-    all_periodic = torch.all(sys_pbc, dim=0)
-    return torch.any(any_periodic & ~all_periodic).item()
+    if hasattr(data, "pbc") and torch.atleast_2d(data.pbc).shape[0] > 1:
+        sys_pbc = torch.atleast_2d(data.pbc)
+        for i in range(3):
+            col = sys_pbc[:, i]
+            if torch.any(col).item() and not torch.all(col).item():
+                return True
+    return False
 
 
 def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
@@ -357,31 +352,48 @@ def radius_graph_pbc(
     return edge_index, unit_cell, num_neighbors_image
 
 
-def canonical_pbc(data, pbc: torch.Tensor | None):
+def canonical_pbc(data, pbc: torch.Tensor | None) -> list[bool]:
+    """
+    Resolve and normalize the periodic boundary condition (PBC) flags for a batch.
+
+    This helper produces a canonical 1D PBC specification (a list of three booleans,
+    one per lattice direction) that downstream graph construction code can rely on.
+
+    Behavior:
+      - If ``pbc`` is None, derive it from ``data.pbc``: a dimension is considered
+        periodic only if at least one system in the batch is periodic along that
+        dimension. ``data.pbc`` is also normalized to be at least 2D in-place.
+      - If ``pbc`` has more than one dimension, collapse it across systems with a
+        logical OR so that a dimension is periodic if any system requests it.
+
+    Args:
+        data: An AtomicData-like object that must expose a ``pbc`` attribute
+            describing per-system PBC flags.
+        pbc: Optional explicit PBC override. May be a 1D tensor of length 3 or a
+            2D tensor of shape (num_systems, 3). If None, the value is taken from
+            ``data.pbc``.
+
+    Returns:
+        A length-3 Python list of booleans ``[pbc_x, pbc_y, pbc_z]`` indicating
+        which lattice directions are periodic for the batch.
+    """
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
-    if pbc is None and hasattr(data, "pbc"):
+
+    if pbc is None:
         data.pbc = torch.atleast_2d(data.pbc)
         pbc = torch.BoolTensor([True, True, True])
-        for i in range(3):
-            if not torch.any(data.pbc[:, i]).item():
-                pbc[i] = False
-    # elif pbc is not None and hasattr(data, "pbc"):
-    #     # This can be on a different device, deffering to a new PR to fix this TODO
-    #     if (pbc != data.pbc).all():
-    #         logging.warning("PBC provided to radius_graph_pbc differs from data.pbc")
-    elif pbc is None:
-        pbc = torch.BoolTensor([True, True, True])
+        pbc[~torch.any(data.pbc, dim=0)] = False
 
-    # For multi-system batches with a 2D pbc tensor, reduce to a single global
-    # pbc via OR (periodic in a dimension if any system is periodic there).
-    # radius_graph_pbc_v2 uses per-system pbc from data.pbc for the actual
-    # rep computation; this global pbc is only used by v1 and for warnings.
+    # If a per-system PBC tensor was passed in, collapse it via logical OR
+    # so a dimension is periodic when any system requests it.
     if pbc.ndim > 1:
-        pbc = pbc[0]
+        pbc = pbc.any(dim=0)
+
     assert isinstance(pbc, torch.Tensor)
     assert pbc.ndim == 1
     assert pbc.shape[0] == 3
-    return list(pbc)
+
+    return pbc.tolist()
 
 
 def box_size_warning(cell, pos, pbc):
