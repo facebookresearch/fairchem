@@ -441,8 +441,19 @@ def _calc_nvt_npt(
         pressure=pressure,
     )
 
+    # PhonopyQHA uses centered finite differences over the input temperature
+    # grid (see ``_set_thermal_expansion`` etc. in ``phonopy/qha/core.py``), so
+    # the QHA-derived arrays drop the high-temperature endpoint and are one
+    # element shorter than the input grid. Truncate the harmonic arrays to the
+    # same length so every value in the returned dict is on a single
+    # consistent temperature axis.
+    qha_len = len(qha.thermal_expansion)
+    for key in ("temperatures", "free_energy", "entropy", "heat_capacity"):
+        if key in harmonic_properties:
+            harmonic_properties[key] = harmonic_properties[key][:qha_len]
+
     anharmonic_properties = {
-        "temperatures": temperatures,
+        "temperatures": temperatures[:qha_len],
         "thermal_expansion_coefficients": qha.thermal_expansion,
         "gibbs_free_energies": qha.gibbs_temperature,
         "bulk_modulus_P": qha.bulk_modulus_temperature,

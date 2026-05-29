@@ -276,7 +276,9 @@ def main(args: argparse.Namespace) -> None:
         wait_for_jobs(jobs)
         collect_free_energy_results(
             jobs=jobs,
+            input_dir=fe_input_dir,
             output_dir=fe_output_dir,
+            fe_config=fe_config,
         )
         logging.log_stage_complete(
             logger, "vibrational free energy calculations", len(jobs)
