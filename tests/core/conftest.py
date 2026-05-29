@@ -23,6 +23,7 @@ from pymatgen.core import Structure
 from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
 
+from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
 from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
@@ -399,3 +400,23 @@ def uma_s_1p2_checkpoint():
     )
 
     return pretrained_checkpoint_path_from_name("uma-s-1p2")
+
+
+# _LOCAL_CHECKPOINT = "/checkpoint/ocp/shared/uma_checkpoints/uma_sm_1p2.pt"
+@pytest.fixture(scope="session")
+def uma_predict_unit():
+    """Predict unit using the first available UMA model."""
+    # return load_predict_unit(_LOCAL_CHECKPOINT, device="cpu")
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
+
+
+@pytest.fixture(scope="session")
+def uma_predict_unit_alt():
+    """Predict unit using the second available UMA model."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    if len(uma_models) < 2:
+        pytest.skip("Fewer than 2 UMA models available")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
