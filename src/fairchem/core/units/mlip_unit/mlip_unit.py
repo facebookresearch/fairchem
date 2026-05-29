@@ -760,7 +760,7 @@ class MLIPTrainEvalUnit(
             num_atoms_local = data.natoms.sum().item()
             num_samples_local = data.natoms.numel()
             log_dict = {
-                "train/loss": scalar_loss.item(),
+                "train/loss_mae": scalar_loss.item(),
                 "train/lr": self.scheduler.get_lr()[0],
                 "train/step": step,
                 "train/epoch": epoch,
@@ -1058,7 +1058,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
 
         # we do not reduce across ranks here. DDP loss uses a _ddp_mean that
         # gives the an approximate loss -> loss_rank_i / average_num_samples_across_ranks
-        log_dict["val/loss"] = self.total_loss_metrics.metric
+        log_dict["val/loss_mae"] = self.total_loss_metrics.metric
         log_dict["val/atoms_per_second"] = total_atoms / total_runtime
         log_dict["val/epoch"] = self.eval_progress.num_epochs_completed
 
