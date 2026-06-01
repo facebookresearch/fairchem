@@ -246,6 +246,11 @@ def collect_free_energy_results(
     rows are left in the partial state so the next run can finish them.
     Job-level failures are logged but do not abort collection.
 
+    The final parquets contain only the rows that passed
+    :func:`filter_structure_indices` (i.e. the same subset that was scheduled
+    for free-energy computation), with a fresh ``RangeIndex``. Rows that were
+    filtered out at submission time are not carried through to the output.
+
     Args:
         jobs: List of completed submitit Job objects (used only to surface
             any job-level failures in the logs)
@@ -325,10 +330,12 @@ def collect_free_energy_results(
                         r[key]
                     )
 
+        filtered_df = structures_df.iloc[expected_indices].reset_index(drop=True)
+
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        structures_df.to_parquet(output_file, engine="pyarrow", compression="zstd")
+        filtered_df.to_parquet(output_file, engine="pyarrow", compression="zstd")
         logger.info(
-            f"Wrote free energy results for {len(structures_df)} structures "
+            f"Wrote free energy results for {len(filtered_df)} structures "
             f"to {output_file}"
         )
 
