@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import ase.units
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -42,7 +43,14 @@ class TrajectoryFrame:
     energy: float | None = None
     forces: np.ndarray | None = None  # (N, 3)
     stress: np.ndarray | None = None  # (6,) Voigt notation
+    temperature: float | None = None  # Kelvin
+    kinetic_energy: float | None = None  # eV
+    pressure: float | None = None  # bar
     sid: str | int | None = None
+    tags: np.ndarray | None = None  # (N,) int
+    fixed: np.ndarray | None = None  # (N,) bool
+    charge: int | None = None
+    spin: int | None = None
 
     def to_dict(self) -> dict:
         """
@@ -67,6 +75,20 @@ class TrajectoryFrame:
             d["forces"] = self.forces.tolist()
         if self.stress is not None:
             d["stress"] = self.stress.tolist()
+        if self.temperature is not None:
+            d["temperature"] = self.temperature
+        if self.kinetic_energy is not None:
+            d["kinetic_energy"] = self.kinetic_energy
+        if self.pressure is not None:
+            d["pressure"] = self.pressure
+        if self.tags is not None:
+            d["tags"] = self.tags.tolist()
+        if self.fixed is not None:
+            d["fixed"] = self.fixed.tolist()
+        if self.charge is not None:
+            d["charge"] = self.charge
+        if self.spin is not None:
+            d["spin"] = self.spin
         return d
 
     @classmethod
@@ -104,6 +126,41 @@ class TrajectoryFrame:
         except (PropertyNotImplementedError, RuntimeError):
             velocities = None
 
+        try:
+            temperature = atoms.get_temperature()
+        except Exception:
+            temperature = None
+
+        try:
+            kinetic_energy = atoms.get_kinetic_energy()
+        except Exception:
+            kinetic_energy = None
+
+        # Pressure from stress: P = -trace(stress)/3, converted to bar
+        if stress is not None:
+            pressure = -stress[:3].mean() / ase.units.bar
+        else:
+            pressure = None
+
+        # Tags: only store if any are nonzero (all zeros is ASE default)
+        raw_tags = atoms.get_tags()
+        tags = raw_tags.copy() if np.any(raw_tags) else None
+
+        # Fixed atoms: build bool mask from FixAtoms constraints
+        fixed = None
+        if atoms.constraints:
+            from ase.constraints import FixAtoms
+
+            mask = np.zeros(len(atoms), dtype=bool)
+            for constraint in atoms.constraints:
+                if isinstance(constraint, FixAtoms):
+                    mask[constraint.index] = True
+            if np.any(mask):
+                fixed = mask
+
+        charge = atoms.info.get("charge", None)
+        spin = atoms.info.get("spin", None)
+
         return cls(
             step=step,
             time=time,
@@ -115,7 +172,14 @@ class TrajectoryFrame:
             energy=energy,
             forces=forces,
             stress=stress,
+            temperature=temperature,
+            kinetic_energy=kinetic_energy,
+            pressure=pressure,
             sid=atoms.info.get("sid"),
+            tags=tags,
+            fixed=fixed,
+            charge=charge,
+            spin=spin,
         )
 
 

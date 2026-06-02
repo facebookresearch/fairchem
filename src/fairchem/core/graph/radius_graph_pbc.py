@@ -14,6 +14,22 @@ import numpy as np
 import torch
 
 
+def is_mixed_pbc(data) -> bool:
+    """
+    Check if a batch has mixed PBC (some systems periodic, others not).
+
+    Returns True if the batch contains systems with different PBC settings
+    across any of the 3 dimensions, which is not supported by radius_graph_pbc.
+    """
+    if hasattr(data, "pbc") and torch.atleast_2d(data.pbc).shape[0] > 1:
+        sys_pbc = torch.atleast_2d(data.pbc)
+        for i in range(3):
+            col = sys_pbc[:, i]
+            if torch.any(col).item() and not torch.all(col).item():
+                return True
+    return False
+
+
 def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
     """
     Sum values within partitions defined by indices.
@@ -183,6 +199,15 @@ def radius_graph_pbc(
 ):
     pbc = canonical_pbc(data, pbc)
 
+    # v1 uses a single global PBC for the whole batch and cannot produce
+    # correct graphs for batches where some systems are periodic and others
+    # are not.  Use radius_graph_pbc_v2 for mixed-PBC batches.
+    if is_mixed_pbc(data):
+        raise RuntimeError(
+            "radius_graph_pbc does not support batches with mixed PBC "
+            "(some systems periodic, others not). Use radius_graph_pbc_v2 instead."
+        )
+
     device = data.pos.device
     batch_size = len(data.natoms)
 
@@ -327,41 +352,48 @@ def radius_graph_pbc(
     return edge_index, unit_cell, num_neighbors_image
 
 
-def canonical_pbc(data, pbc: torch.Tensor | None):
+def canonical_pbc(data, pbc: torch.Tensor | None) -> list[bool]:
+    """
+    Resolve and normalize the periodic boundary condition (PBC) flags for a batch.
+
+    This helper produces a canonical 1D PBC specification (a list of three booleans,
+    one per lattice direction) that downstream graph construction code can rely on.
+
+    Behavior:
+      - If ``pbc`` is None, derive it from ``data.pbc``: a dimension is considered
+        periodic only if at least one system in the batch is periodic along that
+        dimension. ``data.pbc`` is also normalized to be at least 2D in-place.
+      - If ``pbc`` has more than one dimension, collapse it across systems with a
+        logical OR so that a dimension is periodic if any system requests it.
+
+    Args:
+        data: An AtomicData-like object that must expose a ``pbc`` attribute
+            describing per-system PBC flags.
+        pbc: Optional explicit PBC override. May be a 1D tensor of length 3 or a
+            2D tensor of shape (num_systems, 3). If None, the value is taken from
+            ``data.pbc``.
+
+    Returns:
+        A length-3 Python list of booleans ``[pbc_x, pbc_y, pbc_z]`` indicating
+        which lattice directions are periodic for the batch.
+    """
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
-    if pbc is None and hasattr(data, "pbc"):
+
+    if pbc is None:
         data.pbc = torch.atleast_2d(data.pbc)
         pbc = torch.BoolTensor([True, True, True])
-        for i in range(3):
-            if not torch.any(data.pbc[:, i]).item():
-                pbc[i] = False
-            elif torch.all(data.pbc[:, i]).item():
-                pbc[i] = True
-            else:
-                raise RuntimeError(
-                    "Different structures in the batch have different PBC configurations. This is not currently supported."
-                )
-    # elif pbc is not None and hasattr(data, "pbc"):
-    #     # This can be on a different device, deffering to a new PR to fix this TODO
-    #     if (pbc != data.pbc).all():
-    #         logging.warning("PBC provided to radius_graph_pbc differs from data.pbc")
-    elif pbc is None:
-        pbc = torch.BoolTensor([True, True, True])
+        pbc[~torch.any(data.pbc, dim=0)] = False
 
-    # We only supports only the same pbc for all systems in the batch
-    # so we must check that all pbc are the same if we are given a list of them
-    # if this is ok, we just take the first pbc in the batch to represent
+    # If a per-system PBC tensor was passed in, collapse it via logical OR
+    # so a dimension is periodic when any system requests it.
     if pbc.ndim > 1:
-        # check all pbc are the same along each pbc dimension
-        if not torch.all(pbc == pbc[0], dim=0).all():
-            raise ValueError(
-                "All pbc values must be the same for all systems in the batch"
-            )
-        pbc = pbc[0]
+        pbc = pbc.any(dim=0)
+
     assert isinstance(pbc, torch.Tensor)
     assert pbc.ndim == 1
     assert pbc.shape[0] == 3
-    return list(pbc)
+
+    return pbc.tolist()
 
 
 def box_size_warning(cell, pos, pbc):
@@ -414,25 +446,33 @@ def radius_graph_pbc_v2(
     cross_a2a3 = torch.cross(data.cell[:, 1], data.cell[:, 2], dim=-1)
     cell_vol = torch.sum(data.cell[:, 0] * cross_a2a3, dim=-1, keepdim=True)
 
-    if pbc[0]:
-        inv_min_dist_a1 = torch.norm(cross_a2a3 / cell_vol, p=2, dim=-1)
-        rep_a1 = torch.ceil(radius * inv_min_dist_a1)
-    else:
-        rep_a1 = data.cell.new_zeros(batch_size)
+    # Use per-system PBC from data.pbc so mixed-PBC batches are handled correctly.
+    # Each system's rep (number of periodic image repetitions) is computed from
+    # its own cell and masked to zero for non-periodic dimensions.
+    sys_pbc = torch.atleast_2d(data.pbc)  # (batch_size, 3)
 
-    if pbc[1]:
-        cross_a3a1 = torch.cross(data.cell[:, 2], data.cell[:, 0], dim=-1)
-        inv_min_dist_a2 = torch.norm(cross_a3a1 / cell_vol, p=2, dim=-1)
-        rep_a2 = torch.ceil(radius * inv_min_dist_a2)
-    else:
-        rep_a2 = data.cell.new_zeros(batch_size)
+    inv_min_dist_a1 = torch.norm(cross_a2a3 / cell_vol, p=2, dim=-1)
+    rep_a1 = torch.where(
+        sys_pbc[:, 0],
+        torch.ceil(radius * inv_min_dist_a1),
+        data.cell.new_zeros(batch_size),
+    )
 
-    if pbc[2]:
-        cross_a1a2 = torch.cross(data.cell[:, 0], data.cell[:, 1], dim=-1)
-        inv_min_dist_a3 = torch.norm(cross_a1a2 / cell_vol, p=2, dim=-1)
-        rep_a3 = torch.ceil(radius * inv_min_dist_a3)
-    else:
-        rep_a3 = data.cell.new_zeros(batch_size)
+    cross_a3a1 = torch.cross(data.cell[:, 2], data.cell[:, 0], dim=-1)
+    inv_min_dist_a2 = torch.norm(cross_a3a1 / cell_vol, p=2, dim=-1)
+    rep_a2 = torch.where(
+        sys_pbc[:, 1],
+        torch.ceil(radius * inv_min_dist_a2),
+        data.cell.new_zeros(batch_size),
+    )
+
+    cross_a1a2 = torch.cross(data.cell[:, 0], data.cell[:, 1], dim=-1)
+    inv_min_dist_a3 = torch.norm(cross_a1a2 / cell_vol, p=2, dim=-1)
+    rep_a3 = torch.where(
+        sys_pbc[:, 2],
+        torch.ceil(radius * inv_min_dist_a3),
+        data.cell.new_zeros(batch_size),
+    )
 
     rep = torch.cat([rep_a1.view(-1, 1), rep_a2.view(-1, 1), rep_a3.view(-1, 1)], dim=1)
     cells_per_image = (

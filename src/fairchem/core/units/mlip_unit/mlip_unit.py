@@ -551,6 +551,8 @@ class MLIPTrainEvalUnit(
             else distutils.get_world_size()
         )
 
+        self.last_loss = None
+        self.last_grad_norm = None
         self.num_params = sum(p.numel() for p in model.parameters())
         if self.logger:
             self.logger.log_summary(
@@ -746,6 +748,7 @@ class MLIPTrainEvalUnit(
 
                 if self.logger:
                     self.logger.log({"train/grad_norm": grad_norm}, step=step)
+                self.last_grad_norm = float(grad_norm)
             self.optimizer.step()
             if self.ema_model is not None:
                 self.ema_model.update_parameters(self.model)

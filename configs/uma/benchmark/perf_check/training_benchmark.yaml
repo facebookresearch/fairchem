@@ -1,0 +1,30 @@
+# Benchmark training fidelity and throughput: fp32 baseline vs candidate
+#
+# Fake datasets are auto-generated and cached on first run.
+#
+# Usage:
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml
+#
+# Override settings from the command line:
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+#     runner.bf16=True
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+#     runner.device=cpu
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+#     runner.throughput_steps=20
+
+defaults:
+  - job: local
+  - _self_
+
+job:
+  device_type: CPU
+
+runner:
+  _target_: fairchem.core.components.benchmark.training.TrainingBenchmarkRunner
+  training_config: configs/uma/benchmark/perf_check/training_inner.yaml
+  device: "cuda"
+  bf16: False
+  throughput_steps: 50
+  seed: 42
+  candidate_overrides: null
