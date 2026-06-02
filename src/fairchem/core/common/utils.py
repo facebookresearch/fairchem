@@ -51,6 +51,29 @@ DEFAULT_ENV_VARS = {
 }
 
 
+def recursive_dict_merge(*dicts: dict) -> dict:
+    """Recursively merge dictionaries; later values override earlier ones.
+
+    Unlike ``dict.update`` (which is shallow), nested dict values are merged
+    key-by-key so callers can pass partial overrides without losing sibling
+    keys in inner dicts.
+    """
+    result: dict = {}
+    for d in dicts:
+        if d is None:
+            continue
+        for key, value in d.items():
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
+                result[key] = recursive_dict_merge(result[key], value)
+            else:
+                result[key] = value
+    return result
+
+
 # copied from https://stackoverflow.com/questions/33490870/parsing-yaml-in-python-detect-duplicated-keys
 # prevents loading YAMLS where keys have been overwritten
 class UniqueKeyLoader(yaml.SafeLoader):

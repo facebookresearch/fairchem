@@ -12,7 +12,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, ListConfig
@@ -63,12 +62,7 @@ from fairchem.core.models.uma.outputs import (
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.units.mlip_unit.api.inference import (
-    CHARGE_RANGE,
-    DEFAULT_CHARGE,
-    DEFAULT_SPIN,
-    DEFAULT_SPIN_OMOL,
-    SPIN_RANGE,
-    UMATask,
+    validate_uma_atoms_data,
 )
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 
@@ -613,9 +607,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
             # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
             # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
@@ -967,56 +958,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         UMA-specific validation: handle charge/spin for OMOL task.
 
-        Sets default values for charge and spin in atoms.info and validates
-        they are within acceptable ranges.
+        Uses the shared validation logic from the api.inference module.
         """
-        # Set charge defaults
-        if "charge" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                logging.warning(
-                    "task_name='omol' detected, but charge is not set in atoms.info. "
-                    "Defaulting to charge=0. Ensure charge is an integer representing "
-                    "the total charge on the system and is within the range -100 to 100."
-                )
-            atoms.info["charge"] = DEFAULT_CHARGE
-
-        # Set spin defaults (OMOL uses spin=1, others use spin=0)
-        if "spin" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                atoms.info["spin"] = DEFAULT_SPIN_OMOL
-                logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in "
-                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
-                    "representing the spin multiplicity from 0 to 100."
-                )
-            else:
-                atoms.info["spin"] = DEFAULT_SPIN
-
-        # Validate charge range
-        charge = atoms.info["charge"]
-        if not isinstance(charge, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for charge: {type(charge)}. "
-                "Charge must be an integer representing the total charge on the system."
-            )
-        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for charge: {charge}. "
-                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
-            )
-
-        # Validate spin range
-        spin = atoms.info["spin"]
-        if not isinstance(spin, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for spin: {type(spin)}. "
-                "Spin must be an integer representing the spin multiplicity."
-            )
-        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for spin: {spin}. "
-                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
-            )
+        validate_uma_atoms_data(atoms, task_name)
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):

@@ -15,15 +15,15 @@ import random
 import sys
 from collections import defaultdict
 from contextlib import nullcontext
-from functools import wraps
-from typing import TYPE_CHECKING, Protocol
+from functools import cached_property, wraps
+from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import hydra
 import numpy as np
 import ray
 import torch
 import torch.distributed as dist
-from ray import remote
+from ray import remote, serve
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
@@ -52,6 +52,7 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from ase import Atoms
+    from ray.serve.handle import DeploymentHandle
 
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
@@ -785,21 +786,101 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     This provides a clean interface compatible with MLIPPredictUnitProtocol
     while leveraging Ray Serve's batching capabilities under the hood.
+
+    Works with both ``BatchPredictServer`` (single model) and
+    ``MultiplexedBatchPredictServer`` (on-demand model loading). For
+    multiplexed deployments, pass ``multiplexed_model_id`` to ``from_deployment_connection_info``
+    which binds the Ray Serve ``multiplexed_model_id`` to the handle so
+    that all requests are transparently routed to the correct model.
+
+    Can be constructed directly with a server handle, or via
+    ``from_deployment_connection_info`` to connect to an already-running deployment.
     """
+
+    _handle_cache: ClassVar[dict[str, DeploymentHandle]] = {}
 
     def __init__(
         self,
-        server_handle,
-        predict_unit: MLIPPredictUnit,
+        server_handle: DeploymentHandle,
+        multiplexed_model_id: str | None = None,
     ):
         """
         Args:
-            server_handle: Ray Serve deployment handle for BatchPredictServer
-            predict_unit: Local MLIPPredictUnit used for input validation.
-                Validation must run locally because it mutates atoms.info.
+            server_handle: Ray Serve deployment handle for a
+                ``BatchPredictServer`` or ``MultiplexedBatchPredictServer``.
+            multiplexed_model_id: Optional model identifier for multiplexed
+                deployments in the format
+                ``"checkpoint_name_or_path:settings"``. When provided, the
+                handle is configured with Ray Serve's
+                ``multiplexed_model_id`` so that all calls are routed to
+                the correct model on the server.
         """
+        if multiplexed_model_id is not None:
+            if not server_handle.is_multiplexed.remote().result():
+                raise ValueError(
+                    f"multiplexed_model_id={multiplexed_model_id!r} was "
+                    "provided but the deployment is not a multiplexed "
+                    "server. Use MultiplexedBatchPredictServer or remove "
+                    "the multiplexed_model_id argument."
+                )
+            server_handle = server_handle.options(
+                multiplexed_model_id=multiplexed_model_id
+            )
         self.server_handle = server_handle
-        self._predict_unit = predict_unit
+        self._multiplexed_model_id = multiplexed_model_id
+
+    @property
+    def multiplexed_model_id(self) -> str | None:
+        """
+        The multiplexed model ID bound to this unit's server handle.
+
+        Read-only — changing this after construction would have no effect
+        on the already-configured handle.
+        """
+        return self._multiplexed_model_id
+
+    @classmethod
+    def from_deployment_connection_info(
+        cls,
+        deployment_name: str = "fairchem-inference",
+        ray_address: str | None = None,
+        namespace: str | None = None,
+        multiplexed_model_id: str | None = None,
+    ) -> BatchServerPredictUnit:
+        """
+        Connect to an already-running server by deployment name.
+
+        Args:
+            deployment_name: Name of the Ray Serve application.
+            ray_address: Ray client address (e.g. ``ray://host:10001``).
+                Falls back to ``RAY_ADDRESS`` env var. If *None* and env var
+                is unset, assumes Ray is already initialised locally.
+            namespace: Ray namespace. Falls back to
+                ``RAY_NAMESPACE_SERVE_FAIRCHEM`` env var.
+            multiplexed_model_id: Optional model identifier for multiplexed
+                deployments in the format
+                ``"checkpoint_name_or_path:settings"``.
+
+        Returns:
+            A ``BatchServerPredictUnit`` connected to the remote deployment.
+        """
+        if ray_address is None:
+            ray_address = os.environ.get("RAY_ADDRESS")
+        if namespace is None:
+            namespace = os.environ.get("RAY_NAMESPACE_SERVE_FAIRCHEM")
+
+        cache_key = f"{ray_address}|{namespace}|{deployment_name}"
+        if cache_key not in cls._handle_cache:
+            if ray_address and not ray.is_initialized():
+                ray.init(ray_address, namespace=namespace)
+
+            handle = serve.get_app_handle(deployment_name)
+            cls._handle_cache[cache_key] = handle
+
+        return cls(
+            cls._handle_cache[cache_key],
+            multiplexed_model_id=multiplexed_model_id,
+        )
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -810,33 +891,43 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.predict.remote(
-            data, undo_element_references
-        ).result()
+        result = self.server_handle.remote(data, undo_element_references).result()
         return result
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
 
-        Runs locally (not via Ray Serve) because validation mutates atoms.info.
+        Delegates to the server's predict unit so that validation is
+        model-specific rather than hardcoded.  The server runs
+        ``predict_unit.validate_atoms_data`` on a stub ``Atoms`` and
+        returns the mutated ``atoms.info`` dict which is applied locally.
         """
-        self._predict_unit.validate_atoms_data(atoms, task_name)
+        updated_info = self.server_handle.validate_atoms_data.remote(
+            dict(atoms.info), task_name
+        ).result()
+        atoms.info.update(updated_info)
 
-    @property
+    @cached_property
     def dataset_to_tasks(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
             "dataset_to_tasks"
         ).result()
 
-    @property
+    @cached_property
     def atom_refs(self) -> dict | None:
         return self.server_handle.get_predict_unit_attribute.remote(
             "atom_refs"
         ).result()
 
-    @property
+    @cached_property
     def inference_settings(self) -> InferenceSettings:
         return self.server_handle.get_predict_unit_attribute.remote(
             "inference_settings"
+        ).result()
+
+    @cached_property
+    def form_elem_refs(self) -> dict:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "form_elem_refs"
         ).result()
