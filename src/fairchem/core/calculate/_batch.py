@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 import ray
 from ray.util import ActorPool
 
-from fairchem.core.units.mlip_unit.batch_server import (
+from fairchem.core.calculate._batch_server import (
     AutobatchConfig,
     AutobatchResult,
     probe_optimal_batch_size,

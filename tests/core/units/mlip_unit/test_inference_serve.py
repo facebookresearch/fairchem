@@ -30,14 +30,14 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.launchers.cluster.ray_cluster import find_free_port
-from fairchem.core.units.mlip_unit.batch_server import (
+from fairchem.core.calculate._batch_server import (
     get_ray_connection_info,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
     wait_for_serve_ready,
 )
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
 ATOL = 5e-4
