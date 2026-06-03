@@ -14,6 +14,9 @@ from functools import cached_property
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Literal, Protocol
 
+import ray
+from ray.util import ActorPool
+
 from fairchem.core.units.mlip_unit.batch_server import (
     AutobatchConfig,
     AutobatchResult,
@@ -23,22 +26,10 @@ from fairchem.core.units.mlip_unit.batch_server import (
 from fairchem.core.units.mlip_unit.predict import (
     BatchServerPredictUnit,
     MLIPPredictUnit,
-    MLIPWorkerPredictUnit,
 )
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
-
-
-__all__ = [
-    "InferenceBatcher",
-    "AutobatchConfig",
-    "AutobatchResult",
-    "probe_optimal_batch_size",
-    "BatchServerPredictUnit",
-    "MLIPPredictUnit",
-    "MLIPWorkerPredictUnit",
-]
 
 
 class ExecutorProtocol(Protocol):
@@ -69,8 +60,6 @@ class RayActorPoolExecutor:
             ray_actor_options: Options to pass to Ray actor creation
                 (e.g., {"num_cpus": 1, "num_gpus": 0}).
         """
-        import ray
-        from ray.util import ActorPool
 
         if ray_actor_options is None:
             ray_actor_options = {}
