@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
+DEFAULT_EXECUTOR_WORKER_CAP = 16
+
+
 class ExecutorProtocol(Protocol):
     def submit(self, fn, *args, **kwargs): ...
     def map(self, fn, *iterables, **kwargs): ...
@@ -167,7 +170,9 @@ class InferenceBatcher:
             concurrency_backend in ("threads", "processes")
             and "max_workers" not in concurrency_backend_options
         ):
-            concurrency_backend_options["max_workers"] = min(cpu_count(), 16)
+            concurrency_backend_options["max_workers"] = min(
+                cpu_count(), DEFAULT_EXECUTOR_WORKER_CAP
+            )
 
         self.executor: ExecutorProtocol = _get_concurrency_backend(
             concurrency_backend, concurrency_backend_options
