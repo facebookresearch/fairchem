@@ -131,7 +131,17 @@ def _sparse_index_exchange(
     Step 2: Exchange actual atom indices with variable split sizes.
 
     Sends only the exact number of indices needed (no padding),
-    keeping communication volume minimal.
+    keeping communication volume minimal: O(sum of needed counts).
+
+    We considered a single-allgather alternative that packs counts +
+    padded indices into one buffer and calls all_gather once, but it
+    sends O(P * natoms_per_rank) regardless of sparsity. Benchmarks
+    on H200 at GP=64 across 8 nodes (256K atoms, UMA-S) showed:
+      2x A2A (this fn):   0.593 ns/day  (+22.8% vs baseline AG-GP)
+      1x all-gather:      0.584 ns/day  (+20.9% vs baseline AG-GP)
+    The 2x A2A is ~1.5% faster because the variable-split second
+    A2A transfers less data when each rank only needs atoms from
+    nearby neighbors, not all P ranks.
 
     Args:
         needed_atoms: Global indices of atoms this rank needs,
@@ -203,103 +213,22 @@ def _sparse_index_exchange(
     return send_counts, send_indices_global
 
 
-def _allgather_index_exchange(
-    needed_atoms: torch.Tensor,
-    recv_counts: torch.Tensor,
-    rank: int,
-    world_size: int,
-    device: torch.device,
-    natoms: int,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
-    """
-    Single all-gather variant of index exchange.
-
-    Packs [recv_counts (P ints), needed_atoms (padded to natoms)] into
-    one buffer and performs a single all_gather call.  Each rank then
-    extracts its send_counts and send_indices from the gathered data.
-
-    Communication volume: O(P * (P + natoms)).
-    Advantage: one collective instead of two, potentially better NCCL
-    utilization for small messages.
-    """
-    if not gp_utils.initialized():
-        return (
-            torch.zeros(world_size, dtype=torch.long, device=device),
-            None,
-        )
-
-    gp_group = gp_utils.get_gp_group()
-
-    # Pack: [recv_counts (P), needed_atoms padded to natoms]
-    buf_size = world_size + natoms
-    send_buf = torch.zeros(buf_size, dtype=torch.long, device=device)
-    send_buf[:world_size] = recv_counts
-    n_needed = needed_atoms.numel()
-    if n_needed > 0:
-        send_buf[world_size : world_size + n_needed] = needed_atoms
-
-    # Single all-gather
-    recv_bufs = [
-        torch.empty(buf_size, dtype=torch.long, device=device)
-        for _ in range(world_size)
-    ]
-    dist.all_gather(recv_bufs, send_buf.contiguous(), group=gp_group)
-
-    # Unpack count matrix: count_matrix[r][s] = how many atoms rank r
-    # needs from rank s.
-    count_matrix = torch.stack([buf[:world_size] for buf in recv_bufs])
-    # send_counts[r] = count_matrix[r][rank] = atoms rank r needs from me
-    send_counts = count_matrix[:, rank].contiguous()
-
-    # Extract send_indices: for each rank r, find atoms they need from me
-    send_indices_parts = []
-    for r in range(world_size):
-        if r == rank:
-            continue
-        length = count_matrix[r, rank].item()
-        if length > 0:
-            offset = count_matrix[r, :rank].sum().item()
-            send_indices_parts.append(
-                recv_bufs[r][world_size + offset : world_size + offset + length]
-            )
-
-    if send_indices_parts:
-        send_indices_global = torch.cat(send_indices_parts)
-    else:
-        send_indices_global = torch.empty(0, dtype=torch.long, device=device)
-
-    return send_counts, send_indices_global
-
-
 def _resolve_send_metadata(
     send_info: dict | None,
-    index_exchange_method: str,
     needed_atoms: torch.Tensor,
     recv_counts: torch.Tensor,
     rank: int,
     world_size: int,
     device: torch.device,
-    total_atoms: int,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """
     Resolve send_counts and send_indices_global.
 
     Uses pre-computed send_info when available; otherwise runs
-    the configured index exchange collective.
+    the sparse index exchange collective.
     """
     if send_info is not None:
         return send_info["send_counts"], send_info["send_indices_global"]
-
-    if index_exchange_method == "allgather":
-        with record_function("a2a_allgather_index_exchange"):
-            return _allgather_index_exchange(
-                needed_atoms=needed_atoms,
-                recv_counts=recv_counts,
-                rank=rank,
-                world_size=world_size,
-                device=device,
-                natoms=total_atoms,
-            )
 
     with record_function("a2a_sparse_index_exchange"):
         return _sparse_index_exchange(
@@ -411,7 +340,6 @@ def build_gp_context(
     world_size: int,
     send_info: dict | None = None,
     node_partition: torch.Tensor | None = None,
-    index_exchange_method: str = "a2a",
 ) -> GPContext:
     """
     Build the GP context from edge connectivity and atom assignments.
@@ -425,8 +353,6 @@ def build_gp_context(
         world_size: GP world size.
         send_info: Pre-computed send metadata (skips index exchange).
         node_partition: Pre-computed local atom indices.
-        index_exchange_method: "a2a" (2x all-to-all) or "allgather"
-            (1x all-gather).
 
     Returns:
         GPContext with all communication metadata.
@@ -465,13 +391,11 @@ def build_gp_context(
     # Resolve send metadata (pre-computed or via collective).
     send_counts, send_indices_global = _resolve_send_metadata(
         send_info,
-        index_exchange_method,
         needed_atoms,
         recv_counts,
         rank,
         world_size,
         device,
-        total_atoms,
     )
 
     # Build global-to-local index mapping.

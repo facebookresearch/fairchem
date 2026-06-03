@@ -325,7 +325,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         execution_mode: str = "general",
         use_all_to_all_gp: bool = False,
         gp_partition_strategy: str = "index_split",
-        gp_index_exchange_method: str = "a2a",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -379,7 +378,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.edge_chunk_size = edge_chunk_size
         self.use_all_to_all_gp = use_all_to_all_gp
         self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
-        self.gp_index_exchange_method = gp_index_exchange_method
 
         # Allgather+spatial is not supported because allgather concatenates
         # per-rank tensors in rank order, which only matches global atom order
@@ -958,7 +956,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         world_size=gp_utils.get_gp_world_size(),
                         send_info=graph_dict.get("send_info"),
                         node_partition=node_partition,
-                        index_exchange_method=self.gp_index_exchange_method,
                     )
                 data_dict["gp_ctx"] = gp_ctx
                 # Store rank_assignments so output heads can reorder
