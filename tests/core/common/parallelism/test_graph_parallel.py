@@ -38,6 +38,89 @@ pytestmark = pytest.mark.serial
 # =========================================================================
 
 
+class TestPartitionAtomsIndexSplit:
+    """
+    Tests for partition_atoms_index_split.
+    """
+
+    def test_single_rank(self):
+        result = partition_atoms_index_split(5, 1, torch.device("cpu"))
+        assert result.shape == (5,)
+        assert (result == 0).all()
+
+    def test_even_split(self):
+        result = partition_atoms_index_split(6, 3, torch.device("cpu"))
+        assert result.shape == (6,)
+        # Atoms 0,1 -> rank 0; atoms 2,3 -> rank 1; atoms 4,5 -> rank 2
+        assert result[0] == 0
+        assert result[1] == 0
+        assert result[2] == 1
+        assert result[3] == 1
+        assert result[4] == 2
+        assert result[5] == 2
+
+    def test_uneven_split(self):
+        result = partition_atoms_index_split(5, 2, torch.device("cpu"))
+        assert result.shape == (5,)
+        # 5 atoms, 2 ranks: [0,1,2] -> rank 0, [3,4] -> rank 1
+        assert (result[:3] == 0).all()
+        assert (result[3:] == 1).all()
+
+    def test_more_ranks_than_atoms(self):
+        result = partition_atoms_index_split(2, 5, torch.device("cpu"))
+        assert result.shape == (2,)
+        # Each atom gets its own rank
+        for i in range(2):
+            assert result[i].item() >= 0
+            assert result[i].item() < 5
+
+
+class TestPartitionAtomsSpatial:
+    """
+    Tests for partition_atoms_spatial.
+    """
+
+    def test_single_rank(self):
+        pos = torch.randn(10, 3)
+        result = partition_atoms_spatial(pos, 1)
+        assert result.shape == (10,)
+        assert (result == 0).all()
+
+    def test_balanced_output(self):
+        pos = torch.randn(100, 3)
+        result = partition_atoms_spatial(pos, 4)
+        assert result.shape == (100,)
+        # Check all ranks are assigned
+        for r in range(4):
+            count = (result == r).sum()
+            assert count > 0, f"Rank {r} has no atoms"
+        # Check balance: each should have ~25 atoms (±1)
+        for r in range(4):
+            count = (result == r).sum().item()
+            assert 24 <= count <= 26, f"Rank {r} has {count} atoms, expected ~25"
+
+    def test_spatially_separated_clusters(self):
+        """
+        Atoms in distinct spatial clusters should be assigned to different ranks.
+        """
+        pos = torch.cat(
+            [
+                torch.randn(20, 3) + torch.tensor([0.0, 0.0, 0.0]),
+                torch.randn(20, 3) + torch.tensor([100.0, 0.0, 0.0]),
+            ]
+        )
+        result = partition_atoms_spatial(pos, 2)
+        # The two clusters should be mostly on different ranks
+        rank_cluster_0 = result[:20].mode()[0].item()
+        rank_cluster_1 = result[20:].mode()[0].item()
+        assert rank_cluster_0 != rank_cluster_1
+
+    def test_more_ranks_than_atoms(self):
+        pos = torch.randn(3, 3)
+        result = partition_atoms_spatial(pos, 5)
+        assert result.shape == (3,)
+
+
 class TestBuildGPContext:
     """
     Tests for build_gp_context (non-distributed, simulates single rank).
@@ -147,11 +230,6 @@ class TestBuildGPContext:
 
         assert ctx.local_edge_idx.numel() == 2
         assert ctx.remote_edge_idx.numel() == 0
-
-
-# =========================================================================
-# Distributed tests: A2A vs All-Gather correctness
-# =========================================================================
 
 
 def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
@@ -549,8 +627,146 @@ def test_a2a_spatial_partition():
 
 
 # =========================================================================
-# Distributed tests: compiled collect correctness
+# Distributed tests: send_info optimization correctness
 # =========================================================================
+
+
+def send_info_optimization_test(atomic_numbers, edge_index):
+    """
+    Verify that pre-computed send_info from filter_edges_by_node_partition
+    produces the same GPContext as the _sparse_index_exchange path.
+    """
+    from fairchem.core.graph.compute import filter_edges_by_node_partition
+
+    rank = gp_utils.get_gp_rank()
+    world_size = gp_utils.get_gp_world_size()
+    natoms = atomic_numbers.shape[0]
+
+    rank_assignments = partition_atoms_index_split(
+        natoms, world_size, torch.device("cpu")
+    )
+
+    # Get this rank's partition
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+
+    # Filter edges with send_info computation
+    neighbors = torch.tensor([edge_index.shape[1]])
+    edge_index_filtered, _, _, send_info = filter_edges_by_node_partition(
+        node_partition=node_partition,
+        edge_index=edge_index,
+        cell_offsets=torch.zeros(edge_index.shape[1], 3),
+        neighbors=neighbors,
+        num_atoms=natoms,
+        rank_assignments=rank_assignments,
+        rank=rank,
+        world_size=world_size,
+    )
+
+    # Build GPContext WITH send_info (skip _sparse_index_exchange)
+    ctx_with_send_info = build_gp_context(
+        edge_index_filtered,
+        rank_assignments,
+        rank,
+        world_size,
+        send_info=send_info,
+    )
+
+    # Build GPContext WITHOUT send_info (use _sparse_index_exchange)
+    ctx_without = build_gp_context(
+        edge_index_filtered,
+        rank_assignments,
+        rank,
+        world_size,
+    )
+
+    # Compare the two contexts
+    send_counts_match = torch.equal(
+        ctx_with_send_info.send_counts, ctx_without.send_counts
+    )
+    recv_counts_match = torch.equal(
+        ctx_with_send_info.recv_counts, ctx_without.recv_counts
+    )
+
+    # send_indices should select the same atoms (may differ in order
+    # within a rank's chunk, but counts must match)
+    si_a = ctx_with_send_info.send_indices
+    si_b = ctx_without.send_indices
+    if si_a is not None and si_b is not None:
+        send_indices_match = si_a.shape == si_b.shape and torch.equal(
+            si_a.sort()[0], si_b.sort()[0]
+        )
+    elif si_a is None and si_b is None:
+        send_indices_match = True
+    else:
+        send_indices_match = False
+
+    # Functional test: both contexts should produce identical
+    # all-to-all results
+    x = atomic_numbers[node_partition].unsqueeze(1).float()
+
+    x_recv_opt = all_to_all_collect(
+        x, ctx_with_send_info, ctx_with_send_info.send_indices
+    )
+    x_recv_ref = all_to_all_collect(x, ctx_without, ctx_without.send_indices)
+
+    functional_match = torch.allclose(x_recv_opt, x_recv_ref, atol=1e-6)
+
+    return {
+        "rank": rank,
+        "send_counts_match": send_counts_match,
+        "recv_counts_match": recv_counts_match,
+        "send_indices_match": send_indices_match,
+        "functional_match": functional_match,
+        "send_counts_opt": ctx_with_send_info.send_counts,
+        "send_counts_ref": ctx_without.send_counts,
+    }
+
+
+def test_send_info_matches_fused_exchange():
+    """
+    Verify that pre-computed send_info from filter_edges_by_node_partition
+    produces identical GPContext and all-to-all results as the
+    _sparse_index_exchange path.
+    """
+    num_atoms = 8
+    # Dense graph: all atoms connected
+    src = []
+    dst = []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+
+    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        send_info_optimization_test,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["send_counts_match"], (
+            f"Rank {result['rank']}: send_counts mismatch. "
+            f"opt={result['send_counts_opt']}, "
+            f"ref={result['send_counts_ref']}"
+        )
+        assert result[
+            "recv_counts_match"
+        ], f"Rank {result['rank']}: recv_counts mismatch"
+        assert result[
+            "send_indices_match"
+        ], f"Rank {result['rank']}: send_indices mismatch"
+        assert result["functional_match"], (
+            f"Rank {result['rank']}: functional mismatch — "
+            f"all-to-all produced different embeddings"
+        )
 
 
 def compiled_collect_test(

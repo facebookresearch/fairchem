@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import types
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -19,6 +20,15 @@ from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.parallelism.graph_parallel_a2a import (
+    GPContext,
+    build_gp_context,
+)
+from fairchem.core.common.parallelism.graph_partition import (
+    PartitionStrategy,
+    partition_atoms_index_split,
+    partition_atoms_spatial,
+)
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -93,12 +103,10 @@ class GradRegressConfig:
     hessian_vmap: bool = True
 
 
-def add_n_empty_edges(
-    graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0
-):
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
     graph_dict["edge_index"] = torch.cat(
         (
-            graph_dict["edge_index"].new_ones(2, edges_to_add) * node_offset,
+            graph_dict["edge_index"].new_zeros(2, edges_to_add),
             graph_dict["edge_index"],
         ),
         dim=1,
@@ -309,6 +317,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int = 1,
         execution_mode: str = "general",
+        use_all_to_all_gp: bool = False,
+        gp_partition_strategy: str = "index_split",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -360,6 +370,26 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+        self.use_all_to_all_gp = use_all_to_all_gp
+        self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
+
+        # Allgather+spatial is not supported because allgather concatenates
+        # per-rank tensors in rank order, which only matches global atom order
+        # for contiguous (index_split) partitions.  Spatial partitions are
+        # non-contiguous, so edge_index lookups into the allgathered tensor
+        # would reference wrong atoms.  Spatial partitioning is designed for
+        # A2A where only boundary atoms are exchanged.
+        if (
+            not self.use_all_to_all_gp
+            and self.gp_partition_strategy == PartitionStrategy.SPATIAL
+        ):
+            raise ValueError(
+                "Spatial partitioning is not supported with all-gather GP. "
+                "Allgather concatenates per-rank tensors in rank order, which "
+                "only matches global atom order for contiguous (index_split) "
+                "partitions. Use use_all_to_all_gp=True with spatial, or "
+                "gp_partition_strategy='index_split' with allgather."
+            )
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -582,18 +612,223 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
+    @torch.compiler.disable
+    def _compute_a2a_partition(
+        self,
+        pos: torch.Tensor,
+        total_atoms: int,
+        device: torch.device,
+        world_size: int,
+        rank: int,
+        strategy: PartitionStrategy,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute A2A rank assignments and node partition.
+
+        Separated from _generate_graph so that only the A2A-specific
+        partitioning is excluded from torch.compile.  The BL (all-gather)
+        path stays fully compilable.
+        """
+        with record_function("a2a_partition"):
+            if strategy == PartitionStrategy.SPATIAL:
+                rank_assignments = partition_atoms_spatial(pos, world_size)
+            else:
+                rank_assignments = partition_atoms_index_split(
+                    total_atoms, world_size, device
+                )
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+
+        return rank_assignments, node_partition
+
+    @torch.compiler.disable
+    def _compute_aabb_halo(
+        self,
+        pos: torch.Tensor,
+        node_partition: torch.Tensor,
+        pbc: torch.Tensor,
+        cell: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute AABB halo mask for graph generation filtering.
+
+        Builds an axis-aligned bounding box (AABB) around the local
+        partition's atoms, expanded by the interaction cutoff, then
+        identifies ALL atoms (including PBC images) that fall within
+        this box. Graph generation then operates on ~N_halo atoms
+        instead of N_total, significantly reducing cost at scale.
+
+        No NCCL communication — purely local computation.
+
+        Note: Only supports single-system inputs (not batched).
+        For multi-system batches, the caller should skip halo
+        filtering and fall back to full graph generation.
+
+        Returns:
+            Tuple of (halo_mask, shift_vecs) where:
+            - halo_mask: Boolean mask over all atoms in the AABB halo.
+            - shift_vecs: PBC shift vectors (n_shifts, 3).
+        """
+        device = pos.device
+        n_total = len(pos)
+
+        # --- Compute our AABB (expanded by cutoff) ---
+        local_pos = pos[node_partition]
+        lo = local_pos.min(dim=0)[0] - self.cutoff
+        hi = local_pos.max(dim=0)[0] + self.cutoff
+
+        cell_sq = cell.view(3, 3) if cell.dim() == 3 else cell
+        pbc_flat = pbc.view(3) if pbc.dim() == 2 else pbc
+
+        # Build shift vectors for periodic images (up to 27).
+        shift_components = []
+        for d in range(3):
+            if pbc_flat[d]:
+                shift_components.append(torch.tensor([-1, 0, 1], device=device))
+            else:
+                shift_components.append(torch.tensor([0], device=device))
+        grid = torch.cartesian_prod(*shift_components)
+        shift_vecs = grid.float() @ cell_sq
+
+        # --- Compute our halo mask (atoms we need) ---
+        halo_mask = torch.zeros(n_total, dtype=torch.bool, device=device)
+        for shift in shift_vecs:
+            shifted = pos + shift
+            in_box = ((shifted >= lo) & (shifted <= hi)).all(dim=-1)
+            halo_mask |= in_box
+
+        return halo_mask, shift_vecs
+
+    @torch.compiler.disable
+    def _compute_halo_graph(
+        self,
+        data_dict: dict,
+        node_partition: torch.Tensor,
+        rank_assignments: torch.Tensor,
+        pbc: torch.Tensor,
+        halo_mask: torch.Tensor,
+    ) -> dict | None:
+        """
+        Try to generate graph using AABB halo filtering.
+
+        Uses the pre-computed halo_mask from _compute_aabb_halo to
+        filter graph gen input from N_total to ~N_halo atoms.
+        Returns the graph_dict if the halo achieves significant
+        reduction, or None to fall back to full graph generation.
+
+        The edge_index in the returned graph_dict is remapped to
+        global coordinates for use by the backbone forward pass.
+        Additionally, halo-local metadata is stored so that
+        ``build_gp_context`` can work with O(N_halo)-sized tensors
+        instead of O(N_total).
+
+        Args:
+            data_dict: Full data dictionary with pos, cell, etc.
+            node_partition: Local atom indices (global coords).
+            rank_assignments: Rank assignment per atom (global).
+            pbc: Periodic boundary conditions.
+            halo_mask: Pre-computed boolean halo mask.
+
+        Returns:
+            graph_dict with edge_index in global coordinates and
+            halo metadata for build_gp_context,
+            or None if halo didn't help.
+        """
+        with record_function("a2a_halo_filter"):
+            pos = data_dict["pos"]
+            cell = data_dict["cell"]
+            n_total = len(pos)
+
+            n_halo = halo_mask.sum().item()
+
+            # Only use halo filtering if it reduces atoms enough.
+            if n_halo >= n_total * 0.95:
+                return None
+
+            halo_indices = halo_mask.nonzero(as_tuple=True)[0]
+
+            # Map global indices to halo-local indices
+            global_to_halo = torch.full(
+                (n_total,), -1, dtype=torch.long, device=pos.device
+            )
+            global_to_halo[halo_indices] = torch.arange(n_halo, device=pos.device)
+
+            # Create subset data for graph generation.
+            data_subset = types.SimpleNamespace()
+            data_subset.pos = pos[halo_indices]
+            data_subset.cell = cell
+            data_subset.natoms = torch.tensor([n_halo], device=pos.device)
+            data_subset.batch = torch.zeros(n_halo, dtype=torch.long, device=pos.device)
+            data_subset.pbc = pbc
+
+            # Remap partition and rank_assignments to halo-local
+            node_partition_local = global_to_halo[node_partition]
+            assert (node_partition_local >= 0).all(), (
+                "Local partition atoms not found in halo — "
+                "AABB expansion may be too small"
+            )
+            rank_assignments_local = rank_assignments[halo_indices]
+
+            graph_dict = generate_graph(
+                data_subset,
+                cutoff=self.cutoff,
+                max_neighbors=self.max_neighbors,
+                enforce_max_neighbors_strictly=(self.enforce_max_neighbors_strictly),
+                radius_pbc_version=self.radius_pbc_version,
+                pbc=pbc,
+                node_partition=node_partition_local,
+                rank_assignments=rank_assignments_local,
+                rank=gp_utils.get_gp_rank(),
+                world_size=gp_utils.get_gp_world_size(),
+            )
+
+            # Remap edge_index from halo-local to global for use
+            # by the backbone forward pass (source/target embedding
+            # lookups index into atomic_numbers_full).
+            graph_dict["edge_index"] = halo_indices[graph_dict["edge_index"]]
+
+            # Remap send_info indices from halo-local to global so
+            # build_gp_context can use them with global-coord
+            # rank_assignments and edge_index.
+            if "send_info" in graph_dict:
+                si = graph_dict["send_info"]
+                if si["send_indices_global"].numel() > 0:
+                    si["send_indices_global"] = halo_indices[si["send_indices_global"]]
+
+            return graph_dict
+
     def _generate_graph(self, data_dict):
-        data_dict["gp_node_offset"] = 0
         node_partition = None
+        rank_assignments = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
-            node_partition = torch.tensor_split(
-                torch.arange(
-                    len(atomic_numbers_full), device=atomic_numbers_full.device
-                ),
-                gp_utils.get_gp_world_size(),
-            )[gp_utils.get_gp_rank()]
+
+            if self.use_all_to_all_gp:
+                # All-to-all: compute rank_assignments FIRST, then derive
+                # node_partition from them.  This ensures the
+                # graph-generation partition and the GPContext partition
+                # are identical, avoiding index mismatches that cause
+                # OOB crashes.
+                natoms = len(atomic_numbers_full)
+                rank_assignments, node_partition = self._compute_a2a_partition(
+                    pos=data_dict["pos"],
+                    total_atoms=natoms,
+                    device=atomic_numbers_full.device,
+                    world_size=gp_utils.get_gp_world_size(),
+                    rank=gp_utils.get_gp_rank(),
+                    strategy=self.gp_partition_strategy,
+                )
+            else:
+                # All-gather: only supports contiguous (index_split)
+                # partitioning. __init__ blocks spatial+allgather.
+                node_partition = torch.tensor_split(
+                    torch.arange(
+                        len(atomic_numbers_full),
+                        device=atomic_numbers_full.device,
+                    ),
+                    gp_utils.get_gp_world_size(),
+                )[gp_utils.get_gp_rank()]
+
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -607,17 +842,60 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
-            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
-            graph_dict = generate_graph(
-                data_dict,
-                cutoff=self.cutoff,
-                max_neighbors=self.max_neighbors,
-                enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
-                radius_pbc_version=self.radius_pbc_version,
-                pbc=pbc,
-                node_partition=node_partition,
+            assert (
+                pbc.all() or (~pbc).all()
+            ), "We can only accept pbc that is all true or all false"
+
+            # AABB halo optimization for A2A:
+            # Compute AABB bounding box around local partition,
+            # expanded by cutoff, to filter graph gen input from
+            # N_total to ~N_halo atoms. Pure local computation,
+            # no NCCL needed.
+            # Note: AABB halo only supports single-system inputs.
+            # Multi-system batches skip halo and use full graph gen.
+            graph_dict = None
+            is_single_system = data_dict["cell"].dim() == 2 or (
+                data_dict["cell"].dim() == 3 and data_dict["cell"].shape[0] == 1
             )
+            if (
+                self.use_all_to_all_gp
+                and rank_assignments is not None
+                and is_single_system
+            ):
+                halo_mask, _ = self._compute_aabb_halo(
+                    data_dict["pos"],
+                    node_partition,
+                    pbc,
+                    data_dict["cell"],
+                )
+                graph_dict = self._compute_halo_graph(
+                    data_dict,
+                    node_partition,
+                    rank_assignments,
+                    pbc,
+                    halo_mask,
+                )
+
+            if graph_dict is None:
+                # Full graph gen (no halo filter, or halo didn't help)
+                graph_dict = generate_graph(
+                    data_dict,
+                    cutoff=self.cutoff,
+                    max_neighbors=self.max_neighbors,
+                    enforce_max_neighbors_strictly=(
+                        self.enforce_max_neighbors_strictly
+                    ),
+                    radius_pbc_version=self.radius_pbc_version,
+                    pbc=pbc,
+                    node_partition=node_partition,
+                    rank_assignments=(
+                        rank_assignments if self.use_all_to_all_gp else None
+                    ),
+                    rank=(gp_utils.get_gp_rank() if self.use_all_to_all_gp else None),
+                    world_size=(
+                        gp_utils.get_gp_world_size() if self.use_all_to_all_gp else None
+                    ),
+                )
         else:
             # this assume edge_index is provided
             assert (
@@ -661,10 +939,57 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 node_partition
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
-            data_dict["gp_node_offset"] = node_partition.min().item()
+
+            # Build GPContext for all-to-all communication
+            if self.use_all_to_all_gp:
+                with record_function("a2a_build_gp_context"):
+                    gp_ctx = build_gp_context(
+                        edge_index=graph_dict["edge_index"],
+                        rank_assignments=rank_assignments,
+                        rank=gp_utils.get_gp_rank(),
+                        world_size=gp_utils.get_gp_world_size(),
+                        send_info=graph_dict.get("send_info"),
+                        node_partition=node_partition,
+                    )
+                data_dict["gp_ctx"] = gp_ctx
+                # Store rank_assignments so output heads can reorder
+                # gathered forces/stress from partition-concatenated order
+                # back to global index order. Only needed for A2A where
+                # partitions are non-consecutive (spatial).
+                data_dict["gp_rank_assignments"] = rank_assignments
+                # A2A scatter_target comes from gp_ctx.edge_index_local[1]
+                # which is set dynamically in InteractionBlock.forward().
+                data_dict["scatter_target"] = None
+            else:
+                # Allgather: pre-compute local target indices for scatter
+                # operations. Maps global edge targets to 0-based local
+                # partition indices. Works for both contiguous (index_split)
+                # and non-contiguous (spatial) partitions.
+                total_atoms = len(data_dict["atomic_numbers_full"])
+                device = graph_dict["edge_index"].device
+                global_to_local = torch.zeros(
+                    total_atoms, dtype=torch.long, device=device
+                )
+                global_to_local[node_partition] = torch.arange(
+                    len(node_partition), device=device
+                )
+                data_dict["scatter_target"] = global_to_local[
+                    graph_dict["edge_index"][1]
+                ]
 
         if graph_dict["edge_index"].shape[1] == 0:
-            add_n_empty_edges(graph_dict, 1, self.cutoff, data_dict["gp_node_offset"])
+            add_n_empty_edges(graph_dict, 1, self.cutoff)
+            # Also update scatter_target for the dummy edge (target=0)
+            if (
+                "scatter_target" in data_dict
+                and data_dict["scatter_target"] is not None
+            ):
+                data_dict["scatter_target"] = torch.cat(
+                    [
+                        data_dict["scatter_target"].new_zeros(1),
+                        data_dict["scatter_target"],
+                    ]
+                )
 
         return graph_dict
 
@@ -740,6 +1065,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+        # Retrieve precomputed all-to-all context (needed for edge embedding
+        # and message passing layers)
+        gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
+        send_indices: torch.Tensor | None = None
+        if gp_ctx is not None:
+            send_indices = gp_ctx.send_indices
+
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
@@ -764,9 +1096,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_index"],
+                # scatter_target contains pre-computed local target indices
+                # for scattering edge messages to nodes. For A2A, use
+                # gp_ctx.edge_index_local[1] (already local). For allgather,
+                # use pre-computed global→local mapped targets.
+                gp_ctx.edge_index_local[1]
+                if gp_ctx is not None
+                else data_dict.get(
+                    "scatter_target", default=graph_dict["edge_index"][1]
+                ),
                 wigner_inv_envelope,
-                data_dict["gp_node_offset"],
             )
 
         ###############################################################
@@ -791,7 +1130,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
-                    node_offset=data_dict["gp_node_offset"],
+                    scatter_target=data_dict.get("scatter_target", default=None),
+                    gp_ctx=gp_ctx,
+                    send_indices=send_indices,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(
@@ -1134,6 +1475,18 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
+            # A2A spatial partitions are non-consecutive, so the
+            # gathered forces are in partition-concatenated order
+            # (NOT global index order). Reorder to match positions.
+            ra = data_dict.get("gp_rank_assignments", None)
+            if ra is not None:
+                ws = gp_utils.get_gp_world_size()
+                perm = torch.cat(
+                    [(ra == r).nonzero(as_tuple=True)[0] for r in range(ws)]
+                )
+                forces_ordered = torch.empty_like(forces)
+                forces_ordered[perm] = forces
+                forces = forces_ordered
 
         return {"forces": forces}
 
