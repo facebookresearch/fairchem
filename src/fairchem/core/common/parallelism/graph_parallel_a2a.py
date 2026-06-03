@@ -203,206 +203,172 @@ def _sparse_index_exchange(
     return send_counts, send_indices_global
 
 
-@torch.compiler.disable
-def build_gp_context(
-    edge_index: torch.Tensor,
-    rank_assignments: torch.Tensor,
+def _allgather_index_exchange(
+    needed_atoms: torch.Tensor,
+    recv_counts: torch.Tensor,
     rank: int,
     world_size: int,
-    send_info: dict | None = None,
-    node_partition: torch.Tensor | None = None,
-) -> GPContext:
+    device: torch.device,
+    natoms: int,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
     """
-    Build the GP context from edge connectivity and atom assignments.
+    Single all-gather variant of index exchange.
 
-    Determines which non-local atoms this rank needs (edge sources from
-    other ranks), exchanges atom indices via all-to-all, and computes
-    all communication metadata.
+    Packs [recv_counts (P ints), needed_atoms (padded to natoms)] into
+    one buffer and performs a single all_gather call.  Each rank then
+    extracts its send_counts and send_indices from the gathered data.
 
-    When send_info is provided (pre-computed during graph filtering in
-    filter_edges_by_node_partition), the NCCL index-exchange collective
-    is skipped entirely — send_counts and send_indices_global are taken
-    directly from send_info.
-
-    Args:
-        edge_index: Edge index filtered to edges whose targets are in
-            this rank's partition, shape (2, num_edges).
-            Row 0 = source, row 1 = target.
-        rank_assignments: Rank assignment for each atom,
-            shape (total_atoms,).
-        rank: This rank's GP rank.
-        world_size: GP world size.
-        send_info: Pre-computed send/recv metadata from graph filtering.
-            If provided, must contain:
-            - send_counts: Tensor of shape (world_size,) with count of
-              atoms to send to each rank.
-            - send_indices_global: Tensor of global atom indices to send,
-              sorted by destination rank.
-            When provided, _sparse_index_exchange is skipped.
-        node_partition: Pre-computed atom indices in this rank's
-            partition. If provided, avoids recomputing from
-            rank_assignments.
-
-    Returns:
-        GPContext with all metadata needed for all-to-all communication.
+    Communication volume: O(P * (P + natoms)).
+    Advantage: one collective instead of two, potentially better NCCL
+    utilization for small messages.
     """
-    total_atoms = rank_assignments.shape[0]
-    device = rank_assignments.device
-
-    # Atoms owned by this rank (reuse pre-computed if available)
-    if node_partition is None:
-        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
-    total_local_atoms = node_partition.shape[0]
-
-    # Find which non-local atoms this rank needs as edge sources.
-    # Since edge_index is already filtered to edges whose targets are
-    # in this rank's partition, every edge has a local target. We only
-    # need to find edges where the SOURCE is remote (not in our partition).
-    local_mask = rank_assignments == rank  # (total_atoms,) bool
-    src_is_remote = ~local_mask[edge_index[0]]
-
-    # Remote sources needed for local targets
-    # Use boolean mask + nonzero instead of .unique(sorted=True) on raw
-    # edge sources — O(N) scatter + scan vs O(E log E) sort.
-    needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
-    needed_mask[edge_index[0, src_is_remote]] = True
-    needed_mask &= ~local_mask  # exclude local atoms (safety)
-    needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
-
-    total_needed_atoms = needed_atoms.shape[0]
-    needed_from_ranks = rank_assignments[needed_atoms]
-
-    # Compute recv_counts: how many atoms we receive from each rank
-    if total_needed_atoms > 0:
-        recv_counts = torch.bincount(needed_from_ranks, minlength=world_size).to(
-            dtype=torch.long, device=device
+    if not gp_utils.initialized():
+        return (
+            torch.zeros(world_size, dtype=torch.long, device=device),
+            None,
         )
+
+    gp_group = gp_utils.get_gp_group()
+
+    # Pack: [recv_counts (P), needed_atoms padded to natoms]
+    buf_size = world_size + natoms
+    send_buf = torch.zeros(buf_size, dtype=torch.long, device=device)
+    send_buf[:world_size] = recv_counts
+    n_needed = needed_atoms.numel()
+    if n_needed > 0:
+        send_buf[world_size : world_size + n_needed] = needed_atoms
+
+    # Single all-gather
+    recv_bufs = [
+        torch.empty(buf_size, dtype=torch.long, device=device)
+        for _ in range(world_size)
+    ]
+    dist.all_gather(recv_bufs, send_buf.contiguous(), group=gp_group)
+
+    # Unpack count matrix: count_matrix[r][s] = how many atoms rank r
+    # needs from rank s.
+    count_matrix = torch.stack([buf[:world_size] for buf in recv_bufs])
+    # send_counts[r] = count_matrix[r][rank] = atoms rank r needs from me
+    send_counts = count_matrix[:, rank].contiguous()
+
+    # Extract send_indices: for each rank r, find atoms they need from me
+    send_indices_parts = []
+    for r in range(world_size):
+        if r == rank:
+            continue
+        length = count_matrix[r, rank].item()
+        if length > 0:
+            offset = count_matrix[r, :rank].sum().item()
+            send_indices_parts.append(
+                recv_bufs[r][world_size + offset : world_size + offset + length]
+            )
+
+    if send_indices_parts:
+        send_indices_global = torch.cat(send_indices_parts)
     else:
-        recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
-    recv_counts[rank] = 0  # Never receive from self
+        send_indices_global = torch.empty(0, dtype=torch.long, device=device)
 
-    # CRITICAL: Sort needed_atoms by source rank to match recv_buf ordering.
-    # all_to_all fills recv_buf by source rank: [atoms from rank 0 | atoms
-    # from rank 1 | ...]. Within each rank, atoms are in the order we
-    # requested them (global index order, since argsort is stable).
-    # global_to_local must assign local indices in this SAME order,
-    # otherwise local index i maps to recv_buf[i] which has a DIFFERENT
-    # atom's embedding.
-    # With index_split, global index order == rank order (no-op sort).
-    # With spatial, global index order != rank order → sort is essential.
-    sort_order = needed_from_ranks.argsort(stable=True)
-    needed_atoms = needed_atoms[sort_order]
-    needed_from_ranks = needed_from_ranks[sort_order]
+    return send_counts, send_indices_global
 
-    # Use pre-computed send_info when available to skip the
-    # _sparse_index_exchange NCCL collectives entirely.
+
+def _resolve_send_metadata(
+    send_info: dict | None,
+    index_exchange_method: str,
+    needed_atoms: torch.Tensor,
+    recv_counts: torch.Tensor,
+    rank: int,
+    world_size: int,
+    device: torch.device,
+    total_atoms: int,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """
+    Resolve send_counts and send_indices_global.
+
+    Uses pre-computed send_info when available; otherwise runs
+    the configured index exchange collective.
+    """
     if send_info is not None:
-        # Pre-computed during graph filtering — use it.
-        send_counts = send_info["send_counts"]
-        send_indices_global = send_info["send_indices_global"]
-    else:
-        with record_function("a2a_sparse_index_exchange"):
-            send_counts, send_indices_global = _sparse_index_exchange(
+        return send_info["send_counts"], send_info["send_indices_global"]
+
+    if index_exchange_method == "allgather":
+        with record_function("a2a_allgather_index_exchange"):
+            return _allgather_index_exchange(
                 needed_atoms=needed_atoms,
                 recv_counts=recv_counts,
                 rank=rank,
                 world_size=world_size,
                 device=device,
+                natoms=total_atoms,
             )
 
-    # Build global_to_local mapping:
-    # Local atoms: index 0..total_local_atoms-1 (in order of
-    # node_partition)
-    # Received atoms: index total_local_atoms..total_local_atoms+total_needed
-    # IMPORTANT: needed_atoms is sorted by source rank (not global index)
-    # to match the recv_buf ordering from all_to_all. This ensures that
-    # local index (total_local + i) maps to recv_buf[i], which contains
-    # the embedding of needed_atoms[i].
-    global_to_local = torch.full((total_atoms,), -1, dtype=torch.long, device=device)
-    # Map local atoms
-    global_to_local[node_partition] = torch.arange(
-        total_local_atoms, dtype=torch.long, device=device
-    )
-    # Map needed remote atoms (in recv_buf order = source rank order)
-    global_to_local[needed_atoms] = torch.arange(
-        total_local_atoms,
-        total_local_atoms + total_needed_atoms,
-        dtype=torch.long,
-        device=device,
-    )
-
-    # Convert send_indices from global to local
-    send_indices = None
-    has_send = send_indices_global is not None
-    if has_send and send_indices_global.numel() > 0:
-        send_indices = global_to_local[send_indices_global]
-    elif has_send:
-        send_indices = torch.empty(0, dtype=torch.long, device=device)
-
-    # Precompute edge_index_local
-    edge_index_local = global_to_local[edge_index]
-
-    # Batch ALL GPU→CPU scalar extractions into a single transfer.
-    # This batches send_counts, recv_counts, AND validation scalars
-    # into ONE .cpu() call, eliminating extra GPU→CPU syncs.
-    bad_edge_count = (edge_index_local < 0).sum().unsqueeze(0).to(torch.long)
-    send_valid = (
-        torch.ones(1, dtype=torch.long, device=device)
-        if send_indices is None or send_indices.numel() == 0
-        else (
-            ((send_indices >= 0) & (send_indices < total_local_atoms))
-            .all()
-            .unsqueeze(0)
-            .to(torch.long)
+    with record_function("a2a_sparse_index_exchange"):
+        return _sparse_index_exchange(
+            needed_atoms=needed_atoms,
+            recv_counts=recv_counts,
+            rank=rank,
+            world_size=world_size,
+            device=device,
         )
-    )
-    all_cpu = torch.cat([send_counts, recv_counts, bad_edge_count, send_valid]).cpu()
-    send_splits = all_cpu[:world_size].tolist()
-    recv_splits = all_cpu[world_size : 2 * world_size].tolist()
-    total_recv = sum(recv_splits)
-    n_bad = int(all_cpu[2 * world_size].item())
-    send_ok = int(all_cpu[2 * world_size + 1].item())
 
-    # Validate AFTER the batched CPU transfer (no extra GPU syncs).
-    if not send_ok:
-        # Diagnostic: identify which send_indices are out of range.
+
+def _validate_gp_mappings(
+    send_indices: torch.Tensor | None,
+    send_indices_global: torch.Tensor | None,
+    edge_index_local: torch.Tensor,
+    edge_index: torch.Tensor,
+    rank: int,
+    rank_assignments: torch.Tensor,
+    local_mask: torch.Tensor,
+    needed_atoms: torch.Tensor,
+    node_partition: torch.Tensor,
+    total_local_atoms: int,
+    total_atoms: int,
+    total_needed_atoms: int,
+    send_info: dict | None,
+) -> None:
+    """
+    Validate index mappings; raise with diagnostics on failure.
+
+    Only called when fast-path checks detect an error, so
+    GPU→CPU transfers here are acceptable.
+    """
+    device = edge_index.device
+
+    if send_indices is not None and send_indices.numel() > 0:
         bad_mask = (send_indices < 0) | (send_indices >= total_local_atoms)
-        n_bad_send = bad_mask.sum().item()
-        n_total_send = send_indices.numel()
-        bad_global = send_indices_global[bad_mask][:10].tolist()
-        bad_ra = rank_assignments[send_indices_global[bad_mask][:10]].tolist()
-        raise RuntimeError(
-            f"Rank {rank}: received requests for atoms not in our "
-            f"partition ({n_bad_send}/{n_total_send} OOB). "
-            f"bad_global={bad_global}, bad_ranks={bad_ra}. "
-            f"This usually means rank_assignments differs across "
-            f"ranks (e.g. non-deterministic crystal generation)."
-        )
+        if bad_mask.any():
+            n_bad_send = bad_mask.sum().item()
+            bad_global = send_indices_global[bad_mask][:10].tolist()
+            bad_ra = rank_assignments[send_indices_global[bad_mask][:10]].tolist()
+            raise RuntimeError(
+                f"Rank {rank}: received requests for atoms not "
+                f"in our partition "
+                f"({n_bad_send}/{send_indices.numel()} OOB). "
+                f"bad_global={bad_global}, "
+                f"bad_ranks={bad_ra}. "
+                f"This usually means rank_assignments differs "
+                f"across ranks (e.g. non-deterministic crystal "
+                f"generation)."
+            )
+
+    n_bad = (edge_index_local < 0).sum().item()
     if n_bad > 0:
-        # Only compute diagnostics in the error path (rare).
         bad_cols = (edge_index_local < 0).any(dim=0)
         bad_globals = edge_index[:, bad_cols].unique()
         bad_ranks = rank_assignments[bad_globals]
 
-        # Compute edge-based needed atoms for comparison.
         edge_src_remote = ~local_mask[edge_index[0]]
         edge_needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
         edge_needed_mask[edge_index[0, edge_src_remote]] = True
         edge_needed_mask &= ~local_mask
         edge_needed_count = edge_needed_mask.sum().item()
 
-        # Check which edge-needed atoms are NOT in our needed_atoms.
         needed_set = torch.zeros(total_atoms, dtype=torch.bool, device=device)
         needed_set[needed_atoms] = True
         missing = edge_needed_mask & ~needed_set
         missing_count = missing.sum().item()
-
-        # Check for local atoms in needed_atoms.
         local_in_needed = (local_mask & needed_set).sum().item()
-
-        # Check for bad local atoms (local atoms mapped to -1).
-        local_is_bad = local_mask[bad_globals]
-        n_local_bad = local_is_bad.sum().item()
+        n_local_bad = local_mask[bad_globals].sum().item()
 
         logging.error(
             f"Rank {rank}: GP DIAGNOSTIC — "
@@ -411,10 +377,12 @@ def build_gp_context(
             f"needed_atoms_count={total_needed_atoms}, "
             f"missing_from_needed={missing_count}, "
             f"local_in_needed={local_in_needed}, "
-            f"n_local_bad={n_local_bad}/{len(bad_globals)} bad globals, "
+            f"n_local_bad={n_local_bad}/{len(bad_globals)} "
+            f"bad globals, "
             f"total_atoms={total_atoms}, "
             f"total_local={total_local_atoms}, "
-            f"node_partition_range=[{node_partition.min().item()}, "
+            f"node_partition_range="
+            f"[{node_partition.min().item()}, "
             f"{node_partition.max().item()}], "
             f"send_info_provided={send_info is not None}, "
             f"bad_globals[:20]={bad_globals.tolist()[:20]}, "
@@ -424,17 +392,144 @@ def build_gp_context(
             missing_indices = missing.nonzero(as_tuple=True)[0][:10]
             logging.error(
                 f"Rank {rank}: Missing atoms (edge-needed but "
-                f"not in needed_atoms): {missing_indices.tolist()}"
+                f"not in needed_atoms): "
+                f"{missing_indices.tolist()}"
             )
         raise RuntimeError(
-            f"Rank {rank}: edge_index has {n_bad} endpoints not in "
-            f"global_to_local mapping. This indicates a mismatch "
-            f"between graph edges and partition assignments."
+            f"Rank {rank}: edge_index has {n_bad} endpoints "
+            f"not in global_to_local mapping. This indicates "
+            f"a mismatch between graph edges and partition "
+            f"assignments."
+        )
+
+
+@torch.compiler.disable
+def build_gp_context(
+    edge_index: torch.Tensor,
+    rank_assignments: torch.Tensor,
+    rank: int,
+    world_size: int,
+    send_info: dict | None = None,
+    node_partition: torch.Tensor | None = None,
+    index_exchange_method: str = "a2a",
+) -> GPContext:
+    """
+    Build the GP context from edge connectivity and atom assignments.
+
+    Args:
+        edge_index: Edge index filtered to this rank's partition,
+            shape (2, num_edges). Row 0 = source, row 1 = target.
+        rank_assignments: Rank owner for each atom,
+            shape (total_atoms,).
+        rank: This rank's GP rank.
+        world_size: GP world size.
+        send_info: Pre-computed send metadata (skips index exchange).
+        node_partition: Pre-computed local atom indices.
+        index_exchange_method: "a2a" (2x all-to-all) or "allgather"
+            (1x all-gather).
+
+    Returns:
+        GPContext with all communication metadata.
+    """
+    total_atoms = rank_assignments.shape[0]
+    device = rank_assignments.device
+
+    if node_partition is None:
+        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    total_local_atoms = node_partition.shape[0]
+
+    # Find remote atoms needed as edge sources.
+    local_mask = rank_assignments == rank
+    src_is_remote = ~local_mask[edge_index[0]]
+    needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
+    needed_mask[edge_index[0, src_is_remote]] = True
+    needed_mask &= ~local_mask
+    needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
+
+    total_needed_atoms = needed_atoms.shape[0]
+    needed_from_ranks = rank_assignments[needed_atoms]
+
+    if total_needed_atoms > 0:
+        recv_counts = torch.bincount(needed_from_ranks, minlength=world_size).to(
+            dtype=torch.long, device=device
+        )
+    else:
+        recv_counts = torch.zeros(world_size, dtype=torch.long, device=device)
+    recv_counts[rank] = 0
+
+    # Sort needed_atoms by source rank to match A2A recv_buf ordering.
+    sort_order = needed_from_ranks.argsort(stable=True)
+    needed_atoms = needed_atoms[sort_order]
+    needed_from_ranks = needed_from_ranks[sort_order]
+
+    # Resolve send metadata (pre-computed or via collective).
+    send_counts, send_indices_global = _resolve_send_metadata(
+        send_info,
+        index_exchange_method,
+        needed_atoms,
+        recv_counts,
+        rank,
+        world_size,
+        device,
+        total_atoms,
+    )
+
+    # Build global-to-local index mapping.
+    # Local atoms: [0, total_local_atoms)
+    # Remote atoms: [total_local_atoms, total_local_atoms + needed)
+    global_to_local = torch.full((total_atoms,), -1, dtype=torch.long, device=device)
+    global_to_local[node_partition] = torch.arange(
+        total_local_atoms, dtype=torch.long, device=device
+    )
+    global_to_local[needed_atoms] = torch.arange(
+        total_local_atoms,
+        total_local_atoms + total_needed_atoms,
+        dtype=torch.long,
+        device=device,
+    )
+
+    # Convert send_indices from global to local.
+    send_indices = None
+    if send_indices_global is not None:
+        if send_indices_global.numel() > 0:
+            send_indices = global_to_local[send_indices_global]
+        else:
+            send_indices = torch.empty(0, dtype=torch.long, device=device)
+
+    # Remap edge_index to local indices.
+    edge_index_local = global_to_local[edge_index]
+
+    # Single GPU-to-CPU transfer for send/recv splits.
+    splits_cpu = torch.stack([send_counts, recv_counts]).cpu()
+    send_splits = splits_cpu[0].tolist()
+    recv_splits = splits_cpu[1].tolist()
+    total_recv = sum(recv_splits)
+
+    # Validate (only touches GPU on error path).
+    has_bad_edges = (edge_index_local < 0).any().item()
+    has_bad_send = (
+        send_indices is not None
+        and send_indices.numel() > 0
+        and ((send_indices < 0) | (send_indices >= total_local_atoms)).any().item()
+    )
+    if has_bad_edges or has_bad_send:
+        _validate_gp_mappings(
+            send_indices,
+            send_indices_global,
+            edge_index_local,
+            edge_index,
+            rank,
+            rank_assignments,
+            local_mask,
+            needed_atoms,
+            node_partition,
+            total_local_atoms,
+            total_atoms,
+            total_needed_atoms,
+            send_info,
         )
 
     # Precompute local/remote edge indices for comm-compute overlap.
-    # An edge is "local-source" if its source atom is owned by this
-    # rank (index < total_local_atoms in the remapped edge_index_local).
     local_edge_mask = edge_index_local[0] < total_local_atoms
     local_edge_idx = local_edge_mask.nonzero(as_tuple=True)[0]
     remote_edge_idx = (~local_edge_mask).nonzero(as_tuple=True)[0]
@@ -453,7 +548,6 @@ def build_gp_context(
         total_needed_atoms=total_needed_atoms,
         send_indices=send_indices,
         edge_index_local=edge_index_local,
-        # Precompute Python lists once (avoids .tolist() per layer per fwd)
         send_splits=send_splits,
         recv_splits=recv_splits,
         total_recv=total_recv,
