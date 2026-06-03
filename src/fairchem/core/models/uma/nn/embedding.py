@@ -78,8 +78,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        scatter_target,
+        edge_index,
         wigner_inv_envelope,
+        node_offset=0,
     ):
         radial = self.rad_func(x_edge)
 
@@ -87,42 +88,46 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             x,
             radial,
             wigner_inv_envelope,
-            scatter_target,
+            edge_index,
             self.m_0_num_coefficients,
             self.sphere_channels,
             self.rescale_factor,
+            node_offset,
         )
 
     def forward(
         self,
         x,
         x_edge,
-        scatter_target,
+        edge_index,
         wigner_inv_envelope,
+        node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x,
                 x_edge,
-                scatter_target,
+                edge_index,
                 wigner_inv_envelope,
+                node_offset,
             )
 
-        scatter_target_partitions = scatter_target.split(
-            self.activation_checkpoint_chunk_size
+        edge_index_partitions = edge_index.split(
+            self.activation_checkpoint_chunk_size, dim=1
         )
         wigner_inv_partitions = wigner_inv_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
 
-        for idx in range(len(scatter_target_partitions)):
+        for idx in range(len(edge_index_partitions)):
             x = torch.utils.checkpoint.checkpoint(
                 self.forward_chunk,
                 x,
                 x_edge_partitions[idx],
-                scatter_target_partitions[idx],
+                edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
+                node_offset,
                 use_reentrant=False,
             )
 
