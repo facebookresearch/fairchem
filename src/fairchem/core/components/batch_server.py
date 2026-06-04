@@ -94,10 +94,35 @@ class BatchConfig:
     max_concurrent_batches: int | None = None
 
     def to_init_kwargs(self) -> dict[str, Any]:
-        d = asdict(self)
-        if d.get("max_concurrent_batches") is None:
-            d.pop("max_concurrent_batches")
-        return d
+        """Return ``{name: value}`` for fields that were explicitly set (non-None)."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+def _build_serve_batch_kwargs(
+    max_batch_size: int,
+    batch_wait_timeout_s: float,
+    max_concurrent_batches: int | None,
+) -> dict[str, Any]:
+    """
+    Build the kwargs forwarded to ``@serve.batch`` when wrapping a
+    deployment's predict method.
+
+    ``max_concurrent_batches`` is a decoration-time-only arg in Ray Serve
+    (no runtime setter exists), so it must be baked into the decorator
+    at deployment construction time. ``max_batch_size`` and
+    ``batch_wait_timeout_s`` are passed here too so the initial values
+    are correct from the first request.
+    """
+    batch_kwargs: dict[str, Any] = {
+        "batch_size_fn": lambda batch: sum(
+            sample.natoms.sum() for sample in batch
+        ).item(),
+        "max_batch_size": max_batch_size,
+        "batch_wait_timeout_s": batch_wait_timeout_s,
+    }
+    if max_concurrent_batches is not None:
+        batch_kwargs["max_concurrent_batches"] = max_concurrent_batches
+    return batch_kwargs
 
 
 class BatchPredictServerMixin:
@@ -109,30 +134,6 @@ class BatchPredictServerMixin:
     ``BatchPredictServer`` and ``MultiplexedBatchPredictServer`` apply the
     decorator themselves.
     """
-
-    def configure_batching(
-        self,
-        max_batch_size: int,
-        batch_wait_timeout_s: float,
-        max_concurrent_batches: int | None = None,
-    ):
-        # ``max_concurrent_batches`` is a decoration-time-only arg in
-        # Ray Serve's ``@serve.batch`` (no runtime setter is exposed),
-        # so we (re)apply the decorator here against the undecorated
-        # ``_predict_impl`` bound method. ``max_batch_size`` and
-        # ``batch_wait_timeout_s`` still have runtime setters, but we
-        # pass them as decoration args too so the initial values are
-        # correct from the first request.
-        batch_kwargs: dict[str, Any] = {
-            "batch_size_fn": lambda batch: sum(
-                sample.natoms.sum() for sample in batch
-            ).item(),
-            "max_batch_size": max_batch_size,
-            "batch_wait_timeout_s": batch_wait_timeout_s,
-        }
-        if max_concurrent_batches is not None:
-            batch_kwargs["max_concurrent_batches"] = max_concurrent_batches
-        self.predict = serve.batch(**batch_kwargs)(self._predict_impl)
 
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         # Move the returned value to CPU so that callers running on
@@ -312,9 +313,15 @@ class BatchPredictServer(BatchPredictServerMixin):
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(
-            max_batch_size, batch_wait_timeout_s, max_concurrent_batches
-        )
+        # One-time decoration at deployment construction. ``max_concurrent_batches``
+        # has no runtime setter on ``@serve.batch``, so it must be baked in here;
+        # the runtime-mutable settings (max_batch_size, batch_wait_timeout_s) are
+        # still adjustable via ``self.predict.set_*`` on the decorated method.
+        self.predict = serve.batch(
+            **_build_serve_batch_kwargs(
+                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
+            )
+        )(self._predict_impl)
 
         logging.info(
             "BatchPredictServer initialized with predict_unit from object store"
@@ -374,9 +381,12 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
                 decorator. If None, uses Ray Serve's default.
         """
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(
-            max_batch_size, batch_wait_timeout_s, max_concurrent_batches
-        )
+        # Same one-time decoration as BatchPredictServer; see comment there.
+        self.predict = serve.batch(
+            **_build_serve_batch_kwargs(
+                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
+            )
+        )(self._predict_impl)
         logging.info("MultiplexedBatchPredictServer initialized")
 
     async def is_multiplexed(self) -> bool:
@@ -553,21 +563,21 @@ def _init_ray_and_serve(
         )
         logging.info("Ray initialized")
 
-    # If the deployment's CPU request plus that overhead consumes the whole
-    # cluster, downstream Ray tasks (and even Serve's own actors) can
-    # starve. Warn (don't raise) because multi-node Ray clusters can
-    # auto-grow as workers join, and autoscaling deployments only need
-    # capacity for ``min_replicas`` at startup.
-    serve_overhead_cpus = 2  # Serve controller + HTTP proxy
-    cluster_cpus = ray.cluster_resources().get("CPU", 0)
-    if requested_cpus + serve_overhead_cpus > cluster_cpus:
+    # If the deployment's CPU request exceeds what's currently available,
+    # replicas will queue until capacity frees up. Warn (don't raise)
+    # because multi-node Ray clusters can auto-grow as workers join, and
+    # autoscaling deployments only need capacity for ``min_replicas`` at
+    # startup. ``available_resources()`` already accounts for CPUs used by
+    # the Serve controller/proxy and other live actors, so no manual
+    # overhead adjustment is needed.
+    available_cpus = ray.available_resources().get("CPU", 0)
+    if requested_cpus > available_cpus:
         logging.warning(
             f"Ray Serve deployment requests {cpus_per_actor} CPU(s) x "
-            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), plus "
-            f"~{serve_overhead_cpus} CPU(s) for the Serve controller/proxy, "
-            f"but the Ray cluster currently reports {cluster_cpus:g} CPU(s). "
-            "Replicas will queue until workers join or autoscaling adds "
-            "capacity. If the cluster is fixed-size and small, reduce "
+            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), but only "
+            f"{available_cpus:g} CPU(s) are currently available on the Ray "
+            "cluster. Replicas will queue until workers join or autoscaling "
+            "adds capacity. If the cluster is fixed-size and small, reduce "
             "ray_actor_options['num_cpus'] / num_replicas."
         )
 
@@ -717,6 +727,38 @@ def setup_multiplexed_batch_predict_server(
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
     logging.info(f"MultiplexedBatchPredictServer deployed: name={deployment_name}")
     return handle
+
+
+def get_app_handle_with_retry(
+    deployment_name: str,
+    timeout_seconds: float = 60.0,
+    poll_interval_seconds: float = 1.0,
+):
+    """
+    Look up a Ray Serve app handle by name, retrying transient lookup
+    failures for up to ``timeout_seconds``.
+
+    The Serve controller is registered in the "serve" Ray namespace by the
+    driver that called ``serve.start()``. A consumer (e.g. a Ray task on a
+    fresh worker) may race the GCS sync of that actor entry and see a
+    transient "SERVE_CONTROLLER_ACTOR not found" failure. Non-transient
+    errors are re-raised immediately.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            return serve.get_app_handle(deployment_name)
+        except Exception as exc:
+            msg = str(exc)
+            transient = (
+                "SERVE_CONTROLLER_ACTOR" in msg
+                or "There is no Serve instance" in msg
+                or "Failed to look up actor" in msg
+            )
+            if not transient or time.monotonic() > deadline:
+                raise
+            logging.debug("Serve controller not visible yet (%s); retrying.", msg)
+            time.sleep(poll_interval_seconds)
 
 
 def wait_for_serve_ready(

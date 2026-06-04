@@ -23,7 +23,7 @@ import numpy as np
 import ray
 import torch
 import torch.distributed as dist
-from ray import remote, serve
+from ray import remote
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
@@ -35,6 +35,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
     maybe_update_settings_backend,
@@ -839,37 +840,6 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         """
         return self._multiplexed_model_id
 
-    @staticmethod
-    def _get_app_handle_with_retry(
-        deployment_name: str,
-        timeout_seconds: float = 60.0,
-        poll_interval_seconds: float = 1.0,
-    ):
-        # The Serve controller is registered in the "serve" Ray namespace by
-        # the driver that called serve.start(). A consumer (e.g. a Ray task
-        # on a fresh worker) may race the GCS sync of that actor entry and
-        # see a transient "SERVE_CONTROLLER_ACTOR not found" failure. Retry
-        # the lookup for a bounded window before giving up.
-        import time
-
-        deadline = time.monotonic() + timeout_seconds
-        while True:
-            try:
-                return serve.get_app_handle(deployment_name)
-            except Exception as exc:
-                msg = str(exc)
-                transient = (
-                    "SERVE_CONTROLLER_ACTOR" in msg
-                    or "There is no Serve instance" in msg
-                    or "Failed to look up actor" in msg
-                )
-                if not transient or time.monotonic() > deadline:
-                    raise
-                logging.debug(
-                    "Serve controller not visible yet (%s); retrying.", msg
-                )
-                time.sleep(poll_interval_seconds)
-
     @classmethod
     def from_deployment_connection_info(
         cls,
@@ -905,7 +875,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             if ray_address and not ray.is_initialized():
                 ray.init(ray_address, namespace=namespace)
 
-            handle = cls._get_app_handle_with_retry(deployment_name)
+            handle = get_app_handle_with_retry(deployment_name)
             cls._handle_cache[cache_key] = handle
 
         return cls(

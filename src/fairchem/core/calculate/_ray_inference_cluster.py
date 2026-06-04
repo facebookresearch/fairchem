@@ -7,8 +7,8 @@ LICENSE file in the root directory of this source tree.
 Ray cluster utilities for SLURM and local environments.
 
 This module provides context managers for starting and managing Ray clusters:
-- get_slurm_fairchem_inference_raycluster: Start a Ray cluster on SLURM with automatic cleanup
-- get_local_fairchem_inference_raycluster: Start a local Ray cluster for testing/development
+- get_slurm_inference_raycluster: Start a Ray cluster on SLURM with automatic cleanup
+- get_local_inference_raycluster: Start a local Ray cluster for testing/development
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from typing import Any
 import yaml
 
 from fairchem.core.common.utils import recursive_dict_merge
+from fairchem.core.components.batch_server import (
+    setup_batch_predict_server,
+    setup_multiplexed_batch_predict_server,
+    wait_for_serve_ready,
+)
 from fairchem.core.launchers.cluster.ray_cluster import (
     DEFAULT_HEAD_FILE_DIR,
     RayCluster,
     find_free_port,
-)
-from fairchem.core.units.mlip_unit.batch_server import (
-    setup_batch_predict_server,
-    setup_multiplexed_batch_predict_server,
-    wait_for_serve_ready,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ def _resolve_serve_configs(
     # replicas. Otherwise fall back to num_workers as the unit of scale.
     num_workers = int(cluster_config.get("num_workers", 1) or 1)
     gpus_per_node = int(cluster_config.get("gpus_per_node", 0) or 0)
-    actor_opts = (deployment_config.get("ray_actor_options") or {})
+    actor_opts = deployment_config.get("ray_actor_options") or {}
     num_gpus_per_replica = actor_opts.get("num_gpus", 0) or 0
     if gpus_per_node > 0 and num_gpus_per_replica > 0:
         capacity = max(
@@ -262,9 +262,9 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     # replicas: gpus_per_node * num_cpus_per_replica. Otherwise replicas
     # would queue forever despite having free GPUs.
     if config.get("start_inference_server", False):
-        actor_opts = (
-            (config.get("deployment_config") or {}).get("ray_actor_options") or {}
-        )
+        actor_opts = (config.get("deployment_config") or {}).get(
+            "ray_actor_options"
+        ) or {}
         num_cpus_per_replica = int(actor_opts.get("num_cpus", 0) or 0)
         gpus_per_node = int(config.get("gpus_per_node", 0) or 0)
         if gpus_per_node > 0 and num_cpus_per_replica > 0:
@@ -362,7 +362,7 @@ def start_ray_cluster(
 
 
 @contextmanager
-def get_slurm_fairchem_inference_raycluster(
+def get_slurm_inference_raycluster(
     config: str | Path | None = None,
     num_workers: int = 1,
     partition: str | None = None,
@@ -393,7 +393,7 @@ def get_slurm_fairchem_inference_raycluster(
 
     Usage::
 
-        with get_slurm_fairchem_inference_raycluster(num_workers=32, gpus_per_node=1) as head_file:
+        with get_slurm_inference_raycluster(num_workers=32, gpus_per_node=1) as head_file:
             import ray
             with open(head_file) as f:
                 head_info = json.load(f)
@@ -431,7 +431,9 @@ def get_slurm_fairchem_inference_raycluster(
     try:
         env_head_file = os.environ.get("RAY_HEAD_FILE")
         if env_head_file and Path(env_head_file).exists():
-            logger.info(f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}")
+            logger.info(
+                f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}"
+            )
             manage_cluster = False
             head_file = env_head_file
         else:
@@ -457,7 +459,9 @@ def get_slurm_fairchem_inference_raycluster(
             with open(head_file) as f:
                 head_info = json.load(f)
             namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
-            logger.info(f"Ray cluster started with namespace: {namespace_serve_fairchem}")
+            logger.info(
+                f"Ray cluster started with namespace: {namespace_serve_fairchem}"
+            )
 
             if cluster_config.get("start_inference_server", False):
                 import ray
@@ -482,8 +486,12 @@ def get_slurm_fairchem_inference_raycluster(
                     )
                     import backoff
 
-                    max_tries = int(os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8"))
-                    base_delay = float(os.environ.get("FAIRCHEM_RAY_INIT_BASE_DELAY", "2.0"))
+                    max_tries = int(
+                        os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8")
+                    )
+                    base_delay = float(
+                        os.environ.get("FAIRCHEM_RAY_INIT_BASE_DELAY", "2.0")
+                    )
 
                     @backoff.on_exception(
                         backoff.expo,
@@ -504,7 +512,7 @@ def get_slurm_fairchem_inference_raycluster(
                     _do_init()
                     # Remember that we own this connection so the finally
                     # block can release it; otherwise a subsequent
-                    # get_slurm_fairchem_inference_raycluster() call in the same process would
+                    # get_slurm_inference_raycluster() call in the same process would
                     # fail with "client has already connected" when the dead
                     # connection from the prior cluster lingers.
                     ray_client_owned = True
@@ -526,6 +534,7 @@ def get_slurm_fairchem_inference_raycluster(
                 if _skip_serve_setup:
                     pass
                 elif predict_unit is None:
+
                     @ray.remote
                     def _setup_multiplexed_serve_remote(dep_name, dep_cfg, batch_cfg):
                         setup_multiplexed_batch_predict_server(
@@ -547,8 +556,11 @@ def get_slurm_fairchem_inference_raycluster(
                         )
                     )
                 else:
+
                     @ray.remote
-                    def _setup_serve_remote(predict_unit_ref, dep_name, dep_cfg, batch_cfg):
+                    def _setup_serve_remote(
+                        predict_unit_ref, dep_name, dep_cfg, batch_cfg
+                    ):
                         pu = ray.get(predict_unit_ref)
                         setup_batch_predict_server(
                             pu,
@@ -575,15 +587,19 @@ def get_slurm_fairchem_inference_raycluster(
 
                 if not _skip_serve_setup:
                     logger.info(
-                        "Inference server deployment complete, " "verifying readiness..."
+                        "Inference server deployment complete, "
+                        "verifying readiness..."
                     )
-                    ray.get(_wait_for_serve_ready_remote.remote(resolved_deployment_name))
+                    ray.get(
+                        _wait_for_serve_ready_remote.remote(resolved_deployment_name)
+                    )
                     logger.info("Inference server ready and accepting requests")
 
         yield head_file
     finally:
         if ray_client_owned:
             import ray
+
             try:
                 ray.shutdown()
                 logger.info("Released Ray client connection.")
@@ -599,7 +615,7 @@ def get_slurm_fairchem_inference_raycluster(
 
 
 @contextmanager
-def get_local_fairchem_inference_raycluster(
+def get_local_inference_raycluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
     num_gpus: int | None = None,
@@ -614,7 +630,7 @@ def get_local_fairchem_inference_raycluster(
     Context manager that starts a local Ray cluster with optional inference
     server.
 
-    Similar to get_slurm_fairchem_inference_raycluster but for local/testing use. Automatically:
+    Similar to get_slurm_inference_raycluster but for local/testing use. Automatically:
     - Detects available GPUs if num_gpus is None
     - Starts Ray Serve
     - Deploys FAIRChem inference server
@@ -623,12 +639,12 @@ def get_local_fairchem_inference_raycluster(
 
     Usage::
 
-        with get_local_fairchem_inference_raycluster() as head_file:
+        with get_local_inference_raycluster() as head_file:
             # Run code that uses Ray Serve inference
             ...
 
         # Or for testing, without inference server:
-        with get_local_fairchem_inference_raycluster(start_inference_server=False):
+        with get_local_inference_raycluster(start_inference_server=False):
             # Run CPU-only tests
             ...
 

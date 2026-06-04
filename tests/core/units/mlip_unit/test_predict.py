@@ -877,7 +877,7 @@ def batch_server_handle(uma_predict_unit):
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
     from ray import serve
 
-    from fairchem.core.units.mlip_unit.batch_server import setup_batch_predict_server
+    from fairchem.core.components.batch_server import setup_batch_predict_server
 
     # Ensure Ray is properly shut down before initializing
     if ray.is_initialized():
