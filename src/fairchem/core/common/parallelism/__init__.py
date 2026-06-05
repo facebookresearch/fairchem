@@ -11,7 +11,6 @@ from fairchem.core.common.parallelism.graph_parallel_a2a import (
     AllToAllCollect,
     GPContext,
     all_to_all_collect,
-    all_to_all_collect_compiled,
     build_gp_context,
 )
 from fairchem.core.common.parallelism.graph_partition import (
@@ -25,7 +24,6 @@ __all__ = [
     "GPContext",
     "PartitionStrategy",
     "all_to_all_collect",
-    "all_to_all_collect_compiled",
     "build_gp_context",
     "partition_atoms_index_split",
     "partition_atoms_spatial",

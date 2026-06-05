@@ -19,7 +19,6 @@ from fairchem.core.common import gp_utils
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
     GPContext,
     all_to_all_collect,
-    all_to_all_collect_compiled,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -142,31 +141,10 @@ class Edgewise(torch.nn.Module):
         """
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings.
-            # When x requires grad (autograd forces/stress), we use the
-            # AllToAllCollect autograd.Function so gradients flow through
-            # the communication. This creates a graph break (same as BL's
-            # GatherFromModelParallelRegionSumGradPadded), but is necessary
-            # because funcoll autograd crashes with torch.compile (SymInt
-            # split sizes). When no autograd is needed, use the
-            # compile-friendly funcoll (no graph break).
-            needs_grad = torch.is_grad_enabled() and x.requires_grad
-            if not self.training and not needs_grad:
-                # Eval path without autograd: compile-friendly funcoll.
-                with record_function("a2a_collect_compiled"):
-                    x_received = all_to_all_collect_compiled(
-                        x,
-                        gp_ctx,
-                        send_indices,
-                    )
-                    x_full = torch.cat([x, x_received], dim=0)
-                    edge_index_local = gp_ctx.edge_index_local
-            else:
-                # Training or eval+autograd: AllToAllCollect autograd.Function.
-                # Supports backward; creates graph break (same as BL).
-                with record_function("a2a_collect"):
-                    x_received = all_to_all_collect(x, gp_ctx, send_indices)
-                    x_full = torch.cat([x, x_received], dim=0)
-                    edge_index_local = gp_ctx.edge_index_local
+            with record_function("a2a_collect"):
+                x_received = all_to_all_collect(x, gp_ctx, send_indices)
+                x_full = torch.cat([x, x_received], dim=0)
+                edge_index_local = gp_ctx.edge_index_local
             local_scatter_target = edge_index_local[1]
         elif gp_utils.initialized():
             # Legacy all-gather path
