@@ -38,15 +38,26 @@ pytest tests/core/common/parallelism/test_a2a_correctness.py -v
 8 tests: correctness at 100/500 atoms × 2 strategies, consistency across graph sizes × 2,
 1536-dim embeddings × 2.
 
-### 1d. Full-model GPU correctness (4+ GPUs, ~5 min)
+### 1d. Full-model GPU correctness (8 GPUs, ~5 min)
+
+```bash
+# Local 8-GPU
+fairchem -c configs/uma/correctness/gp-correctness.yaml job=local_8gpu
+
+# SLURM
+fairchem -c configs/uma/correctness/gp-correctness.yaml job=slurm
+```
+
+9 checks: 3 atom counts (10, 50, 100) × 3 GP modes (allgather, A2A-spatial,
+A2A-index_split). Each mode compared against single-GPU no-GP reference.
+Compares energy/forces/stress (tol: energy/stress 5e-4, forces 1e-4).
+Results written to `correctness_results.json` in the run directory.
+
+Also available as a pytest (skipped on CI):
 
 ```bash
 pytest tests/core/units/mlip_unit/test_predict.py::test_full_model_gp_correctness -v
 ```
-
-27 tests: 3 atom counts (10, 50, 100) × 9 configs (no-GP, allgather, A2A-spatial,
-A2A-index_split at 1/2/4 workers). Compares energy/forces/stress against single-GPU
-reference (tol: energy/stress 5e-4, forces 1e-4). Skipped on CI (`CI=true`).
 
 ### 1e. Predict pipeline + MD consistency (CPU, PR3 branch, ~2 min)
 
