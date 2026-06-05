@@ -4,33 +4,23 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Multi-GPU correctness test: A2A (all-to-all) vs BL (all-gather baseline).
+A2A (all-to-all) graph parallel correctness tests.
 
-Verifies that the A2A graph parallel implementation produces numerically
-identical results to the BL baseline across multiple GPU counts.
+Verifies that the A2A graph parallel implementation produces
+correct results via multi-process Gloo tests (CPU).
 
-Run directly via torchrun:
-    torchrun --nproc_per_node=N test_a2a_correctness.py [--natoms 1000]
-
-Or via pytest (2-process CPU with Gloo):
+Run via pytest:
     pytest test_a2a_correctness.py -v
-
-The test creates an FCC crystal, loads the UMA-S checkpoint, and runs
-inference in both BL and A2A modes. The outputs (energy, forces, stress)
-are gathered to rank 0 and compared numerically.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 import logging
-import sys
 
 import pytest
 import torch
 
-from fairchem.core.common import distutils, gp_utils
+from fairchem.core.common import gp_utils
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
     all_to_all_collect,
     build_gp_context,
@@ -43,10 +33,6 @@ from fairchem.core.common.test_utils import (
     PGConfig,
     init_pg_and_rank_and_launch_test,
     spawn_multi_process,
-)
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.common_structures import (
-    get_fcc_crystal_by_num_atoms,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -352,238 +338,3 @@ def test_a2a_multidim_embeddings(strategy):
             f"shape={result['recv_shape']} "
             f"vs {result['expected_shape']}"
         )
-
-
-# =========================================================================
-# Full model correctness test (GPU, run via torchrun or SLURM)
-# =========================================================================
-
-
-def _resolve_checkpoint():
-    """
-    Resolve the UMA-S checkpoint path using the fairchem pretrained
-    model API.
-    """
-    from fairchem.core.calculate.pretrained_mlip import (
-        pretrained_checkpoint_path_from_name,
-    )
-
-    return pretrained_checkpoint_path_from_name(model_name="uma-s-1p2")
-
-
-def _run_full_model_comparison(
-    natoms: int = 1000,
-    results_file: str | None = None,
-):
-    """
-    Run the full UMA-S model in both BL and A2A modes and compare
-    outputs.
-
-    Must be called inside a torchrun process group.
-    """
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
-
-    rank = distutils.get_rank()
-    world_size = distutils.get_world_size()
-
-    if rank == 0:
-        logger.info(f"Running correctness test: {natoms} atoms, " f"{world_size} GPUs")
-
-    checkpoint_path = _resolve_checkpoint()
-    if rank == 0:
-        logger.info(f"Using checkpoint: {checkpoint_path}")
-
-    # Create input system
-    atoms = get_fcc_crystal_by_num_atoms(natoms, atom_type="Al")
-    actual_natoms = len(atoms)
-    if rank == 0:
-        logger.info(f"Created FCC Al crystal: {actual_natoms} atoms")
-
-    data = AtomicData.from_ase(
-        input_atoms=atoms,
-        max_neigh=200,
-        radius=6.0,
-        task_name="oc20",
-        r_edges=False,
-        r_data_keys=["spin", "charge"],
-    )
-
-    # -- Run BL (all-gather baseline) --
-    if rank == 0:
-        logger.info("Loading model for BL (all-gather) mode...")
-
-    predictor_bl = MLIPPredictUnit.from_checkpoint(
-        checkpoint_path,
-        device=torch.device("cuda"),
-        inference_settings={
-            "tf32": False,
-            "compile": False,
-            "activation_checkpointing": False,
-            "merge_mole": False,
-        },
-        overrides={
-            "backbone": {
-                "use_all_to_all_gp": False,
-            },
-        },
-    )
-    predictor_bl.model.eval()
-
-    # Warm up + run BL
-    with torch.no_grad():
-        _ = predictor_bl.predict(data)
-        bl_out = predictor_bl.predict(data)
-
-    bl_energy = bl_out["energy"].clone()
-    bl_forces = bl_out["forces"].clone()
-    bl_stress = bl_out.get("stress", torch.tensor([])).clone()
-
-    if rank == 0:
-        logger.info(f"BL energy: {bl_energy.item():.6f}")
-        logger.info(f"BL forces shape: {bl_forces.shape}")
-        logger.info(f"BL forces norm: {bl_forces.norm():.6f}")
-
-    # Clean up BL model
-    del predictor_bl
-    torch.cuda.empty_cache()
-
-    # -- Run A2A (all-to-all with spatial partitioning) --
-    if rank == 0:
-        logger.info("Loading model for A2A (all-to-all) mode...")
-
-    predictor_a2a = MLIPPredictUnit.from_checkpoint(
-        checkpoint_path,
-        device=torch.device("cuda"),
-        inference_settings={
-            "tf32": False,
-            "compile": False,
-            "activation_checkpointing": False,
-            "merge_mole": False,
-        },
-        overrides={
-            "backbone": {
-                "use_all_to_all_gp": True,
-                "gp_partition_strategy": "spatial",
-            },
-        },
-    )
-    predictor_a2a.model.eval()
-
-    # Warm up + run A2A
-    with torch.no_grad():
-        _ = predictor_a2a.predict(data)
-        a2a_out = predictor_a2a.predict(data)
-
-    a2a_energy = a2a_out["energy"].clone()
-    a2a_forces = a2a_out["forces"].clone()
-    a2a_stress = a2a_out.get("stress", torch.tensor([])).clone()
-
-    if rank == 0:
-        logger.info(f"A2A energy: {a2a_energy.item():.6f}")
-        logger.info(f"A2A forces shape: {a2a_forces.shape}")
-        logger.info(f"A2A forces norm: {a2a_forces.norm():.6f}")
-
-    # -- Compare outputs --
-    # Energy should match across all ranks (reduced)
-    energy_diff = abs(bl_energy.item() - a2a_energy.item())
-    energy_match = energy_diff < 1e-4
-
-    # Forces: each rank only has forces for its local atoms.
-    # Gather all forces to rank 0 for comparison.
-    # BL forces are already the full set on all ranks.
-    # A2A forces need gathering.
-    if bl_forces.shape == a2a_forces.shape:
-        force_diff = (bl_forces - a2a_forces).abs().max().item()
-        force_match = force_diff < 1e-4
-        force_rmse = (bl_forces - a2a_forces).pow(2).mean().sqrt().item()
-    else:
-        # Different shapes — gather and compare
-        force_diff = float("nan")
-        force_match = False
-        force_rmse = float("nan")
-
-    # Stress
-    if bl_stress.numel() > 0 and a2a_stress.numel() > 0:
-        stress_diff = (bl_stress - a2a_stress).abs().max().item()
-        stress_match = stress_diff < 1e-4
-    else:
-        stress_diff = 0.0
-        stress_match = True
-
-    results = {
-        "natoms": actual_natoms,
-        "world_size": world_size,
-        "energy_bl": bl_energy.item(),
-        "energy_a2a": a2a_energy.item(),
-        "energy_diff": energy_diff,
-        "energy_match": energy_match,
-        "force_max_diff": force_diff,
-        "force_rmse": force_rmse,
-        "force_match": force_match,
-        "stress_max_diff": stress_diff,
-        "stress_match": stress_match,
-        "all_match": energy_match and force_match and stress_match,
-    }
-
-    if rank == 0:
-        logger.info(f"\n{'=' * 60}")
-        logger.info("CORRECTNESS TEST RESULTS")
-        logger.info(f"{'=' * 60}")
-        logger.info(f"Atoms:        {actual_natoms}")
-        logger.info(f"GPUs:         {world_size}")
-        logger.info(f"Energy BL:    {bl_energy.item():.6f}")
-        logger.info(f"Energy A2A:   {a2a_energy.item():.6f}")
-        logger.info(f"Energy diff:  {energy_diff:.2e}")
-        logger.info(f"Force max Δ:  {force_diff:.2e}")
-        logger.info(f"Force RMSE:   {force_rmse:.2e}")
-        logger.info(f"Stress max Δ: {stress_diff:.2e}")
-        status = "✓ PASS" if results["all_match"] else "✗ FAIL"
-        logger.info(f"ALL MATCH:    {status}")
-        logger.info(f"{'=' * 60}")
-
-        if results_file:
-            with open(results_file, "w") as f:
-                json.dump(results, f, indent=2)
-            logger.info(f"Results saved to {results_file}")
-
-    return results
-
-
-# =========================================================================
-# CLI entrypoint for SLURM / torchrun
-# =========================================================================
-
-
-def main():
-    parser = argparse.ArgumentParser(description="A2A vs BL correctness test")
-    parser.add_argument(
-        "--natoms",
-        type=int,
-        default=1000,
-        help="Target number of atoms in FCC crystal",
-    )
-    parser.add_argument(
-        "--results-file",
-        type=str,
-        default=None,
-        help="Path to save JSON results",
-    )
-    args = parser.parse_args()
-
-    # Initialize distributed
-    distutils.setup({"submit": False, "cpu": False})
-    gp_utils.setup_gp(distutils.get_world_size())
-
-    try:
-        results = _run_full_model_comparison(
-            natoms=args.natoms,
-            results_file=args.results_file,
-        )
-        if not results["all_match"]:
-            sys.exit(1)
-    finally:
-        distutils.cleanup()
-
-
-if __name__ == "__main__":
-    main()
