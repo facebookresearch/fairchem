@@ -344,6 +344,11 @@ def test_a2a_multidim_embeddings(strategy):
 # GPU tests (NCCL, 2 processes)
 # =========================================================================
 
+_skip_if_lt_2_gpus = pytest.mark.skipif(
+    not torch.cuda.is_available() or torch.cuda.device_count() < 2,
+    reason="Requires at least 2 GPUs",
+)
+
 
 def _to_cuda(*tensors):
     device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
@@ -364,7 +369,7 @@ def _multidim_test_inner_gpu(x_global, pos, edge_index, num_atoms, strategy):
     return _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy)
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 @pytest.mark.parametrize(
     "strategy,num_atoms",
     [
@@ -413,7 +418,7 @@ def test_a2a_correctness_gpu(strategy, num_atoms):
         ], f"Rank {r}: message passing result differs from reference on GPU"
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 @pytest.mark.parametrize("strategy", ["index_split", "spatial"])
 def test_a2a_consistency_across_graph_sizes_gpu(strategy):
     num_atoms = 16
@@ -451,7 +456,7 @@ def test_a2a_consistency_across_graph_sizes_gpu(strategy):
         ], f"Rank {r}: message passing result differs from reference on GPU"
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 @pytest.mark.parametrize("strategy", ["index_split", "spatial"])
 def test_a2a_multidim_embeddings_gpu(strategy):
     num_atoms = 12
