@@ -212,40 +212,12 @@ def _sparse_index_exchange(
     return send_counts, send_indices_global
 
 
-def _resolve_send_metadata(
-    send_info: dict | None,
-    needed_atoms: torch.Tensor,
-    recv_counts: torch.Tensor,
-    rank: int,
-    world_size: int,
-    device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
-    """
-    Resolve send_counts and send_indices_global.
-
-    Uses pre-computed send_info when available; otherwise runs
-    the sparse index exchange collective.
-    """
-    if send_info is not None:
-        return send_info["send_counts"], send_info["send_indices_global"]
-
-    with record_function("a2a_sparse_index_exchange"):
-        return _sparse_index_exchange(
-            needed_atoms=needed_atoms,
-            recv_counts=recv_counts,
-            rank=rank,
-            world_size=world_size,
-            device=device,
-        )
-
-
 @torch.compiler.disable
 def build_gp_context(
     edge_index: torch.Tensor,
     rank_assignments: torch.Tensor,
     rank: int,
     world_size: int,
-    send_info: dict | None = None,
     node_partition: torch.Tensor | None = None,
 ) -> GPContext:
     """
@@ -258,7 +230,6 @@ def build_gp_context(
             shape (total_atoms,).
         rank: This rank's GP rank.
         world_size: GP world size.
-        send_info: Pre-computed send metadata (skips index exchange).
         node_partition: Pre-computed local atom indices.
 
     Returns:
@@ -295,15 +266,15 @@ def build_gp_context(
     needed_atoms = needed_atoms[sort_order]
     needed_from_ranks = needed_from_ranks[sort_order]
 
-    # Resolve send metadata (pre-computed or via collective).
-    send_counts, send_indices_global = _resolve_send_metadata(
-        send_info,
-        needed_atoms,
-        recv_counts,
-        rank,
-        world_size,
-        device,
-    )
+    # Exchange send metadata via collective.
+    with record_function("a2a_sparse_index_exchange"):
+        send_counts, send_indices_global = _sparse_index_exchange(
+            needed_atoms=needed_atoms,
+            recv_counts=recv_counts,
+            rank=rank,
+            world_size=world_size,
+            device=device,
+        )
 
     # Build global-to-local index mapping.
     # Local atoms: [0, total_local_atoms)
