@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
 import torch
@@ -240,98 +239,6 @@ def _resolve_send_metadata(
         )
 
 
-def _validate_gp_mappings(
-    send_indices: torch.Tensor | None,
-    send_indices_global: torch.Tensor | None,
-    edge_index_local: torch.Tensor,
-    edge_index: torch.Tensor,
-    rank: int,
-    rank_assignments: torch.Tensor,
-    local_mask: torch.Tensor,
-    needed_atoms: torch.Tensor,
-    node_partition: torch.Tensor,
-    total_local_atoms: int,
-    total_atoms: int,
-    total_needed_atoms: int,
-    send_info: dict | None,
-) -> None:
-    """
-    Validate index mappings; raise with diagnostics on failure.
-
-    Only called when fast-path checks detect an error, so
-    GPU→CPU transfers here are acceptable.
-    """
-    device = edge_index.device
-
-    if send_indices is not None and send_indices.numel() > 0:
-        bad_mask = (send_indices < 0) | (send_indices >= total_local_atoms)
-        if bad_mask.any():
-            n_bad_send = bad_mask.sum().item()
-            bad_global = send_indices_global[bad_mask][:10].tolist()
-            bad_ra = rank_assignments[send_indices_global[bad_mask][:10]].tolist()
-            raise RuntimeError(
-                f"Rank {rank}: received requests for atoms not "
-                f"in our partition "
-                f"({n_bad_send}/{send_indices.numel()} OOB). "
-                f"bad_global={bad_global}, "
-                f"bad_ranks={bad_ra}. "
-                f"This usually means rank_assignments differs "
-                f"across ranks (e.g. non-deterministic crystal "
-                f"generation)."
-            )
-
-    n_bad = (edge_index_local < 0).sum().item()
-    if n_bad > 0:
-        bad_cols = (edge_index_local < 0).any(dim=0)
-        bad_globals = edge_index[:, bad_cols].unique()
-        bad_ranks = rank_assignments[bad_globals]
-
-        edge_src_remote = ~local_mask[edge_index[0]]
-        edge_needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
-        edge_needed_mask[edge_index[0, edge_src_remote]] = True
-        edge_needed_mask &= ~local_mask
-        edge_needed_count = edge_needed_mask.sum().item()
-
-        needed_set = torch.zeros(total_atoms, dtype=torch.bool, device=device)
-        needed_set[needed_atoms] = True
-        missing = edge_needed_mask & ~needed_set
-        missing_count = missing.sum().item()
-        local_in_needed = (local_mask & needed_set).sum().item()
-        n_local_bad = local_mask[bad_globals].sum().item()
-
-        logging.error(
-            f"Rank {rank}: GP DIAGNOSTIC — "
-            f"{n_bad} entries in edge_index_local are -1. "
-            f"edge_needed={edge_needed_count}, "
-            f"needed_atoms_count={total_needed_atoms}, "
-            f"missing_from_needed={missing_count}, "
-            f"local_in_needed={local_in_needed}, "
-            f"n_local_bad={n_local_bad}/{len(bad_globals)} "
-            f"bad globals, "
-            f"total_atoms={total_atoms}, "
-            f"total_local={total_local_atoms}, "
-            f"node_partition_range="
-            f"[{node_partition.min().item()}, "
-            f"{node_partition.max().item()}], "
-            f"send_info_provided={send_info is not None}, "
-            f"bad_globals[:20]={bad_globals.tolist()[:20]}, "
-            f"bad_ranks[:20]={bad_ranks.tolist()[:20]}"
-        )
-        if missing_count > 0:
-            missing_indices = missing.nonzero(as_tuple=True)[0][:10]
-            logging.error(
-                f"Rank {rank}: Missing atoms (edge-needed but "
-                f"not in needed_atoms): "
-                f"{missing_indices.tolist()}"
-            )
-        raise RuntimeError(
-            f"Rank {rank}: edge_index has {n_bad} endpoints "
-            f"not in global_to_local mapping. This indicates "
-            f"a mismatch between graph edges and partition "
-            f"assignments."
-        )
-
-
 @torch.compiler.disable
 def build_gp_context(
     edge_index: torch.Tensor,
@@ -429,28 +336,19 @@ def build_gp_context(
     recv_splits = splits_cpu[1].tolist()
     total_recv = sum(recv_splits)
 
-    # Validate (only touches GPU on error path).
-    has_bad_edges = (edge_index_local < 0).any().item()
-    has_bad_send = (
-        send_indices is not None
-        and send_indices.numel() > 0
-        and ((send_indices < 0) | (send_indices >= total_local_atoms)).any().item()
+    # Validate mappings.
+    assert not (edge_index_local < 0).any().item(), (
+        f"Rank {rank}: edge_index_local has negative entries — "
+        f"graph edges reference atoms not in any partition's "
+        f"global_to_local mapping."
     )
-    if has_bad_edges or has_bad_send:
-        _validate_gp_mappings(
-            send_indices,
-            send_indices_global,
-            edge_index_local,
-            edge_index,
-            rank,
-            rank_assignments,
-            local_mask,
-            needed_atoms,
-            node_partition,
-            total_local_atoms,
-            total_atoms,
-            total_needed_atoms,
-            send_info,
+    if send_indices is not None and send_indices.numel() > 0:
+        assert (
+            not ((send_indices < 0) | (send_indices >= total_local_atoms)).any().item()
+        ), (
+            f"Rank {rank}: send_indices out of bounds "
+            f"[0, {total_local_atoms}) — remote rank requested "
+            f"atoms not in our partition."
         )
 
     # Precompute local/remote edge indices for comm-compute overlap.
