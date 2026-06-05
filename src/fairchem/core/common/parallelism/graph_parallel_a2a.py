@@ -233,11 +233,11 @@ def build_gp_context(
     total_local_atoms = node_partition.shape[0]
 
     # Find remote atoms needed as edge sources.
-    local_mask = rank_assignments == rank
-    src_is_remote = ~local_mask[edge_index[0]]
+    remote_mask = rank_assignments != rank
+    src_is_remote = remote_mask[edge_index[0]]
     needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
     needed_mask[edge_index[0, src_is_remote]] = True
-    needed_mask &= ~local_mask
+    needed_mask &= remote_mask
     needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
 
     total_needed_atoms = needed_atoms.shape[0]
@@ -254,7 +254,7 @@ def build_gp_context(
     # Sort needed_atoms by source rank to match A2A recv_buf ordering.
     sort_order = needed_from_ranks.argsort(stable=True)
     needed_atoms = needed_atoms[sort_order]
-    needed_from_ranks = needed_from_ranks[sort_order]
+    needed_from_ranks_sorted = needed_from_ranks[sort_order]
 
     # Exchange send metadata via collective.
     with record_function("a2a_sparse_index_exchange"):
@@ -319,7 +319,7 @@ def build_gp_context(
         node_partition=node_partition,
         rank_assignments=rank_assignments,
         needed_atoms=needed_atoms,
-        needed_from_ranks=needed_from_ranks,
+        needed_from_ranks=needed_from_ranks_sorted,
         send_counts=send_counts,
         recv_counts=recv_counts,
         global_to_local=global_to_local,
