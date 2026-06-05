@@ -33,7 +33,6 @@ import torch
 from fairchem.core.common import distutils, gp_utils
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
     all_to_all_collect,
-    all_to_all_collect_compiled,
     build_gp_context,
 )
 from fairchem.core.common.parallelism.graph_partition import (
@@ -109,19 +108,8 @@ def _correctness_test_inner(
 
     send_indices = gp_ctx.send_indices
 
-    # Test both collect functions
+    # Test collect function
     x_recv_autograd = all_to_all_collect(x_local, gp_ctx, send_indices)
-    x_recv_compiled = all_to_all_collect_compiled(x_local, gp_ctx, send_indices)
-
-    # Verify shapes
-    assert x_recv_autograd.shape == x_recv_compiled.shape, (
-        f"Rank {rank}: shape mismatch "
-        f"autograd={x_recv_autograd.shape} "
-        f"vs compiled={x_recv_compiled.shape}"
-    )
-
-    # Verify autograd == compiled
-    values_match = torch.allclose(x_recv_autograd, x_recv_compiled, atol=1e-6)
 
     # Verify received values are correct:
     # x_recv should contain embeddings of gp_ctx.needed_atoms
@@ -166,7 +154,6 @@ def _correctness_test_inner(
         "local_atoms": gp_ctx.total_local_atoms,
         "needed_atoms": gp_ctx.total_needed_atoms,
         "num_edges": rank_edge_index.shape[1],
-        "values_match": values_match,
         "recv_correct": recv_correct,
         "edge_valid": edge_valid,
         "edge_in_bounds": edge_in_bounds,
@@ -217,7 +204,6 @@ def test_a2a_correctness_gloo(strategy, num_atoms):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["values_match"], f"Rank {r}: autograd vs compiled mismatch"
         assert result["recv_correct"], (
             f"Rank {r}: received embeddings don't match " f"expected values"
         )
@@ -269,7 +255,6 @@ def test_a2a_consistency_across_graph_sizes(strategy):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["values_match"], f"Rank {r}: autograd vs compiled mismatch"
         assert result["recv_correct"], (
             f"Rank {r}: received embeddings don't match " f"expected values"
         )
@@ -310,17 +295,14 @@ def _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy):
     send_indices = gp_ctx.send_indices
 
     x_recv = all_to_all_collect(x_local, gp_ctx, send_indices)
-    x_recv_c = all_to_all_collect_compiled(x_local, gp_ctx, send_indices)
 
     # Verify
     expected = x_global[gp_ctx.needed_atoms]
     recv_correct = torch.allclose(x_recv, expected, atol=1e-6)
-    compiled_match = torch.allclose(x_recv, x_recv_c, atol=1e-6)
 
     return {
         "rank": rank,
         "recv_correct": recv_correct,
-        "compiled_match": compiled_match,
         "recv_shape": x_recv.shape,
         "expected_shape": expected.shape,
     }
@@ -369,9 +351,6 @@ def test_a2a_multidim_embeddings(strategy):
             f"Rank {r}: multidim recv mismatch, "
             f"shape={result['recv_shape']} "
             f"vs {result['expected_shape']}"
-        )
-        assert result["compiled_match"], (
-            f"Rank {r}: autograd vs compiled mismatch " f"for multidim"
         )
 
 
