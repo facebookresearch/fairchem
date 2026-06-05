@@ -338,3 +338,153 @@ def test_a2a_multidim_embeddings(strategy):
             f"shape={result['recv_shape']} "
             f"vs {result['expected_shape']}"
         )
+
+
+# =========================================================================
+# GPU tests (NCCL, 2 processes)
+# =========================================================================
+
+
+def _to_cuda(*tensors):
+    device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
+    return tuple(t.to(device) for t in tensors)
+
+
+def _correctness_test_inner_gpu(
+    atomic_numbers, pos, edge_index, num_atoms, partition_strategy
+):
+    (atomic_numbers, pos, edge_index) = _to_cuda(atomic_numbers, pos, edge_index)
+    return _correctness_test_inner(
+        atomic_numbers, pos, edge_index, num_atoms, partition_strategy
+    )
+
+
+def _multidim_test_inner_gpu(x_global, pos, edge_index, num_atoms, strategy):
+    (x_global, pos, edge_index) = _to_cuda(x_global, pos, edge_index)
+    return _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "strategy,num_atoms",
+    [
+        ("index_split", 8),
+        ("index_split", 20),
+        ("spatial", 8),
+        ("spatial", 20),
+    ],
+)
+def test_a2a_correctness_gpu(strategy, num_atoms):
+    src, dst = [], []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    atomic_numbers = torch.arange(2, 2 + num_atoms, dtype=torch.float)
+    pos = torch.randn(num_atoms, 3) * 10
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        _correctness_test_inner_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        pos,
+        edge_index,
+        num_atoms,
+        strategy,
+    )
+
+    for result in all_rank_results:
+        r = result["rank"]
+        assert result[
+            "recv_correct"
+        ], f"Rank {r}: received embeddings don't match expected values on GPU"
+        assert result[
+            "edge_valid"
+        ], f"Rank {r}: edge_index_local has negative entries on GPU"
+        assert result[
+            "edge_in_bounds"
+        ], f"Rank {r}: edge_index_local has out-of-bounds entries on GPU"
+        assert result[
+            "mp_match"
+        ], f"Rank {r}: message passing result differs from reference on GPU"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("strategy", ["index_split", "spatial"])
+def test_a2a_consistency_across_graph_sizes_gpu(strategy):
+    num_atoms = 16
+
+    src, dst = [], []
+    for i in range(num_atoms):
+        for d in [-2, -1, 1, 2]:
+            j = (i + d) % num_atoms
+            src.append(i)
+            dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    atomic_numbers = torch.arange(10, 10 + num_atoms, dtype=torch.float)
+    pos = torch.zeros(num_atoms, 3)
+    pos[:, 0] = torch.arange(num_atoms, dtype=torch.float)
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        _correctness_test_inner_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        pos,
+        edge_index,
+        num_atoms,
+        strategy,
+    )
+
+    for result in all_rank_results:
+        r = result["rank"]
+        assert result[
+            "recv_correct"
+        ], f"Rank {r}: received embeddings don't match expected values on GPU"
+        assert result[
+            "mp_match"
+        ], f"Rank {r}: message passing result differs from reference on GPU"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("strategy", ["index_split", "spatial"])
+def test_a2a_multidim_embeddings_gpu(strategy):
+    num_atoms = 12
+    embed_dim = 16
+
+    src, dst = [], []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    torch.manual_seed(42)
+    x_global = torch.randn(num_atoms, embed_dim)
+    pos = torch.randn(num_atoms, 3) * 10
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+
+    all_rank_results = spawn_multi_process(
+        config,
+        _multidim_test_inner_gpu,
+        init_pg_and_rank_and_launch_test,
+        x_global,
+        pos,
+        edge_index,
+        num_atoms,
+        strategy,
+    )
+
+    for result in all_rank_results:
+        r = result["rank"]
+        assert result["recv_correct"], (
+            f"Rank {r}: multidim recv mismatch on GPU, "
+            f"shape={result['recv_shape']} "
+            f"vs {result['expected_shape']}"
+        )
