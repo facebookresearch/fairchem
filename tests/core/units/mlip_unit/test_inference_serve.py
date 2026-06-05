@@ -30,14 +30,14 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.launchers.cluster.ray_cluster import find_free_port
-from fairchem.core.units.mlip_unit.batch_server import (
+from fairchem.core.components.batch_server import (
     get_ray_connection_info,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
     wait_for_serve_ready,
 )
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
 ATOL = 5e-4
@@ -77,9 +77,11 @@ def local_ray_cluster_with_inference(uma_predict_unit, dashboard_port):
     setup_batch_predict_server(
         uma_predict_unit,
         deployment_name=DEPLOYMENT_NAME,
-        ray_actor_options={
-            "num_cpus": 1,
-            "num_gpus": 1 if num_gpus > 0 else 0,
+        deployment_config={
+            "ray_actor_options": {
+                "num_cpus": 1,
+                "num_gpus": 1 if num_gpus > 0 else 0,
+            },
         },
     )
     wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
@@ -298,9 +300,11 @@ def local_multiplexed_cluster():
 
     setup_multiplexed_batch_predict_server(
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
-        ray_actor_options={
-            "num_cpus": 1,
-            "num_gpus": num_gpus,
+        deployment_config={
+            "ray_actor_options": {
+                "num_cpus": 1,
+                "num_gpus": num_gpus,
+            },
         },
     )
     wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)

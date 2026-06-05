@@ -23,7 +23,7 @@ import numpy as np
 import ray
 import torch
 import torch.distributed as dist
-from ray import remote, serve
+from ray import remote
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
@@ -35,6 +35,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
     maybe_update_settings_backend,
@@ -842,7 +843,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     @classmethod
     def from_deployment_connection_info(
         cls,
-        deployment_name: str = "fairchem-inference",
+        deployment_name: str = "predict-server",
         ray_address: str | None = None,
         namespace: str | None = None,
         multiplexed_model_id: str | None = None,
@@ -874,7 +875,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             if ray_address and not ray.is_initialized():
                 ray.init(ray_address, namespace=namespace)
 
-            handle = serve.get_app_handle(deployment_name)
+            handle = get_app_handle_with_retry(deployment_name)
             cls._handle_cache[cache_key] = handle
 
         return cls(
