@@ -58,33 +58,21 @@ def _safe_all_to_all(
 @dataclass
 class GPContext:
     """
-    Graph parallel context holding per-rank atom assignments
-    and communication metadata for all-to-all.
+    Graph parallel context holding communication metadata for all-to-all.
 
-    This replaces the all-gather approach by tracking which atoms
-    each rank needs from other ranks for its local edge computations.
+    Runtime-only struct: every field is needed for the forward/backward pass.
+    Construction intermediates (node_partition, rank_assignments, needed_atoms,
+    global_to_local, etc.) are computed in build_gp_context but not stored.
 
     Attributes:
         rank: Current GP rank.
         world_size: Number of GP ranks.
-        node_partition: Global indices of atoms owned by this rank.
-        rank_assignments: For every atom in the global graph, which rank owns it.
-            Shape: (total_atoms,), dtype: int.
-        needed_atoms: Global indices of non-local atoms this rank needs
-            (sources of edges whose targets are in this rank's partition),
-            sorted by source rank.
-        needed_from_ranks: For each atom in needed_atoms, which rank owns it
-            (sorted to match needed_atoms ordering).
+        total_local_atoms: Number of atoms in this rank's partition.
+        send_indices: Local indices of atoms to send, ordered by
+            destination rank.
         send_counts: Number of atoms to send to each rank. Shape: (world_size,).
         recv_counts: Number of atoms to receive from each rank.
             Shape: (world_size,).
-        global_to_local: Mapping from global atom index to position in the
-            local concatenated tensor [local_atoms | received_atoms].
-            Shape: (total_atoms,), with -1 for atoms not accessible.
-        total_local_atoms: Number of atoms in this rank's partition.
-        total_needed_atoms: Total atoms needed from other ranks.
-        send_indices: Local indices of atoms to send, ordered by
-            destination rank.
         edge_index_local: Edge index remapped to local indices.
         send_splits: Per-rank split sizes for the embedding send buffer.
         recv_splits: Per-rank split sizes for the embedding recv buffer.
@@ -95,16 +83,10 @@ class GPContext:
 
     rank: int
     world_size: int
-    node_partition: torch.Tensor
-    rank_assignments: torch.Tensor
-    needed_atoms: torch.Tensor
-    needed_from_ranks: torch.Tensor
+    total_local_atoms: int
+    send_indices: torch.Tensor
     send_counts: torch.Tensor
     recv_counts: torch.Tensor
-    global_to_local: torch.Tensor
-    total_local_atoms: int
-    total_needed_atoms: int
-    send_indices: torch.Tensor
     edge_index_local: torch.Tensor
     send_splits: list[int]
     recv_splits: list[int]
@@ -260,7 +242,6 @@ def build_gp_context(
     # Sort needed_atoms by source rank to match A2A recv_buf ordering.
     sort_order = needed_from_ranks.argsort(stable=True)
     needed_atoms = needed_atoms[sort_order]
-    needed_from_ranks_sorted = needed_from_ranks[sort_order]
 
     # Exchange send metadata via collective.
     with record_function("a2a_sparse_index_exchange"):
@@ -322,16 +303,10 @@ def build_gp_context(
     return GPContext(
         rank=rank,
         world_size=world_size,
-        node_partition=node_partition,
-        rank_assignments=rank_assignments,
-        needed_atoms=needed_atoms,
-        needed_from_ranks=needed_from_ranks_sorted,
+        total_local_atoms=total_local_atoms,
+        send_indices=send_indices,
         send_counts=send_counts,
         recv_counts=recv_counts,
-        global_to_local=global_to_local,
-        total_local_atoms=total_local_atoms,
-        total_needed_atoms=total_needed_atoms,
-        send_indices=send_indices,
         edge_index_local=edge_index_local,
         send_splits=send_splits,
         recv_splits=recv_splits,

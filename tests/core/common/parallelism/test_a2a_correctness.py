@@ -15,7 +15,6 @@ Run via pytest:
 
 from __future__ import annotations
 
-import logging
 import os
 
 import pytest
@@ -35,10 +34,6 @@ from fairchem.core.common.test_utils import (
     init_pg_and_rank_and_launch_test,
     spawn_multi_process,
 )
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 # =========================================================================
 # Pytest-compatible distributed tests (CPU, Gloo, 2 processes)
@@ -98,12 +93,6 @@ def _correctness_test_inner(
     # Test collect function
     x_recv_autograd = all_to_all_collect(x_local, gp_ctx, send_indices)
 
-    # Verify received values are correct:
-    # x_recv should contain embeddings of gp_ctx.needed_atoms
-    # in the correct order (sorted by source rank).
-    expected_values = x_global[gp_ctx.needed_atoms]
-    recv_correct = torch.allclose(x_recv_autograd, expected_values, atol=1e-6)
-
     # Verify edge_index_local is valid
     x_full = torch.cat([x_local, x_recv_autograd], dim=0)
     edge_valid = (gp_ctx.edge_index_local >= 0).all().item()
@@ -139,9 +128,7 @@ def _correctness_test_inner(
         "partition_strategy": partition_strategy,
         "world_size": world_size,
         "local_atoms": gp_ctx.total_local_atoms,
-        "needed_atoms": gp_ctx.total_needed_atoms,
         "num_edges": rank_edge_index.shape[1],
-        "recv_correct": recv_correct,
         "edge_valid": edge_valid,
         "edge_in_bounds": edge_in_bounds,
         "mp_match": mp_match,
@@ -162,9 +149,8 @@ def test_a2a_correctness_gloo(strategy, num_atoms):
     Verify A2A correctness at 2 GPUs using Gloo backend.
 
     Creates a dense graph (all atoms connected) and verifies that:
-    1. Autograd and compiled collect produce identical results
-    2. Received embeddings contain correct values
-    3. Message passing produces correct aggregation
+    1. Edge indices are valid (non-negative, in-bounds)
+    2. Message passing produces correct aggregation vs reference
     """
     # Create dense graph
     src, dst = [], []
@@ -191,9 +177,6 @@ def test_a2a_correctness_gloo(strategy, num_atoms):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["recv_correct"], (
-            f"Rank {r}: received embeddings don't match " f"expected values"
-        )
         assert result["edge_valid"], f"Rank {r}: edge_index_local has negative entries"
         assert result[
             "edge_in_bounds"
@@ -242,9 +225,6 @@ def test_a2a_consistency_across_graph_sizes(strategy):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["recv_correct"], (
-            f"Rank {r}: received embeddings don't match " f"expected values"
-        )
         assert result["mp_match"], (
             f"Rank {r}: message passing result differs " f"from reference"
         )
@@ -283,15 +263,34 @@ def _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy):
 
     x_recv = all_to_all_collect(x_local, gp_ctx, send_indices)
 
-    # Verify
-    expected = x_global[gp_ctx.needed_atoms]
-    recv_correct = torch.allclose(x_recv, expected, atol=1e-6)
+    # Verify message passing produces the same result as non-distributed.
+    x_full = torch.cat([x_local, x_recv], dim=0)
+    x_source = x_full[gp_ctx.edge_index_local[0]]
+    local_result = torch.zeros(
+        gp_ctx.total_local_atoms,
+        x_source.shape[1],
+        dtype=x_source.dtype,
+        device=x_source.device,
+    )
+    local_result.index_add_(0, gp_ctx.edge_index_local[1], x_source)
+
+    # Reference: compute the same aggregation on the full graph
+    x_source_ref = x_global[rank_edge_index[0]]
+    ref_result = torch.zeros(
+        num_atoms,
+        x_source_ref.shape[1],
+        dtype=x_source_ref.dtype,
+        device=x_source_ref.device,
+    )
+    ref_result.index_add_(0, rank_edge_index[1], x_source_ref)
+    ref_local = ref_result[node_partition]
+
+    mp_match = torch.allclose(local_result, ref_local, atol=1e-6)
 
     return {
         "rank": rank,
-        "recv_correct": recv_correct,
+        "mp_match": mp_match,
         "recv_shape": x_recv.shape,
-        "expected_shape": expected.shape,
     }
 
 
@@ -334,10 +333,8 @@ def test_a2a_multidim_embeddings(strategy):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["recv_correct"], (
-            f"Rank {r}: multidim recv mismatch, "
-            f"shape={result['recv_shape']} "
-            f"vs {result['expected_shape']}"
+        assert result["mp_match"], (
+            f"Rank {r}: multidim mp mismatch, " f"recv_shape={result['recv_shape']}"
         )
 
 
@@ -406,9 +403,6 @@ def test_a2a_correctness_gpu(strategy, num_atoms):
     for result in all_rank_results:
         r = result["rank"]
         assert result[
-            "recv_correct"
-        ], f"Rank {r}: received embeddings don't match expected values on GPU"
-        assert result[
             "edge_valid"
         ], f"Rank {r}: edge_index_local has negative entries on GPU"
         assert result[
@@ -450,9 +444,6 @@ def test_a2a_consistency_across_graph_sizes_gpu(strategy):
     for result in all_rank_results:
         r = result["rank"]
         assert result[
-            "recv_correct"
-        ], f"Rank {r}: received embeddings don't match expected values on GPU"
-        assert result[
             "mp_match"
         ], f"Rank {r}: message passing result differs from reference on GPU"
 
@@ -489,8 +480,7 @@ def test_a2a_multidim_embeddings_gpu(strategy):
 
     for result in all_rank_results:
         r = result["rank"]
-        assert result["recv_correct"], (
-            f"Rank {r}: multidim recv mismatch on GPU, "
-            f"shape={result['recv_shape']} "
-            f"vs {result['expected_shape']}"
+        assert result["mp_match"], (
+            f"Rank {r}: multidim mp mismatch on GPU, "
+            f"recv_shape={result['recv_shape']}"
         )
