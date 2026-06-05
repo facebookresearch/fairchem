@@ -629,6 +629,11 @@ def test_a2a_spatial_partition():
 # GPU tests (NCCL, 2 processes)
 # =========================================================================
 
+_skip_if_lt_2_gpus = pytest.mark.skipif(
+    not torch.cuda.is_available() or torch.cuda.device_count() < 2,
+    reason="Requires at least 2 GPUs",
+)
+
 
 def _to_cuda(*tensors):
     device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
@@ -650,7 +655,7 @@ def a2a_spatial_partition_test_gpu(atomic_numbers, edge_index, pos):
     return a2a_spatial_partition_test(atomic_numbers, edge_index, pos)
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 @pytest.mark.parametrize(
     "num_atoms, edges",
     [
@@ -689,7 +694,7 @@ def test_a2a_vs_allgather_gpu(num_atoms, edges):
         )
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 def test_a2a_backward_gpu():
     atomic_numbers = torch.tensor([2.0, 3.0, 5.0, 7.0])
     edge_index = torch.tensor(
@@ -719,9 +724,11 @@ def test_a2a_backward_gpu():
         )
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 @pytest.mark.parametrize("world_size", [2, 3])
 def test_a2a_multi_rank_gpu(world_size):
+    if torch.cuda.device_count() < world_size:
+        pytest.skip(f"Requires at least {world_size} GPUs")
     num_atoms = 6
     src = list(range(num_atoms))
     dst = [(i + 1) % num_atoms for i in range(num_atoms)]
@@ -750,7 +757,7 @@ def test_a2a_multi_rank_gpu(world_size):
         )
 
 
-@pytest.mark.gpu()
+@_skip_if_lt_2_gpus
 def test_a2a_spatial_partition_gpu():
     num_atoms = 8
     pos = torch.cat(
