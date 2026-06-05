@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from copy import deepcopy
 
 import numpy as np
@@ -1859,4 +1860,98 @@ def test_execution_mode_not_set_when_conditions_not_met(model_name):
     assert predict_unit.inference_settings.execution_mode is None, (
         f"Expected execution_mode to be None when activation_checkpointing=True, "
         f"got {predict_unit.inference_settings.execution_mode}"
+    )
+
+
+# =========================================================================
+# Full-model GP correctness: no-GP vs all-gather vs A2A
+# Skipped on CI (no multi-GPU), run locally or via SLURM
+# =========================================================================
+
+_skip_if_ci = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Multi-GPU test, skipped in CI",
+)
+
+
+@_skip_if_ci
+@pytest.mark.gpu()
+@pytest.mark.parametrize("num_atoms", [10, 50, 100])
+@pytest.mark.parametrize(
+    "workers, gp_mode",
+    [
+        # All-gather (default GP)
+        (1, None),
+        (2, None),
+        (4, None),
+        # A2A + spatial
+        (1, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (4, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # A2A + index_split
+        (1, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+        (2, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+        (4, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+    ],
+)
+def test_full_model_gp_correctness(num_atoms, workers, gp_mode):
+    seed = 42
+    model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    ifsets = InferenceSettings(
+        tf32=False,
+        merge_mole=True,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+
+    overrides = None
+    if gp_mode is not None:
+        overrides = {"backbone": gp_mode}
+
+    seed_everywhere(seed)
+    ppunit = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device="cuda",
+        inference_settings=ifsets,
+        num_workers=workers,
+        overrides=overrides,
+    )
+    pp_results = ppunit.predict(atomic_data)
+    distutils.cleanup_gp_ray()
+
+    seed_everywhere(seed)
+    ref_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=ifsets
+    )
+    ref_results = ref_unit.predict(atomic_data)
+
+    assert torch.allclose(
+        pp_results["energy"].detach().cpu(),
+        ref_results["energy"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Energy mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"pp={pp_results['energy'].item():.6f}, "
+        f"ref={ref_results['energy'].item():.6f}"
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu(),
+        ref_results["forces"].detach().cpu(),
+        atol=FORCE_TOL,
+    ), (
+        f"Forces mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"max_diff={torch.max(torch.abs(pp_results['forces'].detach().cpu() - ref_results['forces'].detach().cpu())).item():.6e}"
+    )
+    assert torch.allclose(
+        pp_results["stress"].detach().cpu(),
+        ref_results["stress"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Stress mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}"
     )

@@ -38,28 +38,15 @@ pytest tests/core/common/parallelism/test_a2a_correctness.py -v
 8 tests: correctness at 100/500 atoms × 2 strategies, consistency across graph sizes × 2,
 1536-dim embeddings × 2.
 
-### 1d. Full-model GPU correctness (8 GPUs, ~10 min)
-
-Run BL and A2A benchmarks at 1000 atoms with a single repeat and compare outputs:
+### 1d. Full-model GPU correctness (4+ GPUs, ~5 min)
 
 ```bash
-# BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
-  job=local_8gpu \
-  runner.natoms_list=[1000] \
-  runner.timeiters=1 \
-  runner.repeats=1
-
-# A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
-  job=local_8gpu \
-  runner.natoms_list=[1000] \
-  runner.timeiters=1 \
-  runner.repeats=1 \
-  '+runner.overrides={backbone: {use_all_to_all_gp: true, gp_partition_strategy: spatial}}'
+pytest tests/core/units/mlip_unit/test_predict.py::test_full_model_gp_correctness -v
 ```
 
-Verify energy/forces/stress match between BL and A2A (tol=1e-4).
+27 tests: 3 atom counts (10, 50, 100) × 9 configs (no-GP, allgather, A2A-spatial,
+A2A-index_split at 1/2/4 workers). Compares energy/forces/stress against single-GPU
+reference (tol: energy/stress 5e-4, forces 1e-4). Skipped on CI (`CI=true`).
 
 ### 1e. Predict pipeline + MD consistency (CPU, PR3 branch, ~2 min)
 
