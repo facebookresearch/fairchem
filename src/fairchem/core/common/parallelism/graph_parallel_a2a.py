@@ -71,8 +71,10 @@ class GPContext:
         rank_assignments: For every atom in the global graph, which rank owns it.
             Shape: (total_atoms,), dtype: int.
         needed_atoms: Global indices of non-local atoms this rank needs
-            (sources of edges whose targets are in this rank's partition).
-        needed_from_ranks: For each atom in needed_atoms, which rank owns it.
+            (sources of edges whose targets are in this rank's partition),
+            sorted by source rank.
+        needed_from_ranks: For each atom in needed_atoms, which rank owns it
+            (sorted to match needed_atoms ordering).
         send_counts: Number of atoms to send to each rank. Shape: (world_size,).
         recv_counts: Number of atoms to receive from each rank.
             Shape: (world_size,).
@@ -84,6 +86,11 @@ class GPContext:
         send_indices: Local indices of atoms to send, ordered by
             destination rank.
         edge_index_local: Edge index remapped to local indices.
+        send_splits: Per-rank split sizes for the embedding send buffer.
+        recv_splits: Per-rank split sizes for the embedding recv buffer.
+        total_recv: Total number of embeddings to receive (sum of recv_splits).
+        local_edge_idx: Indices into edge_index_local where source is a local atom.
+        remote_edge_idx: Indices into edge_index_local where source is a remote atom.
     """
 
     rank: int
