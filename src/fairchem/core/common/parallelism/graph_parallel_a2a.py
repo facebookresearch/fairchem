@@ -237,7 +237,6 @@ def build_gp_context(
     src_is_remote = remote_mask[edge_index[0]]
     needed_mask = torch.zeros(total_atoms, dtype=torch.bool, device=device)
     needed_mask[edge_index[0, src_is_remote]] = True
-    needed_mask &= remote_mask
     needed_atoms = needed_mask.nonzero(as_tuple=True)[0]
 
     total_needed_atoms = needed_atoms.shape[0]
