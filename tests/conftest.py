@@ -246,6 +246,28 @@ def water_xyz_file(tmp_path_factory):
     return str(fpath)
 
 
+def get_predict_unit_for_test(name_or_path, **kwargs):
+    """
+    Wrapper that handles both registered model names and filesystem paths.
+
+    When ``name_or_path`` is an existing file on disk (e.g. passed via
+    ``--uma-checkpoint /path/to/file.pt``), we load with
+    ``load_predict_unit`` directly.  Otherwise we delegate to the
+    production ``get_predict_unit`` which resolves registered names.
+    """
+    import os
+
+    if os.path.exists(name_or_path):
+        from fairchem.core.units.mlip_unit import load_predict_unit
+
+        return load_predict_unit(
+            name_or_path, atom_refs=None, form_elem_refs=None, **kwargs
+        )
+    from fairchem.core import pretrained_mlip
+
+    return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
+
+
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
     if ray.is_initialized():

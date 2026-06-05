@@ -18,6 +18,7 @@ from ase.build import bulk, make_supercell
 
 from fairchem.core import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
+from tests.conftest import get_predict_unit_for_test
 from tests.perf.performance_report import MeasurementStats, PerformanceReport
 
 if TYPE_CHECKING:
@@ -127,7 +128,7 @@ def test_pretrained_models(test_case, performance_report) -> None:
     max_time_sec: float = 600
 
     # Setup the predictor
-    predictor = pretrained_mlip.get_predict_unit(
+    predictor = get_predict_unit_for_test(
         model_name=test_case.model,
         device=test_case.device,
     )
@@ -141,7 +142,6 @@ def test_pretrained_models(test_case, performance_report) -> None:
     # minutes when using github runners (1 hour 10 minutes -> 49 minutes).
     for task in predictor.dataset_to_tasks:
         for atoms in test_case.structures:
-
             # Setup the prediction task
             atomic_data = AtomicData.from_ase(
                 input_atoms=atoms,
@@ -214,7 +214,7 @@ class MeanConvergenceChecker:
 
     def __init__(
         self,
-        relative_mean_change_threshold: float = 0.002, # 0.2%
+        relative_mean_change_threshold: float = 0.002,  # 0.2%
         required_samples_below_threshold: int = 3,
     ) -> None:
         """
@@ -270,7 +270,7 @@ class MeanConvergenceChecker:
         """
 
         # Grab the most recent relative mean changes
-        changes = self._mean_change_history[-self._required_samples_below_threshold:]
+        changes = self._mean_change_history[-self._required_samples_below_threshold :]
 
         # Converged only if the most recent "required_samples_below_threshold"
         # changes are all below "relative_mean_change_threshold"

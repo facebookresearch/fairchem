@@ -19,7 +19,7 @@ import pytest
 from ase import Atoms
 from ase.optimize import BFGS
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.calculate.recipes.omol import (
     conformers,
     distance_scaling,
@@ -32,6 +32,7 @@ from fairchem.core.components.calculate.recipes.omol import (
     singlepoint,
     spin_gap,
 )
+from tests.conftest import get_predict_unit_for_test
 
 pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
 
@@ -68,7 +69,7 @@ class TestOmolRecipes(unittest.TestCase):
         self.test_atoms = self.water_atoms.copy()
 
         # Real ASE Calculator using FAIRChem
-        predictor = pretrained_mlip.get_predict_unit(self._uma_checkpoint, device="cpu")
+        predictor = get_predict_unit_for_test(self._uma_checkpoint, device="cpu")
         self.calculator = FAIRChemCalculator(predictor, task_name="omol")
 
         # Mock optimization flags

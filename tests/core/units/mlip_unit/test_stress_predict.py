@@ -16,8 +16,8 @@ import torch
 from ase.build import bulk, fcc111
 
 import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
+from tests.conftest import get_predict_unit_for_test
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -62,7 +62,7 @@ def bulk_atoms() -> Atoms:
 
 @pytest.fixture()
 def uma_predict_unit(uma_checkpoint):
-    return pretrained_mlip.get_predict_unit(uma_checkpoint)
+    return get_predict_unit_for_test(uma_checkpoint)
 
 
 def get_displacement_and_cell(

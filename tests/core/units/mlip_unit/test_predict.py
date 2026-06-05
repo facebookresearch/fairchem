@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from copy import deepcopy
 
 import numpy as np
@@ -20,8 +21,7 @@ from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 from ase.data import chemical_symbols
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
@@ -31,21 +31,25 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
-from tests.conftest import seed_everywhere
+from tests.conftest import get_predict_unit_for_test, seed_everywhere
+
+
+def _resolve_checkpoint_path(name_or_path: str) -> str:
+    """
+    Resolve a model name or filesystem path to a checkpoint file path.
+    """
+    if os.path.exists(name_or_path):
+        return name_or_path
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+
+    return pretrained_checkpoint_path_from_name(name_or_path)
+
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
 pytestmark = pytest.mark.uma_models("uma-s-1p1")
-
-
-def _resolve_checkpoint_path(name_or_path: str) -> str:
-    """Return a filesystem path for either a registered model name or an
-    already-on-disk path."""
-    import os
-
-    if os.path.exists(name_or_path):
-        return name_or_path
-    return pretrained_checkpoint_path_from_name(name_or_path)
 
 
 _REPRESENTATIVE_ELEMENTS = [
@@ -61,7 +65,7 @@ SINGLE_ATOM_ENERGY_ATOL = 0.05  # eV, for model-predicted single atom energies
 @pytest.fixture(scope="module")
 def uma_predict_unit_cuda(uma_checkpoint):
     """Module-scoped predict unit using the UMA checkpoint under test, device=cuda."""
-    return pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
+    return get_predict_unit_for_test(uma_checkpoint, device="cuda")
 
 
 @pytest.fixture(scope="module")
@@ -69,14 +73,14 @@ def uma_predict_unit(uma_predict_unit_cuda, uma_checkpoint):
     """Module-scoped predict unit - uses cuda version if available, otherwise cpu."""
     if torch.cuda.is_available():
         return uma_predict_unit_cuda
-    return pretrained_mlip.get_predict_unit(uma_checkpoint)
+    return get_predict_unit_for_test(uma_checkpoint)
 
 
 @pytest.fixture(scope="module")
 def uma_merge_mole_predict_unit(uma_checkpoint):
     """Module-scoped predict unit with merge_mole=True for MgO tests."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    return pretrained_mlip.get_predict_unit(
+    return get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
 
@@ -84,13 +88,13 @@ def uma_merge_mole_predict_unit(uma_checkpoint):
 @pytest.fixture(scope="module")
 def uma_1p1_predict_unit():
     """Module-scoped predict unit for uma-s-1p1."""
-    return pretrained_mlip.get_predict_unit("uma-s-1p1")
+    return get_predict_unit_for_test("uma-s-1p1")
 
 
 @pytest.fixture(scope="module")
 def uma_1p2_predict_unit():
     """Module-scoped predict unit for uma-s-1p2."""
-    return pretrained_mlip.get_predict_unit("uma-s-1p2")
+    return get_predict_unit_for_test("uma-s-1p2")
 
 
 @pytest.mark.gpu()
@@ -105,7 +109,7 @@ def test_single_dataset_predict(internal_graph_gen_version, uma_checkpoint):
         external_graph_gen=False,
         internal_graph_gen_version=internal_graph_gen_version,
     )
-    uma_predict_unit = pretrained_mlip.get_predict_unit(
+    uma_predict_unit = get_predict_unit_for_test(
         uma_checkpoint, inference_settings=inference_settings
     )
 
@@ -148,7 +152,7 @@ def test_multiple_dataset_predict(internal_graph_gen_version, uma_checkpoint):
         external_graph_gen=False,
         internal_graph_gen_version=internal_graph_gen_version,
     )
-    uma_predict_unit = pretrained_mlip.get_predict_unit(
+    uma_predict_unit = get_predict_unit_for_test(
         uma_checkpoint, inference_settings=inference_settings
     )
 
@@ -238,7 +242,7 @@ def _test_parallel_predict_unit_impl(
     distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
-    normal_predict_unit = pretrained_mlip.get_predict_unit(
+    normal_predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device=device, inference_settings=ifsets
     )
     for _ in range(runs):
@@ -349,7 +353,7 @@ def _test_parallel_predict_unit_batch_impl(
     distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
-    normal_predict_unit = pretrained_mlip.get_predict_unit(
+    normal_predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device=device, inference_settings=ifsets
     )
     for _ in range(runs):
@@ -421,7 +425,7 @@ def test_batching_consistency(padding, uma_checkpoint):
         external_graph_gen=False,
         edge_chunk_size=padding,
     )
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=ifsets
     )
 
@@ -566,7 +570,7 @@ def _get_predict_unit_with_wigner_mode(use_quaternion: bool, uma_checkpoint: str
         external_graph_gen=False,
         use_quaternion_wigner=use_quaternion,
     )
-    return pretrained_mlip.get_predict_unit(
+    return get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
 
@@ -717,7 +721,7 @@ def test_merge_mole_composition_check(uma_checkpoint):
     atoms_cu = bulk("Cu", "fcc", a=3.6)
 
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
@@ -744,7 +748,7 @@ def test_merge_mole_vs_non_merged_consistency(uma_model_name):
 
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit_merged = pretrained_mlip.get_predict_unit(
+    predict_unit_merged = get_predict_unit_for_test(
         uma_model_name, device="cuda", inference_settings=settings_merged
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
@@ -760,7 +764,7 @@ def test_merge_mole_vs_non_merged_consistency(uma_model_name):
 
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
-    predict_unit_non_merged = pretrained_mlip.get_predict_unit(
+    predict_unit_non_merged = get_predict_unit_for_test(
         uma_model_name, device="cuda", inference_settings=settings_non_merged
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
@@ -826,7 +830,7 @@ def test_merge_mole_consistent_batch(uma_checkpoint):
     atoms = bulk("MgO", "rocksalt", a=4.213)
     n_systems = 3
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
 
@@ -847,7 +851,7 @@ def test_merge_mole_consistent_batch(uma_checkpoint):
 def test_merge_mole_inconsistent_batch(uma_checkpoint):
     """Test that merge_mole raises AssertionError when batch contains systems with different compositions."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
 
@@ -872,7 +876,7 @@ def test_merge_mole_batch_predict_matches_single(uma_checkpoint):
     atoms = bulk("MgO", "rocksalt", a=4.213)
     atoms_supercell = make_supercell(atoms, 2 * np.eye(3))
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_checkpoint, device="cuda", inference_settings=settings
     )
 
@@ -1139,7 +1143,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device, uma_checkpoint):
 
     # Trial A: no merge
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
-    predict_unit_A = pretrained_mlip.get_predict_unit(
+    predict_unit_A = get_predict_unit_for_test(
         uma_checkpoint,
         device=device,
         inference_settings=settings_no_merge,
@@ -1150,7 +1154,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device, uma_checkpoint):
     distutils.cleanup_gp_ray()
 
     # Trial B: no merge again (baseline for numerical noise)
-    predict_unit_B = pretrained_mlip.get_predict_unit(
+    predict_unit_B = get_predict_unit_for_test(
         uma_checkpoint,
         device=device,
         inference_settings=settings_no_merge,
@@ -1162,7 +1166,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device, uma_checkpoint):
 
     # Trial C: merge
     settings_merge = InferenceSettings(merge_mole=True, **base_settings)
-    predict_unit_C = pretrained_mlip.get_predict_unit(
+    predict_unit_C = get_predict_unit_for_test(
         uma_checkpoint,
         device=device,
         inference_settings=settings_merge,
@@ -1775,7 +1779,7 @@ def test_execution_mode_auto_set_umas_fast_gpu(uma_model_name):
     the execution_mode should automatically be set to umas_fast_gpu.
     """
 
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_model_name, device="cuda", inference_settings="turbo"
     )
 
@@ -1801,7 +1805,7 @@ def test_execution_mode_not_overridden_when_explicit(uma_model_name):
         execution_mode=ExecutionMode.GENERAL,
     )
 
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         uma_model_name, device="cuda", inference_settings=settings
     )
 
@@ -1819,7 +1823,7 @@ def test_execution_mode_not_overridden_when_explicit(uma_model_name):
 def test_execution_mode_not_set_when_conditions_not_met(model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 
-    predict_unit = pretrained_mlip.get_predict_unit(
+    predict_unit = get_predict_unit_for_test(
         model_name, device="cuda", inference_settings="turbo"
     )
 

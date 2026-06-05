@@ -18,7 +18,7 @@ from ase.md.verlet import VelocityVerlet
 from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate import pretrained_mlip
+from tests.conftest import get_predict_unit_for_test
 
 pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
 
@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
 def run_ase_langevin(uma_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -58,7 +58,7 @@ def run_ase_langevin(uma_checkpoint):
 def run_ase_nve(uma_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -96,7 +96,7 @@ def run_ase_npt(uma_checkpoint):
     """
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -141,7 +141,7 @@ def run_ase_npt(uma_checkpoint):
 
 
 def run_lammps(input_file, uma_checkpoint):
-    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
     lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
