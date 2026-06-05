@@ -623,3 +623,166 @@ def test_a2a_spatial_partition():
             f"Rank {result['rank']}: spatial partitioning produced "
             f"different global results than index partitioning"
         )
+
+
+# =========================================================================
+# GPU tests (NCCL, 2 processes)
+# =========================================================================
+
+
+def _to_cuda(*tensors):
+    device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
+    return tuple(t.to(device) for t in tensors)
+
+
+def a2a_vs_allgather_test_gpu(atomic_numbers, edge_index):
+    (atomic_numbers, edge_index) = _to_cuda(atomic_numbers, edge_index)
+    return a2a_vs_allgather_test(atomic_numbers, edge_index)
+
+
+def a2a_backward_test_gpu(atomic_numbers, edge_index):
+    (atomic_numbers, edge_index) = _to_cuda(atomic_numbers, edge_index)
+    return a2a_backward_test(atomic_numbers, edge_index)
+
+
+def a2a_spatial_partition_test_gpu(atomic_numbers, edge_index, pos):
+    (atomic_numbers, edge_index, pos) = _to_cuda(atomic_numbers, edge_index, pos)
+    return a2a_spatial_partition_test(atomic_numbers, edge_index, pos)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, edges",
+    [
+        (4, [[0, 1, 1, 2, 2, 3], [1, 0, 2, 1, 3, 2]]),
+        (5, [[0, 0, 0, 0, 1, 2, 3, 4], [1, 2, 3, 4, 0, 0, 0, 0]]),
+        (
+            4,
+            [
+                [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+                [1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2],
+            ],
+        ),
+    ],
+)
+def test_a2a_vs_allgather_gpu(num_atoms, edges):
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+    edge_index = torch.tensor(edges, dtype=torch.long)
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        a2a_vs_allgather_test_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["match"], (
+            f"Rank {result['rank']}: all-gather and all-to-all produced "
+            f"different results on GPU.\n"
+            f"allgather: {result['allgather']}\n"
+            f"all_to_all: {result['all_to_all']}"
+        )
+
+
+@pytest.mark.gpu()
+def test_a2a_backward_gpu():
+    atomic_numbers = torch.tensor([2.0, 3.0, 5.0, 7.0])
+    edge_index = torch.tensor(
+        [[0, 0, 1, 1, 2, 2, 3, 3], [1, 2, 0, 3, 0, 3, 1, 2]],
+        dtype=torch.long,
+    )
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        a2a_backward_test_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["energy_match"], (
+            f"Rank {result['rank']}: energy mismatch on GPU. "
+            f"AG={result['allgather_energy']}, "
+            f"A2A={result['all_to_all_energy']}"
+        )
+        assert result["forces_match"], (
+            f"Rank {result['rank']}: forces mismatch on GPU. "
+            f"AG={result['allgather_forces']}, "
+            f"A2A={result['all_to_all_forces']}"
+        )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("world_size", [2, 3])
+def test_a2a_multi_rank_gpu(world_size):
+    num_atoms = 6
+    src = list(range(num_atoms))
+    dst = [(i + 1) % num_atoms for i in range(num_atoms)]
+    edge_src = src + dst
+    edge_dst = dst + src
+    edge_index = torch.tensor([edge_src, edge_dst], dtype=torch.long)
+    atomic_numbers = torch.arange(2, 2 + num_atoms, dtype=torch.float)
+
+    config = PGConfig(
+        backend="nccl",
+        world_size=world_size,
+        gp_group_size=world_size,
+        use_gp=True,
+    )
+    all_rank_results = spawn_multi_process(
+        config,
+        a2a_vs_allgather_test_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+    )
+
+    for result in all_rank_results:
+        assert result["match"], (
+            f"world_size={world_size}, " f"rank {result['rank']}: mismatch on GPU"
+        )
+
+
+@pytest.mark.gpu()
+def test_a2a_spatial_partition_gpu():
+    num_atoms = 8
+    pos = torch.cat(
+        [
+            torch.randn(4, 3) + torch.tensor([0.0, 0.0, 0.0]),
+            torch.randn(4, 3) + torch.tensor([100.0, 0.0, 0.0]),
+        ]
+    )
+    atomic_numbers = torch.arange(
+        2, 2 + num_atoms, dtype=torch.float, requires_grad=False
+    )
+    src = []
+    dst = []
+    for i in range(num_atoms):
+        for j in range(num_atoms):
+            if i != j:
+                src.append(i)
+                dst.append(j)
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+
+    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    all_rank_results = spawn_multi_process(
+        config,
+        a2a_spatial_partition_test_gpu,
+        init_pg_and_rank_and_launch_test,
+        atomic_numbers,
+        edge_index,
+        pos,
+    )
+
+    for result in all_rank_results:
+        assert result["match"], (
+            f"Rank {result['rank']}: spatial partitioning produced "
+            f"different global results than index partitioning on GPU"
+        )
