@@ -141,32 +141,38 @@ class TestBuildGPContext:
         assert ctx.rank == 0
         assert ctx.world_size == 2
         assert ctx.total_local_atoms == 2
-        assert torch.equal(ctx.node_partition, torch.tensor([0, 1]))
 
-        # Rank 0 targets: atoms 0 and 1
-        # Edge (2, 0): src=2 is remote, tgt=0 is local -> need atom 2
-        # Edge (1, 0): src=1 is local -> don't need
-        # Edge (0, 1): src=0 is local -> don't need
-        assert 2 in ctx.needed_atoms
+        # Edge (2, 0): src=2 is remote -> should appear as remote src in edge_index_local
+        # Verify edge_index_local has some remote sources (index >= total_local_atoms)
+        has_remote_src = (ctx.edge_index_local[0] >= ctx.total_local_atoms).any()
+        assert has_remote_src
 
-    def test_global_to_local_mapping(self):
+    def test_edge_index_local_validity(self):
         """
-        Verify that global_to_local correctly maps to local indices.
+        Verify that edge_index_local indices are valid and correctly
+        separate local vs remote sources.
         """
+        # 4 atoms: rank 0 owns [0,1], rank 1 owns [2,3]
+        # Full graph edges, then filter to rank 0's targets
         edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 3, 2]])
         rank_assignments = torch.tensor([0, 0, 1, 1])
 
-        ctx = build_gp_context(edge_index, rank_assignments, rank=0, world_size=2)
+        # Filter to edges where target belongs to rank 0
+        target_mask = (rank_assignments == 0)[edge_index[1]]
+        rank_edge_index = edge_index[:, target_mask]
 
-        # Local atoms [0, 1] should map to indices [0, 1]
-        assert ctx.global_to_local[0] == 0
-        assert ctx.global_to_local[1] == 1
+        ctx = build_gp_context(rank_edge_index, rank_assignments, rank=0, world_size=2)
 
-        # Remote atoms that are needed should map to
-        # indices >= total_local_atoms
-        for atom in ctx.needed_atoms:
-            local_idx = ctx.global_to_local[atom].item()
-            assert local_idx >= ctx.total_local_atoms
+        # All indices should be non-negative
+        assert (ctx.edge_index_local >= 0).all()
+
+        # All indices should be in bounds
+        total = ctx.total_local_atoms + ctx.total_recv
+        assert (ctx.edge_index_local < total).all()
+
+        # All targets should be local (we filtered to rank 0 targets)
+        n_local = ctx.total_local_atoms
+        assert (ctx.edge_index_local[1] < n_local).all()
 
     def test_no_cross_partition_edges(self):
         """
@@ -176,8 +182,9 @@ class TestBuildGPContext:
         rank_assignments = torch.tensor([0, 0, 1, 1])
 
         ctx = build_gp_context(edge_index, rank_assignments, rank=0, world_size=2)
-        assert ctx.total_needed_atoms == 0
-        assert ctx.needed_atoms.numel() == 0
+        # All sources should be local (no remote atoms needed)
+        assert (ctx.edge_index_local[0] < ctx.total_local_atoms).all()
+        assert ctx.recv_counts.sum() == 0
 
     def test_edge_split_indices(self):
         """
@@ -252,8 +259,8 @@ def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
     # Combine local + received
     x_full = torch.cat([x, x_received], dim=0)
 
-    # Remap edges to local space (inline, no helper function needed)
-    edge_index_local = gp_ctx.global_to_local[edge_index]
+    # Use precomputed local edge index
+    edge_index_local = gp_ctx.edge_index_local
 
     # Simple message passing: source embeddings aggregated to targets
     x_source = x_full[edge_index_local[0]]
