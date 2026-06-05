@@ -81,12 +81,9 @@ class GPContext:
             Shape: (total_atoms,), with -1 for atoms not accessible.
         total_local_atoms: Number of atoms in this rank's partition.
         total_needed_atoms: Total atoms needed from other ranks.
-        send_indices: Precomputed local indices of atoms to send, ordered by
-            destination rank. Computed once at build time to avoid per-forward
-            all-to-all index exchange. None if not yet computed.
-        edge_index_local: Precomputed edge index remapped to local indices.
-            None if not yet computed (set by build_gp_context when edge_index
-            is provided).
+        send_indices: Local indices of atoms to send, ordered by
+            destination rank.
+        edge_index_local: Edge index remapped to local indices.
     """
 
     rank: int
@@ -100,20 +97,13 @@ class GPContext:
     global_to_local: torch.Tensor
     total_local_atoms: int
     total_needed_atoms: int
-    send_indices: torch.Tensor | None = None
-    edge_index_local: torch.Tensor | None = None
-    # Precomputed Python lists to avoid repeated .tolist() in AllToAllCollect
-    send_splits: list[int] | None = None
-    recv_splits: list[int] | None = None
-    total_recv: int | None = None
-    # Precomputed integer indices for local/remote edges (for
-    # comm-compute overlap).  Local edges have source atoms owned by
-    # this rank (edge_index_local[0] < total_local_atoms), remote
-    # edges have sources from other ranks.  Using integer indices
-    # instead of boolean masks for compile-friendly indexing (avoids
-    # dynamic-shape boolean masking in compiled graphs).
-    local_edge_idx: torch.Tensor | None = None
-    remote_edge_idx: torch.Tensor | None = None
+    send_indices: torch.Tensor
+    edge_index_local: torch.Tensor
+    send_splits: list[int]
+    recv_splits: list[int]
+    total_recv: int
+    local_edge_idx: torch.Tensor
+    remote_edge_idx: torch.Tensor
 
 
 def _sparse_index_exchange(
@@ -122,7 +112,7 @@ def _sparse_index_exchange(
     rank: int,
     world_size: int,
     device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Variable-split index exchange using two small all-to-alls.
 
@@ -156,7 +146,7 @@ def _sparse_index_exchange(
     if not gp_utils.initialized():
         return (
             torch.zeros(world_size, dtype=torch.long, device=device),
-            None,
+            torch.empty(0, dtype=torch.long, device=device),
         )
 
     gp_group = gp_utils.get_gp_group()
@@ -291,12 +281,10 @@ def build_gp_context(
     )
 
     # Convert send_indices from global to local.
-    send_indices = None
-    if send_indices_global is not None:
-        if send_indices_global.numel() > 0:
-            send_indices = global_to_local[send_indices_global]
-        else:
-            send_indices = torch.empty(0, dtype=torch.long, device=device)
+    if send_indices_global.numel() > 0:
+        send_indices = global_to_local[send_indices_global]
+    else:
+        send_indices = torch.empty(0, dtype=torch.long, device=device)
 
     # Remap edge_index to local indices.
     edge_index_local = global_to_local[edge_index]
@@ -313,7 +301,7 @@ def build_gp_context(
         "edge_index_local has negative entries — graph edges "
         "reference atoms not in global_to_local mapping.",
     )
-    if send_indices is not None and send_indices.numel() > 0:
+    if send_indices.numel() > 0:
         torch._assert_async(
             ~((send_indices < 0) | (send_indices >= total_local_atoms)).any(),
             "send_indices out of bounds — remote rank requested "
@@ -573,11 +561,6 @@ def all_to_all_collect(
         x_received: Remote atom embeddings,
             shape (total_needed, *features).
     """
-    if send_indices is None:
-        raise ValueError(
-            "send_indices is None — build_gp_context should always "
-            "compute send_indices. Check GP setup."
-        )
     return AllToAllCollect.apply(
         x_local,
         send_indices,
