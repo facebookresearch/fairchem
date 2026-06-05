@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 import torch
 
@@ -629,9 +631,9 @@ def test_a2a_spatial_partition():
 # GPU tests (NCCL, 2 processes)
 # =========================================================================
 
-_skip_if_lt_2_gpus = pytest.mark.skipif(
-    not torch.cuda.is_available() or torch.cuda.device_count() < 2,
-    reason="Requires at least 2 GPUs",
+_skip_if_ci = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Multi-GPU test, skipped in CI",
 )
 
 
@@ -655,7 +657,7 @@ def a2a_spatial_partition_test_gpu(atomic_numbers, edge_index, pos):
     return a2a_spatial_partition_test(atomic_numbers, edge_index, pos)
 
 
-@_skip_if_lt_2_gpus
+@_skip_if_ci
 @pytest.mark.parametrize(
     "num_atoms, edges",
     [
@@ -694,7 +696,7 @@ def test_a2a_vs_allgather_gpu(num_atoms, edges):
         )
 
 
-@_skip_if_lt_2_gpus
+@_skip_if_ci
 def test_a2a_backward_gpu():
     atomic_numbers = torch.tensor([2.0, 3.0, 5.0, 7.0])
     edge_index = torch.tensor(
@@ -724,11 +726,9 @@ def test_a2a_backward_gpu():
         )
 
 
-@_skip_if_lt_2_gpus
+@_skip_if_ci
 @pytest.mark.parametrize("world_size", [2, 3])
 def test_a2a_multi_rank_gpu(world_size):
-    if torch.cuda.device_count() < world_size:
-        pytest.skip(f"Requires at least {world_size} GPUs")
     num_atoms = 6
     src = list(range(num_atoms))
     dst = [(i + 1) % num_atoms for i in range(num_atoms)]
@@ -757,7 +757,7 @@ def test_a2a_multi_rank_gpu(world_size):
         )
 
 
-@_skip_if_lt_2_gpus
+@_skip_if_ci
 def test_a2a_spatial_partition_gpu():
     num_atoms = 8
     pos = torch.cat(
