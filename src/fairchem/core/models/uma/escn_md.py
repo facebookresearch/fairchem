@@ -772,7 +772,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "Local partition atoms not found in halo — "
                 "AABB expansion may be too small"
             )
-            rank_assignments_local = rank_assignments[halo_indices]
 
             graph_dict = generate_graph(
                 data_subset,
@@ -782,23 +781,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
                 node_partition=node_partition_local,
-                rank_assignments=rank_assignments_local,
-                rank=gp_utils.get_gp_rank(),
-                world_size=gp_utils.get_gp_world_size(),
             )
 
             # Remap edge_index from halo-local to global for use
             # by the backbone forward pass (source/target embedding
             # lookups index into atomic_numbers_full).
             graph_dict["edge_index"] = halo_indices[graph_dict["edge_index"]]
-
-            # Remap send_info indices from halo-local to global so
-            # build_gp_context can use them with global-coord
-            # rank_assignments and edge_index.
-            if "send_info" in graph_dict:
-                si = graph_dict["send_info"]
-                if si["send_indices_global"].numel() > 0:
-                    si["send_indices_global"] = halo_indices[si["send_indices_global"]]
 
             return graph_dict
 
@@ -894,13 +882,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     radius_pbc_version=self.radius_pbc_version,
                     pbc=pbc,
                     node_partition=node_partition,
-                    rank_assignments=(
-                        rank_assignments if self.use_all_to_all_gp else None
-                    ),
-                    rank=(gp_utils.get_gp_rank() if self.use_all_to_all_gp else None),
-                    world_size=(
-                        gp_utils.get_gp_world_size() if self.use_all_to_all_gp else None
-                    ),
                 )
         else:
             # this assume edge_index is provided
@@ -954,7 +935,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         rank_assignments=rank_assignments,
                         rank=gp_utils.get_gp_rank(),
                         world_size=gp_utils.get_gp_world_size(),
-                        send_info=graph_dict.get("send_info"),
                         node_partition=node_partition,
                     )
                 data_dict["gp_ctx"] = gp_ctx
