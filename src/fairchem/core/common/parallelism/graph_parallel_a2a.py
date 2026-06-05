@@ -336,19 +336,17 @@ def build_gp_context(
     recv_splits = splits_cpu[1].tolist()
     total_recv = sum(recv_splits)
 
-    # Validate mappings.
-    assert not (edge_index_local < 0).any().item(), (
-        f"Rank {rank}: edge_index_local has negative entries — "
-        f"graph edges reference atoms not in any partition's "
-        f"global_to_local mapping."
+    # Validate mappings (async — no device-to-host sync).
+    torch._assert_async(
+        ~(edge_index_local < 0).any(),
+        "edge_index_local has negative entries — graph edges "
+        "reference atoms not in global_to_local mapping.",
     )
     if send_indices is not None and send_indices.numel() > 0:
-        assert (
-            not ((send_indices < 0) | (send_indices >= total_local_atoms)).any().item()
-        ), (
-            f"Rank {rank}: send_indices out of bounds "
-            f"[0, {total_local_atoms}) — remote rank requested "
-            f"atoms not in our partition."
+        torch._assert_async(
+            ~((send_indices < 0) | (send_indices >= total_local_atoms)).any(),
+            "send_indices out of bounds — remote rank requested "
+            "atoms not in our partition.",
         )
 
     # Precompute local/remote edge indices for comm-compute overlap.
