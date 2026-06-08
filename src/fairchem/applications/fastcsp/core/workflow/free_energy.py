@@ -86,6 +86,7 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "match_only": fe_config.get("match_only", True),
         "energy_cutoff": fe_config.get("energy_cutoff", None),
         "max_structures": fe_config.get("max_structures", None),
+        "compute_dos": fe_config.get("compute_dos", False),
     }
 
 
@@ -152,6 +153,7 @@ def compute_free_energy_single(
             t_step=fe_config.get("t_step", 10),
             t_max=fe_config.get("t_max", 500),
             t_min=fe_config.get("t_min", 0),
+            compute_dos=fe_config.get("compute_dos", False),
         )
         result.update(thermo)
     except Exception:
@@ -212,6 +214,7 @@ def compute_free_energy_batch(
                     t_step=fe_config.get("t_step", 10),
                     t_max=fe_config.get("t_max", 500),
                     t_min=fe_config.get("t_min", 0),
+                    compute_dos=fe_config.get("compute_dos", False),
                 )
                 result.update(thermo)
             except Exception:
