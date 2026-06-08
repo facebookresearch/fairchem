@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 import ray
 from ray.util import ActorPool
 
-from fairchem.core.calculate._batch_server import (
+from fairchem.core.components.batch_server import (
     AutobatchConfig,
     AutobatchResult,
     probe_optimal_batch_size,
@@ -246,14 +246,21 @@ class InferenceBatcher:
 
         self.predict_server_handle = setup_batch_predict_server(
             predict_unit=self.predict_unit,
-            max_batch_size=self.max_batch_size,
-            batch_wait_timeout_s=self.batch_wait_timeout_s,
-            split_oom_batch=split_oom_batch,
-            num_replicas=self.num_replicas,
-            ray_actor_options=ray_actor_options or {},
+            deployment_config={
+                "ray_actor_options": ray_actor_options or {},
+                **(
+                    {"autoscaling_config": self.autoscaling_config}
+                    if self.autoscaling_config is not None
+                    else {"num_replicas": self.num_replicas}
+                ),
+            },
+            batch_config={
+                "max_batch_size": self.max_batch_size,
+                "batch_wait_timeout_s": self.batch_wait_timeout_s,
+                "split_oom_batch": split_oom_batch,
+            },
             deployment_name=self.deployment_name,
             route_prefix=f"/{self.deployment_name}",
-            autoscaling_config=self.autoscaling_config,
         )
 
         if concurrency_backend_options is None:

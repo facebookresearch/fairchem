@@ -410,7 +410,7 @@ def test_autobatch_config_initialization(ray_session, uma_predict_unit):
 
 def test_probe_optimal_batch_size_cpu():
     """Test probing on CPU returns defaults."""
-    from fairchem.core.calculate._batch_server import (
+    from fairchem.core.components.batch_server import (
         AutobatchConfig,
         probe_optimal_batch_size,
     )
