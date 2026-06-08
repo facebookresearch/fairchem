@@ -10,5 +10,4 @@ scheduler:
     qos: h200_ocp_high
     mem_gb: 0
     cpus_per_task: 24
-    timeout_hr: 1
 graph_parallel_group_size: 64
