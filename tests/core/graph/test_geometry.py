@@ -64,35 +64,72 @@ class TestWrapPositionsAgainstASE:
         np.testing.assert_allclose(result_torch, expected, atol=1e-10)
 
 
-class TestMinimumImageDisplacement:
-    """Minimum-image convention folds displacements to the shortest periodic image."""
+class TestMinimumImageDisplacementAgainstASE:
+    """Minimum-image displacements must agree with ASE's mic distances."""
 
-    def test_known_displacements_with_mixed_pbc(self):
-        L = 10.0
-        cell = (torch.eye(3, dtype=torch.float64) * L).unsqueeze(0).expand(3, -1, -1)
-        pbc = torch.tensor([
-            [True, True, True],
-            [True, True, True],
-            [True, True, False],
-        ])
+    @pytest.fixture()
+    def random_system(self):
+        rng = np.random.default_rng(42)
+        cell = _random_cell(rng)
+        n_atoms = 20
+        frac = rng.uniform(0.0, 1.0, size=(n_atoms, 3))
+        pos = frac @ cell
+        return pos, cell
 
-        dr = torch.tensor(
-            [
-                [0.5, 0.5, 0.5],
-                [9.5, -9.8, 0.0],
-                [9.5, -9.8, 25.0],
-            ],
-            dtype=torch.float64,
+    @pytest.mark.parametrize(
+        "pbc",
+        [
+            [True, True, True],
+            [True, False, True],
+            [False, False, False],
+        ],
+        ids=["full-pbc", "mixed-pbc", "no-pbc"],
+    )
+    def test_matches_ase_get_all_distances(self, random_system, pbc):
+        from ase import Atoms
+
+        pos, cell = random_system
+        pbc_arr = np.array(pbc)
+
+        atoms = Atoms(
+            symbols=["H"] * len(pos),
+            positions=pos,
+            cell=cell,
+            pbc=pbc_arr,
         )
 
-        result = minimum_image_displacement(dr, cell, pbc)
+        # ASE reference: all pairwise mic displacement vectors, shape (n, n, 3)
+        ase_vecs = atoms.get_all_distances(mic=True, vector=True)
 
-        expected = torch.tensor(
-            [
-                [0.5, 0.5, 0.5],
-                [-0.5, 0.2, 0.0],
-                [-0.5, 0.2, 25.0],
-            ],
-            dtype=torch.float64,
-        )
-        torch.testing.assert_close(result, expected, atol=1e-12, rtol=0)
+        n = len(pos)
+        for i in range(n):
+            # Displacement vectors from atom i to every other atom
+            dr_np = pos - pos[i]  # (n, 3) raw displacements
+
+            dr = torch.from_numpy(dr_np)
+            cell_t = torch.from_numpy(cell).unsqueeze(0).expand(n, -1, -1)
+            pbc_t = torch.tensor(pbc).unsqueeze(0).expand(n, -1)
+
+            result = minimum_image_displacement(dr, cell_t, pbc_t).numpy()
+
+            np.testing.assert_allclose(
+                result,
+                ase_vecs[i],
+                atol=1e-10,
+                err_msg=f"MIC displacement mismatch for reference atom {i}",
+            )
+
+    def test_gradients_flow_through_cell(self):
+        """Verify autograd gradients survive through cell."""
+        cell = torch.eye(3, dtype=torch.float64) * 10.0
+        cell.requires_grad_(True)
+        cell_b = cell.unsqueeze(0).expand(2, -1, -1)
+        pbc = torch.tensor([[True, True, True], [True, True, True]])
+        dr = torch.tensor([[9.5, 0.5, 0.5], [0.5, 9.8, 0.0]], dtype=torch.float64)
+
+        result = minimum_image_displacement(dr, cell_b, pbc)
+        loss = result.sum()
+        loss.backward()
+
+        assert cell.grad is not None
+        assert cell.grad.abs().sum().item() > 0
