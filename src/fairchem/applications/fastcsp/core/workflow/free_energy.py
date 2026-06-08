@@ -133,11 +133,12 @@ def compute_free_energy_single(
 
     result = {"source_file": str(input_file), "row_index": row_index}
 
-    atoms = cif_to_atoms(row["relaxed_cif"])
+    cif_col = "cif_relaxed" if "cif_relaxed" in structures_df.columns else "relaxed_cif"
+    atoms = cif_to_atoms(row[cif_col])
     if atoms is None:
         logger.warning(
             f"Skipping structure at index {row_index} in {input_file}: "
-            "could not parse relaxed_cif"
+            "could not parse relaxed cif"
         )
         return result
 
@@ -195,11 +196,14 @@ def compute_free_energy_batch(
         structures_df = pd.read_parquet(input_file, engine="pyarrow")
         row = structures_df.iloc[row_index]
 
-        atoms = cif_to_atoms(row["relaxed_cif"])
+        cif_col = (
+            "cif_relaxed" if "cif_relaxed" in structures_df.columns else "relaxed_cif"
+        )
+        atoms = cif_to_atoms(row[cif_col])
         if atoms is None:
             logger.warning(
                 f"Skipping structure at index {row_index} in {input_file}: "
-                "could not parse relaxed_cif"
+                "could not parse relaxed cif"
             )
         else:
             atoms.calc = calc
