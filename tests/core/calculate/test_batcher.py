@@ -31,7 +31,7 @@ pytestmark = [
     pytest.mark.serial,
     pytest.mark.gpu,
     pytest.mark.uses_uma,
-    pytest.mark.uma_models("uma-s-1p1"),
+    pytest.mark.uma_models("uma-s-1p2"),
 ]
 
 
