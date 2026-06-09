@@ -108,7 +108,7 @@ We don't set a device here, so we get a warning about using a CPU device. You ca
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 ```
 
 ```{code-cell}
@@ -142,7 +142,7 @@ from ase.build import add_adsorbate, fcc100, molecule
 from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -170,7 +170,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -193,7 +193,7 @@ from ase.io import Trajectory
 from ase.md.langevin import Langevin
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -251,7 +251,7 @@ from ase.build import add_adsorbate, fcc111
 from ase.optimize import BFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -333,7 +333,7 @@ axs[1].set_axis_off()
 from ase import Atoms
 from ase.optimize import BFGS
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 from ase.vibrations import Vibrations
@@ -363,7 +363,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 
 cu = Atoms(
     [Atom("Cu", [0.000, 0.000, 0.000])],
@@ -466,7 +466,7 @@ Phonons have applications in computing the stability and free energy of solids. 
 from ase.build import bulk
 from ase.phonons import Phonons
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Setup crystal
@@ -537,7 +537,7 @@ from ase.build import add_adsorbate, fcc111, molecule
 from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object

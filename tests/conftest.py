@@ -63,6 +63,10 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
         "markers",
+        "compile_gpu: GPU test that uses torch.compile — run in a separate pytest session to avoid cross-test memory accumulation",
+    )
+    config.addinivalue_line(
+        "markers",
         "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
     )
     config.addinivalue_line(
@@ -149,6 +153,8 @@ def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
     if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
+    if "compile_gpu" in item.keywords and not torch.cuda.is_available():
+        pytest.skip("CUDA not available, skipping compile_gpu test")
     if "dgl" in item.keywords:
         # check dgl is installed
         fairchem_cpp_found = False
@@ -214,6 +220,40 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+def _memory_summary() -> str:
+    parts = []
+    if torch.cuda.is_available():
+        free_gpu, total_gpu = torch.cuda.mem_get_info()
+        parts.append(f"GPU free {free_gpu / 1024**3:.2f}/{total_gpu / 1024**3:.2f} GB")
+    import psutil
+
+    vm = psutil.virtual_memory()
+    parts.append(f"CPU free {vm.available / 1024**3:.2f}/{vm.total / 1024**3:.2f} GB")
+    return " | ".join(parts)
+
+
+_test_counts: dict[str, int] = {"current": 0, "total": 0}
+
+
+def pytest_collection_finish(session):
+    _test_counts["total"] = len(session.items)
+
+
+def pytest_runtest_logreport(report):
+    if report.when != "teardown":
+        return
+    _test_counts["current"] += 1
+    current = _test_counts["current"]
+    total = _test_counts["total"]
+    pct = int(100 * current / total) if total else 0
+    summary = _memory_summary()
+    if summary:
+        print(
+            f"\n[mem] [{current}/{total} {pct:3d}%] {report.nodeid}: {summary}",
+            flush=True,
+        )
+
+
 @pytest.fixture()
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
@@ -221,9 +261,17 @@ def seed_fixture():
 
 @pytest.fixture()
 def compile_reset_state():
+    import gc
+
     torch.compiler.reset()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     yield
     torch.compiler.reset()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 @pytest.fixture(scope="session")

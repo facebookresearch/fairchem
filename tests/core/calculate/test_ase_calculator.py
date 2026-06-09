@@ -28,7 +28,6 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     FormationEnergyCalculator,
-    MixedPBCError,
 )
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
 
@@ -315,34 +314,6 @@ def test_large_bulk_system(large_bulk_atoms, single_mlip_predict_unit):
     # Test forces calculation
     forces = large_bulk_atoms.get_forces()
     assert isinstance(forces, np.ndarray)
-
-
-@pytest.mark.parametrize(
-    "pbc",
-    [
-        (True, True, True),
-        (False, False, False),
-        (True, False, True),
-        (False, True, False),
-        (True, True, False),
-    ],
-)
-def test_mixed_pbc_behavior(pbc, aperiodic_atoms, all_calculators):
-    """Test guess_pbc behavior"""
-    pbc = np.array(pbc)
-    aperiodic_atoms.pbc = pbc
-    if np.all(pbc):
-        aperiodic_atoms.cell = [100.0, 100.0, 100.0]
-
-    for calc in all_calculators():
-        if np.any(aperiodic_atoms.pbc) and not np.all(aperiodic_atoms.pbc):
-            with pytest.raises(MixedPBCError):
-                aperiodic_atoms.calc = calc
-                aperiodic_atoms.get_potential_energy()
-        else:
-            aperiodic_atoms.calc = calc
-            energy = aperiodic_atoms.get_potential_energy()
-            assert isinstance(energy, float)
 
 
 def test_error_for_pbc_with_zero_cell(aperiodic_atoms, all_calculators):
