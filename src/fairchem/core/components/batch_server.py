@@ -135,6 +135,21 @@ class BatchPredictServerMixin:
     decorator themselves.
     """
 
+    def configure_batching(
+        self,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
+    ):
+        """
+        Configure batching parameters at runtime.
+
+        Args:
+            max_batch_size: Maximum number of atoms in a batch.
+            batch_wait_timeout_s: Timeout in seconds to wait for a full batch.
+        """
+        self.predict.set_max_batch_size(max_batch_size)
+        self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
+
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         # Move the returned value to CPU so that callers running on
         # CPU-only Ray workers can deserialize it without requiring CUDA
