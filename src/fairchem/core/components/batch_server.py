@@ -89,7 +89,7 @@ class BatchConfig:
 
     max_batch_size: int = DEFAULT_MAX_BATCH_SIZE
     batch_wait_timeout_s: float = DEFAULT_BATCH_WAIT_TIMEOUT_S
-    split_oom_batch: bool = True
+    split_oom_batch: bool = False
     # None defers to Ray Serve's ``@serve.batch`` default.
     max_concurrent_batches: int | None = None
 
@@ -216,12 +216,17 @@ class BatchPredictServerMixin:
             except torch.OutOfMemoryError as err:
                 if not self.split_oom_batch:
                     raise torch.OutOfMemoryError(
-                        "Reduce max_batch_size or set split_oom_batch=True "
-                        "to automatically split OOM batches."
+                        "Out of memory during batched inference. "
+                        "This can happen when the batch contains systems of very different sizes. "
+                        "Consider reducing max_batch_size or setting split_oom_batch=True "
+                        "to automatically split OOM batches. "
+                        "Note: split_oom_batch is useful for heterogeneous batches but may "
+                        "impact performance for homogeneous workloads."
                     ) from err
                 if len(current) == 1:
                     raise torch.OutOfMemoryError(
-                        "Out of memory for a single system left in batch."
+                        "Out of memory for a single system left in batch. "
+                        "Try reducing max_batch_size or using a model with lower memory requirements."
                     ) from err
                 logging.warning(
                     "Caught out of memory error. Splitting batch and retrying."
@@ -310,7 +315,7 @@ class BatchPredictServer(BatchPredictServerMixin):
         predict_unit_ref,
         max_batch_size: int,
         batch_wait_timeout_s: float,
-        split_oom_batch: bool = True,
+        split_oom_batch: bool = False,
         max_concurrent_batches: int | None = None,
     ):
         """
@@ -322,7 +327,11 @@ class BatchPredictServer(BatchPredictServerMixin):
                 The actual number of atoms will likely be larger than this as batches
                 are split when num atoms exceeds this value.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
-            split_oom_batch: If true will split batch if an OOM error is raised
+            split_oom_batch: If True, automatically split batches that cause OOM errors
+                and retry with smaller sub-batches. This is useful when running batches
+                with very different sized systems (e.g., mixed molecules and bulk
+                materials), but may impact performance for homogeneous workloads.
+                Defaults to False.
             max_concurrent_batches: Max concurrent batches for the @serve.batch
                 decorator. If None, uses Ray Serve's default.
         """
@@ -382,7 +391,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         self,
         max_batch_size: int,
         batch_wait_timeout_s: float,
-        split_oom_batch: bool = True,
+        split_oom_batch: bool = False,
         max_concurrent_batches: int | None = None,
     ):
         """
@@ -391,7 +400,11 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         Args:
             max_batch_size: Maximum number of atoms in a batch.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
-            split_oom_batch: If true will split batch if an OOM error is raised.
+            split_oom_batch: If True, automatically split batches that cause OOM errors
+                and retry with smaller sub-batches. This is useful when running batches
+                with very different sized systems (e.g., mixed molecules and bulk
+                materials), but may impact performance for homogeneous workloads.
+                Defaults to False.
             max_concurrent_batches: Max concurrent batches for the @serve.batch
                 decorator. If None, uses Ray Serve's default.
         """
