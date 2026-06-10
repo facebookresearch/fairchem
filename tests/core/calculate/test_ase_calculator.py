@@ -666,7 +666,7 @@ def test_formation_energy_calculator_different_task_types(single_mlip_predict_un
 def test_formation_energy_calculator_predictions_against_known_values(
     atoms_with_formation_energy,
 ):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1")
+    predict_unit = get_predict_unit_for_test("uma-s-1p1")
     base_calc = FAIRChemCalculator(predict_unit, task_name="omat")
     formation_calc = FormationEnergyCalculator(base_calc)
 

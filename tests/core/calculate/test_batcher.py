@@ -22,7 +22,6 @@ from ray import serve
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate._batch import InferenceBatcher
-from fairchem.core.datasets.atomic_data import AtomicData
 from tests.conftest import get_predict_unit_for_test
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
