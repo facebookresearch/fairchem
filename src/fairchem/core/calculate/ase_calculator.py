@@ -222,7 +222,8 @@ class FAIRChemCalculator(Calculator):
             raise ValueError("Atoms object has no atoms inside.")
 
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
-        self._check_atoms_pbc(atoms)
+        if np.all(atoms.pbc) and np.allclose(atoms.cell, 0):
+            raise AllZeroUnitCellError
 
         # Validate input data
         self.predictor.validate_atoms_data(atoms, self.task_name)
@@ -263,10 +264,6 @@ class FAIRChemCalculator(Calculator):
         Args:
             atoms (ase.Atoms): The atomic structure to check.
         """
-        if np.all(atoms.pbc) and np.allclose(atoms.cell, 0):
-            raise AllZeroUnitCellError
-        if np.any(atoms.pbc) and not np.all(atoms.pbc):
-            raise MixedPBCError
 
 
 class FormationEnergyCalculator(Calculator):
@@ -382,21 +379,7 @@ class FormationEnergyCalculator(Calculator):
                 self.results["free_energy"] = formation_energy
 
 
-class MixedPBCError(ValueError):
-    """Specific exception example."""
-
-    def __init__(
-        self,
-        message="Attempted to guess PBC for an atoms object, but the atoms object has PBC set to True for some"
-        "dimensions but not others. Please ensure that the atoms object has PBC set to True for all dimensions.",
-    ):
-        self.message = message
-        super().__init__(self.message)
-
-
 class AllZeroUnitCellError(ValueError):
-    """Specific exception example."""
-
     def __init__(
         self,
         message="Atoms object claims to have PBC set, but the unit cell is identically 0. Please ensure that the atoms"

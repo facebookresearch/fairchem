@@ -338,6 +338,7 @@ class TestCheckpointableRayJob:
             cluster_state=state,
             worker_wait_timeout_seconds=60,
             payload=job.payload,
+            temp_dir_template=None,
             test_kwarg="value",
         )
         mock_worker.assert_not_called()
@@ -362,7 +363,9 @@ class TestCheckpointableRayJob:
 
         # Worker script should be called, not head script
         mock_worker.assert_called_once_with(
-            cluster_state=state, worker_wait_timeout_seconds=60
+            cluster_state=state,
+            worker_wait_timeout_seconds=60,
+            temp_dir_template=None,
         )
         mock_head.assert_not_called()
 

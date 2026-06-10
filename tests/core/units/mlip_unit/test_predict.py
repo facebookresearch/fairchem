@@ -881,7 +881,7 @@ def batch_server_handle(uma_predict_unit):
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
     from ray import serve
 
-    from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
+    from fairchem.core.components.batch_server import setup_batch_predict_server
 
     # Ensure Ray is properly shut down before initializing
     if ray.is_initialized():
@@ -892,7 +892,7 @@ def batch_server_handle(uma_predict_unit):
     # Initialize Ray with specific configuration
     ray.init(
         ignore_reinit_error=True,
-        num_cpus=4,
+        num_cpus=10,
         num_gpus=1 if torch.cuda.is_available() else 0,
         logging_level="ERROR",  # Reduce noise in test output
     )
@@ -900,12 +900,16 @@ def batch_server_handle(uma_predict_unit):
     # Setup the batch server
     server_handle = setup_batch_predict_server(
         predict_unit=uma_predict_unit,
-        max_batch_size=8,
-        batch_wait_timeout_s=0.05,
-        num_replicas=1,
-        ray_actor_options={
-            "num_gpus": 1 if torch.cuda.is_available() else 0,
-            "num_cpus": 2,
+        deployment_config={
+            "num_replicas": 1,
+            "ray_actor_options": {
+                "num_gpus": 1 if torch.cuda.is_available() else 0,
+                "num_cpus": 2,
+            },
+        },
+        batch_config={
+            "max_batch_size": 8,
+            "batch_wait_timeout_s": 0.05,
         },
     )
 
@@ -931,7 +935,6 @@ def test_batch_server_predict_unit_with_calculator(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
-        predict_unit=uma_predict_unit,
     )
 
     atoms = bulk("Cu")
@@ -966,9 +969,7 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-def test_batch_server_predict_unit_multiple_systems(
-    batch_server_handle, uma_predict_unit
-):
+def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
     """Test BatchServerPredictUnit with multiple concurrent requests."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -976,7 +977,6 @@ def test_batch_server_predict_unit_multiple_systems(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
-        predict_unit=uma_predict_unit,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
