@@ -12,6 +12,7 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
+from dataclasses import asdict, dataclass
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
 
@@ -21,11 +22,107 @@ from ray import serve
 from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
-from fairchem.core.units.mlip_unit.predict import move_tensors_to_cpu
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
+
+
+def _to_cpu(obj: Any) -> Any:
+    """Return a CPU-resident copy of ``obj`` so it can be deserialized on CPU-only Ray workers.
+
+    Uses ``torch.save`` + ``torch.load(map_location="cpu")`` which transparently
+    handles arbitrary object graphs containing tensors, ``nn.Module`` instances,
+    OmegaConf containers, etc., without needing to walk and mutate the structure.
+    """
+    import io
+
+    buf = io.BytesIO()
+    torch.save(obj, buf)
+    buf.seek(0)
+    return torch.load(buf, map_location="cpu", weights_only=False)
+
+
+# Centralized batching defaults. Kept here (not on the server class
+# __init__s) so the two setup helpers can't drift apart silently.
+DEFAULT_MAX_BATCH_SIZE = 512
+DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
+
+
+@dataclass
+class DeploymentConfig:
+    """Typed mirror of the most common ``@serve.deployment`` / ``.options()`` kwargs.
+
+    Fields default to ``None`` and are dropped before being forwarded to
+    Ray Serve, so unspecified options inherit Ray Serve's own defaults
+    rather than this class re-asserting them.
+    """
+
+    num_replicas: int | None = None
+    ray_actor_options: dict | None = None
+    # ``autoscaling_config`` accepts a dict or a ``ray.serve.schema.AutoscalingConfig``;
+    # ``logging_config`` accepts a dict or ``ray.serve.schema.LoggingConfig``.
+    autoscaling_config: Any = None
+    max_ongoing_requests: int | None = None
+    max_queued_requests: int | None = None
+    max_replicas_per_node: int | None = None
+    graceful_shutdown_timeout_s: float | None = None
+    graceful_shutdown_wait_loop_s: float | None = None
+    health_check_period_s: float | None = None
+    health_check_timeout_s: float | None = None
+    logging_config: Any = None
+    user_config: dict | None = None
+    placement_group_bundles: list | None = None
+    placement_group_strategy: str | None = None
+    request_router_config: Any = None
+
+    def to_options_kwargs(self) -> dict[str, Any]:
+        """Return ``{name: value}`` for fields that were explicitly set (non-None)."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+@dataclass
+class BatchConfig:
+    """Typed mirror of kwargs accepted by ``BatchPredictServer.__init__`` and
+    ``MultiplexedBatchPredictServer.__init__``.
+    """
+
+    max_batch_size: int = DEFAULT_MAX_BATCH_SIZE
+    batch_wait_timeout_s: float = DEFAULT_BATCH_WAIT_TIMEOUT_S
+    split_oom_batch: bool = True
+    # None defers to Ray Serve's ``@serve.batch`` default.
+    max_concurrent_batches: int | None = None
+
+    def to_init_kwargs(self) -> dict[str, Any]:
+        """Return ``{name: value}`` for fields that were explicitly set (non-None)."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+def _build_serve_batch_kwargs(
+    max_batch_size: int,
+    batch_wait_timeout_s: float,
+    max_concurrent_batches: int | None,
+) -> dict[str, Any]:
+    """
+    Build the kwargs forwarded to ``@serve.batch`` when wrapping a
+    deployment's predict method.
+
+    ``max_concurrent_batches`` is a decoration-time-only arg in Ray Serve
+    (no runtime setter exists), so it must be baked into the decorator
+    at deployment construction time. ``max_batch_size`` and
+    ``batch_wait_timeout_s`` are passed here too so the initial values
+    are correct from the first request.
+    """
+    batch_kwargs: dict[str, Any] = {
+        "batch_size_fn": lambda batch: sum(
+            sample.natoms.sum() for sample in batch
+        ).item(),
+        "max_batch_size": max_batch_size,
+        "batch_wait_timeout_s": batch_wait_timeout_s,
+    }
+    if max_concurrent_batches is not None:
+        batch_kwargs["max_concurrent_batches"] = max_concurrent_batches
+    return batch_kwargs
 
 
 class BatchPredictServerMixin:
@@ -38,20 +135,12 @@ class BatchPredictServerMixin:
     decorator themselves.
     """
 
-    def configure_batching(
-        self,
-        max_batch_size: int,
-        batch_wait_timeout_s: float,
-    ):
-        self.predict.set_max_batch_size(max_batch_size)
-        self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
-
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         # Move the returned value to CPU so that callers running on
         # CPU-only Ray workers can deserialize it without requiring CUDA
         # (e.g. ``atom_refs`` typically contains tensors stored on the
         # server's device).
-        return move_tensors_to_cpu(getattr(self.predict_unit, attribute_name))
+        return _to_cpu(getattr(self.predict_unit, attribute_name))
 
     def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -89,57 +178,46 @@ class BatchPredictServerMixin:
         self.predict_unit = predict_unit
         logging.info("predict_unit updated")
 
-    @serve.batch(
-        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
-    )
-    async def predict(
-        self, data_list: list[AtomicData], undo_element_references: bool = True
+    def _run_batched_inference(
+        self,
+        items: list[AtomicData],
+        predict_unit: MLIPPredictUnit,
+        undo_element_references: bool,
     ) -> list[dict]:
         """
-        Process a batch of AtomicData objects.
-
-        Args:
-            data_list: List of AtomicData objects (automatically batched by Ray Serve)
-            undo_element_references: Whether to undo element references in predictions
-
-        Returns:
-            List of prediction dictionaries, one per input
+        Run batched inference with OOM splitting.
         """
-        data_deque = deque([data_list])
-        prediction_list = []
-        while len(data_deque) > 0:
+        data_deque: deque[list[AtomicData]] = deque([items])
+        results: list[dict] = []
+        while data_deque:
             oom = False
-            data_list = data_deque.popleft()
-            batch = atomicdata_list_to_batch(data_list)
-
+            current = data_deque.popleft()
+            batch = atomicdata_list_to_batch(current)
             try:
-                predictions = self.predict_unit.predict(
+                preds = predict_unit.predict(
                     batch, undo_element_references=undo_element_references
                 )
-                prediction_list.extend(self._split_predictions(predictions, batch))
+                results.extend(self._split_predictions(preds, batch))
             except torch.OutOfMemoryError as err:
                 if not self.split_oom_batch:
                     raise torch.OutOfMemoryError(
-                        "Reduce max_batch_size or set split_oom_batch=True to automatically split OOM batches."
+                        "Reduce max_batch_size or set split_oom_batch=True "
+                        "to automatically split OOM batches."
                     ) from err
-
-                if len(data_list) == 1:
+                if len(current) == 1:
                     raise torch.OutOfMemoryError(
                         "Out of memory for a single system left in batch."
                     ) from err
-
                 logging.warning(
                     "Caught out of memory error. Splitting batch and retrying."
                 )
                 oom = True
                 torch.cuda.empty_cache()
-
             if oom:
-                mid = len(data_list) // 2
-                data_deque.appendleft(data_list[mid:])
-                data_deque.appendleft(data_list[:mid])
-
-        return prediction_list
+                mid = len(current) // 2
+                data_deque.appendleft(current[mid:])
+                data_deque.appendleft(current[:mid])
+        return results
 
     async def __call__(
         self, data: AtomicData, undo_element_references: bool = True
@@ -218,6 +296,7 @@ class BatchPredictServer(BatchPredictServerMixin):
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
+        max_concurrent_batches: int | None = None,
     ):
         """
         Initialize with a Ray object reference to a PredictUnit.
@@ -229,16 +308,33 @@ class BatchPredictServer(BatchPredictServerMixin):
                 are split when num atoms exceeds this value.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
             split_oom_batch: If true will split batch if an OOM error is raised
+            max_concurrent_batches: Max concurrent batches for the @serve.batch
+                decorator. If None, uses Ray Serve's default.
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        # One-time decoration at deployment construction. ``max_concurrent_batches``
+        # has no runtime setter on ``@serve.batch``, so it must be baked in here;
+        # the runtime-mutable settings (max_batch_size, batch_wait_timeout_s) are
+        # still adjustable via ``self.predict.set_*`` on the decorated method.
+        self.predict = serve.batch(
+            **_build_serve_batch_kwargs(
+                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
+            )
+        )(self._predict_impl)
 
         logging.info(
             "BatchPredictServer initialized with predict_unit from object store"
         )
 
-    def is_multiplexed(self) -> bool:
+    async def _predict_impl(
+        self, data_list: list[AtomicData], undo_element_references: bool = True
+    ) -> list[dict]:
+        return self._run_batched_inference(
+            data_list, self.predict_unit, undo_element_references
+        )
+
+    async def is_multiplexed(self) -> bool:
         return False
 
 
@@ -272,6 +368,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
+        max_concurrent_batches: int | None = None,
     ):
         """
         Initialize the multiplexed predict server.
@@ -280,18 +377,22 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             max_batch_size: Maximum number of atoms in a batch.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
             split_oom_batch: If true will split batch if an OOM error is raised.
+            max_concurrent_batches: Max concurrent batches for the @serve.batch
+                decorator. If None, uses Ray Serve's default.
         """
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        # Same one-time decoration as BatchPredictServer; see comment there.
+        self.predict = serve.batch(
+            **_build_serve_batch_kwargs(
+                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
+            )
+        )(self._predict_impl)
         logging.info("MultiplexedBatchPredictServer initialized")
 
-    def is_multiplexed(self) -> bool:
+    async def is_multiplexed(self) -> bool:
         return True
 
-    @serve.batch(
-        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
-    )
-    async def predict(
+    async def _predict_impl(
         self,
         data_list: list[AtomicData],
         model_id_list: list[str],
@@ -332,43 +433,12 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         results: list[dict | None] = [None] * len(data_list)
 
         for model_id, indexed_items in groups.items():
-            indices, group_data = zip(*indexed_items)
             predict_unit = await self.get_model(model_id)  # LRU cache hit
 
-            data_deque: deque[list[AtomicData]] = deque([list(group_data)])
-            group_results: list[dict] = []
-
-            while data_deque:
-                oom = False
-                current = data_deque.popleft()
-                batch = atomicdata_list_to_batch(current)
-
-                try:
-                    preds = predict_unit.predict(
-                        batch, undo_element_references=undo_refs
-                    )
-                    group_results.extend(self._split_predictions(preds, batch))
-                except torch.OutOfMemoryError as err:
-                    if not self.split_oom_batch:
-                        raise torch.OutOfMemoryError(
-                            "Reduce max_batch_size or set split_oom_batch=True "
-                            "to automatically split OOM batches."
-                        ) from err
-                    if len(current) == 1:
-                        raise torch.OutOfMemoryError(
-                            "Out of memory for a single system left in batch."
-                        ) from err
-                    logging.warning(
-                        "Caught out of memory error. Splitting batch and retrying."
-                    )
-                    oom = True
-                    torch.cuda.empty_cache()
-
-                if oom:
-                    mid = len(current) // 2
-                    data_deque.appendleft(current[mid:])
-                    data_deque.appendleft(current[:mid])
-
+            indices, group_data = zip(*indexed_items)
+            group_results = self._run_batched_inference(
+                list(group_data), predict_unit, undo_refs
+            )
             for orig_idx, pred in zip(indices, group_results):
                 results[orig_idx] = pred
 
@@ -435,7 +505,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         # Move any CUDA tensors to CPU before returning so callers (which
         # may be CPU-only Ray workers) can deserialize the result without
         # requiring CUDA.
-        return move_tensors_to_cpu(attr)
+        return _to_cpu(attr)
 
     async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
         """
@@ -493,97 +563,122 @@ def _init_ray_and_serve(
         )
         logging.info("Ray initialized")
 
-    # If the deployment's CPU request exceeds available CPUs, the actor will
-    # silently hang waiting for resources. Fail fast with an actionable message.
-    # Use available_resources() (not cluster_resources()) so that CPUs already
-    # consumed by the Serve controller/proxy are accounted for.
+    # If the deployment's CPU request exceeds what's currently available,
+    # replicas will queue until capacity frees up. Warn (don't raise)
+    # because multi-node Ray clusters can auto-grow as workers join, and
+    # autoscaling deployments only need capacity for ``min_replicas`` at
+    # startup. ``available_resources()`` already accounts for CPUs used by
+    # the Serve controller/proxy and other live actors, so no manual
+    # overhead adjustment is needed.
     available_cpus = ray.available_resources().get("CPU", 0)
     if requested_cpus > available_cpus:
-        raise RuntimeError(
+        logging.warning(
             f"Ray Serve deployment requests {cpus_per_actor} CPU(s) x "
-            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), but the "
-            f"Ray cluster only has {available_cpus:g} CPU(s) currently available. "
-            "Reduce ray_actor_options['num_cpus'] / num_replicas, or grow "
-            "the cluster (e.g. ray.init(num_cpus=...))."
+            f"{num_replicas} replica(s) = {requested_cpus} CPU(s), but only "
+            f"{available_cpus:g} CPU(s) are currently available on the Ray "
+            "cluster. Replicas will queue until workers join or autoscaling "
+            "adds capacity. If the cluster is fixed-size and small, reduce "
+            "ray_actor_options['num_cpus'] / num_replicas."
         )
 
-    try:
-        serve.status()
-        logging.info("Ray Serve already running")
-    except Exception:
-        serve.start(
-            logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-        )
-        logging.info("Ray Serve started")
+    # ``serve.start`` is idempotent for matching options. We always call it so
+    # that ``proxy_location`` is enforced (``serve.status()`` returns OK even
+    # when serve isn't running yet, so it can't be used as a "started" probe).
+    # Clients use Python deployment handles (``serve.get_app_handle``), not HTTP,
+    # so disable the HTTP proxy entirely. This avoids ProxyActor startup
+    # failures on worker nodes where port 8000 is already bound.
+    serve.start(
+        proxy_location="Disabled",
+        logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    )
+    logging.info("Ray Serve started (proxy_location=Disabled)")
 
 
-def _build_deployment_options(
-    ray_actor_options: dict,
-    num_replicas: int,
-    autoscaling_config: dict | None,
-) -> dict:
+def _effective_replicas(deployment_config: dict) -> int:
     """
-    Build the ``deployment_options`` dict for ``Server.options()``.
+    Best-effort estimate of the number of replicas that need to be
+    schedulable at startup, for CPU-sizing warnings.
+
+    For autoscaling configs, returns ``min_replicas`` (autoscaling will
+    grow to ``max_replicas`` later if capacity becomes available).
+    Otherwise returns ``num_replicas`` if it is an int, else ``1``.
     """
-    deployment_options: dict[str, Any] = {
-        "ray_actor_options": ray_actor_options,
-    }
-    if autoscaling_config is not None:
-        deployment_options["autoscaling_config"] = autoscaling_config
-    else:
-        deployment_options["num_replicas"] = num_replicas
-    return deployment_options
+    ac = deployment_config.get("autoscaling_config") or {}
+    if ac:
+        for key in ("min_replicas", "max_replicas"):
+            if key in ac:
+                try:
+                    return max(1, int(ac[key]))
+                except (TypeError, ValueError):
+                    pass
+    nr = deployment_config.get("num_replicas")
+    if isinstance(nr, int):
+        return max(1, nr)
+    return 1
+
+
+def _prepare_deployment_config(
+    deployment_config: DeploymentConfig | dict | None,
+    default_num_gpus_when_cuda: bool,
+) -> DeploymentConfig:
+    """
+    Normalize ``deployment_config`` to a :class:`DeploymentConfig` and ensure
+    ``ray_actor_options`` is a dict, defaulting ``num_gpus=1`` when CUDA is
+    wanted and the caller did not pin a value.
+    """
+    if not isinstance(deployment_config, DeploymentConfig):
+        deployment_config = DeploymentConfig(**(deployment_config or {}))
+    actor_opts = dict(deployment_config.ray_actor_options or {})
+    if default_num_gpus_when_cuda and "num_gpus" not in actor_opts:
+        actor_opts["num_gpus"] = 1
+    deployment_config.ray_actor_options = actor_opts
+    return deployment_config
 
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 512,
-    batch_wait_timeout_s: float = 0.1,
-    split_oom_batch: bool = True,
-    num_replicas: int = 1,
-    ray_actor_options: dict | None = None,
-    deployment_name: str = "fairchem-inference",
+    deployment_config: DeploymentConfig | dict | None = None,
+    batch_config: BatchConfig | dict | None = None,
+    deployment_name: str = "predict-server",
     route_prefix: str = "/predict",
-    autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
     """
     Deploy a ``BatchPredictServer`` that serves a single pre-loaded model.
 
     Args:
         predict_unit: An MLIPPredictUnit instance to use for inference.
-        max_batch_size: Maximum number of atoms in a batch.
-        batch_wait_timeout_s: Maximum wait time before processing partial batch.
-        split_oom_batch: Whether to split batches that cause OOM errors.
-        num_replicas: Number of deployment replicas. Ignored if
-            *autoscaling_config* is provided.
-        ray_actor_options: Additional Ray actor options
-            (e.g., ``{"num_gpus": 1, "num_cpus": 4}``).
+        deployment_config: :class:`DeploymentConfig` (or equivalent dict) of
+            kwargs forwarded to ``BatchPredictServer.options(...)``. Any field
+            on :class:`DeploymentConfig` is valid (e.g. ``num_replicas``,
+            ``autoscaling_config``, ``ray_actor_options``,
+            ``max_ongoing_requests``, ``graceful_shutdown_timeout_s``,
+            ``logging_config``).
+        batch_config: :class:`BatchConfig` (or equivalent dict) of kwargs
+            forwarded into ``BatchPredictServer.__init__`` via
+            ``.bind(**batch_config)``. Accepts ``max_batch_size``,
+            ``batch_wait_timeout_s``, ``split_oom_batch``,
+            ``max_concurrent_batches``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
-        autoscaling_config: Optional autoscaling configuration dict.
 
     Returns:
         Ray Serve deployment handle.
     """
-    if ray_actor_options is None:
-        ray_actor_options = {}
+    dc = _prepare_deployment_config(
+        deployment_config,
+        default_num_gpus_when_cuda="cuda" in predict_unit.device,
+    )
+    if not isinstance(batch_config, BatchConfig):
+        batch_config = BatchConfig(**(batch_config or {}))
 
-    if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
-        ray_actor_options["num_gpus"] = 1
-
-    _init_ray_and_serve(ray_actor_options, num_replicas)
+    dc_kwargs = dc.to_options_kwargs()
+    _init_ray_and_serve(dc_kwargs["ray_actor_options"], _effective_replicas(dc_kwargs))
 
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
 
-    deployment_options = _build_deployment_options(
-        ray_actor_options, num_replicas, autoscaling_config
-    )
-    deployment = BatchPredictServer.options(**deployment_options).bind(
-        predict_unit_ref,
-        max_batch_size=max_batch_size,
-        batch_wait_timeout_s=batch_wait_timeout_s,
-        split_oom_batch=split_oom_batch,
+    deployment = BatchPredictServer.options(**dc_kwargs).bind(
+        predict_unit_ref, **batch_config.to_init_kwargs()
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
@@ -592,14 +687,10 @@ def setup_batch_predict_server(
 
 
 def setup_multiplexed_batch_predict_server(
-    max_batch_size: int = 512,
-    batch_wait_timeout_s: float = 0.1,
-    split_oom_batch: bool = True,
-    num_replicas: int = 1,
-    ray_actor_options: dict | None = None,
-    deployment_name: str = "fairchem-inference",
+    deployment_config: DeploymentConfig | dict | None = None,
+    batch_config: BatchConfig | dict | None = None,
+    deployment_name: str = "multiplexed-predict-server",
     route_prefix: str = "/multiplex-predict",
-    autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
     """
     Deploy a ``MultiplexedBatchPredictServer`` that loads models on demand.
@@ -608,35 +699,29 @@ def setup_multiplexed_batch_predict_server(
     ``multiplexed_model_id`` set on the handle.
 
     Args:
-        max_batch_size: Maximum number of atoms in a batch.
-        batch_wait_timeout_s: Maximum wait time before processing partial batch.
-        split_oom_batch: Whether to split batches that cause OOM errors.
-        num_replicas: Number of deployment replicas. Ignored if
-            *autoscaling_config* is provided.
-        ray_actor_options: Additional Ray actor options
-            (e.g., ``{"num_gpus": 1, "num_cpus": 4}``).
+        deployment_config: :class:`DeploymentConfig` (or equivalent dict)
+            forwarded to ``MultiplexedBatchPredictServer.options(...)``.
+        batch_config: :class:`BatchConfig` (or equivalent dict) forwarded
+            into ``MultiplexedBatchPredictServer.__init__`` via
+            ``.bind(**batch_config)``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
-        autoscaling_config: Optional autoscaling configuration dict.
 
     Returns:
         Ray Serve deployment handle.
     """
-    if ray_actor_options is None:
-        ray_actor_options = {}
-
-    if torch.cuda.is_available() and "num_gpus" not in ray_actor_options:
-        ray_actor_options["num_gpus"] = 1
-
-    _init_ray_and_serve(ray_actor_options, num_replicas)
-
-    deployment_options = _build_deployment_options(
-        ray_actor_options, num_replicas, autoscaling_config
+    dc = _prepare_deployment_config(
+        deployment_config,
+        default_num_gpus_when_cuda=torch.cuda.is_available(),
     )
-    deployment = MultiplexedBatchPredictServer.options(**deployment_options).bind(
-        max_batch_size=max_batch_size,
-        batch_wait_timeout_s=batch_wait_timeout_s,
-        split_oom_batch=split_oom_batch,
+    if not isinstance(batch_config, BatchConfig):
+        batch_config = BatchConfig(**(batch_config or {}))
+
+    dc_kwargs = dc.to_options_kwargs()
+    _init_ray_and_serve(dc_kwargs["ray_actor_options"], _effective_replicas(dc_kwargs))
+
+    deployment = MultiplexedBatchPredictServer.options(**dc_kwargs).bind(
+        **batch_config.to_init_kwargs()
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
@@ -644,8 +729,40 @@ def setup_multiplexed_batch_predict_server(
     return handle
 
 
+def get_app_handle_with_retry(
+    deployment_name: str,
+    timeout_seconds: float = 60.0,
+    poll_interval_seconds: float = 1.0,
+):
+    """
+    Look up a Ray Serve app handle by name, retrying transient lookup
+    failures for up to ``timeout_seconds``.
+
+    The Serve controller is registered in the "serve" Ray namespace by the
+    driver that called ``serve.start()``. A consumer (e.g. a Ray task on a
+    fresh worker) may race the GCS sync of that actor entry and see a
+    transient "SERVE_CONTROLLER_ACTOR not found" failure. Non-transient
+    errors are re-raised immediately.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            return serve.get_app_handle(deployment_name)
+        except Exception as exc:
+            msg = str(exc)
+            transient = (
+                "SERVE_CONTROLLER_ACTOR" in msg
+                or "There is no Serve instance" in msg
+                or "Failed to look up actor" in msg
+            )
+            if not transient or time.monotonic() > deadline:
+                raise
+            logging.debug("Serve controller not visible yet (%s); retrying.", msg)
+            time.sleep(poll_interval_seconds)
+
+
 def wait_for_serve_ready(
-    app_name: str = "fairchem-inference",
+    app_name: str,
     poll_interval_seconds: float = 2,
     timeout_seconds: float = 600,
 ) -> bool:
