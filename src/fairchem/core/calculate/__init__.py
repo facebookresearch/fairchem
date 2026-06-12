@@ -8,6 +8,10 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from fairchem.core.calculate._batch import InferenceBatcher
+from fairchem.core.calculate._ray_inference_cluster import (
+    get_local_inference_raycluster,
+    get_slurm_inference_raycluster,
+)
 from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
     FormationEnergyCalculator,
@@ -19,4 +23,6 @@ __all__ = [
     "FormationEnergyCalculator",
     "InferenceBatcher",
     "InferenceSettings",
+    "get_local_inference_raycluster",
+    "get_slurm_inference_raycluster",
 ]

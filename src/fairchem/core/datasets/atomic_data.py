@@ -21,6 +21,7 @@ import numpy as np
 import torch
 from ase.calculators.singlepoint import SinglePointCalculator, SinglePointDFTCalculator
 from ase.constraints import FixAtoms
+from ase.data import atomic_masses
 from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
 from monty.dev import requires
@@ -245,6 +246,13 @@ class AtomicData:
     @task_name.setter
     def task_name(self, value):
         self.dataset = value
+
+    @property
+    def masses(self) -> torch.Tensor:
+        masses = torch.as_tensor(
+            atomic_masses, dtype=self.pos.dtype, device=self.atomic_numbers.device
+        )
+        return masses[self.atomic_numbers]
 
     def assign_batch_stats(self, slices, cumsum, cat_dims, natoms_list):
         self.__slices__ = slices
