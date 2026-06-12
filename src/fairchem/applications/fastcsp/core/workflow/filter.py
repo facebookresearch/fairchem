@@ -59,7 +59,12 @@ def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
         "energy_cutoff": match_config.get(
             "energy_cutoff", None
         ),  # default 10000 kJ/mol
-        "density_cutoff": match_config.get("density_cutoff", None),  # default 100 g/cm³
+        "density_min_cutoff": match_config.get(
+            "density_min_cutoff", None
+        ),  # default no lower density bound (g/cm³)
+        "density_max_cutoff": match_config.get(
+            "density_max_cutoff", None
+        ),  # default no upper density bound (g/cm³)
         "assign_groups": match_config.get(
             "assign_groups", False
         ),  # default no grouping
@@ -68,6 +73,30 @@ def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
         "angle_tol": match_config.get(
             "angle_tol", 5
         ),  # default angle tolerance in degrees
+        "density_bin_size": match_config.get(
+            "density_bin_size", None
+        ),  # default no density blocker (full mol_id+z bucket)
+        "energy_bin_size": match_config.get(
+            "energy_bin_size", None
+        ),  # default no energy blocker (full mol_id+z bucket)
+        "density_tol": match_config.get(
+            "density_tol", None
+        ),  # g/cc; cheap |Δρ| prefilter before sm.fit. None = off.
+        "energy_tol": match_config.get(
+            "energy_tol", None
+        ),  # kJ/mol; cheap |ΔE| prefilter before sm.fit. None = off.
+        "apply_niggli_filter": match_config.get(
+            "apply_niggli_filter", False
+        ),  # True = apply Niggli (a,b,c,alpha,beta,gamma) prefilter; False = skip it.
+        "bin_by_conf": match_config.get(
+            "bin_by_conf", False
+        ),  # include conf_id in the dedup bin key
+        "bin_by_z": match_config.get(
+            "bin_by_z", False
+        ),  # include Z in the dedup bin key
+        "bin_by_spg": match_config.get(
+            "bin_by_spg", False
+        ),  # include spg_generated in the dedup bin key
         "remove_duplicates": match_config.get(
             "remove_duplicates", False
         ),  # default no deduplication
@@ -79,13 +108,22 @@ def filter_and_deduplicate_structures_single(
     output_filename: Path,
     remove_problematic: bool = False,
     energy_cutoff: float | None = None,
-    density_cutoff: float | None = None,
+    density_min_cutoff: float | None = None,
+    density_max_cutoff: float | None = None,
     assign_groups: bool = True,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
+    bin_by_conf: bool = False,
+    bin_by_z: bool = True,
+    bin_by_spg: bool = False,
+    density_bin_size: float | None = None,
+    energy_bin_size: float | None = None,
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
+    density_tol: float | None = None,
+    energy_tol: float | None = None,
+    apply_niggli_filter: bool = False,
 ):
     """
     Apply filtering and deduplication to a single parquet dataset.
@@ -95,18 +133,32 @@ def filter_and_deduplicate_structures_single(
         output_filename: Path to output parquet file for filtered results
         remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
         energy_cutoff: Maximum energy above minimum (kJ/mol)
-        density_cutoff: Maximum allowed density (g/cm³) for filtering
+        density_min_cutoff: Minimum allowed density (g/cm³); None = no lower bound
+        density_max_cutoff: Maximum allowed density (g/cm³); None = no upper bound
         assign_groups: Whether to assign group IDs to similar structures
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
+        density_bin_size: Optional density blocker bin (g/cc) for hash grouping.
+            Set to subdivide the (mol_id, Z) buckets and speed up clustering.
+            None = no density-based bucketing (one giant bucket per (mol_id, Z)).
+        energy_bin_size: Optional energy blocker bin (kJ/mol) for hash grouping.
+            Set to subdivide the (mol_id, Z) buckets and speed up clustering.
+            None = no energy-based bucketing.
         remove_duplicates: Whether to enable structure deduplication
         root_unrelaxed: Path to unrelaxed structures for comparison
+        density_tol: Optional cheap |Δρ| prefilter (g/cc) applied before
+            ``StructureMatcher.fit``. None disables the prefilter.
+        energy_tol: Optional cheap |ΔE| prefilter (kJ/mol) applied
+            before ``StructureMatcher.fit``. None disables the prefilter.
+        apply_niggli_filter: When True, apply the Niggli (a,b,c,alpha,beta,gamma)
+            prefilter before ``StructureMatcher.fit``. Default False
+            (skip the Niggli reduction + check entirely).
 
     Filtering Workflow:
         1. Validate connectivity preservation during relaxation
         2. Deal with problematic structures (non-converged or connectivity changed)
-        3. Apply density cutoff to remove unphysical structures
+        3. Apply density cutoffs to remove unphysical structures
         4. Energy-based filtering relative to global minimum
         5. Deduplication with pymatgen StructureMatcher
         6. Save filtered and deduplicated results
@@ -132,12 +184,22 @@ def filter_and_deduplicate_structures_single(
         )
 
         # Convert CIF strings to atomic structures for connectivity analysis
-        final_atoms = structures_df["cif_relaxed"].apply(cif_to_atoms)
-        initial_atoms = structures_df["cif_generated"].apply(cif_to_atoms)
+        # (parallelized: cif parsing is CPU-bound and embarrassingly parallel)
+        num_cpus = max(len(os.sched_getaffinity(0)), 1)
+        final_atoms = p_map(
+            cif_to_atoms,
+            structures_df["cif_relaxed"].tolist(),
+            num_cpus=num_cpus,
+            desc="cif_relaxed -> atoms",
+        )
+        initial_atoms = p_map(
+            cif_to_atoms,
+            structures_df["cif_generated"].tolist(),
+            num_cpus=num_cpus,
+            desc="cif_generated -> atoms",
+        )
 
         # Validate bonding network preservation during relaxation
-
-        num_cpus = max(len(os.sched_getaffinity(0)), 1)
         structures_df["validity.connectivity_unchanged"] = p_map(
             check_no_changes_in_covalent_matrix,
             initial_atoms,
@@ -169,14 +231,27 @@ def filter_and_deduplicate_structures_single(
     ]
 
     # 3. Apply multi-stage filtering workflow
-    if density_cutoff is not None:
-        logger.info(f"Before filtering by density: {structures_df_filtered.shape}")
-        structures_df_filtered = structures_df_filtered[
-            structures_df_filtered["density_relaxed"] <= density_cutoff
-        ]  # Remove unphysically dense structures
-        problematic_structures_df = problematic_structures_df[
-            problematic_structures_df["density_relaxed"] <= density_cutoff
-        ]
+    # Density window: drop rows outside [density_min_cutoff, density_max_cutoff]
+    if density_min_cutoff is not None or density_max_cutoff is not None:
+        logger.info(
+            f"Before filtering by density ["
+            f"min={density_min_cutoff}, max={density_max_cutoff}]: "
+            f"{structures_df_filtered.shape}"
+        )
+        if density_min_cutoff is not None:
+            structures_df_filtered = structures_df_filtered[
+                structures_df_filtered["density_relaxed"] >= density_min_cutoff
+            ]
+            problematic_structures_df = problematic_structures_df[
+                problematic_structures_df["density_relaxed"] >= density_min_cutoff
+            ]
+        if density_max_cutoff is not None:
+            structures_df_filtered = structures_df_filtered[
+                structures_df_filtered["density_relaxed"] <= density_max_cutoff
+            ]
+            problematic_structures_df = problematic_structures_df[
+                problematic_structures_df["density_relaxed"] <= density_max_cutoff
+            ]
         logger.info(f"After filtering by density: {structures_df_filtered.shape}")
 
     # Apply energy-based cutoff relative to global minimum
@@ -194,21 +269,43 @@ def filter_and_deduplicate_structures_single(
         logger.info(f"After filtering by energy: {structures_df_filtered.shape}")
 
     # Convert CIF strings to pymatgen Structures for deduplication
-    structures_df_filtered["structure"] = structures_df_filtered["cif_relaxed"].apply(
-        cif_to_structure
+    # (parallelized: cif parsing is CPU-bound and embarrassingly parallel)
+    dedup_num_cpus = max(len(os.sched_getaffinity(0)), 1)
+    structures_df_filtered["structure"] = p_map(
+        cif_to_structure,
+        structures_df_filtered["cif_relaxed"].tolist(),
+        num_cpus=dedup_num_cpus,
+        desc="cif_relaxed -> structure",
     )
 
-    # Apply deduplication without hash-based pre-filtering
-    # (disable density/volume hashing for final deduplication)
+    # Post-relax dedup blocker = (mol_id, Z) + optional binned density/energy.
     if assign_groups:
+        # ``energy_col`` must be set whenever we want to use it either as a
+        # blocker (``energy_bin_size``) or as a cheap |ΔE| prefilter
+        # (``energy_tol``).
+        energy_col_used = (
+            "energy_relaxed_per_molecule"
+            if (energy_bin_size is not None or energy_tol is not None)
+            else None
+        )
         structures_df_filtered = deduplicate_structures(
             structures_df_filtered,
-            remove_duplicates=remove_duplicates,
+            conf_col="conf_id" if bin_by_conf else None,
+            z_col="z" if bin_by_z else None,
+            spg_col="spg_generated" if bin_by_spg else None,
+            density_col="density_relaxed" if density_bin_size is not None else None,
+            density_bin_size=density_bin_size,
+            energy_col=energy_col_used,
+            energy_bin_size=energy_bin_size,
             ltol=ltol,
             stol=stol,
             angle_tol=angle_tol,
-            hash_density=False,
-            hash_volume=False,
+            ignored_species=["H"],
+            density_tol=density_tol,
+            energy_tol=energy_tol,
+            apply_niggli_filter=apply_niggli_filter,
+            keep="min" if remove_duplicates else None,
+            keep_col="energy_relaxed_per_molecule",
         )
         problematic_structures_df[
             "group_index"
@@ -237,13 +334,22 @@ def filter_and_deduplicate_structures(
     post_relax_config: dict[str, Any],
     remove_problematic: bool,
     energy_cutoff: float | None,
-    density_cutoff: float | None,
+    density_min_cutoff: float | None,
+    density_max_cutoff: float | None,
     assign_groups: bool,
     ltol: float,
     stol: float,
     angle_tol: float,
+    bin_by_conf: bool = False,
+    bin_by_z: bool = True,
+    bin_by_spg: bool = False,
+    density_bin_size: float | None = None,
+    energy_bin_size: float | None = None,
     remove_duplicates: bool = False,
     root_unrelaxed: Path | None = None,
+    density_tol: float | None = None,
+    energy_tol: float | None = None,
+    apply_niggli_filter: bool = False,
 ):
     """
     Submit parallel filtering jobs for multiple datasets.
@@ -254,13 +360,18 @@ def filter_and_deduplicate_structures(
         post_relax_config: Configuration dictionary containing SLURM and filtering parameters
         remove_problematic: Whether to remove problematic structures (non-converged or connectivity changed)
         energy_cutoff: Energy threshold above minimum (kJ/mol)
-        density_cutoff: Maximum density threshold (g/cm³)
+        density_min_cutoff: Lower density bound (g/cm³); None = no lower bound
+        density_max_cutoff: Upper density bound (g/cm³); None = no upper bound
         assign_groups: Whether to assign group indices during deduplication
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
         remove_duplicates: Whether to enable deduplication
         root_unrelaxed: Root directory with unrelaxed structures
+        density_tol: Optional cheap |Δρ| prefilter (g/cc). None = off.
+        energy_tol: Optional cheap |ΔE| prefilter (kJ/mol). None = off.
+        apply_niggli_filter: When True, apply Niggli (a,b,c,alpha,beta,gamma) prefilter
+            before ``StructureMatcher.fit``. Default False (skip it).
 
     Returns:
         List of submitit job objects.
@@ -296,13 +407,22 @@ def filter_and_deduplicate_structures(
                     output_filename,
                     remove_problematic,
                     energy_cutoff,
-                    density_cutoff,
+                    density_min_cutoff,
+                    density_max_cutoff,
                     assign_groups,
                     ltol,
                     stol,
                     angle_tol,
+                    bin_by_conf,
+                    bin_by_z,
+                    bin_by_spg,
+                    density_bin_size,
+                    energy_bin_size,
                     remove_duplicates,
                     unrelaxed_path,
+                    density_tol,
+                    energy_tol,
+                    apply_niggli_filter,
                 ),
                 {},
             )

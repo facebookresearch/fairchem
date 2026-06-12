@@ -32,6 +32,9 @@ pre_relaxation_filter:        # Before ML relaxation
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
+  density_bin_size: 0.02       # Density blocker bin (g/cc) for hash grouping.
+                               #   Smaller -> more, smaller buckets -> faster dedup
+                               #   but risks missing duplicates across bin edges.
   remove_duplicates: true      # Enable duplicate removal
   npartitions: 1000            # Size of slurm array
 
@@ -52,11 +55,15 @@ relax:
 post_relaxation_filter:       # After ML relaxation
   remove_problematic: true     # Remove structures that failed to converge or connectivity check
   energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum (null = no filter)
-  density_cutoff: 10           # Maximum density in g/cm³ (null = no filter)
+  density_min_cutoff: 0.5      # Minimum density in g/cm³ (null = no lower bound)
+  density_max_cutoff: 3.0      # Maximum density in g/cm³ (null = no upper bound)
   assign_groups: true          # Assign group indices via deduplication
   ltol: 0.2                    # Lattice parameter tolerance
   stol: 0.3                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
+  density_bin_size: 0.1        # g/cc; relaxation tightens density into basins,
+                               # so a coarser bin than pre-relax is safe.
+  energy_bin_size: 2           # kJ/mol; ~thermal scale, captures within-basin spread.
   remove_duplicates: true      # Drop all-but-one structure per group
 
 # (Optional) Experimental structure evaluation settings

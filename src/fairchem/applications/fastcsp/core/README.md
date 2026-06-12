@@ -87,6 +87,7 @@ pre_relaxation_filter:
   ltol: 0.3                 # lattice tolerance
   stol: 0.4                 # site tolerance (Å)
   angle_tol: 5              # angle tolerance (degrees)
+  density_bin_size: 0.02    # density blocker bin (g/cc) for hash grouping;
   npartitions: 1000         # number of output partitions / SLURM array size
 
 # ML relaxation
@@ -106,12 +107,16 @@ relax:
 post_relaxation_filter:
   remove_problematic: true   # drop structures that didn't converge or whose connectivity changed
   energy_cutoff: 20          # kJ/mol above the global minimum (null = no filter)
-  density_cutoff: 10         # g/cm³ upper bound on relaxed density (null = no filter)
+  density_min_cutoff: 0.5    # g/cm³ lower bound on relaxed density (null = no lower bound)
+  density_max_cutoff: 3.0    # g/cm³ upper bound on relaxed density (null = no upper bound)
   assign_groups: true
   remove_duplicates: true
   ltol: 0.2
   stol: 0.3
   angle_tol: 5
+  # Post-relax dedup blocker subdivides (mol_id, Z) buckets.
+  density_bin_size: 0.1      # g/cc; relaxation tightens density into basins
+  energy_bin_size: 2         # kJ/mol; ~thermal scale
 
 # (Optional) Experimental evaluation
 evaluate:

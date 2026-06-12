@@ -27,7 +27,7 @@ Processing Pipeline:
 
 from __future__ import annotations
 
-import json
+import os
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -39,7 +39,9 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import get_partition_id
+from p_tqdm import p_map
 from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.io.cif import CifWriter
 from tqdm import tqdm
 
 if TYPE_CHECKING:
@@ -62,10 +64,13 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
             - ltol: Lattice parameter tolerance for structure matching (default: 0.2)
             - stol: Site position tolerance for structure matching (default: 0.3)
             - angle_tol: Lattice angle tolerance in degrees (default: 5.0)
+            - density_bin_size: Density blocker bin (g/cc) for hash grouping (default: None)
             - npartitions: Number of partitions for parallel processing (default: 1)
 
     Configuration Guidelines:
         - Stricter tolerances (lower ltol/stol) preserve more unique structures
+        - Smaller density_bin_size creates more, smaller buckets -> faster dedup
+          but may miss duplicates whose density falls across bin boundaries
         - Higher npartitions improves parallelization for large datasets
         - Parameters should be consistent with post-relaxation filtering for continuity
 
@@ -85,6 +90,24 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
         "angle_tol": match_config.get(
             "angle_tol", 5
         ),  # default angle tolerance in degrees
+        "density_bin_size": match_config.get(
+            "density_bin_size", None
+        ),  # default density blocker bin (g/cc)
+        "density_tol": match_config.get(
+            "density_tol", None
+        ),  # g/cc; cheap |Δρ| prefilter before sm.fit. None = off.
+        "bin_by_conf": match_config.get(
+            "bin_by_conf", False
+        ),  # include conf_id in the dedup bin key
+        "bin_by_z": match_config.get(
+            "bin_by_z", False
+        ),  # include Z in the dedup bin key
+        "bin_by_spg": match_config.get(
+            "bin_by_spg", False
+        ),  # include spg_generated in the dedup bin key
+        "apply_niggli_filter": match_config.get(
+            "apply_niggli_filter", False
+        ),  # Whether to apply a fast Niggli cell filter before the full StructureMatcher
         "npartitions": match_config.get(
             "npartitions", 1
         ),  # default number of partitions
@@ -120,13 +143,15 @@ def structure_to_row(
         4. Generate CIF string representation
         5. Assign consistent partition ID for distributed processing
     """
-    atoms = decode(json.dumps(struct_dict))
+    atoms = struct_dict
     structure = AseAtomsAdaptor.get_structure(atoms)
     formula = structure.composition.reduced_formula
     n_atoms = len(structure)
     volume = structure.volume
     density = structure.density
-    cif_str = structure.to(fmt="cif")
+    # CifWriter(symprec=None, refine_struct=False) skips the per-structure
+    # symmetry analysis that dominates structure.to(fmt="cif") runtime.
+    cif_str = str(CifWriter(structure, symprec=None, refine_struct=False))
     spg = int(atoms.info["spg"])
     unique_structure_id = (
         f"mol={mol_id}::conf={conf_id}::z={z_val}::spg={spg}::hash={hash_id}"
@@ -152,106 +177,133 @@ def process_genarris_outputs_single(
     input_dir: Path,
     output_dir: Path,
     remove_duplicates: bool = False,
-    ltol: float = 0.2,
-    stol: float = 0.3,
+    ltol: float = 0.3,
+    stol: float = 0.4,
     angle_tol: float = 5,
+    bin_by_conf: bool = False,
+    bin_by_z: bool = False,
+    bin_by_spg: bool = False,
+    density_bin_size: float | None = None,
+    apply_niggli_filter: bool = False,
     npartitions: int = 1000,
     assign_groups: bool = True,
+    density_tol: float | None = None,
 ):
     """
-    Process Genarris output files from a single molecular conformer directory.
+    Process Genarris output files for a single (mol_id, conf_id) directory.
 
     Converts raw Genarris JSON structure files into standardized parquet format
-    with structure deduplication and metadata extraction. This function handles
-    the complex directory structure of Genarris outputs and transforms them into
-    a format suitable for downstream ML processing.
+    with structure deduplication and metadata extraction. The directory may
+    contain multiple Z subdirectories; each ``structures.json`` is parsed and
+    Z is read from the directory hierarchy.
 
     Args:
-        input_dir: Root directory containing Genarris output structure
-                 Expected structure: mol_id/conf_id/z_val/symm_rigid_press/structures.json
-        output_dir: Directory where processed parquet files will be saved
-        npartitions: Number of partitions for distributed processing (default: 1000)
-        remove_duplicates: Whether to perform deduplication (default: False)
-        ltol: Lattice parameter tolerance for structure deduplication (default: 0.2)
-        stol: Site tolerance for structure deduplication (default: 0.3)
-        angle_tol: Angle tolerance for structure deduplication (default: 5°)
-
-    Processing Workflow:
-        1. Scan directory structure for structures.json files
-        2. Extract mol_id and Z values from directory hierarchy
-        3. Parse JSON structure data and convert to standardized format
-        4. Apply deduplication using pymatgen
-        5. Save results in partitioned parquet format for efficient access
-
-    Output Format:
-        Creates parquet files partitioned by partition_id containing:
-        - structure_id: Unique identifier for each structure
-        - mol_id: Original molecule identifier
-        - z: Number of formula units per unit cell
-        - formula: Reduced chemical formula
-        - n_atoms: Total atoms in unit cell
-        - volume: Unit cell volume
-        - cif: Structure in CIF format
-        - group_index: Deduplication group assignment
+        input_dir: Conformer-level directory.
+                 Expected: <mol_id>/<conf_id>/<z>/symm_rigid_press/structures.json
+                 or fallback <mol_id>/<conf_id>/<z>/structures.json.
+                 mol_id and conf_id are read from input_dir's path:
+                 conf_id = input_dir.name, mol_id = input_dir.parent.name.
+        output_dir: Where processed parquet files are saved.
+        remove_duplicates: Whether to drop duplicates (default: False).
+        ltol, stol, angle_tol: StructureMatcher tolerances.
+        density_bin_size: Density blocker bin (g/cc) for hash grouping (default: None).
+        npartitions: Number of partitions for downstream parallel processing.
+        assign_groups: Whether to run the dedup blocker + group assignment.
     """
     logger = get_central_logger()
-    logger.info(f"Processing {input_dir}")
-    json_files = list(input_dir.glob("**/symm_rigid_press/structures.json"))
+    # Use all CPUs allocated to this SLURM task at runtime
+    num_cpus = max(len(os.sched_getaffinity(0)), 1)
+    # input_dir is the conformer-level directory: .../<mol_id>/<conf_id>
+    conf_id = input_dir.name
+    mol_id = input_dir.parent.name
+    logger.info(f"Processing {input_dir} (mol_id={mol_id}, conf_id={conf_id})")
+    # Sort so two runs over the same directory produce the same row order
+    # (Path.glob returns filesystem order, which is not deterministic).
+    json_files = sorted(input_dir.glob("*/structures/symm_rigid_press/structures.json"))
     generation_method = "genarris"
     # in case Genarris version is different
     # or other structure generation method is used
     if not json_files:
-        json_files = list(input_dir.rglob("structures.json"))
+        json_files = sorted(input_dir.rglob("structures.json"))
         generation_method = "other"
     logger.info(f"Found {len(json_files)} files / {input_dir}")
-    all_rows = []
-    for file_path in tqdm(json_files, desc="Processing files"):
+
+    # Pass 1: enumerate (hash_id, struct_dict, z_val) items across all JSON files.
+    all_items: list[tuple[str, dict, int]] = []
+    for file_path in tqdm(json_files, desc="Reading files"):
         try:
             json_file_parents = list(file_path.parents)
             if generation_method == "genarris":
-                mol_id = json_file_parents[4].name
-                conf_id = json_file_parents[3].name
-                z_val = int(json_file_parents[2].name)
+                # based on expected directory structure
+                # <z>/symm_rigid_press/structures.json
+                # parents: [0]=symm_rigid_press, [1]=structures, [2]=z
+                z_dir = json_file_parents[2]
             else:
                 # based on expected directory structure
-                # mol_id/conf_id/z_val/structures.json
-                # adjust indices accordingly
-                mol_id = json_file_parents[2].name
-                conf_id = json_file_parents[1].name
-                z_val = int(json_file_parents[0].name)
-        except Exception as e:
-            logger.warning(
-                f"Failed to extract mol_id, conf_id, or z from path {file_path}: {e}"
-            )
+                # <z>/structures.json
+                # parents: [0]=<z>
+                z_dir = json_file_parents[0]
+            z_val = int(z_dir.name)
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Failed to extract Z from path {file_path}: {e}")
             continue
 
-        with file_path.open("r") as f:
-            struct_data = json.load(f)
+        try:
+            with file_path.open("r") as f:
+                struct_data = decode(f.read())
+        except Exception as e:
+            logger.warning(f"Failed to read {file_path}: {e}")
+            continue
 
-        for hash_id, struct_dict in tqdm(
-            struct_data.items(),
-            desc="Processing structures",
-            total=len(struct_data),
-        ):
-            try:
-                row = structure_to_row(
-                    hash_id, struct_dict, mol_id, conf_id, z_val, npartitions
-                )
-                all_rows.append(row)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to parse structure {hash_id} in {file_path}: {e}"
-                )
+        for hash_id, struct_dict in struct_data.items():
+            all_items.append((hash_id, struct_dict, z_val))
+
+    if not all_items:
+        logger.warning(f"No structures found in {input_dir}")
+        return
+
+    # Pass 2: parallel structure_to_row conversion
+    def _convert(item):
+        hash_id, struct_dict, z_val = item
+        try:
+            return structure_to_row(
+                hash_id, struct_dict, mol_id, conf_id, z_val, npartitions
+            )
+        except Exception as e:
+            logger.warning(f"Failed to convert structure {hash_id} in {input_dir}: {e}")
+            return None
+
+    rows = p_map(
+        _convert,
+        all_items,
+        num_cpus=num_cpus,
+        desc="Converting structures",
+    )
+    all_rows = [r for r in rows if r is not None]
 
     structures_df = pd.DataFrame(all_rows)
     if assign_groups:
+        # Pre-relax dedup blocker = (mol_id, Z, conf_id, spg_generated,
+        # density-bin @ density_bin_size). Representative per group = row
+        # whose density_generated is closest to the group median (robust to
+        # high-density packing artefacts).
         structures_df = deduplicate_structures(
             structures_df,
-            remove_duplicates=remove_duplicates,
+            structure_col="structure_generated",
+            conf_col="conf_id" if bin_by_conf else None,
+            z_col="z" if bin_by_z else None,
+            spg_col="spg_generated" if bin_by_spg else None,
+            density_col="density_generated",
+            density_bin_size=density_bin_size,
             ltol=ltol,
             stol=stol,
             angle_tol=angle_tol,
-            structure_col="structure_generated",
+            ignored_species=["H"],
+            density_tol=density_tol,
+            apply_niggli_filter=apply_niggli_filter,
+            keep="median" if remove_duplicates else None,
+            keep_col="density_generated",
+            n_jobs=num_cpus,
         )
     structures_df = structures_df.drop(columns=["structure_generated"])
     structures_df.to_parquet(
@@ -270,8 +322,14 @@ def process_genarris_outputs(
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
+    bin_by_conf: bool = True,
+    bin_by_z: bool = True,
+    bin_by_spg: bool = True,
+    apply_niggli_filter: bool = False,
+    density_bin_size: float | None = None,
     npartitions: int = 1000,
     assign_groups: bool = True,
+    density_tol: float | None = None,
 ):
     """
     Batch process multiple Genarris output directories using SLURM parallel execution.
@@ -284,6 +342,7 @@ def process_genarris_outputs(
         ltol: Lattice parameter tolerance for structure deduplication
         stol: Site tolerance for structure deduplication
         angle_tol: Angle tolerance for structure deduplication
+        density_bin_size: Density blocker bin (g/cc) for hash grouping (default: None)
         npartitions: Number of partitions for distributed processing
 
     Returns:
@@ -296,7 +355,11 @@ def process_genarris_outputs(
 
     job_args = []
     for mol_dir in input_dir.iterdir():
+        if not mol_dir.is_dir():
+            continue
         for conf_dir in mol_dir.iterdir():
+            if not conf_dir.is_dir():
+                continue
             processed_dir = output_dir / mol_dir.name / conf_dir.name
 
             if (
@@ -311,17 +374,21 @@ def process_genarris_outputs(
             job_args.append(
                 (
                     process_genarris_outputs_single,
-                    (
-                        conf_dir,
-                        processed_dir,
-                        remove_duplicates,
-                        ltol,
-                        stol,
-                        angle_tol,
-                        npartitions,
-                        assign_groups,
-                    ),
-                    {},
+                    (conf_dir, processed_dir),
+                    {
+                        "remove_duplicates": remove_duplicates,
+                        "ltol": ltol,
+                        "stol": stol,
+                        "angle_tol": angle_tol,
+                        "bin_by_conf": bin_by_conf,
+                        "bin_by_z": bin_by_z,
+                        "bin_by_spg": bin_by_spg,
+                        "density_bin_size": density_bin_size,
+                        "apply_niggli_filter": apply_niggli_filter,
+                        "npartitions": npartitions,
+                        "assign_groups": assign_groups,
+                        "density_tol": density_tol,
+                    },
                 )
             )
 

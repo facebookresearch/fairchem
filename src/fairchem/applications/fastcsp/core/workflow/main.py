@@ -166,8 +166,14 @@ def main(args: argparse.Namespace) -> None:
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
+            bin_by_conf=pre_relax_config["bin_by_conf"],
+            bin_by_z=pre_relax_config["bin_by_z"],
+            bin_by_spg=pre_relax_config["bin_by_spg"],
+            density_bin_size=pre_relax_config["density_bin_size"],
             npartitions=pre_relax_config["npartitions"],
             assign_groups=pre_relax_config["assign_groups"],
+            density_tol=pre_relax_config["density_tol"],
+            apply_niggli_filter=pre_relax_config["apply_niggli_filter"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
@@ -212,12 +218,21 @@ def main(args: argparse.Namespace) -> None:
             post_relax_config=post_relax_config,
             remove_problematic=post_relax_config["remove_problematic"],
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
-            density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
+            density_min_cutoff=post_relax_config["density_min_cutoff"],  # g/cm³
+            density_max_cutoff=post_relax_config["density_max_cutoff"],  # g/cm³
             assign_groups=post_relax_config["assign_groups"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
+            bin_by_conf=post_relax_config["bin_by_conf"],
+            bin_by_z=post_relax_config["bin_by_z"],
+            bin_by_spg=post_relax_config["bin_by_spg"],
+            density_bin_size=post_relax_config["density_bin_size"],
+            energy_bin_size=post_relax_config["energy_bin_size"],
             remove_duplicates=post_relax_config["remove_duplicates"],
+            density_tol=post_relax_config["density_tol"],
+            energy_tol=post_relax_config["energy_tol"],
+            apply_niggli_filter=post_relax_config["apply_niggli_filter"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
