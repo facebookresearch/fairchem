@@ -168,6 +168,13 @@ def get_slurm_config(
             "mem_gb": 10,
             "time": 1000,
         },
+        "free_energy": {
+            "job-name": "free_energy",
+            "gpus_per_node": 1,
+            "cpus_per_task": 10,
+            "mem_gb": 50,
+            "time": 2000,
+        },
     }
 
     if module_name not in module_defaults:

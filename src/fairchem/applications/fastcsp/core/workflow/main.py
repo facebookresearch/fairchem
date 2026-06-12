@@ -251,18 +251,36 @@ def main(args: argparse.Namespace) -> None:
             wait_for_jobs(jobs)
         logging.log_stage_complete(logger, "evaluation against experimental structures")
 
-    # 6. (Optional) Calculate free energies for structures
-    # TODO: Implementation in progress - will be available soon
-    if "free_energy" in args.stages:
-        logger.info("Free energy calculations requested...")
-        # calculate_free_energies(
-        #     relax_output_dir / "matched_structures",
-        #     relax_output_dir / "free_energy_results",
-        #     config,
-        # )
-        logger.info("Free energy calculations functionality coming soon...")
-        logger.info(
-            "Please check future releases or contact the developers for updates."
+    # 6. (Optional) Calculate vibrational free energies for structures
+    if "compute_free_energy" in args.stages:
+        logging.log_stage_start(logger, "vibrational free energy calculations")
+        from fairchem.applications.fastcsp.core.workflow.free_energy import (
+            collect_free_energy_results,
+            compute_free_energies,
+            get_free_energy_config,
+        )
+        from fairchem.applications.fastcsp.core.workflow.relax import (
+            get_relax_config_and_dir,
+        )
+
+        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        fe_config = get_free_energy_config(config)
+        fe_input_dir = relax_output_dir / "matched_structures"
+        fe_output_dir = relax_output_dir / "free_energy"
+        jobs = compute_free_energies(
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        wait_for_jobs(jobs)
+        collect_free_energy_results(
+            jobs=jobs,
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        logging.log_stage_complete(
+            logger, "vibrational free energy calculations", len(jobs)
         )
 
     logger.info("🎉 FastCSP workflow completed!")
