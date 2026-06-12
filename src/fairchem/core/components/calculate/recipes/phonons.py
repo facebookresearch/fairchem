@@ -196,7 +196,8 @@ def produce_force_constants(
 def calculate_phonon_frequencies(
     phonon: Phonopy, qpoints: ArrayLike | None = None
 ) -> NDArray:
-    """Calculate phonon frequencies at a given set of qpoints.
+    """
+    Calculate phonon frequencies at a given set of qpoints.
 
     Args:
         phonon: a Phonopy api object with displacements generated
@@ -214,12 +215,57 @@ def calculate_phonon_frequencies(
     return frequencies
 
 
-def calculate_thermal_properties(
-    phonon: Phonopy, t_min, t_max, t_step, mesh: ArrayLike = (20, 20, 20)
-) -> dict[str, float]:
-    """Calculate thermal properties from initialized phonopy object
+def calculate_total_dos(
+    phonon: Phonopy,
+    mesh: ArrayLike = (20, 20, 20),
+    sigma: float | None = None,
+    freq_min: float | None = None,
+    freq_max: float | None = None,
+    freq_pitch: float | None = None,
+    use_tetrahedron_method: bool = True,
+) -> dict[str, NDArray]:
+    """
+    Calculate the total phonon density of states.
 
-    Thermal properties include: vibrational free energy, entropy and heat capacity
+    This is a standalone function for users who want DOS independently of thermal
+    properties. Runs its own mesh integration and returns the DOS dict.
+
+    Args:
+        phonon: a Phonopy api object with force constants already computed
+        mesh: qpoint mesh for Brillouin zone sampling
+        sigma: smearing width for Gaussian broadening (ignored if use_tetrahedron_method=True)
+        freq_min: minimum frequency for DOS (THz)
+        freq_max: maximum frequency for DOS (THz)
+        freq_pitch: frequency step for DOS (THz)
+        use_tetrahedron_method: use tetrahedron method for DOS integration (default True)
+
+    Returns:
+        dict with keys 'frequency_points' (THz) and 'total_dos' (states/THz)
+    """
+    phonon.run_mesh(mesh)
+    phonon.run_total_dos(
+        sigma=sigma,
+        freq_min=freq_min,
+        freq_max=freq_max,
+        freq_pitch=freq_pitch,
+        use_tetrahedron_method=use_tetrahedron_method,
+    )
+    return phonon.get_total_dos_dict()
+
+
+def calculate_thermal_properties(
+    phonon: Phonopy,
+    t_min,
+    t_max,
+    t_step,
+    mesh: ArrayLike = (20, 20, 20),
+    return_dos: bool = False,
+) -> dict[str, float]:
+    """
+    Calculate thermal properties from initialized phonopy object.
+
+    Thermal properties include: vibrational free energy, entropy and heat capacity.
+    Optionally also returns the total phonon DOS.
 
     Args:
         phonon: a Phonopy api object with displacements generated
@@ -227,14 +273,22 @@ def calculate_thermal_properties(
         t_max: max temperature
         t_step: temperature step between min and max
         mesh: qpoint mesh to compute properties using Fourier interpolation
+        return_dos: if True, also compute and return the total DOS
 
     Returns:
-        dict: dictionary of computed properties
+        dict: dictionary of computed properties. Always includes 'temperatures',
+            'free_energy', 'entropy', 'heat_capacity'. If return_dos is True, also
+            includes 'frequency_points' and 'total_dos'.
     """
-
     phonon.run_mesh(mesh)
     phonon.run_thermal_properties(t_min=t_min, t_max=t_max, t_step=t_step)
-    return phonon.get_thermal_properties_dict()
+    result = phonon.get_thermal_properties_dict()
+
+    if return_dos:
+        phonon.run_total_dos()
+        result.update(phonon.get_total_dos_dict())
+
+    return result
 
 
 def calculate_vibrational_thermo(
@@ -255,6 +309,7 @@ def calculate_vibrational_thermo(
     optimizer: str = "FIRE",
     eos: str = "vinet",
     pressure: float | None = None,
+    compute_dos: bool = False,
 ) -> dict[str, ArrayLike]:
     """
     Calculate vibrational thermodynamic properties using either anharmonic (QHA) or harmonic (phonon) approach.
@@ -293,11 +348,17 @@ def calculate_vibrational_thermo(
         Equation of state to use for QHA calculations
     pressure : float | None, default=None
         External pressure for calculations
+    compute_dos : bool, default=False
+        If True, also compute and return the total phonon density of states.
+        The DOS is temperature-independent in the harmonic approximation, so
+        a single DOS is returned valid for all temperatures. In QHA mode, the
+        DOS is computed at the equilibrium volume (scale_factor=1.0).
 
     Returns:
     --------
     dict[str, ArrayLike]
-        Dictionary containing vibrational free energy corrections
+        Dictionary containing vibrational free energy corrections. If compute_dos
+        is True, also includes 'frequency_points' and 'total_dos'.
     """
     calculator = atoms.calc
 
@@ -323,6 +384,7 @@ def calculate_vibrational_thermo(
             optimizer=optimizer,
             eos=eos,
             pressure=pressure,
+            return_dos=compute_dos,
         )
     else:
         return _calc_nvt(
@@ -337,17 +399,27 @@ def calculate_vibrational_thermo(
             fmax=fmax,
             max_steps=max_steps,
             optimizer=optimizer,
+            return_dos=compute_dos,
         )
 
 
 def _run_phonon_thermal(
-    atoms, calculator, supercell_matrix, atom_disp, t_step, t_max, t_min
+    atoms,
+    calculator,
+    supercell_matrix,
+    atom_disp,
+    t_step,
+    t_max,
+    t_min,
+    return_dos: bool = False,
 ):
     phonon = get_phonopy_object(
         atoms, displacement=atom_disp, supercell_matrix=supercell_matrix
     )
     produce_force_constants(phonon, calculator)
-    return calculate_thermal_properties(phonon, t_min=t_min, t_max=t_max, t_step=t_step)
+    return calculate_thermal_properties(
+        phonon, t_min=t_min, t_max=t_max, t_step=t_step, return_dos=return_dos
+    )
 
 
 def _calc_nvt_npt(
@@ -367,6 +439,7 @@ def _calc_nvt_npt(
     optimizer,
     eos,
     pressure,
+    return_dos: bool = False,
 ) -> dict:
     if relax_initial:
         atoms.calc = calculator
@@ -411,7 +484,14 @@ def _calc_nvt_npt(
         electronic_energies.append(electronic_energy)
 
         thermal = _run_phonon_thermal(
-            scaled_atoms, calculator, supercell_matrix, atom_disp, t_step, t_max, t_min
+            scaled_atoms,
+            calculator,
+            supercell_matrix,
+            atom_disp,
+            t_step,
+            t_max,
+            t_min,
+            return_dos=(return_dos and np.isclose(scale_factor, 1.0)),
         )
         free_energies.append(thermal["free_energy"])
         entropies.append(thermal["entropy"])
@@ -478,6 +558,7 @@ def _calc_nvt(
     fmax,
     max_steps,
     optimizer,
+    return_dos: bool = False,
 ) -> dict:
     if relax_initial:
         atoms.calc = calculator
@@ -490,7 +571,14 @@ def _calc_nvt(
         )
 
     thermal = _run_phonon_thermal(
-        atoms, calculator, supercell_matrix, atom_disp, t_step, t_max, t_min
+        atoms,
+        calculator,
+        supercell_matrix,
+        atom_disp,
+        t_step,
+        t_max,
+        t_min,
+        return_dos=return_dos,
     )
     thermal["free_energy"] = (
         thermal["free_energy"] * kJmol2eV
