@@ -87,6 +87,7 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "energy_cutoff": fe_config.get("energy_cutoff", None),
         "max_structures": fe_config.get("max_structures", None),
         "compute_dos": fe_config.get("compute_dos", False),
+        "input_directory": fe_config.get("input_directory", "matched_structures"),
     }
 
 
