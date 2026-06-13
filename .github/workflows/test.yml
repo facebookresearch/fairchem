@@ -135,7 +135,7 @@ jobs:
       # Needed to manually set commit status
       statuses: write
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         python_version: ['3.13']
         shard:
