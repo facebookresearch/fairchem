@@ -25,7 +25,7 @@ Below is an example that uses the default `elastic_tensor_flow` flow:
 from __future__ import annotations
 
 from ase.build import bulk
-from quacc.recipes.mlp.elastic import elastic_tensor_flow
+from quacc.recipes.mlip.elastic import elastic_tensor_flow
 
 # Make an Atoms object of a bulk Cu structure
 atoms = bulk("Cu")
@@ -35,7 +35,7 @@ result = elastic_tensor_flow(
     atoms,
     job_params={
         "all": dict(
-            method="fairchem",
+            library="fairchem",
             name_or_path="uma-s-1p2",
             task_name="omat",
         ),
