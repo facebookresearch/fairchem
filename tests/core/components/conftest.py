@@ -7,18 +7,14 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from random import choice
-
 import pytest
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
+from fairchem.core.units.mlip_unit import load_predict_unit
 
 
 @pytest.fixture(scope="session")
-def calculator() -> FAIRChemCalculator:
-    uma_sm_models = [
-        model for model in pretrained_mlip.available_models if "uma-s" in model
-    ]
-    return FAIRChemCalculator.from_model_checkpoint(
-        choice(uma_sm_models), task_name="omat"
-    )
+def calculator(direct_checkpoint) -> FAIRChemCalculator:
+    inference_checkpoint_pt, _ = direct_checkpoint
+    predictor = load_predict_unit(inference_checkpoint_pt, device="cpu")
+    return FAIRChemCalculator(predictor, task_name="omat")

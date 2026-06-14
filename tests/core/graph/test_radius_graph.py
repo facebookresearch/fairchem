@@ -1559,12 +1559,16 @@ class TestMixedPBCBatch:
         assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
 
     @pytest.mark.gpu()
-    def test_inference_results_match_mixed_vs_individual(self, radius_pbc_version):
+    @pytest.mark.uses_uma()
+    @pytest.mark.uma_models("uma-s-1p1")
+    def test_inference_results_match_mixed_vs_individual(
+        self, radius_pbc_version, uma_checkpoint
+    ):
         """End-to-end inference on a mixed-PBC batch must match per-system individual results."""
-        from fairchem.core.calculate import pretrained_mlip
+        from tests.conftest import get_predict_unit_for_test
 
-        predictor = pretrained_mlip.get_predict_unit(
-            "uma-s-1p1",
+        predictor = get_predict_unit_for_test(
+            uma_checkpoint,
             overrides={"backbone": {"radius_pbc_version": radius_pbc_version}},
         )
 

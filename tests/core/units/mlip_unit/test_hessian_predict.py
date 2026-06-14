@@ -22,7 +22,7 @@ from tests.conftest import get_predict_unit_for_test
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
+pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")]
 
 
 def get_numerical_hessian(

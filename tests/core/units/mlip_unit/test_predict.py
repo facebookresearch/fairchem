@@ -49,7 +49,7 @@ def _resolve_checkpoint_path(name_or_path: str) -> str:
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
-pytestmark = pytest.mark.uma_models("uma-s-1p1")
+pytestmark = pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")
 
 
 _REPRESENTATIVE_ELEMENTS = [

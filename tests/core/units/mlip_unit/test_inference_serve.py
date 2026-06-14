@@ -45,7 +45,7 @@ DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
 
-pytestmark = pytest.mark.gpu
+pytestmark = [pytest.mark.gpu, pytest.mark.uses_uma]
 
 
 @pytest.fixture()
