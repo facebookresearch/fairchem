@@ -13,6 +13,7 @@ import ase
 import pytest
 import torch
 from ase.build import molecule
+from ase.data import atomic_masses
 
 from fairchem.core.datasets.atomic_data import (
     AtomicData,
@@ -30,6 +31,16 @@ def ase_atoms():
 def test_to_ase_single(ase_atoms):
     atoms = AtomicData.from_ase(ase_atoms).to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_masses_property_uses_atomic_numbers(dtype):
+    data = AtomicData.from_ase(molecule("H2O"), target_dtype=dtype)
+
+    expected = torch.as_tensor(
+        atomic_masses[data.atomic_numbers], dtype=dtype, device=data.pos.device
+    )
+    torch.testing.assert_close(data.masses, expected)
 
 
 @pytest.mark.gpu()

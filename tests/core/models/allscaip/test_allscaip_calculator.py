@@ -46,6 +46,7 @@ def test_calculator_inference(allscaip_predict_unit):
     assert forces.shape == (len(atoms), 3)
 
 
+@pytest.mark.compile_gpu()
 def test_calculator_inference_with_max_atoms():
     """
     Test that max_atoms in InferenceSettings pads inputs correctly

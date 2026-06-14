@@ -130,9 +130,9 @@ def get_escaip_full(
 
 
 @pytest.mark.gpu()
-def test_compile_full_gpu():
+@pytest.mark.compile_gpu()
+def test_compile_full_gpu(compile_reset_state):
     # make_deterministic()
-    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     model_compile = get_escaip_full(cutoff=cutoff, use_compile=True, device=device)
@@ -154,9 +154,8 @@ def test_compile_full_gpu():
 
 
 @pytest.mark.gpu()
-def test_fixed_forward_full_gpu():
+def test_fixed_forward_full_gpu(compile_reset_state):
     # make_deterministic()
-    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     seed_everywhere()
