@@ -829,6 +829,16 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             )
         self.server_handle = server_handle
         self._multiplexed_model_id = multiplexed_model_id
+        # Identity-based cache for ``validate_atoms_data``.
+        # ``ase_calculator.calculate()`` calls validate on every
+        # optimizer step with the same ``atoms.info`` dict object;
+        # validation only mutates that dict in place to add defaults
+        # (charge, spin, ...). After the first call the dict is
+        # saturated, so any subsequent call on the same dict is
+        # guaranteed redundant. We key on ``(id(info), task_name)``;
+        # since this unit holds no reference to the dict itself, this
+        # is purely a fast-path skip and cannot extend its lifetime.
+        self._validated_info_keys: set[tuple[int, str]] = set()
 
     @property
     def multiplexed_model_id(self) -> str | None:
@@ -903,11 +913,23 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         model-specific rather than hardcoded.  The server runs
         ``predict_unit.validate_atoms_data`` on a stub ``Atoms`` and
         returns the mutated ``atoms.info`` dict which is applied locally.
+
+        Skips the Ray Serve round-trip when the same ``atoms.info``
+        dict object has already been validated for this task: the
+        server's validation is purely defaulting and was applied to
+        the dict in place on the first call, so subsequent calls
+        with the same dict are no-ops. ``ase_calculator.calculate()``
+        calls this on every optimizer step — without the skip, each
+        step pays a network hop.
         """
+        key = (id(atoms.info), task_name)
+        if key in self._validated_info_keys:
+            return
         updated_info = self.server_handle.validate_atoms_data.remote(
             dict(atoms.info), task_name
         ).result()
         atoms.info.update(updated_info)
+        self._validated_info_keys.add(key)
 
     @cached_property
     def dataset_to_tasks(self) -> dict:
