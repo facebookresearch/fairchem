@@ -24,13 +24,12 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate._batch import InferenceBatcher
 from tests.conftest import get_predict_unit_for_test
 
-# mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
-# uses_uma flags every test for the --uma-checkpoint sweep mode.
+# mark all tests in this module as serial (Ray needs serial execution due to
+# large number of subprocesses) and pretrained (sweep-eligible).
 pytestmark = [
     pytest.mark.serial,
     pytest.mark.gpu,
-    pytest.mark.uses_uma,
-    pytest.mark.uma_models("uma-s-1p2"),
+    pytest.mark.pretrained("uma-s-1p2"),
 ]
 
 
@@ -40,9 +39,9 @@ def setup_before_each_test():
 
 
 @pytest.fixture(scope="module")
-def uma_predict_unit(uma_checkpoint):
+def uma_predict_unit(pretrained_checkpoint):
     """Get a UMA predict unit for testing."""
-    return get_predict_unit_for_test(uma_checkpoint)
+    return get_predict_unit_for_test(pretrained_checkpoint)
 
 
 def setup_ray():

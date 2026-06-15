@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from fairchem.core.models.uma.escn_md import GradRegressConfig
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
 def apply_strain(atoms: Atoms, strain: np.ndarray) -> Atoms:
@@ -61,8 +61,8 @@ def bulk_atoms() -> Atoms:
 
 
 @pytest.fixture()
-def uma_predict_unit(uma_checkpoint):
-    return get_predict_unit_for_test(uma_checkpoint)
+def uma_predict_unit(pretrained_checkpoint):
+    return get_predict_unit_for_test(pretrained_checkpoint)
 
 
 def get_displacement_and_cell(
@@ -299,7 +299,7 @@ def compute_stress_from_cell_displacement(
 
 
 @pytest.mark.gpu()
-@pytest.mark.checkpoint_specific()
+@pytest.mark.calibrated()
 @pytest.mark.parametrize("atoms_fixture", ["bulk_atoms", "slab_atoms"])
 def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_unit):
     """
@@ -386,7 +386,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
 
 
 @pytest.mark.gpu()
-@pytest.mark.checkpoint_specific()
+@pytest.mark.calibrated()
 def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_unit):
     """
     Test that old and new stress implementations give identical results for batch predictions.

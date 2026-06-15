@@ -20,13 +20,13 @@ from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 from fairchem.core import FAIRChemCalculator
 from tests.conftest import get_predict_unit_for_test
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 
 
-def run_ase_langevin(uma_checkpoint):
+def run_ase_langevin(pretrained_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -55,10 +55,10 @@ def run_ase_langevin(uma_checkpoint):
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_nve(uma_checkpoint):
+def run_ase_nve(pretrained_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -84,7 +84,7 @@ def run_ase_nve(uma_checkpoint):
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_npt(uma_checkpoint):
+def run_ase_npt(pretrained_checkpoint):
     """Run ASE NPT-like using a Berendsen barostat approximation via NPT wrapper.
 
     ASE doesn't provide a direct NPT integrator in the core; here we mimic
@@ -96,7 +96,7 @@ def run_ase_npt(uma_checkpoint):
     """
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -140,27 +140,27 @@ def run_ase_npt(uma_checkpoint):
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_lammps(input_file, uma_checkpoint):
-    predictor = get_predict_unit_for_test(uma_checkpoint, device="cuda")
+def run_lammps(input_file, pretrained_checkpoint):
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_nve(uma_checkpoint):
-    ase_kinetic, ase_pot = run_ase_nve(uma_checkpoint)
+def test_ase_vs_lammps_nve(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_nve(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_nve.file", uma_checkpoint
+        "tests/lammps/lammps_nve.file", pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.1)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_npt(uma_checkpoint):
-    ase_kinetic, ase_pot = run_ase_npt(uma_checkpoint)
+def test_ase_vs_lammps_npt(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_npt(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_npt.file", uma_checkpoint
+        "tests/lammps/lammps_npt.file", pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
@@ -170,10 +170,10 @@ def test_ase_vs_lammps_npt(uma_checkpoint):
     reason="This is more demo purposes, need to configure the right parameters for ASE langevin to match lammps"
 )
 @pytest.mark.gpu()
-def test_ase_vs_lammps_langevin(uma_checkpoint):
-    ase_kinetic, ase_pot = run_ase_langevin(uma_checkpoint)
+def test_ase_vs_lammps_langevin(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_langevin(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_langevin.file", uma_checkpoint
+        "tests/lammps/lammps_langevin.file", pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=1e-4)
     assert np.isclose(ase_pot, lammps_pot, rtol=1e-4)

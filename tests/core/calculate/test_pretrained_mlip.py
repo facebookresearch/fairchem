@@ -19,13 +19,13 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from tests.conftest import get_predict_unit_for_test
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
-@pytest.mark.checkpoint_specific()
-def test_get_predict_unit_by_name(uma_checkpoint):
+@pytest.mark.calibrated()
+def test_get_predict_unit_by_name(pretrained_checkpoint):
     """Registered name → predictor with populated external refs."""
-    predictor = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cpu")
+    predictor = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
     assert isinstance(predictor, MLIPPredictUnit)
     assert predictor.atom_refs, "atom_refs should be populated by the name branch"
     assert (
@@ -33,27 +33,27 @@ def test_get_predict_unit_by_name(uma_checkpoint):
     ), "form_elem_refs should be populated by the name branch"
 
 
-def test_get_predict_unit_for_test_by_path(uma_checkpoint):
+def test_get_predict_unit_for_test_by_path(pretrained_checkpoint):
     """
     Filesystem path via get_predict_unit_for_test → predictor loads
     successfully but external refs are empty (path goes through
     load_predict_unit which does not auto-fetch YAMLs).
     """
-    checkpoint_path = pretrained_checkpoint_path_from_name(uma_checkpoint)
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
     predictor = get_predict_unit_for_test(checkpoint_path, device="cpu")
     assert isinstance(predictor, MLIPPredictUnit)
     assert predictor.atom_refs == {}, "path-load should leave atom_refs empty"
     assert predictor.form_elem_refs == {}, "path-load should leave form_elem_refs empty"
 
 
-def test_name_and_path_forward_match(uma_checkpoint):
+def test_name_and_path_forward_match(pretrained_checkpoint):
     """
     Forward pass on a multi-atom system must agree between name-load and
     path-load — the in-checkpoint normalizer and element_references buffers
     travel with the .pt, so external refs don't affect ordinary energies.
     """
-    checkpoint_path = pretrained_checkpoint_path_from_name(uma_checkpoint)
-    pu_by_name = pretrained_mlip.get_predict_unit(uma_checkpoint, device="cpu")
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+    pu_by_name = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
     pu_by_path = get_predict_unit_for_test(checkpoint_path, device="cpu")
 
     atoms = bulk("Cu", "fcc", a=3.6).repeat((2, 1, 1))  # 2-atom system
@@ -77,29 +77,29 @@ def test_get_predict_unit_unknown_name_raises_keyerror():
         pretrained_mlip.get_predict_unit("definitely-not-a-real-model", device="cpu")
 
 
-def test_get_predict_unit_for_test_dispatches_on_path(uma_checkpoint):
+def test_get_predict_unit_for_test_dispatches_on_path(pretrained_checkpoint):
     """
     get_predict_unit_for_test dispatches path-vs-name: a real filesystem
     path goes through load_predict_unit (empty refs), a registered name
     goes through pretrained_mlip.get_predict_unit (populated refs).
     """
-    checkpoint_path = pretrained_checkpoint_path_from_name(uma_checkpoint)
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
 
     # Path branch
     pu_path = get_predict_unit_for_test(checkpoint_path, device="cpu")
     assert pu_path.atom_refs == {}
 
     # Name branch
-    pu_name = get_predict_unit_for_test(uma_checkpoint, device="cpu")
+    pu_name = get_predict_unit_for_test(pretrained_checkpoint, device="cpu")
     assert pu_name.atom_refs != {}
 
 
-def test_get_predict_unit_for_test_symlink(tmp_path, uma_checkpoint):
+def test_get_predict_unit_for_test_symlink(tmp_path, pretrained_checkpoint):
     """
     A symlink to a checkpoint is still recognized as a file path,
     so get_predict_unit_for_test takes the path branch (empty refs).
     """
-    checkpoint_path = pretrained_checkpoint_path_from_name(uma_checkpoint)
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
     link = tmp_path / "uma-link"
     os.symlink(checkpoint_path, link)
 
@@ -109,12 +109,12 @@ def test_get_predict_unit_for_test_symlink(tmp_path, uma_checkpoint):
     assert predictor.form_elem_refs == {}
 
 
-def test_from_model_checkpoint_path_behavior_unchanged(uma_checkpoint):
+def test_from_model_checkpoint_path_behavior_unchanged(pretrained_checkpoint):
     """
     Regression guard: FAIRChemCalculator.from_model_checkpoint with a path
     drops external refs. get_predict_unit_for_test matches this behavior.
     """
-    checkpoint_path = pretrained_checkpoint_path_from_name(uma_checkpoint)
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
     calc = FAIRChemCalculator.from_model_checkpoint(
         checkpoint_path, task_name="omat", device="cpu"
     )

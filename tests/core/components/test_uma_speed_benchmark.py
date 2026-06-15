@@ -15,7 +15,7 @@ import pytest
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from tests.core.testing_utils import launch_main
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p2")]
 
 COMMON_ARGS = [
     "job.device_type=CPU",
@@ -27,11 +27,11 @@ COMMON_ARGS = [
 ]
 
 
-def _checkpoint_overrides(uma_checkpoint: str) -> list[str]:
+def _checkpoint_overrides(pretrained_checkpoint: str) -> list[str]:
     checkpoint_path = (
-        uma_checkpoint
-        if Path(uma_checkpoint).exists()
-        else pretrained_checkpoint_path_from_name(uma_checkpoint)
+        pretrained_checkpoint
+        if Path(pretrained_checkpoint).exists()
+        else pretrained_checkpoint_path_from_name(pretrained_checkpoint)
     )
     return [
         "~uma_s_1p2",
@@ -39,14 +39,14 @@ def _checkpoint_overrides(uma_checkpoint: str) -> list[str]:
     ]
 
 
-def test_uma_speed_benchmark_natoms_list(uma_checkpoint):
+def test_uma_speed_benchmark_natoms_list(pretrained_checkpoint):
     """Run the UMA speed benchmark via CLI using natoms_list override."""
     with tempfile.TemporaryDirectory() as run_root:
         sys_args = [
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            *_checkpoint_overrides(uma_checkpoint),
+            *_checkpoint_overrides(pretrained_checkpoint),
             f"job.run_dir={run_root}",
             "runner.natoms_list=[20]",
         ]
@@ -55,7 +55,7 @@ def test_uma_speed_benchmark_natoms_list(uma_checkpoint):
         assert entries, "Benchmark did not create a run directory"
 
 
-def test_uma_speed_benchmark_input_system(water_xyz_file, uma_checkpoint):
+def test_uma_speed_benchmark_input_system(water_xyz_file, pretrained_checkpoint):
     """Run the UMA speed benchmark using an explicit input_system (water.xyz)."""
     with tempfile.TemporaryDirectory() as run_root:
         input_system_override = f"+runner.input_system={{water: {water_xyz_file}}}"
@@ -63,7 +63,7 @@ def test_uma_speed_benchmark_input_system(water_xyz_file, uma_checkpoint):
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            *_checkpoint_overrides(uma_checkpoint),
+            *_checkpoint_overrides(pretrained_checkpoint),
             f"job.run_dir={run_root}",
             input_system_override,
             "runner.natoms_list=null",

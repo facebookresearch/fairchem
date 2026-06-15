@@ -24,7 +24,7 @@ from tests.perf.performance_report import MeasurementStats, PerformanceReport
 if TYPE_CHECKING:
     from ase import Atoms
 
-pytestmark = pytest.mark.uses_uma
+pytestmark = pytest.mark.pretrained
 
 
 # The scope here ensures that the same report instance is passed to every
@@ -105,13 +105,13 @@ def generate_test_cases(models: list[str]) -> list[InferenceTestCase]:
 
 
 def pytest_generate_tests(metafunc):
-    """Pick models for `test_pretrained_models` from --uma-checkpoint when set,
+    """Pick models for `test_pretrained_models` from --sweep-model when set,
     otherwise iterate every registered pretrained model."""
     if metafunc.function.__name__ != "test_pretrained_models":
         return
     if "test_case" not in metafunc.fixturenames:
         return
-    override = metafunc.config.getoption("--uma-checkpoint")
+    override = metafunc.config.getoption("--sweep-model")
     models = [override] if override else list(pretrained_mlip.available_models)
     metafunc.parametrize("test_case", generate_test_cases(models))
 

@@ -614,9 +614,8 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
-@pytest.mark.uses_uma()
-@pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")
-def test_compiled_backends_match_baseline(uma_model_name, compile_reset_state):
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_state):
     """
     Test compiled execution modes produce same results as non-compiled baseline.
 
@@ -625,14 +624,14 @@ def test_compiled_backends_match_baseline(uma_model_name, compile_reset_state):
     - umas_fast_gpu compiled vs general non-compiled
 
     Uses pretrained checkpoints (cached by HuggingFace Hub) — or a direct
-    filesystem path if --uma-checkpoint is set to one.
+    filesystem path if --sweep-model is set to one.
     """
     # Resolve to a checkpoint file: accept either a registered model name
     # or an already-on-disk path.
-    if os.path.exists(uma_model_name):
-        checkpoint_pt = uma_model_name
+    if os.path.exists(pretrained_model_name):
+        checkpoint_pt = pretrained_model_name
     else:
-        checkpoint_pt = pretrained_checkpoint_path_from_name(uma_model_name)
+        checkpoint_pt = pretrained_checkpoint_path_from_name(pretrained_model_name)
 
     # Create test system (32-atom Cu FCC)
     atoms = bulk("Cu", "fcc", a=3.6) * (2, 2, 2)
@@ -675,13 +674,13 @@ def test_compiled_backends_match_baseline(uma_model_name, compile_reset_state):
         assert torch.allclose(
             baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
         ), (
-            f"{uma_model_name} {test_mode} compile={test_compile}: "
+            f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
         )
         # Energy comparison
         assert torch.allclose(
             baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
         ), (
-            f"{uma_model_name} {test_mode} compile={test_compile}: "
+            f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"
         )

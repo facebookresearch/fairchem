@@ -37,15 +37,11 @@ if TYPE_CHECKING:
 from fairchem.core.calculate import pretrained_mlip
 from tests.conftest import get_predict_unit_for_test
 
-# mark all tests in this module as gpu tests
-# uses_uma flags every test for the --uma-checkpoint sweep mode. The single
-# non-UMA test (test_formation_energy_calculator_non_fairchemcalculator) is
-# fast and harmless to include in exchange for simpler module-level marking.
-pytestmark = [
-    pytest.mark.gpu,
-    pytest.mark.uses_uma,
-    pytest.mark.uma_models("uma-s-1p1"),
-]
+# All tests use a GPU and a pretrained model. Tests that iterate over all
+# registered models inherit the bare @pretrained (no model args) from here;
+# tests locked to specific UMA-s checkpoints add their own
+# @pretrained("uma-s-1p1", "uma-s-1p2") which shadows the module marker.
+pytestmark = [pytest.mark.gpu, pytest.mark.pretrained]
 
 
 @pytest.fixture(scope="session")
@@ -68,17 +64,26 @@ def atoms_with_formation_energy():
 
 
 def _models_to_test(config) -> list[str]:
-    """Models to iterate over: the --uma-checkpoint override if set,
-    otherwise every registered pretrained model."""
-    override = config.getoption("--uma-checkpoint")
+    """
+    Models to iterate over for all-models tests.
+
+    With ``--sweep-model``: just the override.
+    With ``--exclude-models``: all registered models minus excluded.
+    Otherwise: every registered pretrained model.
+    """
+    override = config.getoption("--sweep-model")
     if override is not None:
         return [override]
-    return list(pretrained_mlip.available_models)
+    excluded = config.getoption("--exclude-models")
+    excluded_set = set(excluded.split(",")) if excluded else set()
+    return [m for m in pretrained_mlip.available_models if m not in excluded_set]
 
 
 def pytest_generate_tests(metafunc):
-    """Drive `mlip_predict_unit` parametrization from --uma-checkpoint when set,
-    falling back to all registered models otherwise."""
+    """
+    Drive ``mlip_predict_unit`` parametrization from --sweep-model when set,
+    falling back to all registered models otherwise.
+    """
     if "mlip_predict_unit" in metafunc.fixturenames:
         metafunc.parametrize(
             "mlip_predict_unit",
@@ -89,8 +94,8 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture(scope="module")
-def single_mlip_predict_unit(uma_checkpoint):
-    return get_predict_unit_for_test(uma_checkpoint)
+def single_mlip_predict_unit(pretrained_checkpoint):
+    return get_predict_unit_for_test(pretrained_checkpoint)
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +105,9 @@ def mlip_predict_unit(request) -> MLIPPredictUnit:
 
 @pytest.fixture(scope="module")
 def all_calculators(mlip_predict_unit):
-    """Generate calculators for all available datasets in the mlip predict unit"""
+    """
+    Generate calculators for all available datasets in the mlip predict unit.
+    """
 
     def _calc_generator():
         for dataset in mlip_predict_unit.dataset_to_tasks:
@@ -177,18 +184,27 @@ def large_bulk_atoms() -> Atoms:
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
 
 
-def test_calculator_from_checkpoint(uma_checkpoint):
-    calc = FAIRChemCalculator.from_model_checkpoint(uma_checkpoint, task_name="omol")
+# ---- UMA-only tests (locked to specific models) ----
+
+
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_calculator_from_checkpoint(pretrained_checkpoint):
+    calc = FAIRChemCalculator.from_model_checkpoint(
+        pretrained_checkpoint, task_name="omol"
+    )
     assert "energy" in calc.implemented_properties
     assert "forces" in calc.implemented_properties
 
 
-def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms, uma_checkpoint):
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_calculator_with_task_names_matches_uma_task(
+    aperiodic_atoms, pretrained_checkpoint
+):
     calc_omol = FAIRChemCalculator.from_model_checkpoint(
-        uma_checkpoint, task_name="omol"
+        pretrained_checkpoint, task_name="omol"
     )
     calc_omol_uma_task = FAIRChemCalculator.from_model_checkpoint(
-        uma_checkpoint, task_name=UMATask.OMOL
+        pretrained_checkpoint, task_name=UMATask.OMOL
     )
     calculators = [calc_omol, calc_omol_uma_task]
     energies = []
@@ -200,6 +216,9 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms, uma_checkp
     npt.assert_allclose(energies[0], energies[1])
 
 
+# ---- All-models tests (no model args → bare @pretrained from module) ----
+
+
 def test_no_task_name_single_task(request):
     for model_name in _models_to_test(request.config):
         predict_unit = get_predict_unit_for_test(model_name)
@@ -209,9 +228,12 @@ def test_no_task_name_single_task(request):
             assert calc.task_name == datasets[0]
 
 
-def test_calculator_unknown_task_raises_error(uma_checkpoint):
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_calculator_unknown_task_raises_error(pretrained_checkpoint):
     with pytest.raises(ValueError):
-        FAIRChemCalculator.from_model_checkpoint(uma_checkpoint, task_name="ommmmmol")
+        FAIRChemCalculator.from_model_checkpoint(
+            pretrained_checkpoint, task_name="ommmmmol"
+        )
 
 
 def test_calculator_setup(all_calculators):
@@ -275,6 +297,7 @@ def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     assert isinstance(final_energy, float)
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.parametrize("inference_settings", ["default", "turbo"])
 def test_calculator_configurations(
     inference_settings, slab_atoms, single_mlip_predict_unit
@@ -302,6 +325,7 @@ def test_calculator_configurations(
         assert isinstance(stress, np.ndarray)
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_large_bulk_system(large_bulk_atoms, single_mlip_predict_unit):
     """Test a bulk system with 1000 atoms using the small model."""
     calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omat")
@@ -329,7 +353,10 @@ def test_error_for_pbc_with_zero_cell(aperiodic_atoms, all_calculators):
 def test_omol_missing_spin_charge_logs_warning(
     periodic_h2o_atoms, omol_calculators, caplog
 ):
-    """Test that missing spin/charge in atoms.info logs a warning when task_name='omol'."""
+    """
+    Test that missing spin/charge in atoms.info logs a warning
+    when task_name='omol'.
+    """
 
     for calc in omol_calculators():
         periodic_h2o_atoms.calc = calc
@@ -342,7 +369,10 @@ def test_omol_missing_spin_charge_logs_warning(
 
 
 def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators):
-    """Test that energy differs for H2O molecule with different charge and spin_multiplicity."""
+    """
+    Test that energy differs for H2O molecule with different charge and
+    spin_multiplicity.
+    """
 
     for calc in omol_calculators():
         # Test all combinations of charge and spin
@@ -365,8 +395,12 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
         ), "Energy values are not unique for different charge/spin combinations"
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_single_atom_systems(single_mlip_predict_unit):
-    """Test a system with a single atom. Single atoms do not currently use the model."""
+    """
+    Test a system with a single atom.
+    Single atoms do not currently use the model.
+    """
     for at_num in range(1, 84):
         atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
         atom.info["charge"] = 0
@@ -384,6 +418,7 @@ def test_single_atom_systems(single_mlip_predict_unit):
             assert (forces == 0.0).all()
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_single_atom_system_errors(single_mlip_predict_unit):
     """Test that a charged system with a single atom does not work."""
     if single_mlip_predict_unit.model.module.supports_single_atoms:
@@ -401,6 +436,7 @@ def test_single_atom_system_errors(single_mlip_predict_unit):
         atom.get_potential_energy()
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.skip(
     reason="the wigner matrices should be dependent on the RNG, but the energies"
     "are not actually different using the above seed setting code."
@@ -429,11 +465,12 @@ def test_random_seed_final_energy(single_mlip_predict_unit):
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.gpu()
-def test_external_graph_generation_molecular_system(uma_checkpoint):
+def test_external_graph_generation_molecular_system(pretrained_checkpoint):
     inference_settings = InferenceSettings(external_graph_gen=True)
     predict_unit = get_predict_unit_for_test(
-        uma_checkpoint, device="cuda", inference_settings=inference_settings
+        pretrained_checkpoint, device="cuda", inference_settings=inference_settings
     )
 
     calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
@@ -454,18 +491,23 @@ def test_external_graph_generation_molecular_system(uma_checkpoint):
     assert forces.shape == (len(atoms), 3)
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.gpu()
-def test_external_graph_gen_vs_internal(uma_checkpoint):
+def test_external_graph_gen_vs_internal(pretrained_checkpoint):
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
     inference_settings_external = InferenceSettings(external_graph_gen=True)
     predict_unit_external = get_predict_unit_for_test(
-        uma_checkpoint, device="cuda", inference_settings=inference_settings_external
+        pretrained_checkpoint,
+        device="cuda",
+        inference_settings=inference_settings_external,
     )
 
     inference_settings_internal = InferenceSettings(external_graph_gen=False)
     predict_unit_internal = get_predict_unit_for_test(
-        uma_checkpoint, device="cuda", inference_settings=inference_settings_internal
+        pretrained_checkpoint,
+        device="cuda",
+        inference_settings=inference_settings_internal,
     )
 
     calc_external = FAIRChemCalculator(predict_unit_external, task_name="omat")
@@ -504,7 +546,11 @@ def run_md_simulation(calc, steps: int = 10):
     assert np.allclose(atoms.get_potential_energy(), expected_energy, atol=1e-4)
 
 
-@pytest.mark.checkpoint_specific()
+# ---- Calibrated tests (locked to one model's exact values) ----
+
+
+@pytest.mark.pretrained("uma-s-1p1")
+@pytest.mark.calibrated()
 def test_simple_md():
     inference_settings = InferenceSettings(
         tf32=True,
@@ -521,11 +567,15 @@ def test_simple_md():
     run_md_simulation(calc, steps=10)
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_correctness(
     aperiodic_atoms, single_mlip_predict_unit
 ):
-    """Test that FormationEnergyCalculator wraps a calculator and computes formation energies."""
+    """
+    Test that FormationEnergyCalculator wraps a calculator and computes
+    formation energies.
+    """
     base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
 
     atoms = molecule("H2")
@@ -547,11 +597,15 @@ def test_formation_energy_calculator_correctness(
     assert np.isclose(formation_energy, expected_formation_energy, atol=1e-6)
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_missing_element_raises_error(
     single_mlip_predict_unit,
 ):
-    """Test that FormationEnergyCalculator raises error for missing element references."""
+    """
+    Test that FormationEnergyCalculator raises error for missing element
+    references.
+    """
     water_molecule = molecule("H2O")
     water_molecule.info["charge"] = 0
     water_molecule.info["spin"] = 1
@@ -568,7 +622,8 @@ def test_formation_energy_calculator_missing_element_raises_error(
         water_molecule.get_potential_energy()
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predict_unit):
     """Test MP corrections with FormationEnergyCalculator for OMat task."""
     base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omat")
@@ -595,7 +650,8 @@ def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predic
         pytest.skip("fairchem.data.omat not available for MP corrections")
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
     single_mlip_predict_unit,
 ):
@@ -607,7 +663,8 @@ def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
         FormationEnergyCalculator(base_calc, apply_corrections=True)
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_auto_loads_references(single_mlip_predict_unit):
     base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
 
@@ -649,7 +706,8 @@ def test_formation_energy_calculator_non_fairchemcalculator():
     assert np.isclose(formation_energy, expected, atol=1e-6)
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_different_task_types(single_mlip_predict_unit):
     for task_name in ["omol", "omat", "oc20"]:
         if task_name in single_mlip_predict_unit.dataset_to_tasks:
@@ -662,7 +720,8 @@ def test_formation_energy_calculator_different_task_types(single_mlip_predict_un
             assert formation_calc.element_references is not None
 
 
-@pytest.mark.checkpoint_specific()
+@pytest.mark.pretrained("uma-s-1p1")
+@pytest.mark.calibrated()
 def test_formation_energy_calculator_predictions_against_known_values(
     atoms_with_formation_energy,
 ):

@@ -22,7 +22,7 @@ from tests.conftest import get_predict_unit_for_test
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
 def get_numerical_hessian(
@@ -101,10 +101,10 @@ def get_numerical_hessian(
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
-def test_hessian(vmap, uma_checkpoint):
+def test_hessian(vmap, pretrained_checkpoint):
     """Test Hessian calculation using MLIPPredictUnit directly."""
     predict_unit = get_predict_unit_for_test(
-        uma_checkpoint,
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=vmap
@@ -131,17 +131,17 @@ def test_hessian(vmap, uma_checkpoint):
 
 @pytest.mark.xfail(reason="Need to fix the numerical/autograd Hessian calculation")
 @pytest.mark.gpu()
-def test_hessian_vs_numerical(uma_checkpoint):
+def test_hessian_vs_numerical(pretrained_checkpoint):
     """Test that analytical and numerical Hessians are close."""
     hessian_unit = get_predict_unit_for_test(
-        uma_checkpoint,
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True
         ),
     )
     forces_unit = get_predict_unit_for_test(
-        uma_checkpoint,
+        pretrained_checkpoint,
         device="cuda",
     )
 
@@ -176,10 +176,10 @@ def test_hessian_vs_numerical(uma_checkpoint):
 
 
 @pytest.mark.gpu()
-def test_hessian_symmetry(uma_checkpoint):
+def test_hessian_symmetry(pretrained_checkpoint):
     """Test that the Hessian matrix is symmetric."""
     predict_unit = get_predict_unit_for_test(
-        uma_checkpoint,
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True

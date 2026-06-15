@@ -46,14 +46,27 @@ def pytest_addoption(parser):
         "--inference-dataset", action="store", help="inference dataset to run check on"
     )
     parser.addoption(
-        "--uma-checkpoint",
+        "--sweep-model",
         action="store",
         default=None,
         help=(
-            "Sweep mode: name (e.g. 'uma-s-1p3') or filesystem path of the "
-            "UMA checkpoint to run all UMA-using tests against. When set, "
-            "tests without @pytest.mark.uses_uma are deselected and tests "
-            "with @pytest.mark.checkpoint_specific are skipped."
+            "Sweep mode: name (e.g. 'uma-s-1p3') or filesystem path of a "
+            "pretrained checkpoint to run all @pretrained tests against. "
+            "When set, tests without @pytest.mark.pretrained are deselected "
+            "and @calibrated tests are skipped unless the sweep model "
+            "matches their declared pretrained(...) models."
+        ),
+    )
+    parser.addoption(
+        "--exclude-models",
+        action="store",
+        default=None,
+        help=(
+            "Comma-separated model names to exclude. Tests whose "
+            "@pretrained(...) models are entirely within this set are "
+            "deselected. Tests with no declared models (all-models tests) "
+            "are kept. Used by the base CI job to avoid re-running models "
+            "that have their own sweep jobs."
         ),
     )
 
@@ -63,87 +76,99 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
         "markers",
-        "compile_gpu: GPU test that uses torch.compile — run in a separate pytest session to avoid cross-test memory accumulation",
+        "compile_gpu: GPU test that uses torch.compile — run in a separate pytest "
+        "session to avoid cross-test memory accumulation",
     )
     config.addinivalue_line(
         "markers",
-        "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
+        "serial: mark test to run serially on the CPU runner "
+        "(not parallelized with xdist)",
     )
     config.addinivalue_line(
         "markers",
-        "subprocess: mark test that spawns subprocesses (excluded from parallel xdist run)",
+        "subprocess: mark test that spawns subprocesses "
+        "(excluded from parallel xdist run)",
     )
     config.addinivalue_line(
         "markers",
-        "uses_uma: test exercises a UMA pretrained checkpoint. Required for "
-        "tests to be selected under --uma-checkpoint sweep mode.",
+        "pretrained: test exercises a pretrained checkpoint. Optional positional "
+        "args list model names to parametrize against (e.g. "
+        '@pretrained("uma-s-1p1", "uma-s-1p2")). No args means the test runs '
+        "against all registered models or uses its own model selection.",
     )
     config.addinivalue_line(
         "markers",
-        "uma_models(*names): UMA model names to run this test against when "
-        "--uma-checkpoint is not set.",
-    )
-    config.addinivalue_line(
-        "markers",
-        "checkpoint_specific: test asserts values calibrated to a specific "
-        "UMA checkpoint and is skipped under --uma-checkpoint sweep mode.",
+        "calibrated: test asserts exact numerical values calibrated to a specific "
+        "pretrained checkpoint. Skipped under --sweep-model when the sweep model "
+        "does not match the test's declared pretrained(...) models.",
     )
 
 
-def _uma_model_values(metafunc) -> list[str]:
-    override = metafunc.config.getoption("--uma-checkpoint")
+def _pretrained_model_values(metafunc) -> list[str]:
+    """
+    Resolve pretrained model names for parametrization.
+
+    When ``--sweep-model`` is set, returns ``[override]``.
+    Otherwise reads model names from the closest ``@pretrained(...)`` marker.
+    """
+    override = metafunc.config.getoption("--sweep-model")
     if override is not None:
         return [override]
 
-    marker = metafunc.definition.get_closest_marker("uma_models")
+    marker = metafunc.definition.get_closest_marker("pretrained")
     if marker is None or not marker.args:
         raise RuntimeError(
-            f"{metafunc.function.__name__} uses uma_model_name/uma_checkpoint "
-            "but does not declare @pytest.mark.uma_models(...)."
+            f"{metafunc.function.__name__} uses pretrained_checkpoint / "
+            "pretrained_model_name but does not declare "
+            "@pytest.mark.pretrained(...)."
         )
     return list(marker.args)
 
 
 @pytest.fixture(scope="module")
-def uma_checkpoint(request):
+def pretrained_checkpoint(request):
     """
-    Name or path of the UMA checkpoint under test.
+    Name or path of the pretrained checkpoint under test.
 
-    This fixture is parametrized by pytest_generate_tests from the test's
-    @pytest.mark.uma_models(...) declaration, or by --uma-checkpoint in sweep mode.
+    Parametrized by ``pytest_generate_tests`` from the test's
+    ``@pytest.mark.pretrained(...)`` declaration, or by ``--sweep-model``
+    in sweep mode.
     """
     if hasattr(request, "param"):
         return request.param
 
-    override = request.config.getoption("--uma-checkpoint")
+    override = request.config.getoption("--sweep-model")
     if override is not None:
         return override
 
-    marker = request.node.get_closest_marker("uma_models")
+    marker = request.node.get_closest_marker("pretrained")
     if marker is None or not marker.args:
         raise RuntimeError(
-            f"{request.node.nodeid} uses uma_checkpoint but does not declare "
-            "@pytest.mark.uma_models(...)."
+            f"{request.node.nodeid} uses pretrained_checkpoint but does not "
+            "declare @pytest.mark.pretrained(...)."
         )
     return marker.args[0]
 
 
 def pytest_generate_tests(metafunc):
     """
-    Provide values for UMA checkpoint parameters:
-    - default: checkpoints declared by @pytest.mark.uma_models(...)
-    - --uma-checkpoint=...: just the override
+    Provide values for pretrained checkpoint parameters:
+    - default: checkpoints declared by @pytest.mark.pretrained(...)
+    - --sweep-model=...: just the override
 
-    Tests opt in by taking `uma_model_name` or `uma_checkpoint` as an argument.
+    Tests opt in by taking ``pretrained_model_name`` or
+    ``pretrained_checkpoint`` as a fixture argument.
     """
-    if "uma_model_name" in metafunc.fixturenames:
+    if "pretrained_model_name" in metafunc.fixturenames:
         metafunc.parametrize(
-            "uma_model_name", _uma_model_values(metafunc), scope="module"
+            "pretrained_model_name",
+            _pretrained_model_values(metafunc),
+            scope="module",
         )
-    if "uma_checkpoint" in metafunc.fixturenames:
+    if "pretrained_checkpoint" in metafunc.fixturenames:
         metafunc.parametrize(
-            "uma_checkpoint",
-            _uma_model_values(metafunc),
+            "pretrained_checkpoint",
+            _pretrained_model_values(metafunc),
             indirect=True,
             scope="module",
         )
@@ -167,7 +192,8 @@ def pytest_runtest_setup(item):
             fairchem_cpp_found = True
         if not fairchem_cpp_found:
             pytest.skip(
-                "fairchem_cpp not found, skipping DGL tests! please install fairchem if you want to run these"
+                "fairchem_cpp not found, skipping DGL tests! please install "
+                "fairchem if you want to run these"
             )
 
 
@@ -192,21 +218,46 @@ def pytest_collection_modifyitems(config, items):
             if "inference_check" in item.keywords:
                 item.add_marker(skip_inference_check)
 
-    # Sweep mode: --uma-checkpoint deselects non-UMA tests and skips
-    # checkpoint_specific tests so the named checkpoint runs against the
-    # full set of model-agnostic UMA tests.
-    uma_override = config.getoption("--uma-checkpoint")
-    if uma_override is not None:
-        skip_specific = pytest.mark.skip(
-            reason=f"checkpoint_specific test skipped under --uma-checkpoint={uma_override}"
-        )
+    # --exclude-models: deselect tests whose declared pretrained(...)
+    # models are entirely within the excluded set. Tests with no declared
+    # models (bare @pretrained or no marker) are kept.
+    exclude_raw = config.getoption("--exclude-models")
+    if exclude_raw is not None:
+        excluded = set(exclude_raw.split(","))
         keep, deselect = [], []
         for item in items:
-            if not item.get_closest_marker("uses_uma"):
+            marker = item.get_closest_marker("pretrained")
+            declared = set(marker.args) if marker and marker.args else set()
+            if declared and declared.issubset(excluded):
                 deselect.append(item)
                 continue
-            if item.get_closest_marker("checkpoint_specific"):
-                item.add_marker(skip_specific)
+            keep.append(item)
+        if deselect:
+            config.hook.pytest_deselected(items=deselect)
+            items[:] = keep
+
+    # --sweep-model: select only @pretrained tests.
+    # @calibrated tests are skipped unless the sweep model matches their
+    # declared pretrained(...) models.
+    sweep_override = config.getoption("--sweep-model")
+    if sweep_override is not None:
+        keep, deselect = [], []
+        for item in items:
+            if not item.get_closest_marker("pretrained"):
+                deselect.append(item)
+                continue
+            if item.get_closest_marker("calibrated"):
+                marker = item.get_closest_marker("pretrained")
+                declared = set(marker.args) if marker and marker.args else set()
+                if sweep_override not in declared:
+                    item.add_marker(
+                        pytest.mark.skip(
+                            reason=(
+                                f"calibrated: --sweep-model={sweep_override} "
+                                f"not in declared models {declared}"
+                            )
+                        )
+                    )
             keep.append(item)
         if deselect:
             config.hook.pytest_deselected(items=deselect)
@@ -276,7 +327,8 @@ def compile_reset_state():
 
 @pytest.fixture(scope="session")
 def water_xyz_file(tmp_path_factory):
-    """Provide a reusable minimal water molecule XYZ file path.
+    """
+    Provide a reusable minimal water molecule XYZ file path.
 
     Returns the filesystem path to a temporary XYZ file containing a 3-atom
     water cluster suitable for quick inference / graph generation tests.
@@ -299,7 +351,7 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     Resolve a model name or filesystem path to a ``MLIPPredictUnit``.
 
     When ``name_or_path`` is an existing file on disk (e.g. passed via
-    ``--uma-checkpoint /path/to/file.pt``), loads with
+    ``--sweep-model /path/to/file.pt``), loads with
     ``load_predict_unit`` directly.  Otherwise delegates to
     ``pretrained_mlip.get_predict_unit`` which resolves registered names.
     """

@@ -34,15 +34,15 @@ from fairchem.core.components.calculate.recipes.omol import (
 )
 from tests.conftest import get_predict_unit_for_test
 
-pytestmark = [pytest.mark.uses_uma, pytest.mark.uma_models("uma-s-1p1")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 
 
 class TestOmolRecipes(unittest.TestCase):
     """Test suite for OMol calculation recipes."""
 
     @pytest.fixture(autouse=True)
-    def _inject_uma_checkpoint(self, uma_checkpoint):
-        self._uma_checkpoint = uma_checkpoint
+    def _inject_uma_checkpoint(self, pretrained_checkpoint):
+        self._uma_checkpoint = pretrained_checkpoint
 
     def setUp(self):
         """Set up common test fixtures."""
