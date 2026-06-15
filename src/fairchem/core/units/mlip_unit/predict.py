@@ -950,9 +950,9 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.remote(
-            data, undo_element_references
-        ).result(timeout_s=self._request_timeout_s)
+        result = self.server_handle.remote(data, undo_element_references).result(
+            timeout_s=self._request_timeout_s
+        )
         return result
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
@@ -989,9 +989,9 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     @cached_property
     def atom_refs(self) -> dict | None:
-        return self.server_handle.get_predict_unit_attribute.remote(
-            "atom_refs"
-        ).result(timeout_s=self._request_timeout_s)
+        return self.server_handle.get_predict_unit_attribute.remote("atom_refs").result(
+            timeout_s=self._request_timeout_s
+        )
 
     @cached_property
     def inference_settings(self) -> InferenceSettings:
