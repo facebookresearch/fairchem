@@ -413,10 +413,14 @@ def uma_predict_unit():
 
 
 @pytest.fixture(scope="session")
-def uma_predict_unit_alt():
-    """Predict unit using the second available UMA model."""
+def uma_predict_unit_alt(request):
+    """Predict unit using a UMA model different from the sweep model."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Fewer than 2 UMA models available")
+    sweep = request.config.getoption("--sweep-model", default=None)
+    candidates = [m for m in uma_models if m != sweep] if sweep else uma_models[1:]
+    if not candidates:
+        pytest.skip("No UMA model available that differs from sweep model")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
+    return pretrained_mlip.get_predict_unit(candidates[0], device=device)

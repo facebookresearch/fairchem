@@ -17,4 +17,4 @@ from fairchem.core.units.mlip_unit import load_predict_unit
 def calculator(direct_checkpoint) -> FAIRChemCalculator:
     inference_checkpoint_pt, _ = direct_checkpoint
     predictor = load_predict_unit(inference_checkpoint_pt, device="cpu")
-    return FAIRChemCalculator(predictor, task_name="omat")
+    return FAIRChemCalculator(predictor, task_name="oc20")
