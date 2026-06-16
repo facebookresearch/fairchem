@@ -1342,13 +1342,13 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
     - L=2: dW[4:9, 4:9]
 
     Each thread block handles one edge.
-    Load all channels at once (assuming C <= 128).
+    Loads all C channels at once.
 
     Grid: (num_edges,)
     """
     edge_id = tl.program_id(0)
 
-    c_range = tl.arange(0, 128)
+    c_range = tl.arange(0, C)
     c_mask = c_range < C
 
     while edge_id < num_edges:

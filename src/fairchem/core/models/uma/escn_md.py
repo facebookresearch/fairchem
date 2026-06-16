@@ -12,7 +12,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, ListConfig
@@ -63,12 +62,7 @@ from fairchem.core.models.uma.outputs import (
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.units.mlip_unit.api.inference import (
-    CHARGE_RANGE,
-    DEFAULT_CHARGE,
-    DEFAULT_SPIN,
-    DEFAULT_SPIN_OMOL,
-    SPIN_RANGE,
-    UMATask,
+    validate_uma_atoms_data,
 )
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 
@@ -512,18 +506,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
-    @property
-    def direct_forces(self) -> bool:
-        return self.regress_config.direct_forces
-
-    @property
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
-
     def balance_channels(
         self,
         x_message_prime: torch.Tensor,
@@ -625,9 +607,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
             # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
             # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
@@ -903,7 +882,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         stress computation requires energy-conserving force computation.
         """
         # Direct force models can't compute stress via autograd
-        if self.direct_forces:
+        if self.regress_config.direct_forces:
             return []
 
         tasks = []
@@ -964,165 +943,24 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """
         Prepare model for inference. Called once on first prediction.
-
-        For UMA: handles MOLE merging if settings.merge_mole is True.
-        Stores initial composition for consistency checking.
-
-        Returns:
-            self or a new merged backbone if MOLE merging was performed. We return
-            because type could have changed due to merging MOLE.
         """
         self._inference_settings = settings
-        self._merged_composition = None
-
-        # Validate settings against backend requirements (fail early)
         self.backend.validate(self.lmax, self.mmax, settings)
-
-        if settings.merge_mole:
-            assert (
-                data.natoms.numel() == 1
-            ), "Cannot merge model with multiple systems in batch"
-            # Store composition we merged on
-            self._merged_composition = self._get_composition_info(data)
-            # Merge the model - returns new merged backbone
-            new_backbone = self.merge_MOLE_model(data)
-            # Transfer inference state to new backbone
-            new_backbone._inference_settings = settings
-            new_backbone._merged_composition = self._merged_composition
-            self.backend.prepare_model_for_inference(new_backbone)
-            return new_backbone
-
         self.backend.prepare_model_for_inference(self)
         return self
 
     def on_predict_check(self, data: AtomicData) -> None:
         """
-        Called before each prediction. UMA checks MOLE consistency here.
+        Called before each prediction.
         """
-        if not getattr(self, "_inference_settings", None):
-            return  # Not initialized yet
-
-        if self._inference_settings.merge_mole and self._merged_composition is not None:
-            assert (
-                data.natoms.numel() == 1
-            ), "Cannot run merged model on batch with multiple systems"
-            current = self._get_composition_info(data)
-            self._assert_composition_matches(current)
-
-    def _get_composition_info(self, data) -> tuple:
-        """
-        Get composition info for MOLE consistency checking.
-        """
-        composition = data.atomic_numbers.new_zeros(
-            self.max_num_elements, dtype=torch.int
-        ).index_add(
-            0,
-            data.atomic_numbers.to(torch.int),
-            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int),
-        )
-        return (
-            composition,
-            getattr(data, "charge", None),
-            getattr(data, "spin", None),
-            getattr(data, "dataset", [None]),
-        )
-
-    def _assert_composition_matches(self, current: tuple) -> None:
-        """
-        Assert current composition matches what model was merged on.
-        """
-        merged = self._merged_composition
-        # Move current tensors to same device as merged (CPU) for comparison
-        device = merged[0].device
-
-        merged_norm = merged[0].float() / merged[0].sum()
-        curr_norm = current[0].float().to(device) / current[0].sum().to(device)
-
-        assert merged_norm.isclose(
-            curr_norm, rtol=1e-5
-        ).all(), "Compositions differ from merged model"
-
-        # Charge and spin are tensors that need device alignment
-        merged_charge = merged[1]
-        curr_charge = (
-            current[1].to(device)
-            if isinstance(current[1], torch.Tensor)
-            else current[1]
-        )
-        assert (
-            (merged_charge == curr_charge).all()
-            if isinstance(merged_charge, torch.Tensor)
-            else merged_charge == curr_charge
-        ), f"Charge differs: {merged_charge} vs {current[1]}"
-
-        merged_spin = merged[2]
-        curr_spin = (
-            current[2].to(device)
-            if isinstance(current[2], torch.Tensor)
-            else current[2]
-        )
-        assert (
-            (merged_spin == curr_spin).all()
-            if isinstance(merged_spin, torch.Tensor)
-            else merged_spin == curr_spin
-        ), f"Spin differs: {merged_spin} vs {current[2]}"
-
-        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         UMA-specific validation: handle charge/spin for OMOL task.
 
-        Sets default values for charge and spin in atoms.info and validates
-        they are within acceptable ranges.
+        Uses the shared validation logic from the api.inference module.
         """
-        # Set charge defaults
-        if "charge" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                logging.warning(
-                    "task_name='omol' detected, but charge is not set in atoms.info. "
-                    "Defaulting to charge=0. Ensure charge is an integer representing "
-                    "the total charge on the system and is within the range -100 to 100."
-                )
-            atoms.info["charge"] = DEFAULT_CHARGE
-
-        # Set spin defaults (OMOL uses spin=1, others use spin=0)
-        if "spin" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                atoms.info["spin"] = DEFAULT_SPIN_OMOL
-                logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in "
-                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
-                    "representing the spin multiplicity from 0 to 100."
-                )
-            else:
-                atoms.info["spin"] = DEFAULT_SPIN
-
-        # Validate charge range
-        charge = atoms.info["charge"]
-        if not isinstance(charge, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for charge: {type(charge)}. "
-                "Charge must be an integer representing the total charge on the system."
-            )
-        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for charge: {charge}. "
-                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
-            )
-
-        # Validate spin range
-        spin = atoms.info["spin"]
-        if not isinstance(spin, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for spin: {type(spin)}. "
-                "Spin must be an integer representing the spin multiplicity."
-            )
-        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for spin: {spin}. "
-                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
-            )
+        validate_uma_atoms_data(atoms, task_name)
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
@@ -1158,14 +996,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         backbone.energy_block = None
         backbone.force_block = None
         self.regress_config = backbone.regress_config
-
-    @property
-    def regress_forces(self) -> bool:
-        return self.regress_config.forces
-
-    @property
-    def regress_stress(self) -> bool:
-        return self.regress_config.stress
 
     @conditional_grad(torch.enable_grad())
     def forward(
@@ -1255,10 +1085,14 @@ class MLP_Energy_Head(MLP_EFS_Head):
     ) -> None:
         super().__init__(backbone, reduce, prefix, wrap_property)
         assert (
-            backbone.regress_forces is False and backbone.regress_stress is False
-        ) or (backbone.direct_forces is True or backbone.direct_stress is True), (
-            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
-            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
+            backbone.regress_config.forces is False
+            and backbone.regress_config.stress is False
+        ) or (
+            backbone.regress_config.direct_forces is True
+            or backbone.regress_config.direct_stress is True
+        ), (
+            "regress_forces and regress_stress must be False or direct_forces must be True to use an MLP_Energy_Head. "
+            "Use an MLP_EFS_Head if you want to predict gradient forces and stress."
         )
 
 

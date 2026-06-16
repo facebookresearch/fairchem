@@ -106,7 +106,7 @@ jobs:
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
           files: ./coverage.xml,./gpu-coverage.xml
@@ -138,6 +138,11 @@ jobs:
       max-parallel: 1
       matrix:
         python_version: ['3.13']
+        shard:
+          - name: models
+            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts
+          - name: units
+            paths: tests/core/units
 
     steps:
       - name: Checkout code
@@ -150,7 +155,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/multi-trigger-setup
         with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -170,17 +175,26 @@ jobs:
         run: |
           pip install packages/fairchem-core[torchsim]
 
-      - name: Core GPU tests
+      - name: Core GPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml
+
+      - name: Core GPU compile tests (${{ matrix.shard.name }})
+        # compile_gpu tests only exist in the models shard
+        if: matrix.shard.name == 'models'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
         with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_lammps_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
@@ -195,7 +209,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created

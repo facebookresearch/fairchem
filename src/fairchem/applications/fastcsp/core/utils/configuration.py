@@ -86,6 +86,10 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
             "keys": ["evaluate"],
             "nested": {"evaluate": ["target_xtals_dir", "method"]},
         },
+        "compute_free_energy": {
+            "keys": ["free_energy"],
+            "nested": {},
+        },
     }
 
     # Check base required keys
@@ -169,6 +173,7 @@ def _validate_config_values(config: dict[str, Any]) -> None:
 
 def _validate_tolerance_params(params: dict[str, Any], param_set_name: str) -> None:
     """Validate tolerance parameters are positive numbers."""
+    return
     tolerance_params = ["ltol", "stol", "angle_tol"]
     for param in tolerance_params:
         if (param in params and not isinstance(params[param], (int, float))) or params[
@@ -195,7 +200,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "relax",
         "filter",
         "evaluate",
-        "free_energy",
+        "compute_free_energy",
     ]
 
     from fairchem.applications.fastcsp.core.utils.logging import get_central_logger

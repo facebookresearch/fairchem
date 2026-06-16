@@ -18,6 +18,7 @@ from ase.atoms import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
 from tqdm import tqdm
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.scripts import download_large_files
 
 
@@ -40,7 +41,7 @@ def update_pkls():
         "oc/databases/pkls/adsorbates.pkl",
         "rb",
     ) as fp:
-        data = pickle.load(fp)
+        data = safe_pickle_load(fp)
 
     for idx in data:
         pbc = data[idx][0].cell._pbc
@@ -57,7 +58,7 @@ def update_pkls():
         "oc/databases/pkls/bulks.pkl",
         "rb",
     ) as fp:
-        data = pickle.load(fp)
+        data = safe_pickle_load(fp)
 
     bulks = []
     for info in tqdm(data):

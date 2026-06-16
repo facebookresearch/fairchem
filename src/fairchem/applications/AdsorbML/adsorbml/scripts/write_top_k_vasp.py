@@ -4,15 +4,17 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import argparse
 import os
-import pickle
 from collections import defaultdict
 
 from fairchem.data.oc.utils.vasp import write_vasp_input_files
 from tqdm import tqdm
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 """
 Given a cache from process_mlrs.py, generate VASP input files
@@ -73,7 +75,7 @@ if __name__ == "__main__":
     outdir = args.outdir
 
     dft_prefix = "relax" if not args.sp else "sp"
-    cache = pickle.load(open(args.cache, "rb"))
+    cache = safe_pickle_load(args.cache)
 
     paths_list = []
     top_k_cache = defaultdict(list)

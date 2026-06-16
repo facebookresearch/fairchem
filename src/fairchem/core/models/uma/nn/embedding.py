@@ -151,11 +151,13 @@ class ChgSpinEmbedding(nn.Module):
         assert embedding_size % 2 == 0, f"{embedding_size=} must be even"
 
         if self.embedding_target == "charge":
-            # 100 is a conservative upper bound
-            self.target_dict = {str(x): x + 100 for x in range(-100, 101)}
+            # Charge range: -100 to +100 → indices 0 to 200
+            self._index_offset = 100
+            self._num_embeddings = 201
         elif self.embedding_target == "spin":
-            # 100 is a conservative upper bound
-            self.target_dict = {str(x): x for x in range(101)}
+            # Spin range: 0 to 100 → indices 0 to 100
+            self._index_offset = 0
+            self._num_embeddings = 101
 
         if self.embedding_type == "pos_emb":
             # dividing by 2 because x_proj multiplies by 2
@@ -173,7 +175,7 @@ class ChgSpinEmbedding(nn.Module):
                 for param in self.lin_emb.parameters():
                     param.requires_grad = False
         elif self.embedding_type == "rand_emb":
-            self.rand_emb = nn.Embedding(len(self.target_dict), embedding_size)
+            self.rand_emb = nn.Embedding(self._num_embeddings, embedding_size)
             if not grad:
                 for param in self.rand_emb.parameters():
                     param.requires_grad = False
@@ -199,13 +201,9 @@ class ChgSpinEmbedding(nn.Module):
                 x[x == 0] = -100
             return self.lin_emb(x.unsqueeze(-1).float())
         elif self.embedding_type == "rand_emb":
-            return self.rand_emb(
-                torch.tensor(
-                    [self.target_dict[str(i)] for i in x.tolist()],
-                    device=x.device,
-                    dtype=torch.long,
-                )
-            )
+            # Use tensor arithmetic instead of dict lookup (compile-friendly)
+            indices = x + self._index_offset
+            return self.rand_emb(indices.long())
         raise ValueError(f"embedding type {self.embedding_type} not implemented")
 
 
