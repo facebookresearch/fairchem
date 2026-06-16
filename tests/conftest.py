@@ -366,6 +366,40 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
 
 
+def models_to_test(config) -> list[str]:
+    """
+    Return the list of pretrained model names to iterate over in all-models tests.
+
+    Respects the CI partition flags:
+
+    * ``--sweep-model=X`` → ``[X]`` (one model, used by sweep jobs).
+    * ``--exclude-models=A,B`` → all registered models minus A, B
+      (used by base job to skip models that have their own sweep jobs).
+    * Neither flag → every registered pretrained model.
+
+    Import and call from any test module that needs to parametrize
+    over the full model catalogue::
+
+        from tests.conftest import models_to_test
+
+        def pytest_generate_tests(metafunc):
+            if "my_fixture" in metafunc.fixturenames:
+                metafunc.parametrize(
+                    "my_fixture",
+                    models_to_test(metafunc.config),
+                    indirect=True,
+                )
+    """
+    from fairchem.core.calculate import pretrained_mlip
+
+    override = config.getoption("--sweep-model")
+    if override is not None:
+        return [override]
+    excluded = config.getoption("--exclude-models")
+    excluded_set = set(excluded.split(",")) if excluded else set()
+    return [m for m in pretrained_mlip.available_models if m not in excluded_set]
+
+
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
     if ray.is_initialized():

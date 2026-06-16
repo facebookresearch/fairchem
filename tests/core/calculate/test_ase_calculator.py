@@ -34,8 +34,7 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATa
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
-from fairchem.core.calculate import pretrained_mlip
-from tests.conftest import get_predict_unit_for_test
+from tests.conftest import get_predict_unit_for_test, models_to_test
 
 # All tests use a GPU and a pretrained model. Tests that iterate over all
 # registered models inherit the bare @pretrained (no model args) from here;
@@ -63,29 +62,13 @@ def atoms_with_formation_energy():
     return atoms_with_formation_energy
 
 
-def _models_to_test(config) -> list[str]:
-    """
-    Models to iterate over for all-models tests.
-
-    With ``--sweep-model``: just the override.
-    With ``--exclude-models``: all registered models minus excluded.
-    Otherwise: every registered pretrained model.
-    """
-    override = config.getoption("--sweep-model")
-    if override is not None:
-        return [override]
-    excluded = config.getoption("--exclude-models")
-    excluded_set = set(excluded.split(",")) if excluded else set()
-    return [m for m in pretrained_mlip.available_models if m not in excluded_set]
-
-
 # ── Parametrization overview ──
 #
 # This module has two parametrization paths, driven by two separate
 # pytest_generate_tests hooks:
 #
 # 1. Module-local hook (below): parametrizes ``all_models_predict_unit``
-#    over all registered pretrained models via ``_models_to_test()``.
+#    over all registered pretrained models via ``models_to_test()``.
 #    Used by all-models tests (test_calculator_setup, test_energy_calculation, …).
 #    CI partitions via:
 #      base job:  --exclude-models=uma-s-1p1,uma-s-1p2  →  10 models
@@ -110,7 +93,7 @@ def pytest_generate_tests(metafunc):
     if "all_models_predict_unit" in metafunc.fixturenames:
         metafunc.parametrize(
             "all_models_predict_unit",
-            _models_to_test(metafunc.config),
+            models_to_test(metafunc.config),
             indirect=True,
             scope="module",
         )
@@ -134,7 +117,7 @@ def all_models_predict_unit(request) -> MLIPPredictUnit:
     Predict unit parametrized over all registered pretrained models.
 
     Parametrized by the module-local ``pytest_generate_tests`` hook via
-    ``_models_to_test()``, which respects ``--sweep-model`` and ``--exclude-models``.
+    ``models_to_test()``, which respects ``--sweep-model`` and ``--exclude-models``.
     Runs against every registered model (12 today) unless filtered by CI flags.
     """
     return get_predict_unit_for_test(request.param)
@@ -162,7 +145,7 @@ def all_calculators(all_models_predict_unit):
 
 @pytest.fixture(scope="module")
 def omol_calculators(request):
-    models = _models_to_test(request.config)
+    models = models_to_test(request.config)
 
     def _calc_generator():
         for model_name in models:
@@ -262,7 +245,7 @@ def test_calculator_with_task_names_matches_uma_task(
 
 
 def test_no_task_name_single_task(request):
-    for model_name in _models_to_test(request.config):
+    for model_name in models_to_test(request.config):
         predict_unit = get_predict_unit_for_test(model_name)
         datasets = list(predict_unit.dataset_to_tasks.keys())
         if len(datasets) == 1:
