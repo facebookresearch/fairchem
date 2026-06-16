@@ -245,6 +245,16 @@ def test_calculator_with_task_names_matches_uma_task(
 
 
 def test_no_task_name_single_task(request):
+    """
+    Verify that FAIRChemCalculator auto-selects the task when a model
+    supports only one.
+
+    Iterates over all registered models.  For single-task models (e.g.
+    ``esen-sm-conserving-all-oc25`` which only has ``oc25``), creates a
+    calculator **without** ``task_name`` and asserts it defaults to the
+    model's only available task.  Multi-task models (e.g. UMA) are
+    skipped — they require an explicit ``task_name``.
+    """
     for model_name in models_to_test(request.config):
         predict_unit = get_predict_unit_for_test(model_name)
         datasets = list(predict_unit.dataset_to_tasks.keys())
