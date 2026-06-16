@@ -100,18 +100,6 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture(scope="module")
-def declared_predict_unit(pretrained_checkpoint):
-    """
-    Predict unit for the model(s) declared in the test's ``@pretrained(...)`` marker.
-
-    Parametrized by the root conftest ``pytest_generate_tests`` hook, which reads model
-    names from the test's ``@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")`` decorator.
-    Only runs against the specific models the test declares — typically UMA-S.
-    """
-    return get_predict_unit_for_test(pretrained_checkpoint)
-
-
-@pytest.fixture(scope="module")
 def all_models_predict_unit(request) -> MLIPPredictUnit:
     """
     Predict unit parametrized over all registered pretrained models.

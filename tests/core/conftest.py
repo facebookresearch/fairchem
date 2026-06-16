@@ -29,6 +29,7 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
     UNIT_RESUME_CONFIG,
 )
+from tests.conftest import get_predict_unit_for_test
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_uma_dataset,
@@ -424,3 +425,18 @@ def uma_predict_unit_alt(request):
         pytest.skip("No UMA model available that differs from sweep model")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return pretrained_mlip.get_predict_unit(candidates[0], device=device)
+
+
+@pytest.fixture(scope="module")
+def declared_predict_unit(pretrained_checkpoint):
+    """
+    Predict unit for the model(s) declared in the test's ``@pretrained(...)`` marker.
+
+    Parametrized by the root conftest ``pytest_generate_tests`` hook, which reads
+    model names from the ``@pytest.mark.pretrained("uma-s-1p1", ...)`` decorator.
+
+    Shared across test modules — import via fixture dependency (just add
+    ``declared_predict_unit`` to the test function signature).  Module-scoped so
+    the model is loaded once per (module, model-name) pair.
+    """
+    return get_predict_unit_for_test(pretrained_checkpoint)
