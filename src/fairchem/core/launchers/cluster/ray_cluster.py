@@ -21,7 +21,7 @@ import tempfile
 import time
 from typing import Callable, Optional, TypeVar
 import uuid
-from contextlib import closing
+from contextlib import closing, suppress
 from pathlib import Path
 
 import psutil
@@ -494,6 +494,11 @@ class RayCluster:
         workers in a queue that takes time for allocation, you might want to increase this otherwise your ray payload will fail, not finding resources.
     temp_dir_template: Template path for Ray temp files. Supports environment variable expansion
         (e.g., "/scratch/slurm_tmpdir/$SLURM_JOB_ID"). If None, uses the system temp directory.
+    cancel_on_exit: If True, register an ``atexit`` hook that scancels submitted slurm jobs
+        when the interpreter exits. Defaults to False (fire-and-forget). Note that using the
+        cluster as a context manager always cancels jobs on block exit and additionally
+        registers the atexit hook as a crash safety net for the duration of the ``with``
+        block, independent of this flag.
 
     """
 
@@ -504,6 +509,7 @@ class RayCluster:
         cluster_id: Optional[str] = None,
         worker_wait_timeout_seconds: int = 60,
         temp_dir_template: Optional[str] = None,
+        cancel_on_exit: bool = False,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
         logger.info(f"cluster {self.state.cluster_id}")
@@ -519,11 +525,13 @@ class RayCluster:
         self.jobs: list[submitit.Job] = []
         logger.info(f"logs will be in {self.log_dir.resolve()}")
 
-        # Safety net: scancel SLURM jobs at interpreter exit if the
-        # caller forgot to (or couldn't) call shutdown(). Avoids leaking
-        # allocations on crash, uncaught exception, or KeyboardInterrupt.
-        self._atexit_hook = self._atexit_shutdown
-        atexit.register(self._atexit_hook)
+        # Optional safety net: scancel SLURM jobs at interpreter exit if the
+        # caller forgot to (or couldn't) call shutdown(). Off by default so
+        # that submit-and-exit ("fire and forget") scripts don't lose their
+        # allocations. Context-manager use registers its own hook in __enter__.
+        self._cancel_on_exit = cancel_on_exit
+        if cancel_on_exit:
+            atexit.register(self._atexit_cancel)
 
     def start_head_and_workers(
         self,
@@ -647,21 +655,24 @@ class RayCluster:
         )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
         logger.info(f"cluster {self.state.cluster_id} shutdown")
-        try:
-            atexit.unregister(self._atexit_hook)
-        except Exception:
-            pass
+        atexit.unregister(self._atexit_cancel)
 
-    def _atexit_shutdown(self):
+    def _atexit_cancel(self):
+        """
+        Minimal scancel for interpreter exit. Does not kill the local proc tree
+        or wipe the rendezvous dir (preserved for postmortem on crash).
+        """
         if self.is_shutdown:
             return
-        try:
+        with suppress(Exception):
             scancel(self.state.list_job_ids())
-        except Exception:
-            pass
 
     def __enter__(self):
         # only use as a context if you have something blocking waiting on the driver
+        # Register a crash safety net for the lifetime of the with-block, so an
+        # uncaught exception or KeyboardInterrupt before __exit__ still cancels jobs.
+        if not self._cancel_on_exit:
+            atexit.register(self._atexit_cancel)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
