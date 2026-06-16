@@ -203,7 +203,7 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "ocpapi_integration_test" in item.keywords:
                 item.add_marker(skip_ocpapi_integration)
-        return
+
     if config.getoption("--inference-checkpoint"):
         # Skip all tests not marked with 'inference_check'
         for item in items:

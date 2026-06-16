@@ -551,7 +551,7 @@ def run_md_simulation(calc, steps: int = 10):
 
 @pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.calibrated()
-def test_simple_md():
+def test_simple_md(pretrained_checkpoint):
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
@@ -561,7 +561,7 @@ def test_simple_md():
         external_graph_gen=False,
     )
     predict_unit = get_predict_unit_for_test(
-        "uma-s-1p1", inference_settings=inference_settings
+        pretrained_checkpoint, inference_settings=inference_settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omol")
     run_md_simulation(calc, steps=10)

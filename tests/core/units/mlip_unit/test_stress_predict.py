@@ -299,6 +299,7 @@ def compute_stress_from_cell_displacement(
 
 
 @pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.calibrated()
 @pytest.mark.parametrize("atoms_fixture", ["bulk_atoms", "slab_atoms"])
 def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_unit):
@@ -386,6 +387,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
 
 
 @pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.calibrated()
 def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_unit):
     """
