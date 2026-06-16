@@ -84,9 +84,9 @@ def _models_to_test(config) -> list[str]:
 # This module has two parametrization paths, driven by two separate
 # pytest_generate_tests hooks:
 #
-# 1. Module-local hook (below): parametrizes ``mlip_predict_unit`` over all
-#    registered pretrained models via ``_models_to_test()``.  Used by
-#    all-models tests (test_calculator_setup, test_energy_calculation, …).
+# 1. Module-local hook (below): parametrizes ``all_models_predict_unit``
+#    over all registered pretrained models via ``_models_to_test()``.
+#    Used by all-models tests (test_calculator_setup, test_energy_calculation, …).
 #    CI partitions via:
 #      base job:  --exclude-models=uma-s-1p1,uma-s-1p2  →  10 models
 #      sweep job: --sweep-model=uma-s-1p1                →   1 model
@@ -94,8 +94,8 @@ def _models_to_test(config) -> list[str]:
 #
 # 2. Root conftest hook (tests/conftest.py): parametrizes
 #    ``pretrained_checkpoint`` from the test's @pretrained("model", …)
-#    marker.  Used by UMA-specific tests (test_calculator_from_checkpoint,
-#    test_calculator_configurations, …).
+#    marker.  Used by UMA-specific tests via ``declared_predict_unit``
+#    (test_calculator_from_checkpoint, test_calculator_configurations, …).
 #
 # ``indirect=True`` means pytest calls the fixture function with
 # ``request.param`` set to the model name, rather than passing the
@@ -104,12 +104,12 @@ def _models_to_test(config) -> list[str]:
 
 def pytest_generate_tests(metafunc):
     """
-    Drive ``mlip_predict_unit`` parametrization from --sweep-model when set,
-    falling back to all registered models otherwise.
+    Drive ``all_models_predict_unit`` parametrization from --sweep-model
+    when set, falling back to all registered models otherwise.
     """
-    if "mlip_predict_unit" in metafunc.fixturenames:
+    if "all_models_predict_unit" in metafunc.fixturenames:
         metafunc.parametrize(
-            "mlip_predict_unit",
+            "all_models_predict_unit",
             _models_to_test(metafunc.config),
             indirect=True,
             scope="module",
@@ -117,26 +117,45 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest.fixture(scope="module")
-def single_mlip_predict_unit(pretrained_checkpoint):
+def declared_predict_unit(pretrained_checkpoint):
+    """
+    Predict unit for the model(s) declared in the test's ``@pretrained(...)`` marker.
+
+    Parametrized by the root conftest ``pytest_generate_tests`` hook, which reads model
+    names from the test's ``@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")`` decorator.
+    Only runs against the specific models the test declares — typically UMA-S.
+    """
     return get_predict_unit_for_test(pretrained_checkpoint)
 
 
 @pytest.fixture(scope="module")
-def mlip_predict_unit(request) -> MLIPPredictUnit:
+def all_models_predict_unit(request) -> MLIPPredictUnit:
+    """
+    Predict unit parametrized over all registered pretrained models.
+
+    Parametrized by the module-local ``pytest_generate_tests`` hook via
+    ``_models_to_test()``, which respects ``--sweep-model`` and ``--exclude-models``.
+    Runs against every registered model (12 today) unless filtered by CI flags.
+    """
     return get_predict_unit_for_test(request.param)
 
 
 @pytest.fixture(scope="module")
-def all_calculators(mlip_predict_unit):
+def all_calculators(all_models_predict_unit):
     """
-    Generate calculators for all available datasets in the mlip predict unit.
+    Generate calculators for all available datasets in the predict unit.
+
+    Inherits parametrization from ``all_models_predict_unit`` — one calculator
+    set per registered model.
     """
 
     def _calc_generator():
-        for dataset in mlip_predict_unit.dataset_to_tasks:
+        for dataset in all_models_predict_unit.dataset_to_tasks:
             # check that all single task models load without specifying task name
-            task_name = dataset if len(mlip_predict_unit.dataset_to_tasks) > 1 else None
-            yield FAIRChemCalculator(mlip_predict_unit, task_name=task_name)
+            task_name = (
+                dataset if len(all_models_predict_unit.dataset_to_tasks) > 1 else None
+            )
+            yield FAIRChemCalculator(all_models_predict_unit, task_name=task_name)
 
     return _calc_generator
 
@@ -303,10 +322,10 @@ def test_energy_calculation(request, atoms_fixture, all_calculators):
         assert isinstance(energy, float)
 
 
-def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
-    datasets = list(mlip_predict_unit.dataset_to_tasks.keys())
+def test_relaxation_final_energy(slab_atoms, all_models_predict_unit):
+    datasets = list(all_models_predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
-        mlip_predict_unit,
+        all_models_predict_unit,
         task_name=datasets[0],
     )
 
@@ -323,19 +342,19 @@ def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.parametrize("inference_settings", ["default", "turbo"])
 def test_calculator_configurations(
-    inference_settings, slab_atoms, single_mlip_predict_unit
+    inference_settings, slab_atoms, declared_predict_unit
 ):
     # turbo mode requires compilation and needs to reset here
     if inference_settings == "turbo":
         torch.compiler.reset()
 
-    datasets = list(single_mlip_predict_unit.dataset_to_tasks.keys())
+    datasets = list(declared_predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
-        single_mlip_predict_unit,
+        declared_predict_unit,
         task_name=datasets[0],
     )
     slab_atoms.calc = calc
-    assert single_mlip_predict_unit.model.module.otf_graph is True
+    assert declared_predict_unit.model.module.otf_graph is True
     # Test energy calculation
     energy = slab_atoms.get_potential_energy()
     assert isinstance(energy, float)
@@ -349,9 +368,9 @@ def test_calculator_configurations(
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_large_bulk_system(large_bulk_atoms, single_mlip_predict_unit):
+def test_large_bulk_system(large_bulk_atoms, declared_predict_unit):
     """Test a bulk system with 1000 atoms using the small model."""
-    calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
     large_bulk_atoms.calc = calc
 
     # Test energy calculation
@@ -419,7 +438,7 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_single_atom_systems(single_mlip_predict_unit):
+def test_single_atom_systems(declared_predict_unit):
     """
     Test a system with a single atom.
     Single atoms do not currently use the model.
@@ -430,7 +449,7 @@ def test_single_atom_systems(single_mlip_predict_unit):
         atom.info["spin"] = 3
 
         for task_name in ("omat", "omol", "oc20"):
-            calc = FAIRChemCalculator(single_mlip_predict_unit, task_name=task_name)
+            calc = FAIRChemCalculator(declared_predict_unit, task_name=task_name)
             atom.calc = calc
             # Test energy calculation
             energy = atom.get_potential_energy()
@@ -442,13 +461,13 @@ def test_single_atom_systems(single_mlip_predict_unit):
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_single_atom_system_errors(single_mlip_predict_unit):
+def test_single_atom_system_errors(declared_predict_unit):
     """Test that a charged system with a single atom does not work."""
-    if single_mlip_predict_unit.model.module.supports_single_atoms:
+    if declared_predict_unit.model.module.supports_single_atoms:
         pytest.skip(
             "Model supports single atoms natively; lookup-path ValueError won't fire"
         )
-    calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+    calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
     atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
     atom.calc = calc
@@ -464,12 +483,12 @@ def test_single_atom_system_errors(single_mlip_predict_unit):
     reason="the wigner matrices should be dependent on the RNG, but the energies"
     "are not actually different using the above seed setting code."
 )
-def test_random_seed_final_energy(single_mlip_predict_unit):
+def test_random_seed_final_energy(declared_predict_unit):
     seeds = [100, 200, 300, 200]
     results_by_seed = {}
 
     calc = FAIRChemCalculator(
-        single_mlip_predict_unit,
+        declared_predict_unit,
         task_name="omat",
     )
 
@@ -593,13 +612,13 @@ def test_simple_md(pretrained_checkpoint):
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
 def test_formation_energy_calculator_correctness(
-    aperiodic_atoms, single_mlip_predict_unit
+    aperiodic_atoms, declared_predict_unit
 ):
     """
     Test that FormationEnergyCalculator wraps a calculator and computes
     formation energies.
     """
-    base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
     atoms = molecule("H2")
     atoms.info["charge"] = 0
@@ -623,7 +642,7 @@ def test_formation_energy_calculator_correctness(
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
 def test_formation_energy_calculator_missing_element_raises_error(
-    single_mlip_predict_unit,
+    declared_predict_unit,
 ):
     """
     Test that FormationEnergyCalculator raises error for missing element
@@ -633,7 +652,7 @@ def test_formation_energy_calculator_missing_element_raises_error(
     water_molecule.info["charge"] = 0
     water_molecule.info["spin"] = 1
 
-    base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
     incomplete_refs = {"H": -0.5}  # Missing O reference
 
     formation_calc = FormationEnergyCalculator(
@@ -647,9 +666,9 @@ def test_formation_energy_calculator_missing_element_raises_error(
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
-def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predict_unit):
+def test_formation_energy_calculator_mp_corrections_omat_task(declared_predict_unit):
     """Test MP corrections with FormationEnergyCalculator for OMat task."""
-    base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omat")
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
     try:
         # With corrections (should default to True for omat)
         atoms = bulk("MgO", "rocksalt", a=4.213)
@@ -676,9 +695,9 @@ def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predic
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
 def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
-    single_mlip_predict_unit,
+    declared_predict_unit,
 ):
-    base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
     with pytest.raises(
         ValueError, match="MP style corrections can only be applied for the OMat task"
@@ -688,8 +707,8 @@ def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
-def test_formation_energy_calculator_auto_loads_references(single_mlip_predict_unit):
-    base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+def test_formation_energy_calculator_auto_loads_references(declared_predict_unit):
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
     # Should not raise error - auto-loads references from predictor
     formation_calc = FormationEnergyCalculator(base_calc)
@@ -731,12 +750,10 @@ def test_formation_energy_calculator_non_fairchemcalculator():
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.calibrated()
-def test_formation_energy_calculator_different_task_types(single_mlip_predict_unit):
+def test_formation_energy_calculator_different_task_types(declared_predict_unit):
     for task_name in ["omol", "omat", "oc20"]:
-        if task_name in single_mlip_predict_unit.dataset_to_tasks:
-            base_calc = FAIRChemCalculator(
-                single_mlip_predict_unit, task_name=task_name
-            )
+        if task_name in declared_predict_unit.dataset_to_tasks:
+            base_calc = FAIRChemCalculator(declared_predict_unit, task_name=task_name)
 
             # Should not raise error when using auto-loaded element references
             formation_calc = FormationEnergyCalculator(base_calc)
