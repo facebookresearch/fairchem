@@ -79,6 +79,29 @@ def _models_to_test(config) -> list[str]:
     return [m for m in pretrained_mlip.available_models if m not in excluded_set]
 
 
+# ── Parametrization overview ──
+#
+# This module has two parametrization paths, driven by two separate
+# pytest_generate_tests hooks:
+#
+# 1. Module-local hook (below): parametrizes ``mlip_predict_unit`` over all
+#    registered pretrained models via ``_models_to_test()``.  Used by
+#    all-models tests (test_calculator_setup, test_energy_calculation, …).
+#    CI partitions via:
+#      base job:  --exclude-models=uma-s-1p1,uma-s-1p2  →  10 models
+#      sweep job: --sweep-model=uma-s-1p1                →   1 model
+#    Total: 10 + 1 + 1 = 12 — every model tested exactly once.
+#
+# 2. Root conftest hook (tests/conftest.py): parametrizes
+#    ``pretrained_checkpoint`` from the test's @pretrained("model", …)
+#    marker.  Used by UMA-specific tests (test_calculator_from_checkpoint,
+#    test_calculator_configurations, …).
+#
+# ``indirect=True`` means pytest calls the fixture function with
+# ``request.param`` set to the model name, rather than passing the
+# string directly as the test argument.
+
+
 def pytest_generate_tests(metafunc):
     """
     Drive ``mlip_predict_unit`` parametrization from --sweep-model when set,
