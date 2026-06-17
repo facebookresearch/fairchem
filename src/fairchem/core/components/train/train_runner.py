@@ -129,6 +129,7 @@ class TrainEvalRunner(Runner):
         max_epochs: int | None = 1,
         evaluate_every_n_steps: Optional[int] = None,
         max_steps: int | None = None,
+        max_eval_steps_per_epoch: int | None = None,
     ):
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
@@ -137,6 +138,7 @@ class TrainEvalRunner(Runner):
         self.max_epochs = max_epochs
         self.max_steps = max_steps
         self.evaluate_every_n_steps = evaluate_every_n_steps
+        self.max_eval_steps_per_epoch = max_eval_steps_per_epoch
 
         checkpoint_callbacks = [
             c for c in callbacks if isinstance(c, TrainCheckpointCallback)
@@ -162,6 +164,7 @@ class TrainEvalRunner(Runner):
             eval_dataloader=self.eval_dataloader,
             max_epochs=self.max_epochs,
             max_steps=self.max_steps,
+            max_eval_steps_per_epoch=self.max_eval_steps_per_epoch,
             callbacks=self.callbacks,
             evaluate_every_n_steps=self.evaluate_every_n_steps,
         )
