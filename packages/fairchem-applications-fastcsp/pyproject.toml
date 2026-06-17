@@ -10,16 +10,17 @@ license = {text = "MIT License"}
 dependencies = [
     "fairchem-core",
     "p_tqdm",
+    "pyarrow",
     "pymatgen",
-    "swifter"
+    "rdkit"
 ]
 
 [project.optional-dependencies]
 free_energy = [] # TODO
-vasp = ["atomate2"]
 
 [project.scripts]
 fastcsp = "fairchem.applications.fastcsp.core.cli:cli_main"
+fastcsp-confgen = "fairchem.applications.fastcsp.confgen.main:main"
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/applications/fastcsp"
