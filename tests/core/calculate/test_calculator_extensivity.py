@@ -15,10 +15,14 @@ from ase.build import bulk, make_supercell, molecule
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 
-# Mark all tests in this module as GPU tests
 pytestmark = pytest.mark.gpu
 
-# Supercell configurations: (transformation_matrix, integer_multiplier)
+# Extensivity is a property of the architecture, not of any particular head:
+# every task head should satisfy E(N replicas) = N * E(1 replica) when the
+# replicas don't interact. We therefore parametrize across every head shipped
+# with the pretrained model.
+TASK_NAMES = ["oc20", "omat", "omol", "odac", "omc", "oc25"]
+
 SUPERCELL_CONFIGS = [
     pytest.param(np.diag([2, 2, 2]), 8, id="2x2x2"),
     pytest.param(np.diag([2, 1, 1]), 2, id="2x1x1"),
@@ -30,45 +34,46 @@ SUPERCELL_CONFIGS = [
 
 @pytest.fixture(scope="module")
 def predict_unit():
-    """
-    Module-scoped predict unit for uma-s-1p1.
-    """
     return pretrained_mlip.get_predict_unit("uma-s-1p1")
 
 
-@pytest.fixture(scope="module")
-def omat_calc(predict_unit):
-    """
-    FAIRChemCalculator configured for the omat task.
-    """
-    return FAIRChemCalculator(predict_unit, task_name="omat")
+@pytest.fixture(scope="module", params=TASK_NAMES)
+def calc(predict_unit, request):
+    task_name = request.param
+    if task_name not in predict_unit.dataset_to_tasks:
+        pytest.skip(f"task {task_name!r} not supported by uma-s-1p1")
+    return FAIRChemCalculator(predict_unit, task_name=task_name)
 
 
-@pytest.fixture(scope="module")
-def omol_calc(predict_unit):
-    """
-    FAIRChemCalculator configured for the omol task.
-    """
-    return FAIRChemCalculator(predict_unit, task_name="omol")
+def _set_neutral_singlet(atoms):
+    # charge=0, spin=1 are accepted defaults for every UMA task head
+    # (omol requires spin=1; the materials heads accept any value).
+    atoms.info["charge"] = 0
+    atoms.info["spin"] = 1
 
 
-# --- PBC extensivity tests ---
+def _assert_multiset_close(a, b, *, atol):
+    # Compare two arrays as multisets of row vectors: extensivity says the
+    # supercell forces equal the unit-cell forces repeated `multiplier` times,
+    # but ASE's make_supercell doesn't guarantee `i % n_unit` ordering.
+    order_a = np.lexsort(a.T)
+    order_b = np.lexsort(b.T)
+    npt.assert_allclose(a[order_a], b[order_b], atol=atol)
+
+
+# --- PBC extensivity ---
 
 
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
-def test_pbc_extensivity_energy(supercell_matrix, multiplier, omat_calc):
-    """
-    Verify energy scales linearly with supercell size for PBC systems.
-
-    For a periodic crystal tiled into a supercell, the total energy must
-    equal the unit cell energy times the number of replicas.
-    """
+def test_pbc_extensivity_energy(supercell_matrix, multiplier, calc):
     atoms_unit = bulk("MgO", "rocksalt", a=4.213)
-    atoms_unit.calc = omat_calc
+    _set_neutral_singlet(atoms_unit)
+    atoms_unit.calc = calc
     energy_unit = atoms_unit.get_potential_energy()
 
     atoms_super = make_supercell(atoms_unit, supercell_matrix)
-    atoms_super.calc = omat_calc
+    _set_neutral_singlet(atoms_super)
+    atoms_super.calc = calc
     energy_super = atoms_super.get_potential_energy()
 
     npt.assert_allclose(
@@ -83,60 +88,38 @@ def test_pbc_extensivity_energy(supercell_matrix, multiplier, omat_calc):
 
 
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
-def test_pbc_extensivity_forces(supercell_matrix, multiplier, omat_calc):
-    """
-    Verify forces in a supercell match the tiled unit cell forces.
-
-    Each atom in the supercell sees the same local environment as the
-    corresponding atom in the unit cell, so forces must be identical.
-    """
+def test_pbc_extensivity_forces(supercell_matrix, multiplier, calc):
     atoms_unit = bulk("MgO", "rocksalt", a=4.213)
-    atoms_unit.calc = omat_calc
+    _set_neutral_singlet(atoms_unit)
+    atoms_unit.calc = calc
     forces_unit = atoms_unit.get_forces()
 
     atoms_super = make_supercell(atoms_unit, supercell_matrix)
-    atoms_super.calc = omat_calc
+    _set_neutral_singlet(atoms_super)
+    atoms_super.calc = calc
     forces_super = atoms_super.get_forces()
 
-    n_unit = len(atoms_unit)
-    for i in range(len(atoms_super)):
-        unit_idx = i % n_unit
-        npt.assert_allclose(
-            forces_super[i],
-            forces_unit[unit_idx],
-            atol=1e-4,
-            err_msg=(
-                f"Force mismatch: supercell atom {i} " f"vs unit cell atom {unit_idx}"
-            ),
-        )
+    forces_unit_tiled = np.vstack([forces_unit] * multiplier)
+    _assert_multiset_close(forces_super, forces_unit_tiled, atol=1e-4)
 
 
-# --- OMol (molecular) extensivity tests ---
+# --- Isolated-cluster extensivity ---
 
 
-def test_omol_extensivity_energy(omol_calc):
-    """
-    Verify energy extensivity for isolated molecules.
-
-    Two identical H2O molecules separated by 50 angstroms (well beyond
-    the 6 angstrom model cutoff) should have a combined energy equal to
-    twice the single molecule energy.
-    """
+def test_isolated_extensivity_energy(calc):
+    # Two H2O copies separated by 50 A, well beyond the 6 A model cutoff —
+    # the combined-system energy must equal twice the single-molecule energy.
     mol_single = molecule("H2O")
-    mol_single.info["charge"] = 0
-    mol_single.info["spin"] = 1
-    mol_single.calc = omol_calc
+    _set_neutral_singlet(mol_single)
+    mol_single.calc = calc
     energy_single = mol_single.get_potential_energy()
 
-    # Create second copy far away (beyond model cutoff)
     mol_copy = mol_single.copy()
     mol_copy.positions += [50.0, 0.0, 0.0]
 
-    # Combine into one system
     mol_combined = mol_single.copy() + mol_copy
-    mol_combined.info["charge"] = 0
-    mol_combined.info["spin"] = 1
-    mol_combined.calc = omol_calc
+    _set_neutral_singlet(mol_combined)
+    mol_combined.calc = calc
     energy_combined = mol_combined.get_potential_energy()
 
     npt.assert_allclose(
@@ -150,26 +133,18 @@ def test_omol_extensivity_energy(omol_calc):
     )
 
 
-def test_omol_extensivity_forces(omol_calc):
-    """
-    Verify force extensivity for isolated molecules.
-
-    Forces on each molecule in the combined system should match the
-    forces on the isolated single molecule.
-    """
+def test_isolated_extensivity_forces(calc):
     mol_single = molecule("H2O")
-    mol_single.info["charge"] = 0
-    mol_single.info["spin"] = 1
-    mol_single.calc = omol_calc
+    _set_neutral_singlet(mol_single)
+    mol_single.calc = calc
     forces_single = mol_single.get_forces()
 
     mol_copy = mol_single.copy()
     mol_copy.positions += [50.0, 0.0, 0.0]
 
     mol_combined = mol_single.copy() + mol_copy
-    mol_combined.info["charge"] = 0
-    mol_combined.info["spin"] = 1
-    mol_combined.calc = omol_calc
+    _set_neutral_singlet(mol_combined)
+    mol_combined.calc = calc
     forces_combined = mol_combined.get_forces()
 
     n = len(mol_single)
