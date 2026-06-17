@@ -1,4 +1,4 @@
-name,molecule_path,refcode
+name,conformers_path,refcode
 ACETAC,ACETAC03_mol.xyz,ACETAC
 AXOSOW,AXOSOW01_mol.xyz,AXOSOW01
 BOQQUT,BOQQUT_mol.xyz,BOQQUT
