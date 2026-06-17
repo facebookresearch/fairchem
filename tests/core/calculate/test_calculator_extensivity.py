@@ -45,11 +45,14 @@ def calc(predict_unit, request):
     return FAIRChemCalculator(predict_unit, task_name=task_name)
 
 
-def _set_neutral_singlet(atoms):
-    # charge=0, spin=1 are accepted defaults for every UMA task head
-    # (omol requires spin=1; the materials heads accept any value).
-    atoms.info["charge"] = 0
-    atoms.info["spin"] = 1
+def _set_charge_spin(atoms, calc):
+    # Only omol has been trained with spin = 1 (singlet). The materials
+    # heads (oc20/omat/odac/omc/oc25) use the null spin token (spin = 0);
+    # setting spin = 1 there would put the model out of distribution.
+    # Charge defaults to 0 for all heads.
+    if calc.task_name == "omol":
+        atoms.info["charge"] = 0
+        atoms.info["spin"] = 1
 
 
 def _assert_multiset_close(a, b, *, atol):
@@ -67,12 +70,12 @@ def _assert_multiset_close(a, b, *, atol):
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
 def test_pbc_extensivity_energy(supercell_matrix, multiplier, calc):
     atoms_unit = bulk("MgO", "rocksalt", a=4.213)
-    _set_neutral_singlet(atoms_unit)
+    _set_charge_spin(atoms_unit, calc)
     atoms_unit.calc = calc
     energy_unit = atoms_unit.get_potential_energy()
 
     atoms_super = make_supercell(atoms_unit, supercell_matrix)
-    _set_neutral_singlet(atoms_super)
+    _set_charge_spin(atoms_super, calc)
     atoms_super.calc = calc
     energy_super = atoms_super.get_potential_energy()
 
@@ -90,12 +93,12 @@ def test_pbc_extensivity_energy(supercell_matrix, multiplier, calc):
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
 def test_pbc_extensivity_forces(supercell_matrix, multiplier, calc):
     atoms_unit = bulk("MgO", "rocksalt", a=4.213)
-    _set_neutral_singlet(atoms_unit)
+    _set_charge_spin(atoms_unit, calc)
     atoms_unit.calc = calc
     forces_unit = atoms_unit.get_forces()
 
     atoms_super = make_supercell(atoms_unit, supercell_matrix)
-    _set_neutral_singlet(atoms_super)
+    _set_charge_spin(atoms_super, calc)
     atoms_super.calc = calc
     forces_super = atoms_super.get_forces()
 
@@ -110,7 +113,7 @@ def test_isolated_extensivity_energy(calc):
     # Two H2O copies separated by 50 A, well beyond the 6 A model cutoff —
     # the combined-system energy must equal twice the single-molecule energy.
     mol_single = molecule("H2O")
-    _set_neutral_singlet(mol_single)
+    _set_charge_spin(mol_single, calc)
     mol_single.calc = calc
     energy_single = mol_single.get_potential_energy()
 
@@ -118,7 +121,7 @@ def test_isolated_extensivity_energy(calc):
     mol_copy.positions += [50.0, 0.0, 0.0]
 
     mol_combined = mol_single.copy() + mol_copy
-    _set_neutral_singlet(mol_combined)
+    _set_charge_spin(mol_combined, calc)
     mol_combined.calc = calc
     energy_combined = mol_combined.get_potential_energy()
 
@@ -135,7 +138,7 @@ def test_isolated_extensivity_energy(calc):
 
 def test_isolated_extensivity_forces(calc):
     mol_single = molecule("H2O")
-    _set_neutral_singlet(mol_single)
+    _set_charge_spin(mol_single, calc)
     mol_single.calc = calc
     forces_single = mol_single.get_forces()
 
@@ -143,7 +146,7 @@ def test_isolated_extensivity_forces(calc):
     mol_copy.positions += [50.0, 0.0, 0.0]
 
     mol_combined = mol_single.copy() + mol_copy
-    _set_neutral_singlet(mol_combined)
+    _set_charge_spin(mol_combined, calc)
     mol_combined.calc = calc
     forces_combined = mol_combined.get_forces()
 
