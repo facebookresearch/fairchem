@@ -15,15 +15,15 @@ Key Features:
 - Batch processing for high-throughput structure relaxation
 - SLURM integration for parallel GPU-accelerated relaxations
 
-The module supports multiple UMA model tasks:
-- uma_sm_1p1_omc: UMA's OMC task [RECOMMENDED]
-- uma_sm_1p1_omol: UMA's OMoltask
+The module supports multiple UMA calculator keys (see ``CHECKPOINTS`` below):
+- ``uma_sm_1p1_omc``: UMA 1.1 with the OMC task [RECOMMENDED]
+- ``uma_sm_1p1_omol``: UMA 1.1 with the OMol task
+- ``uma_sm_1p2_omc`` / ``uma_sm_1p2_omol``: UMA 1.2 variants
 """
 
 from __future__ import annotations
 
 import warnings
-from logging import root
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +117,7 @@ def get_relax_config_and_dir(
 
     relax_params = {
         "root": root,
-        "calculator": relax_config.get("calculator", "uma-s-1p1-omc"),
+        "calculator": relax_config.get("calculator", "uma_sm_1p1_omc"),
         "optimizer": relax_config.get("optimizer", "bfgs").lower(),
         "fmax": relax_config.get("fmax", 0.01),
         "max_steps": relax_config.get("max_steps", relax_config.get("max-steps", 1000)),

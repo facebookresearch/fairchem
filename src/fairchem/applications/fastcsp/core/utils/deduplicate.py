@@ -34,6 +34,8 @@ def process_structure_group(
     density_tol=None,
     energy_tol=None,
     apply_niggli_filter=False,
+    scale: bool = True,
+    primitive_cell: bool = True,
 ):
     # group_data = (indices, structures, energies). ``energies`` may be None
     # (only consulted when ``energy_tol`` is set).
@@ -46,6 +48,8 @@ def process_structure_group(
         stol=stol,
         angle_tol=angle_tol,
         ignored_species=list(ignored_species) if ignored_species else [],
+        scale=scale,
+        primitive_cell=primitive_cell,
     )
     # Cheap prefilters (computed once per bucket): if two structures disagree
     # on Niggli (a,b,c,alpha,beta,gamma) by more than (ltol, angle_tol), on
@@ -141,6 +145,8 @@ def deduplicate_structures(
     density_tol: float | None = None,
     energy_tol: float | None = None,
     apply_niggli_filter: bool = False,
+    scale: bool = True,
+    primitive_cell: bool = True,
     keep: str | None = None,
     keep_col: str | None = None,
     n_jobs: int | None = None,
@@ -175,6 +181,18 @@ def deduplicate_structures(
       Niggli-reduced (a,b,c,alpha,beta,gamma) disagree by more than
       (``ltol``, ``angle_tol``). Default False (skip the Niggli computation
       and prefilter entirely).
+
+    StructureMatcher knobs (forwarded verbatim):
+
+    - ``scale`` (bool, default True): when False, ``sm.fit`` will not
+      rescale lattices to a common volume. Useful post-relax with
+      ``bin_by_z=True`` (same Z -> same atom count, and relaxed volumes
+      are physically meaningful so two structures at different volumes
+      are not the same minimum). Slightly faster.
+    - ``primitive_cell`` (bool, default True): when False, ``sm.fit`` will
+      not reduce to primitive cells before matching. Safe (and a small
+      speed win) when ``bin_by_z=True``, since every structure in a
+      bucket already has the same atom count.
     """
     logger = get_central_logger()
 
@@ -265,6 +283,8 @@ def deduplicate_structures(
         density_tol=density_tol,
         energy_tol=energy_tol if use_energy_prefilter else None,
         apply_niggli_filter=apply_niggli_filter,
+        scale=scale,
+        primitive_cell=primitive_cell,
     )
     biggest = max((len(g[0]) for g in groups_to_process), default=0)
     # Path A (inner-pool fan-out) only wins when a single bucket is large

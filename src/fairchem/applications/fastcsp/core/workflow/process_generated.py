@@ -217,6 +217,20 @@ def process_genarris_outputs_single(
     conf_id = input_dir.name
     mol_id = input_dir.parent.name
     logger.info(f"Processing {input_dir} (mol_id={mol_id}, conf_id={conf_id})")
+
+    # The Niggli (a,b,c,alpha,beta,gamma) prefilter is only well-defined
+    # *within* a fixed-composition bucket. Outside (mol_id, Z, spg) it can
+    # incorrectly drop legitimate matches whose Niggli reductions disagree
+    # because of differing Z or symmetry.
+    if apply_niggli_filter and not (bin_by_z and bin_by_spg):
+        logger.warning(
+            "apply_niggli_filter=True is most reliable inside a "
+            "(mol_id, Z, spg) bucket. Got bin_by_z=%s, bin_by_spg=%s; "
+            "results may be sensitive to (ltol, angle_tol). Set both "
+            "bin_by_z=True and bin_by_spg=True to silence this warning.",
+            bin_by_z,
+            bin_by_spg,
+        )
     # Sort so two runs over the same directory produce the same row order
     # (Path.glob returns filesystem order, which is not deterministic).
     json_files = sorted(input_dir.glob("*/structures/symm_rigid_press/structures.json"))
@@ -301,6 +315,8 @@ def process_genarris_outputs_single(
             ignored_species=["H"],
             density_tol=density_tol,
             apply_niggli_filter=apply_niggli_filter,
+            scale=not bin_by_z,
+            primitive_cell=not bin_by_z,
             keep="median" if remove_duplicates else None,
             keep_col="density_generated",
             n_jobs=num_cpus,
@@ -322,9 +338,9 @@ def process_genarris_outputs(
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
-    bin_by_conf: bool = True,
-    bin_by_z: bool = True,
-    bin_by_spg: bool = True,
+    bin_by_conf: bool = False,
+    bin_by_z: bool = False,
+    bin_by_spg: bool = False,
     apply_niggli_filter: bool = False,
     density_bin_size: float | None = None,
     npartitions: int = 1000,

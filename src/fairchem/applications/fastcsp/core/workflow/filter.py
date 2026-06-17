@@ -115,7 +115,7 @@ def filter_and_deduplicate_structures_single(
     stol: float = 0.3,
     angle_tol: float = 5,
     bin_by_conf: bool = False,
-    bin_by_z: bool = True,
+    bin_by_z: bool = False,
     bin_by_spg: bool = False,
     density_bin_size: float | None = None,
     energy_bin_size: float | None = None,
@@ -164,6 +164,20 @@ def filter_and_deduplicate_structures_single(
         6. Save filtered and deduplicated results
     """
     logger = get_central_logger()
+
+    # The Niggli (a,b,c,alpha,beta,gamma) prefilter is only well-defined
+    # *within* a fixed-composition bucket. Outside (mol_id, Z, spg) it can
+    # incorrectly drop legitimate matches whose Niggli reductions disagree
+    # because of differing Z or symmetry.
+    if apply_niggli_filter and not (bin_by_z and bin_by_spg):
+        logger.warning(
+            "apply_niggli_filter=True is most reliable inside a "
+            "(mol_id, Z, spg) bucket. Got bin_by_z=%s, bin_by_spg=%s; "
+            "results may be sensitive to (ltol, angle_tol). Set both "
+            "bin_by_z=True and bin_by_spg=True to silence this warning.",
+            bin_by_z,
+            bin_by_spg,
+        )
 
     # Load structure dataset from parquet format
     structures_df = pd.read_parquet(input_filename, engine="pyarrow")
@@ -225,10 +239,10 @@ def filter_and_deduplicate_structures_single(
     all_valid = structures_df[validity_cols].all(axis=1)
     problematic_structures_df = structures_df[
         ~structures_df["optimizer_converged"] | ~all_valid
-    ]
+    ].copy()
     structures_df_filtered = structures_df[
         structures_df["optimizer_converged"] & all_valid
-    ]
+    ].copy()
 
     # 3. Apply multi-stage filtering workflow
     # Density window: drop rows outside [density_min_cutoff, density_max_cutoff]
@@ -304,6 +318,8 @@ def filter_and_deduplicate_structures_single(
             density_tol=density_tol,
             energy_tol=energy_tol,
             apply_niggli_filter=apply_niggli_filter,
+            scale=not bin_by_z,
+            primitive_cell=not bin_by_z,
             keep="min" if remove_duplicates else None,
             keep_col="energy_relaxed_per_molecule",
         )
@@ -341,7 +357,7 @@ def filter_and_deduplicate_structures(
     stol: float,
     angle_tol: float,
     bin_by_conf: bool = False,
-    bin_by_z: bool = True,
+    bin_by_z: bool = False,
     bin_by_spg: bool = False,
     density_bin_size: float | None = None,
     energy_bin_size: float | None = None,
