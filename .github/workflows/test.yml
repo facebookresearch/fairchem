@@ -142,7 +142,7 @@ jobs:
       # Needed to manually set commit status
       statuses: write
     strategy:
-      max-parallel: 1
+      fail-fast: false
       matrix:
         python_version: ['3.13']
         shard:
@@ -212,7 +212,7 @@ jobs:
       contents: read
       statuses: write
     strategy:
-      max-parallel: 1
+      fail-fast: false
       matrix:
         python_version: ['3.13']
         sweep_model: [uma-s-1p1, uma-s-1p2]
