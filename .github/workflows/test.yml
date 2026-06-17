@@ -102,14 +102,17 @@ jobs:
       - name: Core tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # --exclude-models deselects tests locked to sweep models and
+        # removes sweep models from all-models parametrization. The
+        # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
@@ -134,6 +137,96 @@ jobs:
         uses: ./.github/actions/multi-trigger-cleanup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
+
+  test_cpu_sweep:
+    runs-on: 32-core-ubuntu
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ['3.13']
+        sweep_model: [uma-s-1p1, uma-s-1p2]
+        shard:
+          - name: units
+            paths: tests/core/units
+          - name: core
+            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/data tests/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Cache pip
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            packages/fairchem-core[dev,extras] \
+            packages/fairchem-data-oc[dev] \
+            packages/fairchem-data-omat \
+            packages/fairchem-data-omol[dev] \
+            packages/fairchem-demo-ocpapi[dev] \
+            -r tests/requirements.txt # pin test packages
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
+      - name: Install additional dependencies
+        if: matrix.shard.name == 'core'
+        run: |
+          wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
+          tar -xzvf v20.15.0.tar.gz
+          cd packmol-20.15.0
+          ./configure
+          make
+          echo "$(readlink -f .)" >> $GITHUB_PATH
+
+      - name: Download large test files
+        if: matrix.shard.name == 'core'
+        run: coverage run -m fairchem.core.scripts.download_large_files oc
+
+      - name: Sweep CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+
+      - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
