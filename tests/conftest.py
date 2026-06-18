@@ -104,6 +104,32 @@ def pytest_configure(config):
     )
 
 
+def sweep_model(config) -> str | None:
+    """
+    Return ``--sweep-model`` value, or ``None`` if unset/empty.
+
+    Centralized so renames and validation live in one place. Empty
+    strings are normalized to ``None`` so downstream callers can use
+    a simple truthiness check.
+    """
+    raw = config.getoption("--sweep-model", default=None)
+    if raw is None:
+        return None
+    raw = raw.strip()
+    return raw or None
+
+
+def excluded_models(config) -> set[str]:
+    """
+    Return the parsed ``--exclude-models`` set (whitespace-trimmed,
+    empties dropped). Returns an empty set when the flag is unset.
+    """
+    raw = config.getoption("--exclude-models", default=None)
+    if not raw:
+        return set()
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+
 def _pretrained_model_values(metafunc) -> list[str]:
     """
     Resolve pretrained model names for parametrization.
@@ -111,7 +137,7 @@ def _pretrained_model_values(metafunc) -> list[str]:
     When ``--sweep-model`` is set, returns ``[override]``.
     Otherwise reads model names from the closest ``@pretrained(...)`` marker.
     """
-    override = metafunc.config.getoption("--sweep-model")
+    override = sweep_model(metafunc.config)
     if override is not None:
         return [override]
 
@@ -137,15 +163,17 @@ def pretrained_checkpoint(request):
     if hasattr(request, "param"):
         return request.param
 
-    override = request.config.getoption("--sweep-model")
+    override = sweep_model(request.config)
     if override is not None:
         return override
 
     marker = request.node.get_closest_marker("pretrained")
     if marker is None or not marker.args:
         raise RuntimeError(
-            f"{request.node.nodeid} uses pretrained_checkpoint but does not "
-            "declare @pytest.mark.pretrained(...)."
+            f"{request.node.nodeid} uses pretrained_checkpoint but its closest "
+            "@pytest.mark.pretrained marker has no model arguments. Either add "
+            "models to the marker (e.g. @pytest.mark.pretrained('uma-s-1p1')) "
+            "or run with --sweep-model=<model>."
         )
     return marker.args[0]
 
@@ -223,9 +251,8 @@ def pytest_collection_modifyitems(config, items):
     # --exclude-models: deselect tests whose declared pretrained(...)
     # models are entirely within the excluded set. Tests with no declared
     # models (bare @pretrained or no marker) are kept.
-    exclude_raw = config.getoption("--exclude-models")
-    if exclude_raw is not None:
-        excluded = {t.strip() for t in exclude_raw.split(",") if t.strip()}
+    excluded = excluded_models(config)
+    if excluded:
         keep, deselect = [], []
         for item in items:
             marker = item.get_closest_marker("pretrained")
@@ -240,8 +267,9 @@ def pytest_collection_modifyitems(config, items):
 
     # --sweep-model: select only @pretrained tests.
     # @calibrated tests are skipped unless the sweep model matches their
-    # declared pretrained(...) models.
-    sweep_override = config.getoption("--sweep-model")
+    # declared pretrained(...) models. A bare @pretrained (no args) is
+    # treated as "matches everything" for calibrated purposes.
+    sweep_override = sweep_model(config)
     if sweep_override is not None:
         keep, deselect = [], []
         for item in items:
@@ -251,7 +279,9 @@ def pytest_collection_modifyitems(config, items):
             if item.get_closest_marker("calibrated"):
                 marker = item.get_closest_marker("pretrained")
                 declared = set(marker.args) if marker and marker.args else set()
-                if sweep_override not in declared:
+                # Bare marker (no declared models) means the test is not
+                # locked to any specific checkpoint — let it run.
+                if declared and sweep_override not in declared:
                     item.add_marker(
                         pytest.mark.skip(
                             reason=(
@@ -350,47 +380,67 @@ def water_xyz_file(tmp_path_factory):
 
 def _validate_sweep_model(config) -> None:
     """
-    Fail fast when ``--sweep-model`` names a model that cannot be loaded.
+    Fail fast when ``--sweep-model`` is unusable.
 
     Without this check, an invalid name surfaces deep inside the first
     test as a confusing ``KeyError`` from ``pretrained_mlip.get_predict_unit``.
     Validating at collection time produces a clear ``pytest.UsageError``
-    listing the available models.
+    listing the available models. Also rejects the ``--sweep-model`` +
+    ``--exclude-models=<sweep>`` combination, which would silently
+    select zero tests.
     """
     import os
 
-    sweep = config.getoption("--sweep-model", default=None)
+    sweep = sweep_model(config)
     if sweep is None:
-        return
-    if os.path.exists(sweep):
         return
     from fairchem.core import pretrained_mlip
 
-    if sweep in pretrained_mlip.available_models:
-        return
-    raise pytest.UsageError(
-        f"--sweep-model={sweep!r} is neither an existing file path nor a "
-        f"registered model name. Registered models: "
-        f"{sorted(pretrained_mlip.available_models)}."
-    )
+    is_registered = sweep in pretrained_mlip.available_models
+    is_real_file = os.path.isfile(sweep)
+    if not (is_registered or is_real_file):
+        raise pytest.UsageError(
+            f"--sweep-model={sweep!r} is neither a registered model name "
+            f"nor an existing file. Registered models: "
+            f"{sorted(pretrained_mlip.available_models)}."
+        )
+    excluded = excluded_models(config)
+    if sweep in excluded:
+        raise pytest.UsageError(
+            f"--sweep-model={sweep!r} is also listed in --exclude-models "
+            f"({sorted(excluded)}); the combination would deselect every "
+            f"test. Drop one of the flags."
+        )
+
+
+# kwargs accepted by pretrained_mlip.get_predict_unit but NOT by
+# load_predict_unit. Filtered out for the path branch so the call
+# stays valid when both branches share a kwargs dict.
+_NAME_ONLY_KWARGS = frozenset({"cache_dir"})
 
 
 def get_predict_unit_for_test(name_or_path, **kwargs):
     """
-    Resolve a model name or filesystem path to a ``MLIPPredictUnit``.
+    Resolve a registered model name or filesystem path to a ``MLIPPredictUnit``.
 
-    When ``name_or_path`` is an existing file on disk (e.g. passed via
-    ``--sweep-model /path/to/file.pt``), loads with
-    ``load_predict_unit`` directly.  Otherwise delegates to
-    ``pretrained_mlip.get_predict_unit`` which resolves registered names.
+    Tries the registry first to avoid CWD collisions where a file
+    happens to share a registered model name. Falls back to
+    ``load_predict_unit`` for filesystem paths. Name-only kwargs
+    (e.g. ``cache_dir``) are dropped from the path branch.
     """
     import os
-    if os.path.exists(name_or_path):
-        from fairchem.core.units.mlip_unit import load_predict_unit
 
-        return load_predict_unit(name_or_path, **kwargs)
     from fairchem.core import pretrained_mlip
 
+    if name_or_path in pretrained_mlip.available_models:
+        return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
+    if os.path.isfile(name_or_path):
+        from fairchem.core.units.mlip_unit import load_predict_unit
+
+        path_kwargs = {k: v for k, v in kwargs.items() if k not in _NAME_ONLY_KWARGS}
+        return load_predict_unit(name_or_path, **path_kwargs)
+    # Not registered and not a file — defer to get_predict_unit so the
+    # caller sees the registry's own KeyError listing valid names.
     return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
 
 
@@ -420,12 +470,11 @@ def models_to_test(config) -> list[str]:
     """
     from fairchem.core.calculate import pretrained_mlip
 
-    override = config.getoption("--sweep-model")
+    override = sweep_model(config)
     if override is not None:
         return [override]
-    excluded = config.getoption("--exclude-models")
-    excluded_set = set(excluded.split(",")) if excluded else set()
-    return [m for m in pretrained_mlip.available_models if m not in excluded_set]
+    excluded = excluded_models(config)
+    return [m for m in pretrained_mlip.available_models if m not in excluded]
 
 
 @pytest.fixture(autouse=True)

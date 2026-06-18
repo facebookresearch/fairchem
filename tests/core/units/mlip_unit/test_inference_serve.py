@@ -277,13 +277,23 @@ def uma_multiplexed_model_id(request):
     Multiplexed model ID for the sweep model, or first available UMA model.
 
     Honors ``--sweep-model`` so per-model sweep CI jobs target the
-    requested checkpoint.
+    requested checkpoint. Skips when the sweep value is a filesystem
+    path — the multiplexed server is keyed by registered model name,
+    so paths cannot be exercised here.
     """
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if not uma_models:
         pytest.skip("No UMA models available")
     sweep = request.config.getoption("--sweep-model", default=None)
-    model = sweep if sweep and sweep in uma_models else uma_models[0]
+    if sweep:
+        if sweep not in uma_models:
+            pytest.skip(
+                f"--sweep-model={sweep!r} is not a registered UMA model; "
+                "multiplexed server tests need a registered name."
+            )
+        model = sweep
+    else:
+        model = uma_models[0]
     return f"{model}:default"
 
 
@@ -352,15 +362,16 @@ def test_multiplexed_single_model(
 
 
 def test_multiplexed_switch_models(
-    local_multiplexed_cluster, uma_multiplexed_model_id, request
+    local_multiplexed_cluster, uma_multiplexed_model_id
 ):
     """Test switching between two different model keys."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
-    sweep = request.config.getoption("--sweep-model", default=None)
-    primary = sweep if sweep and sweep in uma_models else uma_models[0]
+    # uma_multiplexed_model_id already encodes the sweep target (or first
+    # UMA model). Pick any other UMA model as the second key.
+    primary = uma_multiplexed_model_id.split(":")[0]
     other_candidates = [m for m in uma_models if m != primary]
     if not other_candidates:
         pytest.skip("No second UMA model available that differs from the primary")

@@ -404,11 +404,24 @@ def uma_predict_unit(request):
 
 @pytest.fixture(scope="session")
 def uma_predict_unit_alt(request):
-    """Predict unit using a UMA model different from the sweep model."""
+    """
+    Predict unit for a UMA model different from the one ``uma_predict_unit`` uses.
+
+    When ``--sweep-model`` is a registered UMA model, picks any other UMA
+    model. When sweep is unset, picks the second UMA model alphabetically.
+    Skips when ``--sweep-model`` is a filesystem path — we cannot reliably
+    tell which registered model (if any) corresponds to the path, so we
+    cannot guarantee this fixture returns a *different* one.
+    """
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Fewer than 2 UMA models available")
     sweep = request.config.getoption("--sweep-model", default=None)
+    if sweep and sweep not in uma_models:
+        # path-style sweep — primary model identity is opaque
+        pytest.skip(
+            "--sweep-model is a path; cannot pick a distinct UMA model"
+        )
     candidates = [m for m in uma_models if m != sweep] if sweep else uma_models[1:]
     if not candidates:
         pytest.skip("No UMA model available that differs from sweep model")
