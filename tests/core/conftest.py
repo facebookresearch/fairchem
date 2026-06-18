@@ -29,7 +29,12 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
     UNIT_RESUME_CONFIG,
 )
-from tests.conftest import get_predict_unit_for_test, sweep_model, uma_models
+from tests.conftest import (
+    excluded_models,
+    get_predict_unit_for_test,
+    sweep_model,
+    uma_models,
+)
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_uma_dataset,
@@ -387,18 +392,27 @@ def fake_uma_dataset(tmp_path_factory):
 @pytest.fixture(scope="session")
 def uma_predict_unit(request):
     """
-    Predict unit for the sweep model, or the first available UMA model.
+    Predict unit for some UMA model — sweep-aware and exclude-aware.
 
-    Honors ``--sweep-model`` so per-model sweep CI jobs actually exercise
-    the requested checkpoint. Falls back to the first UMA model in the
-    registry (alphabetical) when no sweep flag is set. Path values are
-    accepted via :func:`get_predict_unit_for_test`.
+    * If ``--sweep-model`` is set, loads that checkpoint (name or path).
+    * Otherwise picks the first registered UMA model NOT in
+      ``--exclude-models``. This ensures the base CI job (which excludes
+      ``uma-s-1p1`` and ``uma-s-1p2`` so the sweep jobs own those
+      models) does not silently load an excluded model — which would
+      both violate the partition contract and double-run that model.
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     sweep = sweep_model(request.config)
     if sweep:
         return get_predict_unit_for_test(sweep, device=device)
-    return pretrained_mlip.get_predict_unit(uma_models()[0], device=device)
+    excluded = excluded_models(request.config)
+    candidates = [m for m in uma_models() if m not in excluded]
+    if not candidates:
+        pytest.skip(
+            "No UMA model available outside --exclude-models — sweep jobs "
+            "should be used instead."
+        )
+    return pretrained_mlip.get_predict_unit(candidates[0], device=device)
 
 
 @pytest.fixture(scope="session")
