@@ -591,7 +591,6 @@ def test_simple_md(pretrained_checkpoint):
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_correctness(
     aperiodic_atoms, declared_predict_unit
 ):
@@ -621,7 +620,6 @@ def test_formation_energy_calculator_correctness(
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_missing_element_raises_error(
     declared_predict_unit,
 ):
@@ -646,7 +644,6 @@ def test_formation_energy_calculator_missing_element_raises_error(
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_mp_corrections_omat_task(declared_predict_unit):
     """Test MP corrections with FormationEnergyCalculator for OMat task."""
     base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
@@ -674,7 +671,6 @@ def test_formation_energy_calculator_mp_corrections_omat_task(declared_predict_u
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
     declared_predict_unit,
 ):
@@ -687,7 +683,6 @@ def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_auto_loads_references(declared_predict_unit):
     base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
@@ -730,7 +725,6 @@ def test_formation_energy_calculator_non_fairchemcalculator():
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_different_task_types(declared_predict_unit):
     for task_name in ["omol", "omat", "oc20"]:
         if task_name in declared_predict_unit.dataset_to_tasks:
