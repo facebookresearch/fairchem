@@ -198,6 +198,8 @@ def pytest_runtest_setup(item):
 
 
 def pytest_collection_modifyitems(config, items):
+    _validate_sweep_model(config)
+
     if config.getoption("--skip-ocpapi-integration"):
         skip_ocpapi_integration = pytest.mark.skip(reason="skipping ocpapi integration")
         for item in items:
@@ -223,7 +225,7 @@ def pytest_collection_modifyitems(config, items):
     # models (bare @pretrained or no marker) are kept.
     exclude_raw = config.getoption("--exclude-models")
     if exclude_raw is not None:
-        excluded = set(exclude_raw.split(","))
+        excluded = {t.strip() for t in exclude_raw.split(",") if t.strip()}
         keep, deselect = [], []
         for item in items:
             marker = item.get_closest_marker("pretrained")
@@ -346,6 +348,33 @@ def water_xyz_file(tmp_path_factory):
     return str(fpath)
 
 
+def _validate_sweep_model(config) -> None:
+    """
+    Fail fast when ``--sweep-model`` names a model that cannot be loaded.
+
+    Without this check, an invalid name surfaces deep inside the first
+    test as a confusing ``KeyError`` from ``pretrained_mlip.get_predict_unit``.
+    Validating at collection time produces a clear ``pytest.UsageError``
+    listing the available models.
+    """
+    import os
+
+    sweep = config.getoption("--sweep-model", default=None)
+    if sweep is None:
+        return
+    if os.path.exists(sweep):
+        return
+    from fairchem.core import pretrained_mlip
+
+    if sweep in pretrained_mlip.available_models:
+        return
+    raise pytest.UsageError(
+        f"--sweep-model={sweep!r} is neither an existing file path nor a "
+        f"registered model name. Registered models: "
+        f"{sorted(pretrained_mlip.available_models)}."
+    )
+
+
 def get_predict_unit_for_test(name_or_path, **kwargs):
     """
     Resolve a model name or filesystem path to a ``MLIPPredictUnit``.
@@ -356,7 +385,6 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     ``pretrained_mlip.get_predict_unit`` which resolves registered names.
     """
     import os
-
     if os.path.exists(name_or_path):
         from fairchem.core.units.mlip_unit import load_predict_unit
 
