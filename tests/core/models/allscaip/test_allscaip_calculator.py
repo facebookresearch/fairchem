@@ -18,8 +18,10 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"
 
-# mark all tests in this module as gpu tests
-pytestmark = pytest.mark.gpu
+# mark all tests in this module as gpu tests using the allscaip pretrained
+# checkpoint. The pretrained marker lets --exclude-models / --sweep-model
+# partition correctly.
+pytestmark = [pytest.mark.gpu, pytest.mark.pretrained(ALLSCAIP_MODEL)]
 
 
 @pytest.fixture(scope="module")

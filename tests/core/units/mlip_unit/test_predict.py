@@ -1805,14 +1805,13 @@ def test_execution_mode_not_overridden_when_explicit(pretrained_model_name):
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-m-1p1"])
 @pytest.mark.pretrained("uma-m-1p1")
 @pytest.mark.calibrated()
-def test_execution_mode_not_set_when_conditions_not_met(model_name):
+def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 
     predict_unit = get_predict_unit_for_test(
-        model_name, device="cuda", inference_settings="turbo"
+        pretrained_model_name, device="cuda", inference_settings="turbo"
     )
 
     # execution_mode should remain None (not auto-set to umas_fast_gpu)

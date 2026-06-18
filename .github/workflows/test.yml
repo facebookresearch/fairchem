@@ -36,6 +36,10 @@ jobs:
       max-parallel: 10
       matrix:
         python_version: ['3.11', '3.13']
+        # tests/perf is run by perf-test.yml on a separate cadence.
+        # tests/applications and tests/lammps are run by integration-test.yml
+        # and test_lammps_gpu respectively. Both shards below intentionally
+        # exclude those paths.
         shard:
           - name: units
             paths: tests/core/units
