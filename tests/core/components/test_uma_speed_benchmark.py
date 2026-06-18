@@ -10,12 +10,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from tests.core.testing_utils import launch_main
-
-pytestmark = [pytest.mark.pretrained("uma-s-1p2")]
 
 COMMON_ARGS = [
     "job.device_type=CPU",
@@ -27,35 +22,13 @@ COMMON_ARGS = [
 ]
 
 
-def _checkpoint_overrides(pretrained_checkpoint: str) -> list[str]:
-    """
-    Build Hydra overrides that point the benchmark at ``pretrained_checkpoint``.
-
-    The ``uma-speed.yaml`` config declares ``uma_s_1p2`` as a target-
-    instantiated dict that calls ``pretrained_checkpoint_path_from_name``
-    to resolve a registered model name to a checkpoint path. We bypass
-    that resolver and substitute the sweep checkpoint path directly
-    into ``runner.model_checkpoints.uma_s_1p2``. The dict key name
-    (``uma_s_1p2``) is just an opaque identifier inside the runner —
-    swapping its value at the leaf preserves the strict-mode struct
-    schema while letting the runner load any checkpoint.
-    """
-    checkpoint_path = (
-        pretrained_checkpoint
-        if Path(pretrained_checkpoint).exists()
-        else pretrained_checkpoint_path_from_name(pretrained_checkpoint)
-    )
-    return [f"runner.model_checkpoints.uma_s_1p2={checkpoint_path}"]
-
-
-def test_uma_speed_benchmark_natoms_list(pretrained_checkpoint):
+def test_uma_speed_benchmark_natoms_list():
     """Run the UMA speed benchmark via CLI using natoms_list override."""
     with tempfile.TemporaryDirectory() as run_root:
         sys_args = [
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            *_checkpoint_overrides(pretrained_checkpoint),
             f"job.run_dir={run_root}",
             "runner.natoms_list=[20]",
         ]
@@ -64,7 +37,7 @@ def test_uma_speed_benchmark_natoms_list(pretrained_checkpoint):
         assert entries, "Benchmark did not create a run directory"
 
 
-def test_uma_speed_benchmark_input_system(water_xyz_file, pretrained_checkpoint):
+def test_uma_speed_benchmark_input_system(water_xyz_file):
     """Run the UMA speed benchmark using an explicit input_system (water.xyz)."""
     with tempfile.TemporaryDirectory() as run_root:
         input_system_override = f"+runner.input_system={{water: {water_xyz_file}}}"
@@ -72,7 +45,6 @@ def test_uma_speed_benchmark_input_system(water_xyz_file, pretrained_checkpoint)
             "-c",
             "configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
-            *_checkpoint_overrides(pretrained_checkpoint),
             f"job.run_dir={run_root}",
             input_system_override,
             "runner.natoms_list=null",
