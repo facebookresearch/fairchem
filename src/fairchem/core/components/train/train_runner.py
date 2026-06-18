@@ -151,12 +151,14 @@ class TrainEvalRunner(Runner):
         logging.info(f"Eval Dataloader size {len(self.eval_dataloader)}")
 
     def run(self) -> None:
-        if self.checkpoint_callback is not None:
-            self.checkpoint_callback.set_runner_callbacks(
-                self.save_state,
-                self.load_state,
-                self.job_config.metadata.checkpoint_dir,
-            )
+        for callback in self.callbacks:
+            set_callbacks = getattr(callback, "set_runner_callbacks", None)
+            if set_callbacks is not None:
+                set_callbacks(
+                    self.save_state,
+                    self.load_state,
+                    self.job_config.metadata.checkpoint_dir,
+                )
 
         fit(
             self.train_eval_unit,
