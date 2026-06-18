@@ -179,11 +179,30 @@ def pretrained_checkpoint(request):
     """
     Name or path of the pretrained checkpoint under test.
 
-    Always parametrized by ``pytest_generate_tests`` (via ``indirect=True``)
-    from the test's ``@pytest.mark.pretrained(...)`` marker or by
-    ``--sweep-model``. The value lives in ``request.param``.
+    Normally parametrized by ``pytest_generate_tests`` (via
+    ``indirect=True``) from the test's ``@pytest.mark.pretrained(...)``
+    marker or by ``--sweep-model`` — in that case ``request.param`` is
+    set. Falls back to ``--sweep-model`` / marker resolution when the
+    fixture is consumed by an unittest.TestCase, where pytest does NOT
+    apply ``pytest_generate_tests`` parametrization.
     """
-    return request.param
+    if hasattr(request, "param"):
+        return request.param
+
+    override = sweep_model(request.config)
+    if override is not None:
+        return override
+
+    marker = request.node.get_closest_marker("pretrained")
+    if marker is None or not marker.args:
+        raise RuntimeError(
+            f"{request.node.nodeid} uses pretrained_checkpoint but its "
+            "closest @pytest.mark.pretrained marker is missing or has no "
+            "model arguments. Add models (e.g. "
+            "@pytest.mark.pretrained('uma-s-1p1')) or run with "
+            "--sweep-model=<model>."
+        )
+    return marker.args[0]
 
 
 def pytest_generate_tests(metafunc):
