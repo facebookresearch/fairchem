@@ -405,11 +405,20 @@ def uma_s_1p2_checkpoint():
 
 # _LOCAL_CHECKPOINT = "/checkpoint/ocp/shared/uma_checkpoints/uma_sm_1p2.pt"
 @pytest.fixture(scope="session")
-def uma_predict_unit():
-    """Predict unit using the first available UMA model."""
-    # return load_predict_unit(_LOCAL_CHECKPOINT, device="cpu")
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+def uma_predict_unit(request):
+    """
+    Predict unit for the sweep model, or the first available UMA model.
+
+    Honors ``--sweep-model`` so per-model sweep CI jobs actually exercise
+    the requested checkpoint. Falls back to the first UMA model in the
+    registry (alphabetical) when no sweep flag is set. Path values are
+    accepted via :func:`get_predict_unit_for_test`.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    sweep = request.config.getoption("--sweep-model", default=None)
+    if sweep:
+        return get_predict_unit_for_test(sweep, device=device)
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
 
 

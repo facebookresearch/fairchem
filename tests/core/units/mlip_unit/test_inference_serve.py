@@ -272,12 +272,19 @@ def test_rayserve_external_vs_local_comparison(
 
 
 @pytest.fixture()
-def uma_multiplexed_model_id():
-    """Return the multiplexed model ID for the first available UMA model."""
+def uma_multiplexed_model_id(request):
+    """
+    Multiplexed model ID for the sweep model, or first available UMA model.
+
+    Honors ``--sweep-model`` so per-model sweep CI jobs target the
+    requested checkpoint.
+    """
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if not uma_models:
         pytest.skip("No UMA models available")
-    return f"{uma_models[0]}:default"
+    sweep = request.config.getoption("--sweep-model", default=None)
+    model = sweep if sweep and sweep in uma_models else uma_models[0]
+    return f"{model}:default"
 
 
 @pytest.fixture()
@@ -344,14 +351,22 @@ def test_multiplexed_single_model(
     npt.assert_allclose(stress_mux, stress_local, atol=ATOL)
 
 
-def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_model_id):
+def test_multiplexed_switch_models(
+    local_multiplexed_cluster, uma_multiplexed_model_id, request
+):
     """Test switching between two different model keys."""
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if len(uma_models) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
+    sweep = request.config.getoption("--sweep-model", default=None)
+    primary = sweep if sweep and sweep in uma_models else uma_models[0]
+    other_candidates = [m for m in uma_models if m != primary]
+    if not other_candidates:
+        pytest.skip("No second UMA model available that differs from the primary")
+
     key_a = uma_multiplexed_model_id
-    key_b = f"{uma_models[1]}:default"
+    key_b = f"{other_candidates[0]}:default"
 
     unit_a = BatchServerPredictUnit.from_deployment_connection_info(
         multiplexed_model_id=key_a,
