@@ -34,12 +34,15 @@ jobs:
       statuses: write
     strategy:
       max-parallel: 10
+      fail-fast: false
       matrix:
         python_version: ['3.11', '3.13']
         # tests/perf is run by perf-test.yml on a separate cadence.
         # tests/applications and tests/lammps are run by integration-test.yml
         # and test_lammps_gpu respectively. Both shards below intentionally
         # exclude those paths.
+        # YAML anchor: shard list is reused by test_cpu_sweep below.
+        # Do not reorder jobs (the alias must follow the anchor textually).
         shard: &cpu_shards
           - name: units
             paths: tests/core/units
@@ -251,6 +254,8 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.13']
+        # YAML anchor: shard list is reused by test_gpu_sweep below.
+        # Do not reorder jobs (the alias must follow the anchor textually).
         shard: &gpu_shards
           - name: models
             paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts

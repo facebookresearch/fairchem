@@ -103,6 +103,8 @@ def pytest_configure(config):
         "does not match the test's declared pretrained(...) models.",
     )
 
+    _validate_model_flags(config)
+
 
 def sweep_model(config) -> str | None:
     """
@@ -130,6 +132,19 @@ def excluded_models(config) -> set[str]:
     return {t.strip() for t in raw.split(",") if t.strip()}
 
 
+def uma_models() -> list[str]:
+    """
+    Return registered model names belonging to the UMA family.
+
+    Single source of truth for the ``"uma" in name`` heuristic. If UMA
+    naming conventions ever change, update this function instead of
+    grep-and-replace across fixture files.
+    """
+    from fairchem.core import pretrained_mlip
+
+    return [name for name in pretrained_mlip.available_models if "uma" in name]
+
+
 def _pretrained_model_values(metafunc) -> list[str]:
     """
     Resolve pretrained model names for parametrization.
@@ -142,11 +157,19 @@ def _pretrained_model_values(metafunc) -> list[str]:
         return [override]
 
     marker = metafunc.definition.get_closest_marker("pretrained")
-    if marker is None or not marker.args:
+    if marker is None:
         raise RuntimeError(
             f"{metafunc.function.__name__} uses pretrained_checkpoint / "
-            "pretrained_model_name but does not declare "
-            "@pytest.mark.pretrained(...)."
+            "pretrained_model_name but no @pytest.mark.pretrained(...) marker "
+            "is in scope. Decorate the test or run with --sweep-model=<model>."
+        )
+    if not marker.args:
+        raise RuntimeError(
+            f"{metafunc.function.__name__} uses pretrained_checkpoint / "
+            "pretrained_model_name but its closest @pytest.mark.pretrained "
+            "marker has no model arguments. Add models (e.g. "
+            "@pytest.mark.pretrained('uma-s-1p1')) or run with "
+            "--sweep-model=<model>."
         )
     return list(marker.args)
 
@@ -211,8 +234,6 @@ def pytest_runtest_setup(item):
 
 
 def pytest_collection_modifyitems(config, items):
-    _validate_sweep_model(config)
-
     if config.getoption("--skip-ocpapi-integration"):
         skip_ocpapi_integration = pytest.mark.skip(reason="skipping ocpapi integration")
         for item in items:
@@ -363,37 +384,51 @@ def water_xyz_file(tmp_path_factory):
     return str(fpath)
 
 
-def _validate_sweep_model(config) -> None:
+def _validate_model_flags(config) -> None:
     """
-    Fail fast when ``--sweep-model`` is unusable.
+    Fail fast on unusable ``--sweep-model`` / ``--exclude-models`` values.
 
-    Without this check, an invalid name surfaces deep inside the first
-    test as a confusing ``KeyError`` from ``pretrained_mlip.get_predict_unit``.
-    Validating at collection time produces a clear ``pytest.UsageError``
-    listing the available models. Also rejects two ``--exclude-models``
-    combinations that would silently produce wrong partitions:
+    Without these checks, an invalid model name surfaces deep inside the
+    first test as a confusing ``KeyError`` from
+    ``pretrained_mlip.get_predict_unit``, and an unknown ``--exclude-models``
+    token silently no-ops (partition violation). Validating at
+    configuration time produces a clear ``pytest.UsageError``.
 
-    * Name-style sweep matching an excluded name (zero tests selected).
-    * Any path-style sweep with ``--exclude-models`` non-empty (we cannot
-      tell whether the path's underlying weights are in the exclude set,
-      so we refuse to guess).
+    Rules:
+
+    * ``--sweep-model`` must be a registered model OR an existing file.
+    * Every ``--exclude-models`` token must be a registered model.
+    * ``--sweep-model=<name>`` may not also appear in ``--exclude-models``
+      (zero tests selected).
+    * ``--sweep-model=<path>`` may not be combined with non-empty
+      ``--exclude-models`` (ambiguous: we cannot tell whether the path's
+      weights belong to an excluded model).
     """
     import os
+
+    from fairchem.core import pretrained_mlip
+
+    available = set(pretrained_mlip.available_models)
+
+    excluded = excluded_models(config)
+    unknown = excluded - available
+    if unknown:
+        raise pytest.UsageError(
+            f"--exclude-models contains unknown model names: "
+            f"{sorted(unknown)}. Registered models: {sorted(available)}."
+        )
 
     sweep = sweep_model(config)
     if sweep is None:
         return
-    from fairchem.core import pretrained_mlip
 
-    is_registered = sweep in pretrained_mlip.available_models
+    is_registered = sweep in available
     is_real_file = os.path.isfile(sweep)
     if not (is_registered or is_real_file):
         raise pytest.UsageError(
             f"--sweep-model={sweep!r} is neither a registered model name "
-            f"nor an existing file. Registered models: "
-            f"{sorted(pretrained_mlip.available_models)}."
+            f"nor an existing file. Registered models: {sorted(available)}."
         )
-    excluded = excluded_models(config)
     if sweep in excluded:
         raise pytest.UsageError(
             f"--sweep-model={sweep!r} is also listed in --exclude-models "

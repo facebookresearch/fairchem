@@ -39,7 +39,7 @@ from fairchem.core.components.batch_server import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-from tests.conftest import sweep_model
+from tests.conftest import sweep_model, uma_models
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
@@ -282,19 +282,19 @@ def uma_multiplexed_model_id(request):
     path — the multiplexed server is keyed by registered model name,
     so paths cannot be exercised here.
     """
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
+    available_uma = uma_models()
+    if not available_uma:
         pytest.skip("No UMA models available")
     sweep = sweep_model(request.config)
     if sweep:
-        if sweep not in uma_models:
+        if sweep not in available_uma:
             pytest.skip(
                 f"--sweep-model={sweep!r} is not a registered UMA model; "
                 "multiplexed server tests need a registered name."
             )
         model = sweep
     else:
-        model = uma_models[0]
+        model = available_uma[0]
     return f"{model}:default"
 
 
@@ -366,14 +366,14 @@ def test_multiplexed_switch_models(
     local_multiplexed_cluster, uma_multiplexed_model_id
 ):
     """Test switching between two different model keys."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if len(uma_models) < 2:
+    available_uma = uma_models()
+    if len(available_uma) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
     # uma_multiplexed_model_id already encodes the sweep target (or first
     # UMA model). Pick any other UMA model as the second key.
     primary = uma_multiplexed_model_id.split(":")[0]
-    other_candidates = [m for m in uma_models if m != primary]
+    other_candidates = [m for m in available_uma if m != primary]
     if not other_candidates:
         pytest.skip("No second UMA model available that differs from the primary")
 

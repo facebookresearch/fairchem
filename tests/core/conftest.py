@@ -29,7 +29,7 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
     UNIT_RESUME_CONFIG,
 )
-from tests.conftest import get_predict_unit_for_test, sweep_model
+from tests.conftest import get_predict_unit_for_test, sweep_model, uma_models
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_uma_dataset,
@@ -398,8 +398,7 @@ def uma_predict_unit(request):
     sweep = sweep_model(request.config)
     if sweep:
         return get_predict_unit_for_test(sweep, device=device)
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
+    return pretrained_mlip.get_predict_unit(uma_models()[0], device=device)
 
 
 @pytest.fixture(scope="session")
@@ -413,16 +412,18 @@ def uma_predict_unit_alt(request):
     tell which registered model (if any) corresponds to the path, so we
     cannot guarantee this fixture returns a *different* one.
     """
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if len(uma_models) < 2:
+    available_uma = uma_models()
+    if len(available_uma) < 2:
         pytest.skip("Fewer than 2 UMA models available")
     sweep = sweep_model(request.config)
-    if sweep and sweep not in uma_models:
+    if sweep and sweep not in available_uma:
         # path-style sweep — primary model identity is opaque
         pytest.skip(
             "--sweep-model is a path; cannot pick a distinct UMA model"
         )
-    candidates = [m for m in uma_models if m != sweep] if sweep else uma_models[1:]
+    candidates = (
+        [m for m in available_uma if m != sweep] if sweep else available_uma[1:]
+    )
     if not candidates:
         pytest.skip("No UMA model available that differs from sweep model")
     device = "cuda" if torch.cuda.is_available() else "cpu"
