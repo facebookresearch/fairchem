@@ -119,7 +119,7 @@ jobs:
         uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
-          files: ./coverage.xml,./gpu-coverage.xml
+          files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
@@ -226,6 +226,15 @@ jobs:
         run: |
           pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml,./junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -298,6 +307,15 @@ jobs:
         run: |
           NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml || [ $? -eq 5 ]
 
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-gpu-${{ matrix.shard.name }}.xml,./junit-gpu-compile-${{ matrix.shard.name }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -363,6 +381,15 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml || [ $? -eq 5 ]
+
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml,./junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
 
       - name: Cleanup
         if: always()
