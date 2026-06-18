@@ -83,66 +83,59 @@ def get_partition_id(key: str, npartitions: int = 1000) -> int:
     return consistent_hash_int % npartitions
 
 
-def get_structure_hash(
-    structure: Structure,
-    z: int,
-    use_density: bool = True,
-    use_volume: bool = True,
-    density_bin_size: float = 0.1,
-    vol_bin_size: float = 0.2,
+def get_structure_group(
+    mol_id: str,
+    conf_id: str | None = None,
+    z: int | None = None,
+    spg: int | None = None,
+    density: float | None = None,
+    density_bin_size: float | None = None,
+    energy: float | None = None,
+    energy_bin_size: float | None = None,
 ) -> str:
     """
-    Generate hash string for structure grouping based on formula and binned properties.
+    Build a blocker-key string from mol_id, Z, and optional binned properties.
 
-    Args:
-        structure: Pymatgen Structure object to hash
-        z: Number of formula units per unit cell
-        use_density: Include density in hash for geometric grouping
-        use_volume: Include volume in hash for size-based grouping
-        density_bin_size: Bin size for density discretization (g/cm³)
-        vol_bin_size: Bin size for volume discretization (Ų)
+    The key always starts with ``"{mol_id}"``. Each optional argument adds
+    a segment when set, in this order:
+
+    - ``conf_id``  -> ``"conf={id}"``
+    - ``z`` is always included as ``"zN"``
+    - ``spg``  -> ``"spgN"``  (generated space group, not the relaxed one)
+    - ``density`` + ``density_bin_size``  -> ``"d{bin:g}"``
+    - ``energy`` + ``energy_bin_size``    -> ``"e{bin:g}"``
+
+    Density and energy follow the same pattern: both the value *and* the bin
+    size must be provided to be included.
 
     Returns:
-        Hash string like "C6H4O4_z4_d1.5_v125.2".
+        Group-key string, e.g. ``"ACBNZA02_conf=0_z4_spg14_d1.5_e0.01"``.
     """
-    # Start with chemical composition
-    formula = structure.composition.reduced_formula
-    hash_components = [formula, "z" + str(z)]
-
-    # Add density-based grouping if requested
-    if use_density:
-        density = structure.density
-        # Bin density to group structures with similar packing
-        density_bin = round(density / density_bin_size) * density_bin_size
-        hash_components.append(f"d{density_bin:.1f}")
-
-    # Add volume-based grouping if requested
-    if use_volume:
-        volume = structure.volume
-        # Bin volume to group structures with similar cell sizes
-        vol_bin = round(volume / vol_bin_size**3) * vol_bin_size**3
-        hash_components.append(f"v{vol_bin:.1f}")
-
-    # Combine all components into single hash string
-    return "_".join(hash_components)
+    parts = [str(mol_id)]
+    if conf_id is not None:
+        parts.append(f"conf={conf_id}")
+    parts.append(f"z{z}")
+    if spg is not None:
+        parts.append(f"spg{int(spg)}")
+    if density is not None and density_bin_size is not None:
+        parts.append(f"d{round(density / density_bin_size) * density_bin_size:g}")
+    if energy is not None and energy_bin_size is not None:
+        parts.append(f"e{round(energy / energy_bin_size) * energy_bin_size:g}")
+    return "_".join(parts)
 
 
 def jmolnn_adjacency(
     structure_or_atoms: Structure | Atoms,
 ) -> np.ndarray:
     """
-    Build the JmolNN bond adjacency matrix for a single cell.
-    Shared by ``check_correct_z``,
-    ``reference_graph_from_atoms``, ``check_molecule_matches_reference``,
-    and ``check_connectivity_unchanged``.
+    Check if covalent bonding network is preserved after relaxation.
 
     Args:
-        structure_or_atoms: Pymatgen ``Structure`` or ASE ``Atoms`` for the
-            cell. ASE inputs are converted via ``AseAtomsAdaptor`` first.
+        initial_atoms: Structure before relaxation.
+        final_atoms: Structure after relaxation.
 
     Returns:
-        Square ``np.ndarray`` of dtype ``int`` with shape ``(n, n)`` where
-        ``adj[i, j] == 1`` iff ``j`` is a JmolNN neighbor of ``i``.
+        True if bonding network unchanged, False otherwise.
     """
     if isinstance(structure_or_atoms, Structure):
         structure = structure_or_atoms
@@ -296,7 +289,7 @@ def load_reference_graph(
 
 
 def check_molecule_matches_reference(
-    structure: Structure | None,
+    structure: Structure | Atoms | None,
     reference_graph: nx.Graph | None,
 ) -> bool:
     """
@@ -311,7 +304,8 @@ def check_molecule_matches_reference(
     groups) that the count-only ``check_correct_z`` cannot detect.
 
     Args:
-        structure: Pymatgen ``Structure`` for the generated unit cell.
+        structure: Pymatgen ``Structure`` or ASE ``Atoms`` for the
+            generated unit cell.
         reference_graph: Reference molecular graph built via
             ``reference_graph_from_atoms``.
 
@@ -324,6 +318,8 @@ def check_molecule_matches_reference(
         return False
 
     try:
+        if not isinstance(structure, Structure):
+            structure = AseAtomsAdaptor.get_structure(structure)
         nn_matrix = jmolnn_adjacency(structure)
         n = nn_matrix.shape[0]
 

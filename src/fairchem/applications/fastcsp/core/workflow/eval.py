@@ -178,6 +178,7 @@ def best_match(gen, targets, matcher, shell):
     return best, best_rmsd
 
 payload = json.loads(sys.stdin.read())
+
 target_xtals = {}
 target_parse_errors = []
 for rc, cif in payload["target_cifs"].items():
@@ -207,19 +208,13 @@ for r in payload["rows"]:
            "match30": None, "rmsd30": None}
     try:
         gen = Crystal.from_string(r["cif_relaxed"], "cif")
+        rec["match15"], rec["rmsd15"] = best_match(gen, target_xtals, m15, 15)
+        if rec["match15"] is not None:
+            rec["match20"], rec["rmsd20"] = best_match(gen, target_xtals, m20, 20)
+            if rec["match20"] is not None:
+                rec["match30"], rec["rmsd30"] = best_match(gen, target_xtals, m30, 30)
     except Exception as e:
         parse_errors.append((r["__orig_idx"], repr(e)[:200]))
-        out.append(rec)
-        continue
-    rec["match15"], rec["rmsd15"] = best_match(gen, target_xtals, m15, 15)
-    if rec["match15"] is None:
-        out.append(rec)
-        continue
-    rec["match20"], rec["rmsd20"] = best_match(gen, target_xtals, m20, 20)
-    if rec["match20"] is None:
-        out.append(rec)
-        continue
-    rec["match30"], rec["rmsd30"] = best_match(gen, target_xtals, m30, 30)
     out.append(rec)
 
 if parse_errors:
@@ -239,26 +234,67 @@ def _csd_subprocess_chunk_worker(args):
     Returns ``(mol_name, chunk_id, DataFrame)`` with columns
     ``__orig_idx, match{15,20,30}, rmsd{15,20,30}``.
     """
-    mol_name, chunk_id, chunk_df, target_cifs, csd_python_cmd, timeout = args
+    mol_name, chunk_id, chunk_df, target_cifs, csd_python_cmd, chunk_timeout = args
     cif_col = "cif_relaxed" if "cif_relaxed" in chunk_df.columns else "relaxed_cif"
     rows = [
         {"__orig_idx": int(r["__orig_idx"]), "cif_relaxed": r[cif_col]}
         for _, r in chunk_df.iterrows()
     ]
-    env = {**os.environ, **_THREAD_PIN_ENV}
-    res = subprocess.run(
-        [csd_python_cmd, "-c", _CSD_CHUNK_SCRIPT],
-        input=json.dumps({"rows": rows, "target_cifs": target_cifs}),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-        env=env,
-    )
-    if res.returncode != 0:
-        raise RuntimeError(
-            f"[{mol_name} chunk {chunk_id}] rc={res.returncode}: {res.stderr[-2000:]}"
+    if not rows:
+        return (
+            mol_name,
+            chunk_id,
+            pd.DataFrame(
+                columns=[
+                    "__orig_idx",
+                    "match15",
+                    "rmsd15",
+                    "match20",
+                    "rmsd20",
+                    "match30",
+                    "rmsd30",
+                ]
+            ),
         )
+
+    # Prepare empty results in case of failure
+    empty_results = pd.DataFrame(
+        [
+            {
+                "__orig_idx": r["__orig_idx"],
+                "match15": None,
+                "rmsd15": None,
+                "match20": None,
+                "rmsd20": None,
+                "match30": None,
+                "rmsd30": None,
+            }
+            for r in rows
+        ]
+    )
+
+    env = {**os.environ, **_THREAD_PIN_ENV}
+    try:
+        res = subprocess.run(
+            [csd_python_cmd, "-c", _CSD_CHUNK_SCRIPT],
+            input=json.dumps({"rows": rows, "target_cifs": target_cifs}),
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            timeout=chunk_timeout,  # Kill subprocess if chunk takes too long
+        )
+    except subprocess.TimeoutExpired:
+        get_central_logger().warning(
+            f"[{mol_name} chunk {chunk_id}] TIMEOUT after {chunk_timeout}s - returning empty results for {len(rows)} rows"
+        )
+        return mol_name, chunk_id, empty_results
+
+    if res.returncode != 0:
+        get_central_logger().error(
+            f"[{mol_name} chunk {chunk_id}] rc={res.returncode}: {res.stderr[-500:]} - returning empty results"
+        )
+        return mol_name, chunk_id, empty_results
     if res.stderr:
         get_central_logger().warning(
             f"[{mol_name} chunk {chunk_id}] stderr: {res.stderr[-1000:].strip()}"
@@ -412,7 +448,7 @@ def evaluate_csd_streaming(
     target_cifs: dict[str, str],
     n_workers: int,
     csd_python_cmd: str,
-    chunk_timeout: int | None = None,
+    chunk_timeout: int = 3600,
     target_rows_per_chunk: int = 200,
 ) -> list[Path]:
     """CSD streaming evaluator: one global worker pool across all molecules.
@@ -588,8 +624,8 @@ def compute_structure_matches(
         csd_python_cmd = eval_config.get(
             "csd_python_cmd", csd_cfg.get("python_cmd", "python")
         )
-        _ct = csd_cfg.get("chunk_timeout", None)
-        chunk_timeout = int(_ct) if _ct else None
+        chunk_timeout = int(csd_cfg.get("chunk_timeout", 3600))  # 60 min default
+        target_rows_per_chunk = int(csd_cfg.get("target_rows_per_chunk", 200))
         sys_cpus = os.cpu_count() or 1
         num_cpus_config = int(
             eval_config.get("num_cpus", csd_cfg.get("num_cpus", sys_cpus))
@@ -597,7 +633,9 @@ def compute_structure_matches(
         n_workers = max(1, min(num_cpus_config, sys_cpus))
         logger.info(
             f"CSD local execution: {n_workers} workers "
-            f"(config={num_cpus_config}, system={sys_cpus} cores)"
+            f"(config={num_cpus_config}, system={sys_cpus} cores); "
+            f"chunk_timeout={chunk_timeout}s; "
+            f"target_rows_per_chunk={target_rows_per_chunk}"
         )
         return evaluate_csd_streaming(
             parquet_files=parquet_files,
@@ -607,6 +645,7 @@ def compute_structure_matches(
             n_workers=n_workers,
             csd_python_cmd=csd_python_cmd,
             chunk_timeout=chunk_timeout,
+            target_rows_per_chunk=target_rows_per_chunk,
         )
 
     # ---- Pymatgen: one SLURM job per parquet. -------------------------------

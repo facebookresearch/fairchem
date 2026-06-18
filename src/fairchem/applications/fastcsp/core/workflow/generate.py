@@ -87,9 +87,21 @@ def create_gnrs_submit_script(
         genarris_slurm_config.get("nodes", 1) * genarris_slurm_config["ntasks-per-node"]
     )
 
+    # Optional environment setup commands (e.g. `module load`, `source venv`)
+    # executed on the compute node before mpirun. Provide as a list of shell
+    # lines or a single string under `genarris.env_setup` in the YAML config.
+    env_setup = gnrs_config.get("env_setup", "")
+    if isinstance(env_setup, (list, tuple)):
+        env_setup_block = "\n".join(str(line) for line in env_setup)
+    else:
+        env_setup_block = str(env_setup)
+    if env_setup_block and not env_setup_block.endswith("\n"):
+        env_setup_block += "\n"
+
     slurm_script += f"""#SBATCH --output={single_gnrs_folder}/slurm.out
 #SBATCH --error={single_gnrs_folder}/slurm.err
 
+{env_setup_block}
 ulimit -s unlimited
 export OMP_NUM_THREADS=1
 

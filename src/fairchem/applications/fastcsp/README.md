@@ -189,6 +189,7 @@ fastcsp --config config.yaml --stages generate process_generated relax filter
 | `relax` | Perform UMA-based structure relaxation | `relaxed/<run_name>/raw_structures/` |
 | `filter` | Property filtering and duplicate removal | `relaxed/<run_name>/filtered_structures/` |
 | `evaluate` | Compare against experimental data | `relaxed/<run_name>/matched_structures_{csd,pmg_*}/` |
+| `compute_free_energy` *(optional)* | Quasi-harmonic vibrational free energies | `relaxed/<run_name>/free_energy/` |
 
 ### Configuration
 
@@ -196,13 +197,43 @@ FastCSP uses YAML configuration files to control all workflow parameters. Exampl
 
 **Key Configuration Sections:**
 - `root`: Base directory for all outputs
-- `molecules`: Path to input molecule CSV file
-- `genarris`: Structure generation parameters and SLURM configuration
-- `pre_relaxation_filter`: Pre-relaxation deduplication and validity filtering (`remove_problematic`, `assign_groups`, `remove_duplicates`, `ltol`/`stol`/`angle_tol`, `npartitions`). Set `remove_problematic: true` to drop structures whose generation-time validity flags (`correct_z`, `molecule_matches_reference`) are False before relaxation.
-- `relax`: ML relaxation settings and SLURM configuration
-- `post_relaxation_filter`: Property cutoffs (`energy_cutoff`, `density_cutoff`) and deduplication tolerances (`ltol`/`stol`/`angle_tol`, `remove_duplicates`)
-- `evaluate`: Experimental comparison method (`csd` or `pymatgen`) and parameters
-- `logging`: Log file settings and verbosity levels
+- `molecules`: Path to input molecule CSV file (required columns `name`,
+  `conformers_path`; optional `z`, `spg`, `refcode`, `cif_path`)
+- `genarris`: Structure generation parameters
+  (`mpi_launcher`, `python_cmd`, `genarris_cli`, `genarris_base_config`,
+  `vars.{Z, spg_distribution_type, num_structures_per_spg, read_z_from_file,
+  read_spg_from_file}`) and SLURM block
+- `pre_relaxation_filter`: Pre-ML deduplication
+  (`assign_groups`, `remove_duplicates`, `remove_problematic`, `ltol`/`stol`/`angle_tol`,
+  `bin_by_conf`/`bin_by_z`/`bin_by_spg`, `density_bin_size`, `density_tol`,
+  `apply_niggli_filter`, `npartitions`). Set `remove_problematic: true` to drop structures whose
+  generation-time validity flags (`correct_z`, `molecule_matches_reference`) are False before
+  relaxation.
+- `relax`: ML relaxation settings
+  (`calculator`, `optimizer`, `fmax`, `max_steps`, `fix_symmetry`,
+  `relax_cell`, `write_traj`, `traj_interval`) and SLURM block
+- `post_relaxation_filter`: Property cutoffs and deduplication
+  (`remove_problematic`, `energy_cutoff`, `density_min_cutoff`,
+  `density_max_cutoff`, `assign_groups`, `remove_duplicates`,
+  `ltol`/`stol`/`angle_tol`,
+  `bin_by_conf`/`bin_by_z`/`bin_by_spg`, `density_bin_size`/`energy_bin_size`,
+  `density_tol`/`energy_tol`, `apply_niggli_filter`)
+- `evaluate`: Experimental comparison
+  (`method` = `csd` or `pymatgen`, `target_xtals_dir`,
+  `csd.{num_cpus, python_cmd, target_rows_per_chunk, chunk_timeout}`,
+  `pymatgen.{match_params, slurm}`)
+- `free_energy`: Vibrational free energy corrections (run with
+  `--stages compute_free_energy`). Keys: `calculator`, `quasiharmonic`,
+  `atom_disp`, `min_lengths`, `t_min`/`t_max`/`t_step`, `match_only`,
+  `energy_cutoff`, `max_structures`, `structures_per_job`, `compute_dos`,
+  and a `slurm` block.
+- `logging`: Log file settings (`level`, `console`)
+
+> See [`core/configs/example_config.yaml`](core/configs/example_config.yaml)
+> for the exhaustive, commented reference. Note: enabling
+> `apply_niggli_filter=true` outside a `(mol_id, Z, spg)` bucket emits a
+> runtime warning - the prefilter is most reliable when both `bin_by_z` and
+> `bin_by_spg` are also `true`.
 
 ### Monitoring Progress
 

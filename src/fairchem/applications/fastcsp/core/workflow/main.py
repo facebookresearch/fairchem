@@ -167,8 +167,14 @@ def main(args: argparse.Namespace) -> None:
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
+            bin_by_conf=pre_relax_config["bin_by_conf"],
+            bin_by_z=pre_relax_config["bin_by_z"],
+            bin_by_spg=pre_relax_config["bin_by_spg"],
+            density_bin_size=pre_relax_config["density_bin_size"],
             npartitions=pre_relax_config["npartitions"],
             assign_groups=pre_relax_config["assign_groups"],
+            density_tol=pre_relax_config["density_tol"],
+            apply_niggli_filter=pre_relax_config["apply_niggli_filter"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
@@ -214,13 +220,21 @@ def main(args: argparse.Namespace) -> None:
             post_relax_config=post_relax_config,
             remove_problematic=post_relax_config["remove_problematic"],
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
-            density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
+            density_min_cutoff=post_relax_config["density_min_cutoff"],  # g/cm³
+            density_max_cutoff=post_relax_config["density_max_cutoff"],  # g/cm³
             assign_groups=post_relax_config["assign_groups"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
+            bin_by_conf=post_relax_config["bin_by_conf"],
+            bin_by_z=post_relax_config["bin_by_z"],
+            bin_by_spg=post_relax_config["bin_by_spg"],
+            density_bin_size=post_relax_config["density_bin_size"],
+            energy_bin_size=post_relax_config["energy_bin_size"],
             remove_duplicates=post_relax_config["remove_duplicates"],
-            root_unrelaxed=root / "raw_structures",
+            density_tol=post_relax_config["density_tol"],
+            energy_tol=post_relax_config["energy_tol"],
+            apply_niggli_filter=post_relax_config["apply_niggli_filter"],
             generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
@@ -255,18 +269,36 @@ def main(args: argparse.Namespace) -> None:
             wait_for_jobs(jobs)
         logging.log_stage_complete(logger, "evaluation against experimental structures")
 
-    # 6. (Optional) Calculate free energies for structures
-    # TODO: Implementation in progress - will be available soon
-    if "free_energy" in args.stages:
-        logger.info("Free energy calculations requested...")
-        # calculate_free_energies(
-        #     relax_output_dir / "matched_structures",
-        #     relax_output_dir / "free_energy_results",
-        #     config,
-        # )
-        logger.info("Free energy calculations functionality coming soon...")
-        logger.info(
-            "Please check future releases or contact the developers for updates."
+    # 6. (Optional) Calculate vibrational free energies for structures
+    if "compute_free_energy" in args.stages:
+        logging.log_stage_start(logger, "vibrational free energy calculations")
+        from fairchem.applications.fastcsp.core.workflow.free_energy import (
+            collect_free_energy_results,
+            compute_free_energies,
+            get_free_energy_config,
+        )
+        from fairchem.applications.fastcsp.core.workflow.relax import (
+            get_relax_config_and_dir,
+        )
+
+        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        fe_config = get_free_energy_config(config)
+        fe_input_dir = relax_output_dir / "matched_structures"
+        fe_output_dir = relax_output_dir / "free_energy"
+        jobs = compute_free_energies(
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        wait_for_jobs(jobs)
+        collect_free_energy_results(
+            jobs=jobs,
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        logging.log_stage_complete(
+            logger, "vibrational free energy calculations", len(jobs)
         )
 
     logger.info("🎉 FastCSP workflow completed!")

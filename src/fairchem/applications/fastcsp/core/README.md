@@ -53,16 +53,18 @@ Input: molecules.csv + config.yaml
 
 ## Configuration Management
 
-FastCSP uses a hierarchical YAML configuration system. The snippet below mirrors `core/configs/example_config.yaml` (which itself points at `core/configs/example_systems.csv`):
+FastCSP uses a hierarchical YAML configuration system. The full set of supported flags
+lives in [`core/configs/example_config.yaml`](configs/example_config.yaml) (which itself
+points at [`core/configs/example_systems.csv`](configs/example_systems.csv)). The snippet
+below is a faithful, abbreviated mirror of that file - every key here is honoured by the
+workflow; defaults are noted in comments.
 
 ```yaml
-# Core workflow settings
+# Required
 root: "/path/to/project"
+molecules: "configs/example_systems.csv"   # CSV: name, conformers_path, [z, spg, refcode, cif_path]
 
-# Input molecules CSV (columns: name, conformers_path, [refcode, z, spg, cif_path])
-molecules: "configs/example_systems.csv"
-
-# generation stage
+# Stage 1: Genarris generation
 genarris:
   mpi_launcher: /path/to/mpirun
   python_cmd: /path/to/python/with/genarris/installed
@@ -70,29 +72,37 @@ genarris:
   genarris_base_config: configs/gnrs_base.conf
   vars:
     Z: [1, 2, 3, 4, 6, 8]
-    spg_distribution_type: standard   # "standard" or a list[int] of space-group numbers (per-Z lists also accepted)
+    spg_distribution_type: standard   # "standard", list[int], or list[list[int]] (per Z)
     num_structures_per_spg: 500
-    read_z_from_file: false   # set true to read z from molecules.csv
-    read_spg_from_file: false # set true to read spg from molecules.csv
+    read_z_from_file: false
+    read_spg_from_file: false
   slurm:
     job-name: genarris
     nodes: 1
     ntasks-per-node: 40
     time: 10800
 
-# Pre-ML deduplication on Genarris outputs
+# Stage 2: pre-ML deduplication on Genarris outputs
+# Bin key = (mol_id) + any of conf_id / Z / spg / binned-density that you enable.
 pre_relaxation_filter:
-  remove_problematic: false # drop structures whose generation-time validity flags are False (default: false)
-  assign_groups: true       # assign group indices via deduplication pass
-  remove_duplicates: true   # drop duplicates within each group
-  ltol: 0.3                 # lattice tolerance
-  stol: 0.4                 # site tolerance (Å)
-  angle_tol: 5              # angle tolerance (degrees)
-  npartitions: 1000         # number of output partitions / SLURM array size
+  assign_groups: true        # run dedup blocker
+  remove_duplicates: true    # drop all-but-one per group (rep = closest-to-median density)
+  remove_problematic: false  # drop structures whose generation-time validity flags are False (default: false)
+  ltol: 0.3                  # StructureMatcher tolerances (looser than post-relax)
+  stol: 0.4
+  angle_tol: 5
+  bin_by_conf: false         # bin-key extensions (all default false)
+  bin_by_z: false
+  bin_by_spg: false
+  density_bin_size: 0.02     # density blocker bin (g/cc); null disables
+  density_tol: null          # cheap |Δρ| pairwise prefilter (g/cc); null disables
+  apply_niggli_filter: false # most reliable when bin_by_z and bin_by_spg are both true
+  npartitions: 1000          # number of parquet partitions / SLURM array size
 
-# ML relaxation
+# Stage 3: ML relaxation
 relax:
-  calculator: uma_sm_1p1_omc   # or uma_sm_1p1_omol
+  calculator: uma_sm_1p1_omc   # one of: uma_sm_1p1_omc, uma_sm_1p1_omol,
+                               #         uma_sm_1p2_omc, uma_sm_1p2_omol
   optimizer: BFGS
   fmax: 0.01
   max_steps: 1000
@@ -103,35 +113,67 @@ relax:
   slurm:
     num_ranks: 1000
 
-# Post-ML filtering + deduplication
+# Stage 4: post-ML filtering + deduplication
 post_relaxation_filter:
-  remove_problematic: true   # drop structures that didn't converge or whose connectivity changed
-  energy_cutoff: 20          # kJ/mol above the global minimum (null = no filter)
-  density_cutoff: 10         # g/cm³ upper bound on relaxed density (null = no filter)
+  remove_problematic: true   # drop non-converged or connectivity-changed (else group=-1)
+  energy_cutoff: 20          # kJ/mol above the global minimum; null disables
+  density_min_cutoff: 0.5    # g/cm³ lower bound on relaxed density; null disables
+  density_max_cutoff: 3.0    # g/cm³ upper bound on relaxed density; null disables
   assign_groups: true
-  remove_duplicates: true
-  ltol: 0.2
+  remove_duplicates: true    # representative = lowest energy_relaxed_per_molecule
+  ltol: 0.2                  # tighter tolerances post-relax
   stol: 0.3
   angle_tol: 5
+  bin_by_conf: false
+  bin_by_z: false            # when true, dedup also disables sm.scale and
+                             # sm.primitive_cell internally (small speedup)
+  bin_by_spg: false
+  density_bin_size: 0.1      # g/cc; coarser than pre-relax (basins are tight)
+  energy_bin_size: 2         # kJ/mol; ~thermal scale
+  density_tol: null          # cheap |Δρ| prefilter
+  energy_tol: null           # cheap |ΔE| prefilter (kJ/mol)
+  apply_niggli_filter: false # most reliable when bin_by_z and bin_by_spg are both true
 
-# (Optional) Experimental evaluation
+# Stage 5 (optional): experimental evaluation
 evaluate:
   method: csd                                     # "csd" or "pymatgen"
   target_xtals_dir: /path/to/experimental/cifs    # global directory of {refcode}.cif files
   csd:
     num_cpus: 60
     python_cmd: /path/to/python/with/csd/api/installed
+    target_rows_per_chunk: 200                    # rows per CCDC subprocess chunk
+    chunk_timeout: 3600                           # per-chunk subprocess timeout (sec)
   pymatgen:
-    match_params:
-      ltol: 0.2
-      stol: 0.3
-      angle_tol: 5
-    slurm:
-      job-name: eval_pymatgen
-      cpus_per_task: 1
-      mem_gb: 10
-      time: 1000
+    match_params: {ltol: 0.2, stol: 0.3, angle_tol: 5}
+    slurm: {job-name: eval_pymatgen, cpus_per_task: 1, mem_gb: 10, time: 1000}
+
+# Stage 6 (optional, in development): vibrational free energies
+# Run via ``--stages compute_free_energy``. Reads matched_structures/ and
+# writes per-structure thermo to free_energy/.
+free_energy:
+  calculator: uma_sm_1p1_omc
+  quasiharmonic: true        # quasi-harmonic (volume sweep)
+  atom_disp: 0.01            # finite-difference displacement (Å)
+  min_lengths: 15.0          # min supercell side (Å)
+  t_min: 0                   # temperature grid (K)
+  t_max: 500
+  t_step: 10
+  match_only: true           # only structures matched to experiment
+  energy_cutoff: null        # kJ/mol above the minimum; null = no cutoff
+  max_structures: null       # cap per molecule; null = no cap
+  structures_per_job: 10     # SLURM batching
+  compute_dos: false
+
+# (Optional) logging
+logging:
+  level: INFO          # DEBUG | INFO | WARNING | ERROR
+  console: true        # mirror to stdout in addition to FastCSP.log
 ```
+
+> **Tip**: every stage section also accepts a `slurm:` block. Omitted SLURM
+> blocks fall back to module-specific defaults (see
+> [`core/utils/slurm.py`](utils/slurm.py): `genarris`, `process_generated`,
+> `relax`, `filter`, `evaluate`, `free_energy`).
 
 ### Basic Usage
 
