@@ -290,12 +290,13 @@ jobs:
           NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
-        # compile_gpu tests only exist in the models shard
-        if: matrix.shard.name == 'models'
+        # compile_gpu tests exist in both models and units shards.
+        # Sweep-eligible compile_gpu tests (e.g. @pretrained-locked to
+        # UMA-S) run in test_gpu_sweep, not here.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml || [ $? -eq 5 ]
 
       - name: Cleanup
         if: always()
@@ -354,6 +355,14 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+
+      - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
+        # the base test_gpu compile step excludes via --exclude-models.
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml || [ $? -eq 5 ]
 
       - name: Cleanup
         if: always()
