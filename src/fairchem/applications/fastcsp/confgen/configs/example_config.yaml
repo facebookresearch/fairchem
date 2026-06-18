@@ -1,0 +1,53 @@
+# Example config for fastcsp conformer generation.
+#
+# Mirrors the main fastcsp config style:
+#   * `root`: output base; outputs go to `<root>/conformers/`. The config
+#     file and the molecules CSV are copied there for reproducibility.
+#   * `molecules`: CSV with required `name`, `smiles` columns plus any of
+#     the optional per-row override columns (see ../README.md ->
+#     "Per-molecule CSV overrides"). `name` is used as the per-molecule
+#     subfolder. Resolved as absolute, or relative to this config file,
+#     or relative to `root`.
+#
+# Run:
+#   fastcsp-confgen -c configs/example_config.yaml
+#
+# Every run is submitted as a SLURM array — one task per molecule, 1 GPU
+# per task by default. Molecules with an existing non-empty
+# `conformers_generated/` or `conformers_relaxed/` subfolder are skipped,
+# so reruns are resumable. Any key omitted below falls back to
+# `CONF_GEN_DEFAULTS` / `RELAX_DEFAULTS` in `confgen/main.py`; each
+# worker prints a one-line `overrides=...` summary at task start (or
+# nothing if no overrides were given).
+
+root: /path/to/project
+molecules: example_molecules.csv   # sibling file; see ../README.md for column list
+
+rdkit:
+  initial_pool_size: 250    # seed-pool target before filtering; can also live as a per-row CSV column
+  seed: 42
+  rmsd_thresh: 0.25           # Butina clustering threshold (Angstrom)
+  cluster_energy_thresh: 1.5  # kJ/mol; pairs farther apart are skipped
+  include_hydrogens: true     # if false, best-RMSD is computed over heavy atoms only
+  output_format: mol          # xyz | mol | sdf
+
+# ML relaxation parameters (mirrors the fastcsp `relax:` block).
+relax:
+  calculator: uma_sm_1p1_omol # uma_sm_1p1_omol | uma_sm_1p1_omc
+  optimizer: BFGS             # BFGS | FIRE | LBFGS
+  fmax: 0.05                  # eV/A
+  max_steps: 100
+  write_traj: false           # write per-conformer ASE trajectories
+  traj_interval: 1            # save every N optimisation steps
+  energy_window: 40.0         # kJ/mol cap on final relaxed pool
+
+# SLURM settings for the per-molecule array job (covers both RDKit
+# generation and ML relaxation — they run in the same task).
+# fastcsp-style keys are accepted (partition, array_parallelism, ...);
+# submitit-native names (slurm_partition, ...) also work.
+slurm:
+  timeout_min: 240
+  gpus_per_node: 1
+  cpus_per_task: 8
+  mem_gb: 32
+  use_srun: false

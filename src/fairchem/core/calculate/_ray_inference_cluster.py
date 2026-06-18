@@ -7,8 +7,8 @@ LICENSE file in the root directory of this source tree.
 Ray cluster utilities for SLURM and local environments.
 
 This module provides context managers for starting and managing Ray clusters:
-- get_slurm_ray_cluster: Start a Ray cluster on SLURM with automatic cleanup
-- get_local_ray_cluster: Start a local Ray cluster for testing/development
+- get_slurm_inference_raycluster: Start a Ray cluster on SLURM with automatic cleanup
+- get_local_inference_raycluster: Start a local Ray cluster for testing/development
 """
 
 from __future__ import annotations
@@ -26,21 +26,92 @@ from typing import Any
 import yaml
 
 from fairchem.core.common.utils import recursive_dict_merge
+from fairchem.core.components.batch_server import (
+    setup_batch_predict_server,
+    setup_multiplexed_batch_predict_server,
+    wait_for_serve_ready,
+)
 from fairchem.core.launchers.cluster.ray_cluster import (
     DEFAULT_HEAD_FILE_DIR,
     RayCluster,
     find_free_port,
 )
-from fairchem.core.units.mlip_unit.batch_server import (
-    setup_batch_predict_server,
-    wait_for_serve_ready,
-)
 
 logger = logging.getLogger(__name__)
 
 
+def _find_free_localhost_port() -> int:
+    """Find an available port bound to localhost only.
+
+    Thin wrapper around :func:`find_free_port` that scopes the probe to the
+    loopback interface (avoids exposing ephemeral probe sockets on all
+    network interfaces).
+    """
+    return find_free_port(bind_address="127.0.0.1")
+
+
+def _resolve_serve_configs(
+    cluster_config: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Extract ``deployment_config`` and ``batch_config`` from the cluster
+    config, resolving workflow conventions before they reach Ray Serve:
+
+    - ``autoscaling_config.max_replicas`` / ``min_replicas`` as floats are
+      interpreted as multipliers of the cluster's replica capacity
+      (``num_workers * gpus_per_node // num_gpus_per_replica`` when the
+      deployment requests GPUs, else ``num_workers``). Integers pass
+      through unchanged. ``min_replicas`` as a float ``<= 1.0`` is a
+      fraction of the resolved ``max_replicas``.
+    - ``serve_log_level`` (top-level) is folded into
+      ``deployment_config.logging_config`` unless the caller already set
+      ``logging_config`` explicitly.
+    """
+    from ray import serve as _serve
+
+    deployment_config = dict(cluster_config.get("deployment_config") or {})
+    batch_config = dict(cluster_config.get("batch_config") or {})
+
+    # Replica capacity ceiling: when the deployment binds to GPUs, the
+    # cluster can host at most (total cluster GPUs / GPUs per replica)
+    # replicas. Otherwise fall back to num_workers as the unit of scale.
+    num_workers = int(cluster_config.get("num_workers", 1) or 1)
+    gpus_per_node = int(cluster_config.get("gpus_per_node", 0) or 0)
+    actor_opts = deployment_config.get("ray_actor_options") or {}
+    num_gpus_per_replica = actor_opts.get("num_gpus", 0) or 0
+    if gpus_per_node > 0 and num_gpus_per_replica > 0:
+        capacity = max(
+            1,
+            (num_workers * gpus_per_node) // max(1, int(num_gpus_per_replica)),
+        )
+    else:
+        capacity = max(1, num_workers)
+
+    autoscaling = dict(deployment_config.get("autoscaling_config") or {})
+    if autoscaling:
+        max_r = autoscaling.get("max_replicas")
+        if isinstance(max_r, float):
+            autoscaling["max_replicas"] = max(1, int(round(max_r * capacity)))
+        min_r = autoscaling.get("min_replicas")
+        if isinstance(min_r, float):
+            base = autoscaling.get("max_replicas", capacity)
+            if min_r <= 1.0:
+                autoscaling["min_replicas"] = max(1, int(round(min_r * base)))
+            else:
+                autoscaling["min_replicas"] = max(1, int(round(min_r)))
+        deployment_config["autoscaling_config"] = autoscaling
+
+    serve_log_level = cluster_config.get("serve_log_level")
+    if serve_log_level and "logging_config" not in deployment_config:
+        deployment_config["logging_config"] = _serve.schema.LoggingConfig(
+            log_level=serve_log_level
+        )
+
+    return deployment_config, batch_config
+
+
 def load_update_config(
-    config_path: str | Path,
+    config: str | Path,
     head_file: str | Path | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -51,7 +122,7 @@ def load_update_config(
     head_file path where connection info will be written.
 
     Args:
-        config_path: Path to YAML config file.
+        config: Path to YAML config file.
         head_file: Path to head.json file for connecting to existing cluster
             or where to write connection info. If None, generates path based
             on cluster UUID.
@@ -63,17 +134,32 @@ def load_update_config(
         - cluster_id: Unique identifier for this cluster (if cluster_id generated)
         - head_file: Path to head.json with connection info
     """
-    with open(config_path) as f:
+    with open(config) as f:
         default_config = yaml.safe_load(f)
 
     auto_overrides = {}
+
+    # Resolve rdv_dir up-front (overrides > yaml > RAY_FAIRRAY_DIR env >
+    # ~/.fairray) so it can drive the default head_file location. The env
+    # var lets prefect worker subprocesses and other indirect callers pin
+    # the rendezvous dir to a writable shared path (e.g. CI runner temp)
+    # without having to plumb it through every call site.
+    rdv_dir = (
+        (cluster_config_overrides or {}).get("rdv_dir")
+        or default_config.get("rdv_dir")
+        or os.environ.get("RAY_FAIRRAY_DIR")
+        or (Path.home() / ".fairray")
+    )
+    rdv_dir = Path(rdv_dir)
+    rdv_dir.mkdir(parents=True, exist_ok=True)
+    auto_overrides["rdv_dir"] = str(rdv_dir)
 
     if head_file is None:
         cluster_id = str(uuid.uuid4())
         logger.info(f"Specifying a Ray cluster with uuid {cluster_id}")
         auto_overrides["cluster_id"] = cluster_id
 
-        head_file = DEFAULT_HEAD_FILE_DIR / cluster_id / "head.json"
+        head_file = rdv_dir / cluster_id / "head.json"
     auto_overrides["head_file"] = str(head_file)
 
     return recursive_dict_merge(
@@ -153,7 +239,7 @@ def _build_cluster_config(
     )
 
     return load_update_config(
-        config_path=config,
+        config=config,
         head_file=head_file,
         cluster_config_overrides=merged_overrides,
     )
@@ -169,9 +255,32 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Requirements dict for RayCluster.
     """
+    cpus_per_node = int(config["cpus_per_node"])
+
+    # If the deployment is configured (start_inference_server=True),
+    # make sure each SLURM worker has enough CPUs to host its share of
+    # replicas: gpus_per_node * num_cpus_per_replica. Otherwise replicas
+    # would queue forever despite having free GPUs.
+    if config.get("start_inference_server", False):
+        actor_opts = (config.get("deployment_config") or {}).get(
+            "ray_actor_options"
+        ) or {}
+        num_cpus_per_replica = int(actor_opts.get("num_cpus", 0) or 0)
+        gpus_per_node = int(config.get("gpus_per_node", 0) or 0)
+        if gpus_per_node > 0 and num_cpus_per_replica > 0:
+            required = gpus_per_node * num_cpus_per_replica
+            if cpus_per_node < required:
+                logger.info(
+                    f"Bumping cpus_per_node from {cpus_per_node} to "
+                    f"{required} so each worker can host "
+                    f"{gpus_per_node} replica(s) "
+                    f"(num_cpus={num_cpus_per_replica} each)."
+                )
+                cpus_per_node = required
+
     requirements = {
         "slurm_partition": config["partition"],
-        "cpus_per_task": config["cpus_per_node"],
+        "cpus_per_task": cpus_per_node,
         "slurm_time": config["time_minutes"],
         "mem_gb": config["mem_gb"],
     }
@@ -191,6 +300,7 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
     return requirements
 
 
+# TODO move this and other setup somewhere else
 def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
@@ -215,8 +325,10 @@ def start_ray_cluster(
 
     requirements = _build_slurm_requirements(config)
 
+    rdv_dir_cfg = config.get("rdv_dir")
     cluster = RayCluster(
         log_dir=log_dir,
+        rdv_dir=Path(rdv_dir_cfg) if rdv_dir_cfg else None,
         cluster_id=config.get("cluster_id"),
         worker_wait_timeout_seconds=config.get("worker_wait_timeout_seconds", 300),
         temp_dir_template=config.get("temp_dir_template"),
@@ -250,7 +362,7 @@ def start_ray_cluster(
 
 
 @contextmanager
-def get_slurm_ray_cluster(
+def get_slurm_inference_raycluster(
     config: str | Path | None = None,
     num_workers: int = 1,
     partition: str | None = None,
@@ -265,7 +377,7 @@ def get_slurm_ray_cluster(
     start_inference_server: bool = False,
     predict_unit: Any = None,
     serve_log_level: str | None = None,
-    deployment_name: str = "predict-server",
+    deployment_name: str | None = None,
     cluster_config_overrides: dict[str, Any] | None = None,
 ):
     """
@@ -281,7 +393,7 @@ def get_slurm_ray_cluster(
 
     Usage::
 
-        with get_slurm_ray_cluster(num_workers=32, gpus_per_node=1) as head_file:
+        with get_slurm_inference_raycluster(num_workers=32, gpus_per_node=1) as head_file:
             import ray
             with open(head_file) as f:
                 head_info = json.load(f)
@@ -314,79 +426,185 @@ def get_slurm_ray_cluster(
     """
     cluster = None
     manage_cluster = True
-
-    env_head_file = os.environ.get("RAY_HEAD_FILE")
-    if env_head_file and Path(env_head_file).exists():
-        logger.info(f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}")
-        manage_cluster = False
-        head_file = env_head_file
-    else:
-        cluster_config = _build_cluster_config(
-            config=config,
-            num_workers=num_workers,
-            partition=partition,
-            gpus_per_node=gpus_per_node,
-            cpus_per_node=cpus_per_node,
-            time_minutes=time_minutes,
-            mem_gb=mem_gb,
-            env_vars=env_vars,
-            exclude_nodes=exclude_nodes,
-            slurm_constraint=slurm_constraint,
-            slurm_additional_parameters=slurm_additional_parameters,
-            start_inference_server=start_inference_server,
-            serve_log_level=serve_log_level,
-            cluster_config_overrides=cluster_config_overrides,
-        )
-
-        head_file, cluster = start_ray_cluster(cluster_config, return_cluster=True)
-
-        with open(head_file) as f:
-            head_info = json.load(f)
-        namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
-        logger.info(f"Ray cluster started with namespace: {namespace_serve_fairchem}")
-
-        if cluster_config.get("start_inference_server", False):
-            if predict_unit is None:
-                raise ValueError(
-                    "predict_unit is required when " "start_inference_server=True"
-                )
-
-            import ray
-
-            client_address = (
-                f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
-            )
-            logger.info(
-                f"Connecting to Ray cluster at {client_address} "
-                "to start inference server..."
-            )
-            ray.init(client_address, namespace=namespace_serve_fairchem)
-
-            @ray.remote
-            def _setup_serve_remote(predict_unit_ref, dep_name):
-                pu = ray.get(predict_unit_ref)
-                setup_batch_predict_server(
-                    pu,
-                    deployment_name=dep_name,
-                )
-                return True
-
-            @ray.remote
-            def _wait_for_serve_ready_remote(dep_name):
-                return wait_for_serve_ready(app_name=dep_name)
-
-            predict_unit_ref = ray.put(predict_unit)
-            logger.info("Initializing FAIRChem inference server deployment...")
-            ray.get(_setup_serve_remote.remote(predict_unit_ref, deployment_name))
-            logger.info(
-                "Inference server deployment complete, " "verifying readiness..."
-            )
-            ray.get(_wait_for_serve_ready_remote.remote(deployment_name))
-            logger.info("Inference server ready and accepting requests")
+    ray_client_owned = False
 
     try:
+        env_head_file = os.environ.get("RAY_HEAD_FILE")
+        if env_head_file and Path(env_head_file).exists():
+            logger.info(
+                f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}"
+            )
+            manage_cluster = False
+            head_file = env_head_file
+        else:
+            cluster_config = _build_cluster_config(
+                config=config,
+                num_workers=num_workers,
+                partition=partition,
+                gpus_per_node=gpus_per_node,
+                cpus_per_node=cpus_per_node,
+                time_minutes=time_minutes,
+                mem_gb=mem_gb,
+                env_vars=env_vars,
+                exclude_nodes=exclude_nodes,
+                slurm_constraint=slurm_constraint,
+                slurm_additional_parameters=slurm_additional_parameters,
+                start_inference_server=start_inference_server,
+                serve_log_level=serve_log_level,
+                cluster_config_overrides=cluster_config_overrides,
+            )
+
+            head_file, cluster = start_ray_cluster(cluster_config, return_cluster=True)
+
+            with open(head_file) as f:
+                head_info = json.load(f)
+            namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
+            logger.info(
+                f"Ray cluster started with namespace: {namespace_serve_fairchem}"
+            )
+
+            if cluster_config.get("start_inference_server", False):
+                import ray
+
+                client_address = (
+                    f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
+                )
+                if ray.is_initialized():
+                    # Caller already owns a Ray connection (e.g. a
+                    # SlurmRayTaskRunner connected to a shared cluster with
+                    # its own Serve app). Don't redeploy on top of it; the
+                    # outer owner is responsible for the Serve app.
+                    logger.info(
+                        "Ray client already initialized; skipping inference "
+                        "server deployment (caller owns the connection)."
+                    )
+                    _skip_serve_setup = True
+                else:
+                    logger.info(
+                        f"Connecting to Ray cluster at {client_address} "
+                        "to start inference server..."
+                    )
+                    import backoff
+
+                    max_tries = int(
+                        os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8")
+                    )
+                    base_delay = float(
+                        os.environ.get("FAIRCHEM_RAY_INIT_BASE_DELAY", "2.0")
+                    )
+
+                    @backoff.on_exception(
+                        backoff.expo,
+                        (ConnectionAbortedError, ConnectionError, RuntimeError),
+                        max_tries=max_tries,
+                        factor=base_delay,
+                        max_value=60.0,
+                        jitter=backoff.full_jitter,
+                        logger=logger,
+                    )
+                    def _do_init() -> None:
+                        ray.init(
+                            client_address,
+                            ignore_reinit_error=True,
+                            namespace=namespace_serve_fairchem,
+                        )
+
+                    _do_init()
+                    # Remember that we own this connection so the finally
+                    # block can release it; otherwise a subsequent
+                    # get_slurm_inference_raycluster() call in the same process would
+                    # fail with "client has already connected" when the dead
+                    # connection from the prior cluster lingers.
+                    ray_client_owned = True
+                    _skip_serve_setup = False
+
+                deployment_config, batch_config = _resolve_serve_configs(cluster_config)
+
+                # Single-model and multiplexed deployments use distinct app
+                # names so a consumer can target the right one and the
+                # readiness wait is unambiguous.
+                resolved_deployment_name = deployment_name
+                if resolved_deployment_name is None:
+                    resolved_deployment_name = (
+                        "multiplexed-predict-server"
+                        if predict_unit is None
+                        else "predict-server"
+                    )
+
+                if _skip_serve_setup:
+                    pass
+                elif predict_unit is None:
+
+                    @ray.remote
+                    def _setup_multiplexed_serve_remote(dep_name, dep_cfg, batch_cfg):
+                        setup_multiplexed_batch_predict_server(
+                            deployment_config=dep_cfg,
+                            batch_config=batch_cfg,
+                            deployment_name=dep_name,
+                        )
+                        return True
+
+                    logger.info(
+                        "Initializing multiplexed FAIRChem inference server "
+                        "deployment (no predict_unit provided)..."
+                    )
+                    ray.get(
+                        _setup_multiplexed_serve_remote.remote(
+                            resolved_deployment_name,
+                            deployment_config,
+                            batch_config,
+                        )
+                    )
+                else:
+
+                    @ray.remote
+                    def _setup_serve_remote(
+                        predict_unit_ref, dep_name, dep_cfg, batch_cfg
+                    ):
+                        pu = ray.get(predict_unit_ref)
+                        setup_batch_predict_server(
+                            pu,
+                            deployment_config=dep_cfg,
+                            batch_config=batch_cfg,
+                            deployment_name=dep_name,
+                        )
+                        return True
+
+                    predict_unit_ref = ray.put(predict_unit)
+                    logger.info("Initializing FAIRChem inference server deployment...")
+                    ray.get(
+                        _setup_serve_remote.remote(
+                            predict_unit_ref,
+                            resolved_deployment_name,
+                            deployment_config,
+                            batch_config,
+                        )
+                    )
+
+                @ray.remote
+                def _wait_for_serve_ready_remote(dep_name):
+                    return wait_for_serve_ready(app_name=dep_name)
+
+                if not _skip_serve_setup:
+                    logger.info(
+                        "Inference server deployment complete, "
+                        "verifying readiness..."
+                    )
+                    ray.get(
+                        _wait_for_serve_ready_remote.remote(resolved_deployment_name)
+                    )
+                    logger.info("Inference server ready and accepting requests")
+
         yield head_file
     finally:
+        if ray_client_owned:
+            import ray
+
+            try:
+                ray.shutdown()
+                logger.info("Released Ray client connection.")
+            except Exception as e:
+                logger.warning(f"Error releasing Ray client connection: {e}")
         if cluster is not None and manage_cluster:
             logger.info("Shutting down Ray cluster...")
             try:
@@ -397,20 +615,22 @@ def get_slurm_ray_cluster(
 
 
 @contextmanager
-def get_local_ray_cluster(
+def get_local_inference_raycluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
     num_gpus: int | None = None,
     start_inference_server: bool = True,
     predict_unit: Any = None,
     log_level: str = "WARNING",
-    deployment_name: str = "predict-server",
+    deployment_name: str | None = None,
+    deployment_config: dict[str, Any] | None = None,
+    batch_config: dict[str, Any] | None = None,
 ):
     """
     Context manager that starts a local Ray cluster with optional inference
     server.
 
-    Similar to get_slurm_ray_cluster but for local/testing use. Automatically:
+    Similar to get_slurm_inference_raycluster but for local/testing use. Automatically:
     - Detects available GPUs if num_gpus is None
     - Starts Ray Serve
     - Deploys FAIRChem inference server
@@ -419,12 +639,12 @@ def get_local_ray_cluster(
 
     Usage::
 
-        with get_local_ray_cluster() as head_file:
+        with get_local_inference_raycluster() as head_file:
             # Run code that uses Ray Serve inference
             ...
 
         # Or for testing, without inference server:
-        with get_local_ray_cluster(start_inference_server=False):
+        with get_local_inference_raycluster(start_inference_server=False):
             # Run CPU-only tests
             ...
 
@@ -468,7 +688,7 @@ def get_local_ray_cluster(
     namespace_serve_fairchem = "fairchem_inference" if start_inference_server else None
 
     # Find free ports for this cluster instance
-    dashboard_port = find_free_port(bind_address="127.0.0.1")
+    dashboard_port = _find_free_localhost_port()
 
     try:
         if not ray.is_initialized():
@@ -502,22 +722,46 @@ def get_local_ray_cluster(
             logger.info(f"Ray dashboard URL: http://{hostname}:{dashboard_port}")
 
         if start_inference_server:
-            if predict_unit is None:
-                raise ValueError(
-                    "predict_unit is required when " "start_inference_server=True"
+            # Multiplexed vs single-model deployments get distinct app
+            # names so consumers and readiness waits target the right one.
+            resolved_deployment_name = deployment_name
+            if resolved_deployment_name is None:
+                resolved_deployment_name = (
+                    "multiplexed-predict-server"
+                    if predict_unit is None
+                    else "predict-server"
                 )
 
-            logger.info("Initializing FAIRChem inference server deployment...")
-            setup_batch_predict_server(
-                predict_unit,
-                deployment_name=deployment_name,
-            )
+            if predict_unit is None:
+                logger.info(
+                    "Initializing multiplexed FAIRChem inference server "
+                    "deployment (no predict_unit provided)..."
+                )
+                setup_multiplexed_batch_predict_server(
+                    deployment_config=deployment_config,
+                    batch_config=batch_config,
+                    deployment_name=resolved_deployment_name,
+                )
+            else:
+                logger.info("Initializing FAIRChem inference server deployment...")
+                setup_batch_predict_server(
+                    predict_unit,
+                    deployment_config=deployment_config,
+                    batch_config=batch_config,
+                    deployment_name=resolved_deployment_name,
+                )
 
             logger.info(
                 "Inference server deployment complete, " "verifying readiness..."
             )
-            wait_for_serve_ready(app_name=deployment_name)
+            wait_for_serve_ready(app_name=resolved_deployment_name)
             logger.info("Inference server ready and accepting requests")
+
+        # Capture the bootstrap (GCS) address so consumers can connect
+        # explicitly. ``address="auto"`` relies on /tmp/ray/ray_current_cluster
+        # which races/thrashes when many local clusters are spawned in
+        # parallel (e.g. pytest-xdist + --forked).
+        bootstrap_address = ray.get_runtime_context().gcs_address
 
         head_file_path.parent.mkdir(parents=True, exist_ok=True)
         head_file_path.write_text(
@@ -526,6 +770,7 @@ def get_local_ray_cluster(
                     "hostname": "localhost",
                     "dashboard_port": dashboard_port,
                     "local": True,
+                    "bootstrap_address": bootstrap_address,
                     "num_cpus": num_cpus,
                     "num_gpus": num_gpus,
                     "namespace_serve_fairchem": namespace_serve_fairchem,
@@ -546,10 +791,3 @@ def get_local_ray_cluster(
             head_file_path.unlink()
             with suppress(OSError):
                 head_file_path.parent.rmdir()
-
-
-@contextmanager
-def get_local_inference_cluster(*args, **kwargs):
-    """Descriptive alias for get_local_ray_cluster."""
-    with get_local_ray_cluster(*args, **kwargs) as head_file:
-        yield head_file
