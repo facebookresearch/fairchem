@@ -52,9 +52,10 @@ def pytest_addoption(parser):
         help=(
             "Sweep mode: name (e.g. 'uma-s-1p3') or filesystem path of a "
             "pretrained checkpoint to run all @pretrained tests against. "
-            "When set, tests without @pytest.mark.pretrained are deselected "
-            "and @calibrated tests are skipped unless the sweep model "
-            "matches their declared pretrained(...) models."
+            "When set, tests without @pytest.mark.pretrained are deselected, "
+            "and tests with @pytest.mark.pretrained(M, ...) declared model "
+            "args are deselected unless the sweep model is in those args. "
+            "Bare @pretrained (no args) means 'any model'."
         ),
     )
     parser.addoption(
@@ -92,15 +93,11 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "pretrained: test exercises a pretrained checkpoint. Optional positional "
-        "args list model names to parametrize against (e.g. "
-        '@pretrained("uma-s-1p1", "uma-s-1p2")). No args means the test runs '
-        "against all registered models or uses its own model selection.",
-    )
-    config.addinivalue_line(
-        "markers",
-        "calibrated: test asserts exact numerical values calibrated to a specific "
-        "pretrained checkpoint. Skipped under --sweep-model when the sweep model "
-        "does not match the test's declared pretrained(...) models.",
+        "args list model names to lock the test to (e.g. "
+        '@pretrained("uma-s-1p1", "uma-s-1p2")) — the test only runs when the '
+        "active model is in this list. No args means the test runs against "
+        "any model (parametrized via models_to_test or substituted by "
+        "--sweep-model).",
     )
 
     _validate_model_flags(config)
@@ -290,31 +287,22 @@ def pytest_collection_modifyitems(config, items):
             config.hook.pytest_deselected(items=deselect)
             items[:] = keep
 
-    # --sweep-model: select only @pretrained tests.
-    # @calibrated tests are skipped unless the sweep model matches their
-    # declared pretrained(...) models. A bare @pretrained (no args) is
-    # treated as "matches everything" for calibrated purposes.
+    # --sweep-model: select only @pretrained tests. Tests with declared
+    # @pretrained(M, ...) args are deselected unless the sweep model is
+    # in those args. Bare @pretrained (no args) means "any model" and
+    # always runs.
     sweep_override = sweep_model(config)
     if sweep_override is not None:
         keep, deselect = [], []
         for item in items:
-            if not item.get_closest_marker("pretrained"):
+            marker = item.get_closest_marker("pretrained")
+            if marker is None:
                 deselect.append(item)
                 continue
-            if item.get_closest_marker("calibrated"):
-                marker = item.get_closest_marker("pretrained")
-                declared = set(marker.args) if marker and marker.args else set()
-                # Bare marker (no declared models) means the test is not
-                # locked to any specific checkpoint — let it run.
-                if declared and sweep_override not in declared:
-                    item.add_marker(
-                        pytest.mark.skip(
-                            reason=(
-                                f"calibrated: --sweep-model={sweep_override} "
-                                f"not in declared models {declared}"
-                            )
-                        )
-                    )
+            declared = set(marker.args) if marker.args else None
+            if declared is not None and sweep_override not in declared:
+                deselect.append(item)
+                continue
             keep.append(item)
         if deselect:
             config.hook.pytest_deselected(items=deselect)

@@ -22,7 +22,6 @@ from tests.conftest import get_predict_unit_for_test
 pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
-@pytest.mark.calibrated()
 def test_get_predict_unit_by_name(pretrained_checkpoint):
     """Registered name → predictor with populated external refs."""
     predictor = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")

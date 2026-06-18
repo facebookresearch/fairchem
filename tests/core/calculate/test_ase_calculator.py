@@ -573,7 +573,6 @@ def run_md_simulation(calc, steps: int = 10):
 
 
 @pytest.mark.pretrained("uma-s-1p1")
-@pytest.mark.calibrated()
 def test_simple_md(pretrained_checkpoint):
     inference_settings = InferenceSettings(
         tf32=True,
@@ -736,7 +735,6 @@ def test_formation_energy_calculator_different_task_types(declared_predict_unit)
 
 
 @pytest.mark.pretrained("uma-s-1p1")
-@pytest.mark.calibrated()
 def test_formation_energy_calculator_predictions_against_known_values(
     atoms_with_formation_energy, declared_predict_unit,
 ):

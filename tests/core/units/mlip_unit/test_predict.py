@@ -1295,7 +1295,6 @@ def _test_single_atom_predict(predict_unit, task_name, energy_atol):
 
 @pytest.mark.parametrize("task_name", ["omat", "omol"])
 @pytest.mark.pretrained("uma-s-1p1")
-@pytest.mark.calibrated()
 def test_single_atom_predict_1p1(task_name, declared_predict_unit):
     """Verify uma-s-1p1 single atom energies match the lookup table exactly."""
     _test_single_atom_predict(declared_predict_unit, task_name, energy_atol=0.0)
@@ -1303,7 +1302,6 @@ def test_single_atom_predict_1p1(task_name, declared_predict_unit):
 
 @pytest.mark.parametrize("task_name", ["omat", "omol"])
 @pytest.mark.pretrained("uma-s-1p2")
-@pytest.mark.calibrated()
 def test_single_atom_predict_1p2(task_name, declared_predict_unit):
     """Verify uma-s-1p2 single atom energies are close to reference values."""
     _test_single_atom_predict(
@@ -1806,7 +1804,6 @@ def test_execution_mode_not_overridden_when_explicit(pretrained_model_name):
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-m-1p1")
-@pytest.mark.calibrated()
 def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 
