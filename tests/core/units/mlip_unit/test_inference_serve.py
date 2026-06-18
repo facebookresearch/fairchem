@@ -39,6 +39,7 @@ from fairchem.core.components.batch_server import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+from tests.conftest import sweep_model
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
@@ -284,7 +285,7 @@ def uma_multiplexed_model_id(request):
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     if not uma_models:
         pytest.skip("No UMA models available")
-    sweep = request.config.getoption("--sweep-model", default=None)
+    sweep = sweep_model(request.config)
     if sweep:
         if sweep not in uma_models:
             pytest.skip(

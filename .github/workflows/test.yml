@@ -40,7 +40,7 @@ jobs:
         # tests/applications and tests/lammps are run by integration-test.yml
         # and test_lammps_gpu respectively. Both shards below intentionally
         # exclude those paths.
-        shard:
+        shard: &cpu_shards
           - name: units
             paths: tests/core/units
           - name: core
@@ -110,13 +110,13 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml || [ $? -eq 5 ]
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml || [ $? -eq 5 ]
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
@@ -152,11 +152,7 @@ jobs:
       matrix:
         python_version: ['3.13']
         sweep_model: [uma-s-1p1, uma-s-1p2]
-        shard:
-          - name: units
-            paths: tests/core/units
-          - name: core
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/data tests/demo
+        shard: *cpu_shards
 
     steps:
       - name: Checkout code
@@ -218,7 +214,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml || [ $? -eq 5 ]
 
       - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # The core shard has no serial @pretrained tests, so the sweep
@@ -228,7 +224,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml || [ $? -eq 5 ]
 
       - name: codecov-test-results
         if: always()
@@ -255,7 +251,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.13']
-        shard:
+        shard: &gpu_shards
           - name: models
             paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts
           - name: units
@@ -300,7 +296,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml || [ $? -eq 5 ]
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -336,11 +332,7 @@ jobs:
       matrix:
         python_version: ['3.13']
         sweep_model: [uma-s-1p1, uma-s-1p2]
-        shard:
-          - name: models
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts
-          - name: units
-            paths: tests/core/units
+        shard: *gpu_shards
 
     steps:
       - name: Checkout code
@@ -376,7 +368,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml || [ $? -eq 5 ]
 
       - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that

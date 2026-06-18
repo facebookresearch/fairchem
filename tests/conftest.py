@@ -156,26 +156,11 @@ def pretrained_checkpoint(request):
     """
     Name or path of the pretrained checkpoint under test.
 
-    Parametrized by ``pytest_generate_tests`` from the test's
-    ``@pytest.mark.pretrained(...)`` declaration, or by ``--sweep-model``
-    in sweep mode.
+    Always parametrized by ``pytest_generate_tests`` (via ``indirect=True``)
+    from the test's ``@pytest.mark.pretrained(...)`` marker or by
+    ``--sweep-model``. The value lives in ``request.param``.
     """
-    if hasattr(request, "param"):
-        return request.param
-
-    override = sweep_model(request.config)
-    if override is not None:
-        return override
-
-    marker = request.node.get_closest_marker("pretrained")
-    if marker is None or not marker.args:
-        raise RuntimeError(
-            f"{request.node.nodeid} uses pretrained_checkpoint but its closest "
-            "@pytest.mark.pretrained marker has no model arguments. Either add "
-            "models to the marker (e.g. @pytest.mark.pretrained('uma-s-1p1')) "
-            "or run with --sweep-model=<model>."
-        )
-    return marker.args[0]
+    return request.param
 
 
 def pytest_generate_tests(metafunc):
@@ -385,9 +370,13 @@ def _validate_sweep_model(config) -> None:
     Without this check, an invalid name surfaces deep inside the first
     test as a confusing ``KeyError`` from ``pretrained_mlip.get_predict_unit``.
     Validating at collection time produces a clear ``pytest.UsageError``
-    listing the available models. Also rejects the ``--sweep-model`` +
-    ``--exclude-models=<sweep>`` combination, which would silently
-    select zero tests.
+    listing the available models. Also rejects two ``--exclude-models``
+    combinations that would silently produce wrong partitions:
+
+    * Name-style sweep matching an excluded name (zero tests selected).
+    * Any path-style sweep with ``--exclude-models`` non-empty (we cannot
+      tell whether the path's underlying weights are in the exclude set,
+      so we refuse to guess).
     """
     import os
 
@@ -411,12 +400,13 @@ def _validate_sweep_model(config) -> None:
             f"({sorted(excluded)}); the combination would deselect every "
             f"test. Drop one of the flags."
         )
-
-
-# kwargs accepted by pretrained_mlip.get_predict_unit but NOT by
-# load_predict_unit. Filtered out for the path branch so the call
-# stays valid when both branches share a kwargs dict.
-_NAME_ONLY_KWARGS = frozenset({"cache_dir"})
+    if is_real_file and not is_registered and excluded:
+        raise pytest.UsageError(
+            f"--sweep-model={sweep!r} is a filesystem path; combining it "
+            f"with --exclude-models={sorted(excluded)} is ambiguous because "
+            f"we cannot tell whether the path's weights belong to an "
+            f"excluded model. Drop one of the flags."
+        )
 
 
 def get_predict_unit_for_test(name_or_path, **kwargs):
@@ -425,8 +415,10 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
 
     Tries the registry first to avoid CWD collisions where a file
     happens to share a registered model name. Falls back to
-    ``load_predict_unit`` for filesystem paths. Name-only kwargs
-    (e.g. ``cache_dir``) are dropped from the path branch.
+    ``load_predict_unit`` for filesystem paths. If the caller passes
+    a kwarg that ``load_predict_unit`` does not accept (e.g.
+    ``cache_dir``) on the path branch, the resulting ``TypeError``
+    is the right signal — silent dropping would hide intent.
     """
     import os
 
@@ -437,8 +429,7 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     if os.path.isfile(name_or_path):
         from fairchem.core.units.mlip_unit import load_predict_unit
 
-        path_kwargs = {k: v for k, v in kwargs.items() if k not in _NAME_ONLY_KWARGS}
-        return load_predict_unit(name_or_path, **path_kwargs)
+        return load_predict_unit(name_or_path, **kwargs)
     # Not registered and not a file — defer to get_predict_unit so the
     # caller sees the registry's own KeyError listing valid names.
     return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
