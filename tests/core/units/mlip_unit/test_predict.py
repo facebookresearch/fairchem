@@ -84,18 +84,6 @@ def uma_merge_mole_predict_unit(pretrained_checkpoint):
     )
 
 
-@pytest.fixture(scope="module")
-def uma_1p1_predict_unit():
-    """Module-scoped predict unit for uma-s-1p1."""
-    return get_predict_unit_for_test("uma-s-1p1")
-
-
-@pytest.fixture(scope="module")
-def uma_1p2_predict_unit():
-    """Module-scoped predict unit for uma-s-1p2."""
-    return get_predict_unit_for_test("uma-s-1p2")
-
-
 @pytest.mark.gpu()
 @pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
@@ -1308,18 +1296,18 @@ def _test_single_atom_predict(predict_unit, task_name, energy_atol):
 @pytest.mark.parametrize("task_name", ["omat", "omol"])
 @pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.calibrated()
-def test_single_atom_predict_1p1(task_name, uma_1p1_predict_unit):
+def test_single_atom_predict_1p1(task_name, declared_predict_unit):
     """Verify uma-s-1p1 single atom energies match the lookup table exactly."""
-    _test_single_atom_predict(uma_1p1_predict_unit, task_name, energy_atol=0.0)
+    _test_single_atom_predict(declared_predict_unit, task_name, energy_atol=0.0)
 
 
 @pytest.mark.parametrize("task_name", ["omat", "omol"])
 @pytest.mark.pretrained("uma-s-1p2")
 @pytest.mark.calibrated()
-def test_single_atom_predict_1p2(task_name, uma_1p2_predict_unit):
+def test_single_atom_predict_1p2(task_name, declared_predict_unit):
     """Verify uma-s-1p2 single atom energies are close to reference values."""
     _test_single_atom_predict(
-        uma_1p2_predict_unit,
+        declared_predict_unit,
         task_name,
         energy_atol=SINGLE_ATOM_ENERGY_ATOL,
     )

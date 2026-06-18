@@ -744,10 +744,9 @@ def test_formation_energy_calculator_different_task_types(declared_predict_unit)
 @pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.calibrated()
 def test_formation_energy_calculator_predictions_against_known_values(
-    atoms_with_formation_energy,
+    atoms_with_formation_energy, declared_predict_unit,
 ):
-    predict_unit = get_predict_unit_for_test("uma-s-1p1")
-    base_calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
     formation_calc = FormationEnergyCalculator(base_calc)
 
     for atoms, known_formation_energy in atoms_with_formation_energy.values():

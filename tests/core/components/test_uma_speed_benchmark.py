@@ -28,14 +28,29 @@ COMMON_ARGS = [
 
 
 def _checkpoint_overrides(pretrained_checkpoint: str) -> list[str]:
+    """
+    Build Hydra overrides that point the benchmark at ``pretrained_checkpoint``.
+
+    The ``uma-speed.yaml`` config statically references ``uma_s_1p2``;
+    under ``--sweep-model`` the resolved checkpoint may belong to a
+    different model (e.g. uma-s-1p1, or a filesystem path that does not
+    correspond to any registered name). Override the static key with a
+    sweep-derived key so the benchmark loads the right checkpoint.
+    """
     checkpoint_path = (
         pretrained_checkpoint
         if Path(pretrained_checkpoint).exists()
         else pretrained_checkpoint_path_from_name(pretrained_checkpoint)
     )
+    # Derive a hydra-safe key from the model name: uma-s-1p1 -> uma_s_1p1.
+    # For filesystem paths fall back to a stable literal.
+    if Path(pretrained_checkpoint).exists():
+        sweep_key = "sweep_checkpoint"
+    else:
+        sweep_key = pretrained_checkpoint.replace("-", "_")
     return [
         "~uma_s_1p2",
-        f"runner.model_checkpoints.uma_s_1p2={checkpoint_path}",
+        f"runner.model_checkpoints={{{sweep_key}: {checkpoint_path}}}",
     ]
 
 
