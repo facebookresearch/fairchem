@@ -13,14 +13,14 @@ import pytest
 from ase.build import bulk, make_supercell, molecule
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate import pretrained_mlip
 
-pytestmark = pytest.mark.gpu
+# Extensivity is a property of the UMA-S architecture, not of any particular
+# head: every task head should satisfy E(N replicas) = N * E(1 replica) when
+# the replicas don't interact. Run on both UMA-S checkpoints — declared model
+# args route this file to the per-model sweep CI jobs so a future model
+# regression that breaks extensivity gets caught.
+pytestmark = [pytest.mark.gpu, pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
-# Extensivity is a property of the architecture, not of any particular head:
-# every task head should satisfy E(N replicas) = N * E(1 replica) when the
-# replicas don't interact. We therefore parametrize across every head shipped
-# with the pretrained model.
 TASK_NAMES = ["oc20", "omat", "omol", "odac", "omc", "oc25"]
 
 SUPERCELL_CONFIGS = [
@@ -32,17 +32,14 @@ SUPERCELL_CONFIGS = [
 ]
 
 
-@pytest.fixture(scope="module")
-def predict_unit():
-    return pretrained_mlip.get_predict_unit("uma-s-1p1")
-
-
 @pytest.fixture(scope="module", params=TASK_NAMES)
-def calc(predict_unit, request):
+def calc(declared_predict_unit, request):
     task_name = request.param
-    if task_name not in predict_unit.dataset_to_tasks:
-        pytest.skip(f"task {task_name!r} not supported by uma-s-1p1")
-    return FAIRChemCalculator(predict_unit, task_name=task_name)
+    if task_name not in declared_predict_unit.dataset_to_tasks:
+        pytest.skip(
+            f"task {task_name!r} not supported by current pretrained model"
+        )
+    return FAIRChemCalculator(declared_predict_unit, task_name=task_name)
 
 
 def _set_charge_spin(atoms, calc):
