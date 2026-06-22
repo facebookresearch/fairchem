@@ -584,7 +584,9 @@ class RayCluster:
             try:
                 _register_signal_cancel_cluster(self)
             except Exception:
-                logger.debug("Could not register RayCluster signal cleanup", exc_info=True)
+                logger.debug(
+                    "Could not register RayCluster signal cleanup", exc_info=True
+                )
 
     def start_head_and_workers(
         self,
