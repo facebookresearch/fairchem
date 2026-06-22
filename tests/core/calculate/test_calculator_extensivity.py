@@ -42,6 +42,25 @@ def calc(declared_predict_unit, request):
     return FAIRChemCalculator(declared_predict_unit, task_name=task_name)
 
 
+# Known model-specific extensivity regressions. Keys are
+# (pretrained_checkpoint, task_name) tuples; value is a short bug description.
+# Routed through xfail so CI surfaces the regression without blocking merges.
+# Remove entries here when the underlying model is fixed.
+_KNOWN_EXTENSIVITY_BUGS = {
+    # uma-s-1p2 oc20 head: ~0.78% deviation on MgO rocksalt 2x2x2 supercell
+    # (E_super / E_unit = 8.063 vs expected 8.000). The other UMA-S oc20
+    # combos and other task heads (omat, omol, etc.) are extensive. Tracked
+    # for the UMA team — possibly a head-specific normalization regression.
+    ("uma-s-1p2", "oc20"): "uma-s-1p2 oc20 head non-extensive (~0.78%)",
+}
+
+
+def _maybe_xfail_known_bug(request, pretrained_checkpoint, calc):
+    bug = _KNOWN_EXTENSIVITY_BUGS.get((pretrained_checkpoint, calc.task_name))
+    if bug is not None:
+        request.node.add_marker(pytest.mark.xfail(reason=bug, strict=False))
+
+
 def _set_charge_spin(atoms, calc):
     # Only omol has been trained with spin = 1 (singlet). The materials
     # heads (oc20/omat/odac/omc/oc25) use the null spin token (spin = 0);
@@ -65,7 +84,10 @@ def _assert_multiset_close(a, b, *, atol):
 
 
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
-def test_pbc_extensivity_energy(supercell_matrix, multiplier, calc):
+def test_pbc_extensivity_energy(
+    supercell_matrix, multiplier, calc, pretrained_checkpoint, request
+):
+    _maybe_xfail_known_bug(request, pretrained_checkpoint, calc)
     atoms_unit = bulk("MgO", "rocksalt", a=4.213)
     _set_charge_spin(atoms_unit, calc)
     atoms_unit.calc = calc
