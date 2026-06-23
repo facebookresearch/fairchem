@@ -22,6 +22,22 @@ from tests.conftest import get_predict_unit_for_test
 pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
+# Every test in this file exercises the name-vs-path dispatch infrastructure
+# (registry lookup, YAML auto-fetch, FAIRChemCalculator.from_model_checkpoint
+# behavior). They assume `pretrained_checkpoint` is a REGISTERED name they can
+# also resolve to a file path. Under path-style --sweep-model the fixture
+# value IS already a path, the registry lookup will KeyError, and these
+# tests have nothing meaningful to assert about the candidate's behavior —
+# skip them.
+@pytest.fixture(autouse=True)
+def _skip_under_path_sweep(pretrained_checkpoint):
+    if os.path.isfile(pretrained_checkpoint):
+        pytest.skip(
+            "test exercises the registry-name dispatch path; "
+            "not applicable to path-style --sweep-model"
+        )
+
+
 def test_get_predict_unit_by_name(pretrained_checkpoint):
     """Registered name → predictor with populated external refs."""
     predictor = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
