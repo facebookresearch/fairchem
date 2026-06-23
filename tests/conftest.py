@@ -50,12 +50,22 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help=(
-            "Sweep mode: name (e.g. 'uma-s-1p3') or filesystem path of a "
-            "pretrained checkpoint to run all @pretrained tests against. "
-            "When set, tests without @pytest.mark.pretrained are deselected, "
-            "and tests with @pytest.mark.pretrained(M, ...) declared model "
-            "args are deselected unless the sweep model is in those args. "
-            "Bare @pretrained (no args) means 'any model'."
+            "Sweep mode: select tests that exercise a specific checkpoint. "
+            "Accepts a registered model name OR an absolute path to a .pt "
+            "checkpoint. "
+            "NAME (e.g. 'uma-s-1p2'): strict — tests are kept only when "
+            "their @pytest.mark.pretrained(...) args include this name. "
+            "PATH (e.g. '/abs/path/candidate.pt'): permissive UMA-family — "
+            "any test whose @pretrained args include a UMA model is kept "
+            "and runs against your checkpoint. Use this for validating an "
+            "unreleased UMA candidate against the existing test suite. "
+            "Calibrated tests (test_simple_md, test_single_atom_predict_*, "
+            "test_formation_..._against_known_values, "
+            "test_stress_old_vs_new_*) assert exact values pinned to a "
+            "specific checkpoint; on a candidate they will fail with "
+            "value deltas — that delta IS the regression signal. "
+            "Tests without @pytest.mark.pretrained are always deselected; "
+            "bare @pretrained (no args) is always kept."
         ),
     )
     parser.addoption(
@@ -291,8 +301,19 @@ def pytest_collection_modifyitems(config, items):
     # @pretrained(M, ...) args are deselected unless the sweep model is
     # in those args. Bare @pretrained (no args) means "any model" and
     # always runs.
+    #
+    # Path-style sweep (--sweep-model=/abs/path/cand.pt) is the
+    # candidate-checkpoint workflow: enable validation of an unreleased
+    # checkpoint against the existing test suite. In that mode we keep
+    # tests whose declared args include any UMA model (the family check)
+    # — a path can plausibly substitute for any UMA-S checkpoint, but
+    # not for an allscaip/esen/etc. test locked to a non-UMA model.
     sweep_override = sweep_model(config)
     if sweep_override is not None:
+        import os
+
+        sweep_is_path = os.path.isfile(sweep_override)
+        uma_set = set(uma_models()) if sweep_is_path else None
         keep, deselect = [], []
         for item in items:
             marker = item.get_closest_marker("pretrained")
@@ -300,9 +321,17 @@ def pytest_collection_modifyitems(config, items):
                 deselect.append(item)
                 continue
             declared = set(marker.args) if marker.args else None
-            if declared is not None and sweep_override not in declared:
-                deselect.append(item)
-                continue
+            if declared is not None:
+                if sweep_is_path:
+                    # Path-style: keep iff declared intersects the UMA family.
+                    if not (declared & uma_set):
+                        deselect.append(item)
+                        continue
+                else:
+                    # Name-style: strict match.
+                    if sweep_override not in declared:
+                        deselect.append(item)
+                        continue
             keep.append(item)
         if deselect:
             config.hook.pytest_deselected(items=deselect)
@@ -430,6 +459,23 @@ def _validate_model_flags(config) -> None:
         return
 
     is_registered = sweep in available
+    # Distinguish "looks like a path" from "is a real file" so we can
+    # give a precise error when the user passed a path (absolute or
+    # not) that doesn't resolve, rather than a generic "neither a
+    # registered name nor a file" message.
+    looks_like_path = (os.sep in sweep) or sweep.endswith(".pt")
+    if looks_like_path and not is_registered:
+        if not os.path.isabs(sweep):
+            raise pytest.UsageError(
+                f"--sweep-model={sweep!r} looks like a path but is not "
+                f"absolute. Use an absolute path so the same flag value "
+                f"resolves identically regardless of pytest's CWD."
+            )
+        if not os.path.isfile(sweep):
+            raise pytest.UsageError(
+                f"--sweep-model={sweep!r} is an absolute path but the "
+                f"file does not exist."
+            )
     is_real_file = os.path.isfile(sweep)
     if not (is_registered or is_real_file):
         raise pytest.UsageError(
