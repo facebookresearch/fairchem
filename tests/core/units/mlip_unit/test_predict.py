@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from copy import deepcopy
 
 import numpy as np
@@ -25,8 +26,10 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.models.uma.compat import UMA_1P1_MODEL_ID
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
+from fairchem.core.units.mlip_unit.mlip_unit import initialize_finetuning_model
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
@@ -1773,3 +1776,42 @@ def test_execution_mode_not_set_when_conditions_not_met(model_name):
         f"Expected execution_mode to be None when activation_checkpointing=True, "
         f"got {predict_unit.inference_settings.execution_mode}"
     )
+
+
+# ---------------------------------------------------------------------------
+# UMA compat / model_id fixups (see fairchem.core.models.uma.compat)
+# ---------------------------------------------------------------------------
+
+
+def test_uma_1p1_predict_unit_has_model_id(uma_1p1_predict_unit):
+    """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
+    back-fills it to `"UMA-1.1"` at load time."""
+    assert uma_1p1_predict_unit.model.module.model_id == UMA_1P1_MODEL_ID
+
+
+def test_uma_1p1_finetune_propagates_model_id():
+    """When finetuning starts from UMA 1.1, the back-filled `model_id` is
+    stashed onto `model.finetune_model_full_config` so a subsequent
+    `save_state` persists it into the new checkpoint."""
+    ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    model = initialize_finetuning_model(ckpt, overrides=None, heads=None)
+    assert (
+        model.finetune_model_full_config["model_id"] == UMA_1P1_MODEL_ID
+    )
+
+
+def test_uma_1p0_predict_unit_raises():
+    """UMA 1.0 checkpoints must hard-fail with an actionable message.
+    Skips if no UMA 1.0 checkpoint is locally available."""
+    uma_1p0_path = os.environ.get("UMA_1P0_PATH")
+    if uma_1p0_path is None:
+        # Best-effort discovery in the local HF cache.
+        from pathlib import Path
+
+        cache_root = Path("~/.cache/fairchem/models--facebook--UMA/snapshots").expanduser()
+        candidates = sorted(cache_root.glob("*/checkpoints/uma-s-1.pt"))
+        uma_1p0_path = str(candidates[0]) if candidates else None
+    if uma_1p0_path is None or not os.path.exists(uma_1p0_path):
+        pytest.skip("No UMA 1.0 checkpoint available; set UMA_1P0_PATH to test.")
+    with pytest.raises(RuntimeError, match="UMA 1.0"):
+        MLIPPredictUnit(uma_1p0_path, device="cpu")

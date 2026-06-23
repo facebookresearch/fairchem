@@ -17,6 +17,22 @@ This page documents the release history of UMA models, including new features, i
 
 ---
 
+## Library compatibility — UMA 1.0 deprecation
+
+UMA 1.0 checkpoints (e.g. `uma-s-1.pt`) are **no longer supported** in current `fairchem-core` releases. Loading a UMA 1.0 checkpoint raises a `RuntimeError` at load time, because UMA 1.0 has a known semantic divergence with later releases (the composition-reduction `include_self` flag in `eSCNMDMoeBackbone` branches on `np.isclose(self.model_version, 1.0)`) — silently running a UMA 1.0 checkpoint through current code would produce numerically different results than the original release.
+
+To use a UMA 1.0 checkpoint, install the last release that supports it:
+
+```bash
+pip install 'fairchem-core<=2.21.0'
+```
+
+Otherwise, switch to UMA 1.1 (`uma-s-1p1`, `uma-m-1p1`) or UMA 1.2 (`uma-s-1p2`).
+
+UMA 1.1 checkpoints ship without a top-level `model_id`. The compat shim back-fills `model_id = "UMA-1.1"` at load time so downstream consumers can dispatch on `HydraModel.model_id`. The back-fill persists into any subsequent finetune checkpoint.
+
+---
+
 ## UMA 1.2
 
 :::{admonition} Latest Release

@@ -37,6 +37,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
+from fairchem.core.models.uma.compat import apply_uma_compat_fixups
 from fairchem.core.models.uma.nn.execution_backends import (
     maybe_update_settings_backend,
 )
@@ -128,6 +129,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
         )
+
+        # Classify UMA generation and apply in-place compat fixups (hard-fail
+        # for UMA 1.0, back-fill model_id for UMA 1.1). Runs before the calls
+        # below that read checkpoint.model_config so they see the patched
+        # config; also short-circuits the ~1 GB tensor allocation for 1.0.
+        apply_uma_compat_fixups(checkpoint, checkpoint_location=inference_model_path)
 
         # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
         self.inference_settings = maybe_update_settings_backend(
