@@ -53,7 +53,6 @@ class TrainCheckpointCallback(Callback):
         step = unit.train_progress.num_steps_completed
         if (
             self.checkpoint_every_n_steps is not None
-            and step > 0
             and step % self.checkpoint_every_n_steps == 0
         ):
             save_callback(os.path.join(checkpoint_dir, f"step_{step}"))

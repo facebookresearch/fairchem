@@ -187,18 +187,21 @@ class _CheckpointUnit:
     train_progress = _Progress()
 
 
-def test_train_checkpoint_callback_skips_step_zero(tmp_path):
+def test_train_checkpoint_callback_saves_step_zero(tmp_path):
     saved_paths = []
     callback = TrainCheckpointCallback(checkpoint_every_n_steps=5)
     callback.set_runner_callbacks(saved_paths.append, lambda _: None, str(tmp_path))
     unit = _CheckpointUnit()
 
     callback.on_train_step_start(None, unit)
-    assert saved_paths == []
+    assert saved_paths == [os.path.join(tmp_path, "step_0")]
 
     unit.train_progress.num_steps_completed = 5
     callback.on_train_step_start(None, unit)
-    assert saved_paths == [os.path.join(tmp_path, "step_5")]
+    assert saved_paths == [
+        os.path.join(tmp_path, "step_0"),
+        os.path.join(tmp_path, "step_5"),
+    ]
 
 
 def test_stop_before_timeout_callback_requests_graceful_stop():
