@@ -18,7 +18,12 @@ from omegaconf import OmegaConf
 from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import assign_device_for_local_rank
 from fairchem.core.common.test_utils import init_local_distributed_process_group
+from fairchem.core.components.train.callbacks import (
+    StopBeforeTimeoutCallback,
+    TrainCheckpointCallback,
+)
 from fairchem.core.components.train.train_runner import (
+    TrainEvalRunner,
     get_most_recent_viable_checkpoint_path,
 )
 
@@ -104,3 +109,137 @@ def test_get_most_recent_viable_checkpoint_path():
     assert result == dir_with_metadata_newer
     result = get_most_recent_viable_checkpoint_path("some/random/path")
     assert result is None
+
+
+class _Unit:
+    pass
+
+
+def test_train_eval_runner_accepts_no_callbacks():
+    runner = TrainEvalRunner(
+        train_dataloader=[1],
+        eval_dataloader=[1],
+        train_eval_unit=_Unit(),
+        callbacks=None,
+    )
+
+    assert runner.callbacks == []
+    assert runner.checkpoint_callback is None
+
+
+class _HookCallback:
+    def __init__(self):
+        self.hooks = None
+
+    def set_runner_callbacks(self, save_callback, load_callback, checkpoint_dir):
+        self.hooks = (save_callback, load_callback, checkpoint_dir)
+
+
+class _NonCallableHookCallback:
+    set_runner_callbacks = "not-callable"
+
+
+def test_train_eval_runner_initializes_generic_runner_callback_hooks(tmp_path):
+    hook_callback = _HookCallback()
+    runner = TrainEvalRunner(
+        train_dataloader=[1],
+        eval_dataloader=[1],
+        train_eval_unit=_Unit(),
+        callbacks=[hook_callback, _NonCallableHookCallback()],
+    )
+    runner.job_config = OmegaConf.create(
+        {"metadata": {"checkpoint_dir": str(tmp_path)}}
+    )
+
+    runner._set_runner_callbacks(runner.callbacks)
+
+    assert hook_callback.hooks == (
+        runner.save_state,
+        runner.load_state,
+        str(tmp_path),
+    )
+
+
+class _StopState:
+    class _EvalState:
+        def __init__(self):
+            self._max_steps_per_epoch = None
+
+    def __init__(self):
+        self.stopped = False
+        self.eval_state = self._EvalState()
+
+    def stop(self):
+        self.stopped = True
+
+
+class _StopUnit:
+    class _Progress:
+        num_steps_completed = 12
+
+    train_progress = _Progress()
+
+
+class _CheckpointUnit:
+    class _Progress:
+        num_steps_completed = 0
+
+    train_progress = _Progress()
+
+
+def test_train_checkpoint_callback_skips_step_zero(tmp_path):
+    saved_paths = []
+    callback = TrainCheckpointCallback(checkpoint_every_n_steps=5)
+    callback.set_runner_callbacks(saved_paths.append, lambda _: None, str(tmp_path))
+    unit = _CheckpointUnit()
+
+    callback.on_train_step_start(None, unit)
+    assert saved_paths == []
+
+    unit.train_progress.num_steps_completed = 5
+    callback.on_train_step_start(None, unit)
+    assert saved_paths == [os.path.join(tmp_path, "step_5")]
+
+
+def test_stop_before_timeout_callback_requests_graceful_stop():
+    now = 0.0
+
+    def clock():
+        return now
+
+    callback = StopBeforeTimeoutCallback(
+        timeout_hr=1.0,
+        stop_before_timeout_min=30.0,
+        clock=clock,
+    )
+    state = _StopState()
+
+    callback.on_train_step_start(state, _StopUnit())
+    assert not state.stopped
+
+    now = 31 * 60
+    callback.on_train_step_start(state, _StopUnit())
+    assert state.stopped
+    assert state.eval_state._max_steps_per_epoch == 0
+
+
+def test_stop_before_timeout_callback_checks_after_train_step():
+    now = 0.0
+
+    def clock():
+        return now
+
+    callback = StopBeforeTimeoutCallback(
+        timeout_hr=1.0,
+        stop_before_timeout_min=30.0,
+        clock=clock,
+    )
+    state = _StopState()
+
+    callback.on_train_step_start(state, _StopUnit())
+    assert not state.stopped
+
+    now = 31 * 60
+    callback.on_train_step_end(state, _StopUnit())
+    assert state.stopped
+    assert state.eval_state._max_steps_per_epoch == 0
