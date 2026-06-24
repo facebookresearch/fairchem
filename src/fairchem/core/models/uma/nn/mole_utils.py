@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import functools
-from contextlib import suppress
 
 import torch
 import torch.nn as nn
@@ -20,10 +19,6 @@ from fairchem.core.models.uma.nn.mole import (
     norm_str_to_fn,
 )
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
-
-fairchem_cpp_found = False
-with suppress(ModuleNotFoundError):
-    fairchem_cpp_found = True
 
 
 class MOLEInterface:
@@ -140,9 +135,7 @@ def replace_linear_with_MOLE(
         return cache[layer_identifier]
 
     if mole_layer_type == "dgl":
-        assert (
-            fairchem_cpp_found
-        ), "Cannot use DGL layer type if fairchem_cpp package is not available"
+        # dispatch to nvmath+cuBLAS via the segmentmm.py driver
         layer = MOLEDGL(
             num_experts=num_experts,
             global_mole_tensors=global_mole_tensors,
