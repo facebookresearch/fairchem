@@ -80,6 +80,23 @@ def pytest_addoption(parser):
             "that have their own sweep jobs."
         ),
     )
+    parser.addoption(
+        "--sweep-refs-from",
+        action="store",
+        default=None,
+        help=(
+            "When --sweep-model is a filesystem path, borrow the "
+            "atom_refs and form_elem_refs YAMLs from this registered model "
+            "name (e.g. 'uma-s-1p2'). Without this flag, path-loaded "
+            "checkpoints get empty reference tables, so any test that "
+            "drives FormationEnergyCalculator or the single-atom-patch "
+            "code path raises KeyError on first task lookup. The "
+            "registered model must use the same task heads as the "
+            "candidate. No-op (and validated as such) when --sweep-model "
+            "is a registered name — name-mode already auto-fetches the "
+            "YAMLs from the matching model entry."
+        ),
+    )
 
 
 def pytest_configure(config):
@@ -137,6 +154,17 @@ def excluded_models(config) -> set[str]:
     if not raw:
         return set()
     return {t.strip() for t in raw.split(",") if t.strip()}
+
+
+def sweep_refs_from(config) -> str | None:
+    """
+    Return ``--sweep-refs-from`` value, or ``None`` if unset/empty.
+    """
+    raw = config.getoption("--sweep-refs-from", default=None)
+    if raw is None:
+        return None
+    raw = raw.strip()
+    return raw or None
 
 
 def uma_models() -> list[str]:
@@ -496,8 +524,22 @@ def _validate_model_flags(config) -> None:
             f"excluded model. Drop one of the flags."
         )
 
+    refs = sweep_refs_from(config)
+    if refs is not None:
+        if refs not in available:
+            raise pytest.UsageError(
+                f"--sweep-refs-from={refs!r} is not a registered model. "
+                f"Registered models: {sorted(available)}."
+            )
+        if not (is_real_file and not is_registered):
+            raise pytest.UsageError(
+                f"--sweep-refs-from={refs!r} is only meaningful when "
+                f"--sweep-model is a filesystem path; the registered-name "
+                f"branch already auto-fetches reference YAMLs."
+            )
 
-def get_predict_unit_for_test(name_or_path, **kwargs):
+
+def get_predict_unit_for_test(name_or_path, *, refs_from=None, **kwargs):
     """
     Resolve a registered model name or filesystem path to a ``MLIPPredictUnit``.
 
@@ -507,6 +549,13 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     a kwarg that ``load_predict_unit`` does not accept (e.g.
     ``cache_dir``) on the path branch, the resulting ``TypeError``
     is the right signal — silent dropping would hide intent.
+
+    ``refs_from`` (path branch only): name of a registered model whose
+    ``atom_refs`` / ``form_elem_refs`` YAMLs should be fetched and
+    threaded into the path-loaded predictor. Lets path-mode loads drive
+    code paths (``FormationEnergyCalculator``, the single-atom patch)
+    that look up entries in those tables. Ignored when ``name_or_path``
+    resolves to a registered name — name-mode already fetches them.
     """
     import os
 
@@ -517,6 +566,23 @@ def get_predict_unit_for_test(name_or_path, **kwargs):
     if os.path.isfile(name_or_path):
         from fairchem.core.units.mlip_unit import load_predict_unit
 
+        if refs_from is not None:
+            from fairchem.core._config import CACHE_DIR
+            from fairchem.core.calculate.pretrained_mlip import (
+                _MODEL_CKPTS,
+                get_reference_energies,
+            )
+
+            cache_dir = kwargs.get("cache_dir", CACHE_DIR)
+            atom_refs = get_reference_energies(refs_from, "atom_refs", cache_dir)
+            if _MODEL_CKPTS.checkpoints[refs_from].form_elem_refs is not None:
+                form_elem_refs = get_reference_energies(
+                    refs_from, "form_elem_refs", cache_dir
+                )["refs"]
+            else:
+                form_elem_refs = None
+            kwargs.setdefault("atom_refs", atom_refs)
+            kwargs.setdefault("form_elem_refs", form_elem_refs)
         return load_predict_unit(name_or_path, **kwargs)
     # Not registered and not a file — defer to get_predict_unit so the
     # caller sees the registry's own KeyError listing valid names.

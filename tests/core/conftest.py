@@ -33,6 +33,7 @@ from tests.conftest import (
     excluded_models,
     get_predict_unit_for_test,
     sweep_model,
+    sweep_refs_from,
     uma_models,
 )
 from tests.core.testing_utils import launch_main
@@ -404,7 +405,11 @@ def uma_predict_unit(request):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     sweep = sweep_model(request.config)
     if sweep:
-        return get_predict_unit_for_test(sweep, device=device)
+        return get_predict_unit_for_test(
+            sweep,
+            device=device,
+            refs_from=sweep_refs_from(request.config),
+        )
     excluded = excluded_models(request.config)
     candidates = [m for m in uma_models() if m not in excluded]
     if not candidates:
@@ -432,9 +437,7 @@ def uma_predict_unit_alt(request):
     sweep = sweep_model(request.config)
     if sweep and sweep not in available_uma:
         # path-style sweep — primary model identity is opaque
-        pytest.skip(
-            "--sweep-model is a path; cannot pick a distinct UMA model"
-        )
+        pytest.skip("--sweep-model is a path; cannot pick a distinct UMA model")
     candidates = (
         [m for m in available_uma if m != sweep] if sweep else available_uma[1:]
     )
@@ -445,7 +448,7 @@ def uma_predict_unit_alt(request):
 
 
 @pytest.fixture(scope="module")
-def declared_predict_unit(pretrained_checkpoint):
+def declared_predict_unit(pretrained_checkpoint, request):
     """
     Predict unit for the model(s) declared in the test's ``@pretrained(...)`` marker.
 
@@ -456,4 +459,7 @@ def declared_predict_unit(pretrained_checkpoint):
     ``declared_predict_unit`` to the test function signature).  Module-scoped so
     the model is loaded once per (module, model-name) pair.
     """
-    return get_predict_unit_for_test(pretrained_checkpoint)
+    return get_predict_unit_for_test(
+        pretrained_checkpoint,
+        refs_from=sweep_refs_from(request.config),
+    )
