@@ -482,7 +482,27 @@ def _validate_model_flags(config) -> None:
             f"{sorted(unknown)}. Registered models: {sorted(available)}."
         )
 
+    refs = sweep_refs_from(config)
     sweep = sweep_model(config)
+
+    # Validate --sweep-refs-from independently of --sweep-model. The
+    # "only meaningful with a path-mode --sweep-model" rule applies even
+    # when --sweep-model is unset; without this early check the flag
+    # silently no-ops.
+    if refs is not None:
+        if refs not in available:
+            raise pytest.UsageError(
+                f"--sweep-refs-from={refs!r} is not a registered model. "
+                f"Registered models: {sorted(available)}."
+            )
+        sweep_is_path = sweep is not None and os.path.isfile(sweep)
+        if not sweep_is_path:
+            raise pytest.UsageError(
+                f"--sweep-refs-from={refs!r} is only meaningful when "
+                f"--sweep-model is a filesystem path; the registered-name "
+                f"branch already auto-fetches reference YAMLs."
+            )
+
     if sweep is None:
         return
 
@@ -523,20 +543,6 @@ def _validate_model_flags(config) -> None:
             f"we cannot tell whether the path's weights belong to an "
             f"excluded model. Drop one of the flags."
         )
-
-    refs = sweep_refs_from(config)
-    if refs is not None:
-        if refs not in available:
-            raise pytest.UsageError(
-                f"--sweep-refs-from={refs!r} is not a registered model. "
-                f"Registered models: {sorted(available)}."
-            )
-        if not (is_real_file and not is_registered):
-            raise pytest.UsageError(
-                f"--sweep-refs-from={refs!r} is only meaningful when "
-                f"--sweep-model is a filesystem path; the registered-name "
-                f"branch already auto-fetches reference YAMLs."
-            )
 
 
 def get_predict_unit_for_test(name_or_path, *, refs_from=None, **kwargs):
