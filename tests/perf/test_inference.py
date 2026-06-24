@@ -3,6 +3,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Inference-performance regression check — measures throughput
+        (atoms/sec) on a bulk-MgO supercell for each pretrained
+        model and writes a PerformanceReport. Drives the dashboard
+        used to catch perf regressions.
+Models: parametrized via models_to_test() — every registered
+        model not excluded by --exclude-models. Bare @pretrained
+        marker at module level (any model is valid).
+CI:     perf-test.yml (separate cadence; not part of test.yml /
+        test_gpu / test_gpu_sweep).
 """
 
 from __future__ import annotations

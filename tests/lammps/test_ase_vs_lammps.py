@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  ASE vs LAMMPS energy/force agreement for a fairchem-backed
+        calculator running NVE, NPT, and Langevin molecular dynamics
+        on a bulk-C fcc(2,2,2) supercell. Verifies the LAMMPS bridge
+        produces the same thermodynamics as the ASE reference.
+Models: uma-s-1p1 (module-level pytestmark). Requires the `lammps`
+        Python module + LAMMPS shared library installed.
+CI:     test_lammps_gpu (its own dedicated job — separate runner with
+        the LAMMPS toolchain installed).
 """
 
 from __future__ import annotations

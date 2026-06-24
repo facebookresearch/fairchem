@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  UMA Hessian inference — analytical (autograd) Hessian vs
+        numerical finite-difference Hessian, Hessian symmetry, and
+        the vmap-vs-loop code paths. Uses a single H2O molecule.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark).
+        test_hessian_vs_numerical is xfailed today (open work on
+        numerical / autograd Hessian agreement).
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations

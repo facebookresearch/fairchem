@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  InferenceBatcher — the Ray-backed batched-inference wrapper
+        around a fairchem predictor. Initialization, context-manager
+        lifecycle, batch-vs-serial consistency, runtime checkpoint
+        swap, graceful shutdown, and concurrent multi-batcher runs.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark).
+Markers: @serial (Ray subprocesses can't share workers) + @gpu.
+CI:     test_gpu_sweep (models shard, serial step only).
 """
 
 from __future__ import annotations

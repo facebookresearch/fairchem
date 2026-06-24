@@ -4,10 +4,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Validation tests for execution backends.
-
-Tests that backend validation correctly accepts/rejects model configurations.
-E2E accuracy tests are done via run_benchmarks.sh and compare_forces.py scripts.
+Tests:  Validation that the UMA-S fast-GPU execution backend correctly
+        accepts/rejects model configurations, plus unit tests for the
+        triton kernels (M_TO_L_GATHER_IDX, node-to-edge / edge-to-node
+        Wigner permutations). E2E accuracy tests live in
+        run_benchmarks.sh + compare_forces.py, not here.
+Models: uma-s-1p1, uma-s-1p2 on the @pretrained-locked load test
+        (resolves a registered name to a checkpoint path).
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations

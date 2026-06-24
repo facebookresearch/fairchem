@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Stress-tensor prediction parity between the legacy and the
+        new (declared-output) GradRegressConfig code paths, on both
+        single-system and batched inputs (bulk Cu, slab fcc(111)),
+        under applied strain.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). The two
+        old-vs-new tests are calibrated and currently locked to
+        uma-s-1p1 only via per-test @pretrained.
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations

@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  fairchem.core.components.benchmark.perf_check — the inference
+        performance regression-check harness (timing, OOM detection,
+        comparison against baseline_settings, formatted report tables,
+        and the end-to-end PerfCheckRunner).
+Models: uma-s-1p2 (per-test @pretrained lock). Two GPU tests require
+        full UMA download and large GPU memory; they self-skip on
+        runners that lack capacity.
+CI:     test_gpu_sweep (models shard, uma-s-1p2 only).
 """
 
 from __future__ import annotations

@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  FAIRChemCalculator over the AllScAIP-OMol102M conserving
+        checkpoint — single H2O molecule energies/forces, batched
+        prediction, and compile-mode (torch.compile) GPU path.
+Models: allscaip-md-conserving-all-omol (module-level pytestmark).
+        This is a legacy model — runs in the base GPU job, NOT in
+        the UMA-S sweep partition.
+CI:     test_gpu (models shard) — base, since the model isn't UMA-S
+        and isn't covered by --exclude-models.
 """
 
 from __future__ import annotations

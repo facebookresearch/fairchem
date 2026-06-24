@@ -4,10 +4,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Unit tests for the OMol evaluation recipes.
-
-These tests verify the functionality of molecular property evaluation functions
-used for assessing machine learning interatomic potentials against DFT reference data.
+Tests:  OMol evaluation recipes — molecular-property functions
+        (conformers, distance_scaling, ieea, ligand_pocket,
+        ligand_strain, protonation, relax_job) used for assessing
+        MLIPs against DFT reference data.
+Models: uma-s-1p1 (module-level pytestmark). A unittest.TestCase
+        subclass consumes pretrained_checkpoint via the fallback
+        branch (pytest_generate_tests doesn't parametrize TestCase).
+CI:     test_gpu_sweep (models shard, uma-s-1p1 only).
 """
 
 from __future__ import annotations

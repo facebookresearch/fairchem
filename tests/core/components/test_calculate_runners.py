@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  CPU-only tests for the calculate runners (ElasticityRunner,
+        SinglePointRunner, RelaxationRunner) and their checkpoint /
+        resume / stop semantics on the AtomsDatasetSequence. Uses
+        a synthetic EMT calculator (no pretrained model needed).
+Models: none (uses EMT). No @pretrained marker; runs in the base
+        CPU partition unconditionally.
+CI:     test (core shard) — base CPU job.
 """
 
 from __future__ import annotations

@@ -4,14 +4,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests for the Ray Serve inference server.
-
-Three testing modes:
-1. Ray remote tasks: Tests run as Ray remote tasks submitted to the cluster.
-   These test the typical usage pattern where calculations are submitted as Ray tasks.
-2. External client: Tests run from outside Ray, connecting to the inference server.
-   These test the client-side code that connects to an existing service.
-3. Multiplexed server: Tests for on-demand model loading via MultiplexedBatchPredictServer.
+Tests:  Ray Serve inference server in three modes:
+        1. Ray remote tasks (typical usage — submit as Ray tasks).
+        2. External client (run from outside Ray, connect to the
+           live deployment).
+        3. Multiplexed server (on-demand model loading via
+           MultiplexedBatchPredictServer).
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Locked to
+        UMA-S only because the base GPU runner OOMs with uma-m-1p1's
+        Ray Serve replicas.
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from ase import Atoms
 from ase.build import bulk
 from ray import serve
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.batch_server import (
     get_ray_connection_info,
     setup_batch_predict_server,
@@ -362,9 +364,7 @@ def test_multiplexed_single_model(
     npt.assert_allclose(stress_mux, stress_local, atol=ATOL)
 
 
-def test_multiplexed_switch_models(
-    local_multiplexed_cluster, uma_multiplexed_model_id
-):
+def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_model_id):
     """Test switching between two different model keys."""
     available_uma = uma_models()
     if len(available_uma) < 2:

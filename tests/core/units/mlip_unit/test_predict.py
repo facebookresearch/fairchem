@@ -3,6 +3,18 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  MLIPPredictUnit + ParallelMLIPPredictUnit — single-dataset
+        and multi-dataset prediction, internal graph-gen versions 2/3,
+        batching consistency, rotational invariance / out-of-plane
+        forces, Euler vs quaternion Wigner-D paths, merge-mole
+        consistency on supercells, single-atom lookup-patch path,
+        and the BatchServerPredictUnit deployment-end-to-end tests.
+Models: uma-s-1p1 + uma-s-1p2 on most tests, uma-s-1p2 alone on a
+        few calibrated tests, uma-m-1p1 on the MOLE-merge tests
+        (per-test @pretrained locks). Some tests use the heavier
+        compile / merge-mole / quaternion-wigner inference settings.
+CI:     test_gpu_sweep (units shard) — all @pretrained-locked tests.
 """
 
 from __future__ import annotations

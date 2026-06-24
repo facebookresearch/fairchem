@@ -3,6 +3,19 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Extensivity of UMA-S forces and energies — E(N replicas) =
+        N * E(1 replica) and the equivalent force-tiling check, on
+        both PBC supercells (rocksalt MgO) and isolated clusters
+        (H2O at >50 A separation). Parametrized over fp32/fp64
+        (numerical-floor check) and 6 task heads (oc20, omat, omol,
+        odac, omc, oc25). Structures are rotated by a fixed seeded
+        SO(3) matrix to break axis-aligned-edge degeneracies in the
+        eSCN spherical-harmonic basis.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). uma-s-1p2 is
+        xfail(strict=False) here via _xfail_uma_s_1p2_extensivity_bug
+        for a known regression.
+CI:     test_gpu_sweep (models shard).
 """
 
 from __future__ import annotations

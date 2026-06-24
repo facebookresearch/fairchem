@@ -3,6 +3,19 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  FAIRChemCalculator end-to-end through ASE — construction from
+        registered name vs filesystem checkpoint, task-name dispatch,
+        single-atom and large-bulk systems, MD relaxations, periodic
+        and aperiodic atoms, external-graph-generation modes, and the
+        FormationEnergyCalculator wrapper (auto-loads form_elem_refs).
+Models: uma-s-1p1 and uma-s-1p2 (per-test @pretrained locks), plus
+        every registered model via models_to_test() in
+        test_calculator_setup / test_energy_calculation /
+        test_relaxation_final_energy (all_calculators fixture).
+CI:     test_gpu (models shard) / test_gpu_sweep (models shard).
+        The all-models tests in the base test_gpu job exclude
+        uma-s-1p1 / uma-s-1p2 (those run in test_gpu_sweep).
 """
 
 from __future__ import annotations
@@ -736,7 +749,8 @@ def test_formation_energy_calculator_different_task_types(declared_predict_unit)
 
 @pytest.mark.pretrained("uma-s-1p1")
 def test_formation_energy_calculator_predictions_against_known_values(
-    atoms_with_formation_energy, declared_predict_unit,
+    atoms_with_formation_energy,
+    declared_predict_unit,
 ):
     base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
     formation_calc = FormationEnergyCalculator(base_calc)

@@ -3,6 +3,17 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Name-vs-path checkpoint dispatch — pretrained_mlip.get_predict_unit
+        (registry lookup + YAML auto-fetch) versus load_predict_unit (path
+        only, no auto-fetch). Verifies forward-pass agreement between the
+        two branches, unknown-name KeyError, symlink handling, and
+        FAIRChemCalculator.from_model_checkpoint path-mode behavior.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Every test in
+        this file is skipped by the autouse _skip_under_path_sweep
+        fixture under path-style --sweep-model (the registry-name
+        branch is the thing being tested).
+CI:     test_gpu_sweep (models shard).
 """
 
 from __future__ import annotations
