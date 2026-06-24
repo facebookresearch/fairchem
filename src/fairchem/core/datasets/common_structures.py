@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import numpy as np
 from ase import Atoms
-from ase.build import bulk, molecule
+from ase.build import bulk, fcc111, molecule
+from ase.build.surface import add_adsorbate
+from ase.constraints import FixAtoms
 from ase.lattice.cubic import FaceCenteredCubic
 
 
@@ -64,3 +66,49 @@ def get_water_box(num_molecules=20, box_size=10.0, seed=42) -> Atoms:
         symbols=all_symbols, positions=all_positions, cell=[box_size] * 3, pbc=True
     )
     return atoms
+
+
+def get_slab_adsorbate(
+    slab_symbol: str = "Cu",
+    size: tuple[int, int, int] = (3, 3, 4),
+    adsorbate: str = "CO",
+    vacuum: float = 10.0,
+) -> Atoms:
+    """
+    Create a slab+adsorbate system with OC20-style tags and FixAtoms.
+
+    Tags follow OC20 convention: subsurface=0, surface=1, adsorbate=2.
+    Subsurface atoms are fixed via FixAtoms constraints.
+
+    Args:
+        slab_symbol: Element for the FCC slab.
+        size: (x, y, layers) repetitions for fcc111.
+        adsorbate: Molecule name for the adsorbate (ASE molecule db).
+        vacuum: Vacuum spacing in Angstroms.
+
+    Returns:
+        Atoms with tags, FixAtoms constraints, and charge/spin in info.
+    """
+    slab = fcc111(slab_symbol, size=size, vacuum=vacuum, periodic=True)
+
+    # OC20-style tags: subsurface=0, surface=1
+    # ASE fcc111 tags layers 1 (top) through N (bottom)
+    tags = np.zeros(len(slab), dtype=int)
+    tags[slab.get_tags() == 1] = 1  # top layer = surface
+    slab.set_tags(tags)
+
+    # Fix subsurface atoms
+    fixed_indices = np.where(tags == 0)[0]
+    slab.constraints = [FixAtoms(indices=fixed_indices)]
+
+    # Add adsorbate molecule
+    ads = molecule(adsorbate)
+    add_adsorbate(slab, ads, height=2.0, position="ontop")
+
+    # Tag adsorbate atoms
+    new_tags = slab.get_tags()
+    new_tags[-len(ads) :] = 2
+    slab.set_tags(new_tags)
+
+    slab.info = {"charge": 0, "spin": 0}
+    return slab

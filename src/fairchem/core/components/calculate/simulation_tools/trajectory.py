@@ -47,6 +47,10 @@ class TrajectoryFrame:
     kinetic_energy: float | None = None  # eV
     pressure: float | None = None  # bar
     sid: str | int | None = None
+    tags: np.ndarray | None = None  # (N,) int
+    fixed: np.ndarray | None = None  # (N,) bool
+    charge: int | None = None
+    spin: int | None = None
 
     def to_dict(self) -> dict:
         """
@@ -77,6 +81,14 @@ class TrajectoryFrame:
             d["kinetic_energy"] = self.kinetic_energy
         if self.pressure is not None:
             d["pressure"] = self.pressure
+        if self.tags is not None:
+            d["tags"] = self.tags.tolist()
+        if self.fixed is not None:
+            d["fixed"] = self.fixed.tolist()
+        if self.charge is not None:
+            d["charge"] = self.charge
+        if self.spin is not None:
+            d["spin"] = self.spin
         return d
 
     @classmethod
@@ -130,6 +142,25 @@ class TrajectoryFrame:
         else:
             pressure = None
 
+        # Tags: only store if any are nonzero (all zeros is ASE default)
+        raw_tags = atoms.get_tags()
+        tags = raw_tags.copy() if np.any(raw_tags) else None
+
+        # Fixed atoms: build bool mask from FixAtoms constraints
+        fixed = None
+        if atoms.constraints:
+            from ase.constraints import FixAtoms
+
+            mask = np.zeros(len(atoms), dtype=bool)
+            for constraint in atoms.constraints:
+                if isinstance(constraint, FixAtoms):
+                    mask[constraint.index] = True
+            if np.any(mask):
+                fixed = mask
+
+        charge = atoms.info.get("charge", None)
+        spin = atoms.info.get("spin", None)
+
         return cls(
             step=step,
             time=time,
@@ -145,6 +176,10 @@ class TrajectoryFrame:
             kinetic_energy=kinetic_energy,
             pressure=pressure,
             sid=atoms.info.get("sid"),
+            tags=tags,
+            fixed=fixed,
+            charge=charge,
+            spin=spin,
         )
 
 

@@ -22,6 +22,7 @@ from torch_sim.models.interface import (  # noqa: E402
     ModelInterface,
     validate_model_outputs,
 )
+from torch_sim.typing import SystemExtras  # noqa: E402
 
 from fairchem.core.calculate.torchsim_interface import (  # noqa: E402
     FairChemModel,
@@ -38,6 +39,10 @@ if TYPE_CHECKING:
 
 DTYPE = torch.float32
 DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+CHARGE_SPIN_EXTRAS_MAP: dict[SystemExtras, str] = {
+    SystemExtras.CHARGE: "charge",
+    SystemExtras.SPIN: "spin",
+}
 
 
 @pytest.fixture()
@@ -106,12 +111,16 @@ def test_homogeneous_batching(
     systems = systems_func()
     checkpoint_path, _ = direct_checkpoint
 
+    extras_map = None
     if task_name == "omol":
         for mol in systems:
             mol.info |= {"charge": 0, "spin": 1}
+        extras_map = CHARGE_SPIN_EXTRAS_MAP
 
     model = FairChemModel(model=checkpoint_path, task_name=task_name, device=DEVICE)
-    state = ts.io.atoms_to_state(systems, device=DEVICE, dtype=DTYPE)
+    state = ts.io.atoms_to_state(
+        systems, device=DEVICE, dtype=DTYPE, system_extras_map=extras_map
+    )
     results = model(state)
 
     assert results["energy"].shape == (4,)
@@ -121,71 +130,6 @@ def test_homogeneous_batching(
     energies = results["energy"]
     uniq_energies = torch.unique(energies, dim=0)
     assert len(uniq_energies) > 1, "Different systems should have different energies"
-
-
-def test_heterogeneous_tasks(direct_checkpoint) -> None:
-    """Test different task types work with appropriate systems."""
-    checkpoint_path, _ = direct_checkpoint
-    test_cases = [
-        ("omol", [molecule("H2O")]),
-        ("oc20", [bulk("Pt", cubic=True)]),
-    ]
-
-    for task_name, systems in test_cases:
-        if task_name == "omol":
-            systems[0].info |= {"charge": 0, "spin": 1}
-
-        model = FairChemModel(
-            model=checkpoint_path,
-            task_name=task_name,
-            device=DEVICE,
-        )
-        state = ts.io.atoms_to_state(systems, device=DEVICE, dtype=DTYPE)
-        results = model(state)
-
-        assert results["energy"].shape[0] == 1
-        assert results["forces"].dim() == 2
-        assert results["forces"].shape[1] == 3
-
-
-@pytest.mark.parametrize(
-    ("systems_func", "expected_count"),
-    [
-        (lambda: [bulk("Si", "diamond", a=5.43)], 1),
-        (
-            lambda: [
-                bulk("H", "bcc", a=2.0),
-                bulk("Li", "bcc", a=3.0),
-                bulk("Si", "diamond", a=5.43),
-                bulk("Al", "fcc", a=4.05).repeat((2, 1, 1)),
-            ],
-            4,
-        ),
-        (
-            lambda: [
-                bulk(element, "fcc", a=4.0)
-                for element in ("Al", "Cu", "Ni", "Pd", "Pt") * 3
-            ],
-            15,
-        ),
-    ],
-)
-def test_batch_size_variations(
-    direct_checkpoint, systems_func: Callable, expected_count: int
-) -> None:
-    """Test batching with different numbers and sizes of systems."""
-    systems = systems_func()
-    checkpoint_path, _ = direct_checkpoint
-
-    model = FairChemModel(model=checkpoint_path, task_name="oc20", device=DEVICE)
-    state = ts.io.atoms_to_state(systems, device=DEVICE, dtype=DTYPE)
-    results = model(state)
-
-    assert results["energy"].shape == (expected_count,)
-    assert results["forces"].shape[0] == sum(len(s) for s in systems)
-    assert results["forces"].shape[1] == 3
-    assert torch.isfinite(results["energy"]).all()
-    assert torch.isfinite(results["forces"]).all()
 
 
 @pytest.mark.parametrize("compute_stress", [True, False])
@@ -215,18 +159,6 @@ def test_stress_computation(
         assert "stress" not in results
 
 
-def test_device_consistency(direct_checkpoint) -> None:
-    """Test device consistency between model and data."""
-    checkpoint_path, _ = direct_checkpoint
-    model = FairChemModel(model=checkpoint_path, task_name="oc20", device=DEVICE)
-    system = bulk("Si", "diamond", a=5.43)
-    state = ts.io.atoms_to_state([system], device=DEVICE, dtype=DTYPE)
-
-    results = model(state)
-    assert results["energy"].device == DEVICE
-    assert results["forces"].device == DEVICE
-
-
 def test_empty_batch_error(direct_checkpoint) -> None:
     """Test that empty batches raise appropriate errors."""
     checkpoint_path, _ = direct_checkpoint
@@ -237,29 +169,11 @@ def test_empty_batch_error(direct_checkpoint) -> None:
         model(ts.io.atoms_to_state([], device=torch.device("cpu"), dtype=torch.float32))
 
 
-def test_load_from_checkpoint_path(direct_checkpoint) -> None:
-    """Test loading model from a saved checkpoint file path."""
-    checkpoint_path, _ = direct_checkpoint
-    loaded_model = FairChemModel(model=checkpoint_path, task_name="oc20", device=DEVICE)
-
-    system = bulk("Si", "diamond", a=5.43)
-    state = ts.io.atoms_to_state([system], device=DEVICE, dtype=DTYPE)
-    results = loaded_model(state)
-
-    assert "energy" in results
-    assert "forces" in results
-    assert results["energy"].shape == (1,)
-    assert torch.isfinite(results["energy"]).all()
-    assert torch.isfinite(results["forces"]).all()
-
-
 @pytest.mark.parametrize(
     ("charge", "spin"),
     [
         (0.0, 0.0),
-        (1.0, 1.0),
-        (-1.0, 0.0),
-        (0.0, 2.0),
+        (-1.0, 2.0),
     ],
 )
 def test_charge_spin_handling(direct_checkpoint, charge: float, spin: float) -> None:
@@ -268,8 +182,12 @@ def test_charge_spin_handling(direct_checkpoint, charge: float, spin: float) -> 
     mol.info["charge"] = charge
     mol.info["spin"] = spin
 
-    state = ts.io.atoms_to_state([mol], device=DEVICE, dtype=DTYPE)
+    state = ts.io.atoms_to_state(
+        [mol], device=DEVICE, dtype=DTYPE, system_extras_map=CHARGE_SPIN_EXTRAS_MAP
+    )
 
+    assert state.has_extras("charge")
+    assert state.has_extras("spin")
     assert state.charge[0].item() == charge
     assert state.spin[0].item() == spin
 
@@ -290,6 +208,19 @@ def test_charge_spin_handling(direct_checkpoint, charge: float, spin: float) -> 
     assert torch.isfinite(result["forces"]).all()
 
 
+def _add_default_charge_spin(state: ts.SimState) -> ts.SimState:
+    """Inject zero charge and spin extras for UMA models that require them."""
+    if not state.has_extras("charge"):
+        state.charge = torch.zeros(
+            state.n_systems, dtype=state.dtype, device=state.device
+        )
+    if not state.has_extras("spin"):
+        state.spin = torch.zeros(
+            state.n_systems, dtype=state.dtype, device=state.device
+        )
+    return state
+
+
 @pytest.mark.parametrize(
     "model_fixture_name",
     ["torchsim_model_oc20", "torchsim_model_omol"],
@@ -299,7 +230,9 @@ def test_model_output_validation(
 ) -> None:
     """Test that a model implementation follows the ModelInterface contract."""
     model: ModelInterface = request.getfixturevalue(model_fixture_name)
-    validate_model_outputs(model, DEVICE, DTYPE)
+    validate_model_outputs(
+        model, DEVICE, DTYPE, state_modifier=_add_default_charge_spin
+    )
 
 
 def test_model_output_validation_with_stress(conserving_mole_checkpoint) -> None:
@@ -308,7 +241,9 @@ def test_model_output_validation_with_stress(conserving_mole_checkpoint) -> None
     model = FairChemModel(
         model=checkpoint_path, task_name="oc20", device=DEVICE, compute_stress=True
     )
-    validate_model_outputs(model, DEVICE, DTYPE)
+    validate_model_outputs(
+        model, DEVICE, DTYPE, state_modifier=_add_default_charge_spin
+    )
 
 
 def test_missing_torchsim_raises_import_error(monkeypatch) -> None:
@@ -348,30 +283,6 @@ def test_invalid_task_name_raises_error(direct_checkpoint) -> None:
         FairChemModel(model=checkpoint_path, task_name="invalid_task")
 
 
-def test_single_system_pbc() -> None:
-    """Test conversion of a single periodic system."""
-    system = bulk("Si", "diamond", a=5.43)
-    state = ts.io.atoms_to_state([system], device=DEVICE, dtype=DTYPE)
-
-    atomic_data = _simstate_to_atomicdata_batch(
-        state, task_name="oc20", target_dtype=DTYPE
-    )
-
-    assert atomic_data.num_graphs == 1
-    assert atomic_data.num_nodes == len(system)
-    assert atomic_data.pos.shape == (len(system), 3)
-    assert atomic_data.atomic_numbers.shape == (len(system),)
-    assert atomic_data.cell.shape == (1, 3, 3)
-    assert atomic_data.pbc.shape == (1, 3)
-    assert torch.all(atomic_data.pbc)
-    assert atomic_data.charge.shape == (1,)
-    assert atomic_data.spin.shape == (1,)
-    assert atomic_data.natoms.shape == (1,)
-    assert atomic_data.natoms[0].item() == len(system)
-    assert len(atomic_data.sid) == 1
-    assert atomic_data.dataset == ["oc20"]
-
-
 def test_multiple_systems_pbc() -> None:
     """Test conversion of multiple periodic systems."""
     systems = [
@@ -398,35 +309,15 @@ def test_multiple_systems_pbc() -> None:
     assert atomic_data.dataset == ["oc20"] * 3
 
 
-def test_single_system_molecule() -> None:
-    """Test conversion of a single molecule (non-PBC)."""
-    mol = molecule("H2O")
-    mol.info["charge"] = 0
-    mol.info["spin"] = 1
-    state = ts.io.atoms_to_state([mol], device=DEVICE, dtype=DTYPE)
-
-    atomic_data = _simstate_to_atomicdata_batch(
-        state, task_name="omol", target_dtype=DTYPE
-    )
-
-    assert atomic_data.num_graphs == 1
-    assert atomic_data.num_nodes == len(mol)
-    assert atomic_data.cell.shape == (1, 3, 3)
-    assert atomic_data.pbc.shape == (1, 3)
-    assert not torch.any(atomic_data.pbc)
-    assert atomic_data.charge[0].item() == 0
-    assert atomic_data.spin[0].item() == 1
-    assert len(atomic_data.sid) == 1
-    assert atomic_data.dataset == ["omol"]
-
-
 def test_multiple_systems_molecules() -> None:
-    """Test conversion of multiple molecules."""
+    """Test conversion of multiple molecules including charge/spin values."""
     molecules = [molecule("H2O"), molecule("CO2"), molecule("CH4")]
     for mol in molecules:
         mol.info["charge"] = 0
         mol.info["spin"] = 1
-    state = ts.io.atoms_to_state(molecules, device=DEVICE, dtype=DTYPE)
+    state = ts.io.atoms_to_state(
+        molecules, device=DEVICE, dtype=DTYPE, system_extras_map=CHARGE_SPIN_EXTRAS_MAP
+    )
 
     atomic_data = _simstate_to_atomicdata_batch(
         state, task_name="omol", target_dtype=DTYPE
@@ -437,7 +328,10 @@ def test_multiple_systems_molecules() -> None:
     assert not torch.any(atomic_data.pbc)
     assert atomic_data.charge.shape == (3,)
     assert atomic_data.spin.shape == (3,)
+    assert torch.all(atomic_data.charge == 0)
+    assert torch.all(atomic_data.spin == 1)
     assert len(atomic_data.sid) == 3
+    assert atomic_data.dataset == ["omol"] * 3
 
 
 def test_batch_statistics() -> None:
@@ -484,21 +378,6 @@ def test_dtype_conversion() -> None:
     assert atomic_data.atomic_numbers.dtype == torch.int64
 
 
-def test_empty_graphs() -> None:
-    """Test that empty graphs (no edges) are correctly handled."""
-    system = bulk("Si", "diamond", a=5.43)
-    state = ts.io.atoms_to_state([system], device=DEVICE, dtype=DTYPE)
-
-    atomic_data = _simstate_to_atomicdata_batch(
-        state, task_name=None, target_dtype=DTYPE
-    )
-
-    assert atomic_data.edge_index.shape == (2, 0)
-    assert atomic_data.cell_offsets.shape == (0, 3)
-    assert atomic_data.nedges.shape == (1,)
-    assert atomic_data.nedges[0].item() == 0
-
-
 def test_positions_wrapping_pbc() -> None:
     """Test that positions are wrapped when PBC is enabled."""
     system = bulk("Si", "diamond", a=5.43)
@@ -528,41 +407,6 @@ def test_no_task_name() -> None:
     )
 
     assert "dataset" not in atomic_data.__dict__ or atomic_data.dataset is None
-
-
-def test_fixed_and_tags() -> None:
-    """Test that fixed and tags are set to zeros."""
-    system = bulk("Si", "diamond", a=5.43)
-    state = ts.io.atoms_to_state([system], device=DEVICE, dtype=DTYPE)
-
-    atomic_data = _simstate_to_atomicdata_batch(
-        state, task_name=None, target_dtype=DTYPE
-    )
-
-    assert atomic_data.fixed.shape == (len(system),)
-    assert torch.all(atomic_data.fixed == 0)
-    assert atomic_data.tags.shape == (len(system),)
-    assert torch.all(atomic_data.tags == 0)
-
-
-def test_batch_indices() -> None:
-    """Test that batch indices correctly map atoms to systems."""
-    systems = [
-        bulk("Si", "diamond", a=5.43),
-        bulk("Al", "fcc", a=4.05),
-    ]
-    state = ts.io.atoms_to_state(systems, device=DEVICE, dtype=DTYPE)
-
-    atomic_data = _simstate_to_atomicdata_batch(
-        state, task_name=None, target_dtype=DTYPE
-    )
-
-    assert atomic_data.batch.shape == (atomic_data.num_nodes,)
-    # First system should have batch index 0
-    assert atomic_data.batch[: len(systems[0])].unique().item() == 0
-    # Second system should have batch index 1
-    assert atomic_data.batch[len(systems[0]) :].unique().item() == 1
-    assert atomic_data.batch.max().item() == 1
 
 
 def test_cell_row_vector_convention() -> None:

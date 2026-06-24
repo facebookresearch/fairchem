@@ -14,6 +14,7 @@ import numpy as np
 
 from fairchem.core.datasets.common_structures import (
     get_fcc_crystal_by_num_atoms,
+    get_slab_adsorbate,
     get_water_box,
 )
 
@@ -47,7 +48,7 @@ def make_benchmark_system(
         name: Human-readable identifier.
         task_name: UMA task name (omat, omol, oc20, etc.).
         natoms: Number of atoms for fcc structures.
-        structure_type: One of "fcc" or "water_box".
+        structure_type: One of "fcc", "water_box", or "slab_adsorbate".
         num_molecules: Number of molecules for water_box.
         seed: Random seed for reproducibility.
 
@@ -60,10 +61,12 @@ def make_benchmark_system(
         atoms = get_fcc_crystal_by_num_atoms(natoms)
     elif structure_type == "water_box":
         atoms = get_water_box(num_molecules=num_molecules, seed=seed)
+    elif structure_type == "slab_adsorbate":
+        atoms = get_slab_adsorbate()
     else:
         raise ValueError(
             f"Unknown structure_type: {structure_type}. "
-            "Must be 'fcc' or 'water_box'."
+            "Must be 'fcc', 'water_box', or 'slab_adsorbate'."
         )
     return BenchmarkSystem(name=name, atoms=atoms, task_name=task_name)
 
@@ -98,6 +101,12 @@ def get_default_benchmark_systems(seed: int = 42) -> list[BenchmarkSystem]:
             structure_type="fcc",
             natoms=1000,
             task_name="omat",
+            seed=seed,
+        ),
+        make_benchmark_system(
+            name="slab_adsorbate",
+            structure_type="slab_adsorbate",
+            task_name="oc20",
             seed=seed,
         ),
     ]

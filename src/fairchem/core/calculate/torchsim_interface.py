@@ -84,8 +84,16 @@ def _simstate_to_atomicdata_batch(
     cell_offsets = torch.empty((0, 3), dtype=target_dtype, device=positions.device)
     nedges = torch.zeros(n_systems, dtype=torch.long, device=positions.device)
 
-    charge = sim_state.charge.long()  # (n_systems,)
-    spin = sim_state.spin.long()  # (n_systems,)
+    charge = (
+        sim_state.charge.long()
+        if sim_state.has_extras("charge")
+        else torch.zeros(n_systems, dtype=torch.long, device=positions.device)
+    )
+    spin = (
+        sim_state.spin.long()
+        if sim_state.has_extras("spin")
+        else torch.zeros(n_systems, dtype=torch.long, device=positions.device)
+    )
 
     fixed = torch.zeros_like(atomic_numbers, dtype=torch.long)
     tags = torch.zeros_like(atomic_numbers, dtype=torch.long)
