@@ -12,8 +12,10 @@ import tempfile
 import time
 
 import hydra
+import pytest
 import torch
 from omegaconf import OmegaConf
+from torchtnt.framework.unit import TrainUnit
 
 from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import assign_device_for_local_rank
@@ -24,6 +26,7 @@ from fairchem.core.components.train.callbacks import (
 )
 from fairchem.core.components.train.train_runner import (
     TrainEvalRunner,
+    TrainRunner,
     get_most_recent_viable_checkpoint_path,
 )
 
@@ -115,6 +118,15 @@ class _Unit:
     pass
 
 
+class _CountingTrainUnit(TrainUnit[int]):
+    def __init__(self):
+        super().__init__()
+        self.seen = []
+
+    def train_step(self, _state, data):
+        self.seen.append(data)
+
+
 def test_train_eval_runner_accepts_no_callbacks():
     runner = TrainEvalRunner(
         train_dataloader=[1],
@@ -125,6 +137,31 @@ def test_train_eval_runner_accepts_no_callbacks():
 
     assert runner.callbacks == []
     assert runner.checkpoint_callback is None
+
+
+def test_train_runner_accepts_no_callbacks():
+    runner = TrainRunner(
+        train_dataloader=[1],
+        train_unit=_Unit(),
+        callbacks=None,
+    )
+
+    assert runner.callbacks == []
+    assert runner.checkpoint_callback is None
+
+
+def test_train_runner_runs_torchtnt_train_loop():
+    train_unit = _CountingTrainUnit()
+    runner = TrainRunner(
+        train_dataloader=[1, 2, 3],
+        train_unit=train_unit,
+        callbacks=None,
+        max_steps=2,
+    )
+
+    runner.run()
+
+    assert train_unit.seen == [1, 2]
 
 
 class _HookCallback:
@@ -145,6 +182,26 @@ def test_train_eval_runner_initializes_generic_runner_callback_hooks(tmp_path):
         train_dataloader=[1],
         eval_dataloader=[1],
         train_eval_unit=_Unit(),
+        callbacks=[hook_callback, _NonCallableHookCallback()],
+    )
+    runner.job_config = OmegaConf.create(
+        {"metadata": {"checkpoint_dir": str(tmp_path)}}
+    )
+
+    runner._set_runner_callbacks(runner.callbacks)
+
+    assert hook_callback.hooks == (
+        runner.save_state,
+        runner.load_state,
+        str(tmp_path),
+    )
+
+
+def test_train_runner_initializes_generic_runner_callback_hooks(tmp_path):
+    hook_callback = _HookCallback()
+    runner = TrainRunner(
+        train_dataloader=[1],
+        train_unit=_Unit(),
         callbacks=[hook_callback, _NonCallableHookCallback()],
     )
     runner.job_config = OmegaConf.create(
@@ -202,6 +259,46 @@ def test_train_checkpoint_callback_saves_step_zero(tmp_path):
         os.path.join(tmp_path, "step_0"),
         os.path.join(tmp_path, "step_5"),
     ]
+
+
+def test_train_checkpoint_callback_requires_positive_retention():
+    with pytest.raises(ValueError, match="max_saved_checkpoints"):
+        TrainCheckpointCallback(
+            checkpoint_every_n_steps=5,
+            max_saved_checkpoints=0,
+        )
+
+
+def test_train_checkpoint_callback_updates_latest_and_rotates(tmp_path):
+    def save_checkpoint(path):
+        os.makedirs(path)
+        with open(os.path.join(path, ".metadata"), "w") as f:
+            f.write("metadata")
+
+    callback = TrainCheckpointCallback(
+        checkpoint_every_n_steps=5,
+        max_saved_checkpoints=2,
+    )
+    callback.set_runner_callbacks(save_checkpoint, lambda _: None, str(tmp_path))
+    unit = _CheckpointUnit()
+
+    unit.train_progress.num_steps_completed = 5
+    callback.on_train_step_start(None, unit)
+    unit.train_progress.num_steps_completed = 10
+    callback.on_train_step_start(None, unit)
+    unit.train_progress.num_steps_completed = 15
+    callback.on_train_step_start(None, unit)
+
+    latest = tmp_path / "latest"
+    assert latest.is_symlink()
+    assert os.readlink(latest) == "step_15"
+    assert not (tmp_path / "step_5").exists()
+    assert (tmp_path / "step_10").exists()
+    assert (tmp_path / "step_15").exists()
+
+    callback.on_train_end(None, unit)
+    assert os.readlink(latest) == "final"
+    assert (tmp_path / "final").exists()
 
 
 def test_stop_before_timeout_callback_requests_graceful_stop():

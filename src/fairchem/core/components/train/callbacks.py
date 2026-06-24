@@ -30,24 +30,26 @@ class TrainCheckpointCallback(Callback):
         self,
         checkpoint_every_n_steps: int | None,
         max_saved_checkpoints: int = 2,
+        latest_checkpoint_name: str = "latest",
     ):
+        if max_saved_checkpoints < 1:
+            raise ValueError("max_saved_checkpoints must be at least 1")
         self.checkpoint_every_n_steps = checkpoint_every_n_steps
         self.max_saved_checkpoints = max_saved_checkpoints
+        self.latest_checkpoint_name = latest_checkpoint_name
         self.save_callback = None
-        self.load_callback = None
         self.checkpoint_dir = None
 
     def set_runner_callbacks(
         self,
         save_callback: Callable[[str], None],
-        load_callback: Callable[[str | None], None],
+        _load_callback: Callable[[str | None], None],
         checkpoint_dir: str,
     ) -> None:
         self.save_callback = save_callback
-        self.load_callback = load_callback
         self.checkpoint_dir = checkpoint_dir
 
-    def on_train_step_start(self, state: State, unit: TTrainUnit) -> None:
+    def on_train_step_start(self, _state: State, unit: TTrainUnit) -> None:
         # Step and epoch counts are both current at train-step start.
         save_callback, checkpoint_dir = self._checkpoint_hooks()
         step = unit.train_progress.num_steps_completed
@@ -55,24 +57,43 @@ class TrainCheckpointCallback(Callback):
             self.checkpoint_every_n_steps is not None
             and step % self.checkpoint_every_n_steps == 0
         ):
-            save_callback(os.path.join(checkpoint_dir, f"step_{step}"))
+            checkpoint_path = os.path.join(checkpoint_dir, f"step_{step}")
+            save_callback(checkpoint_path)
             if distutils.is_master():
-                checkpoint_dirs_by_time = get_subdirectories_sorted_by_time(
-                    checkpoint_dir
-                )
-                for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:
-                    if not os.path.islink(dir):
-                        shutil.rmtree(dir)
+                self._update_latest(checkpoint_dir, checkpoint_path)
+                self._rotate_checkpoints(checkpoint_dir)
 
-    def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+    def on_train_end(self, _state: State, _unit: TTrainUnit) -> None:
         if self.checkpoint_every_n_steps is not None:
             save_callback, checkpoint_dir = self._checkpoint_hooks()
-            save_callback(os.path.join(checkpoint_dir, "final"))
+            checkpoint_path = os.path.join(checkpoint_dir, "final")
+            save_callback(checkpoint_path)
+            if distutils.is_master():
+                self._update_latest(checkpoint_dir, checkpoint_path)
 
     def _checkpoint_hooks(self) -> tuple[Callable[[str], None], str]:
         if self.save_callback is None or self.checkpoint_dir is None:
             raise RuntimeError("TrainCheckpointCallback was not initialized.")
         return self.save_callback, self.checkpoint_dir
+
+    def _update_latest(self, checkpoint_dir: str, checkpoint_path: str) -> None:
+        latest_path = os.path.join(checkpoint_dir, self.latest_checkpoint_name)
+        if os.path.lexists(latest_path):
+            if os.path.isdir(latest_path) and not os.path.islink(latest_path):
+                shutil.rmtree(latest_path)
+            else:
+                os.remove(latest_path)
+        os.symlink(os.path.basename(checkpoint_path), latest_path)
+
+    def _rotate_checkpoints(self, checkpoint_dir: str) -> None:
+        checkpoint_dirs_by_time = [
+            (path, mtime)
+            for path, mtime in get_subdirectories_sorted_by_time(checkpoint_dir)
+            if not os.path.islink(path)
+            and os.path.basename(path) != self.latest_checkpoint_name
+        ]
+        for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:
+            shutil.rmtree(dir)
 
 
 class StopBeforeTimeoutCallback(Callback):
