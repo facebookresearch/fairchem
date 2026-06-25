@@ -12,7 +12,7 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
 
@@ -89,7 +89,7 @@ class BatchConfig:
 
     max_batch_size: int = DEFAULT_MAX_BATCH_SIZE
     batch_wait_timeout_s: float = DEFAULT_BATCH_WAIT_TIMEOUT_S
-    split_oom_batch: bool = True
+    split_oom_batch: bool = False
     # None defers to Ray Serve's ``@serve.batch`` default.
     max_concurrent_batches: int | None = None
 
@@ -134,6 +134,21 @@ class BatchPredictServerMixin:
     ``BatchPredictServer`` and ``MultiplexedBatchPredictServer`` apply the
     decorator themselves.
     """
+
+    def configure_batching(
+        self,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
+    ):
+        """
+        Configure batching parameters at runtime.
+
+        Args:
+            max_batch_size: Maximum number of atoms in a batch.
+            batch_wait_timeout_s: Timeout in seconds to wait for a full batch.
+        """
+        self.predict.set_max_batch_size(max_batch_size)
+        self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
 
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
         # Move the returned value to CPU so that callers running on
@@ -201,12 +216,17 @@ class BatchPredictServerMixin:
             except torch.OutOfMemoryError as err:
                 if not self.split_oom_batch:
                     raise torch.OutOfMemoryError(
-                        "Reduce max_batch_size or set split_oom_batch=True "
-                        "to automatically split OOM batches."
+                        "Out of memory during batched inference. "
+                        "This can happen when the batch contains systems of very different sizes. "
+                        "Consider reducing max_batch_size or setting split_oom_batch=True "
+                        "to automatically split OOM batches. "
+                        "Note: split_oom_batch is useful for heterogeneous batches but may "
+                        "impact performance for homogeneous workloads."
                     ) from err
                 if len(current) == 1:
                     raise torch.OutOfMemoryError(
-                        "Out of memory for a single system left in batch."
+                        "Out of memory for a single system left in batch. "
+                        "Try reducing max_batch_size or using a model with lower memory requirements."
                     ) from err
                 logging.warning(
                     "Caught out of memory error. Splitting batch and retrying."
@@ -295,7 +315,7 @@ class BatchPredictServer(BatchPredictServerMixin):
         predict_unit_ref,
         max_batch_size: int,
         batch_wait_timeout_s: float,
-        split_oom_batch: bool = True,
+        split_oom_batch: bool = False,
         max_concurrent_batches: int | None = None,
     ):
         """
@@ -307,7 +327,11 @@ class BatchPredictServer(BatchPredictServerMixin):
                 The actual number of atoms will likely be larger than this as batches
                 are split when num atoms exceeds this value.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
-            split_oom_batch: If true will split batch if an OOM error is raised
+            split_oom_batch: If True, automatically split batches that cause OOM errors
+                and retry with smaller sub-batches. This is useful when running batches
+                with very different sized systems (e.g., mixed molecules and bulk
+                materials), but may impact performance for homogeneous workloads.
+                Defaults to False.
             max_concurrent_batches: Max concurrent batches for the @serve.batch
                 decorator. If None, uses Ray Serve's default.
         """
@@ -367,7 +391,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         self,
         max_batch_size: int,
         batch_wait_timeout_s: float,
-        split_oom_batch: bool = True,
+        split_oom_batch: bool = False,
         max_concurrent_batches: int | None = None,
     ):
         """
@@ -376,7 +400,11 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         Args:
             max_batch_size: Maximum number of atoms in a batch.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
-            split_oom_batch: If true will split batch if an OOM error is raised.
+            split_oom_batch: If True, automatically split batches that cause OOM errors
+                and retry with smaller sub-batches. This is useful when running batches
+                with very different sized systems (e.g., mixed molecules and bulk
+                materials), but may impact performance for homogeneous workloads.
+                Defaults to False.
             max_concurrent_batches: Max concurrent batches for the @serve.batch
                 decorator. If None, uses Ray Serve's default.
         """
@@ -900,3 +928,212 @@ def get_ray_connection_info(head_file: str) -> dict[str, str | None]:
         "namespace_serve_fairchem": namespace_serve_fairchem,
         "local": False,
     }
+
+
+@dataclass
+class AutobatchConfig:
+    """
+    Configuration for probing-based autobatching.
+
+    Attributes:
+        min_batch_size: Minimum batch size (in atoms) to start probing from.
+        max_batch_size_cap: Maximum batch size cap to avoid excessive probing.
+        probe_steps: Number of probe steps to run at each batch size.
+        backoff_factor: Factor to reduce batch size by after OOM (e.g., 0.8 = 80%).
+        timeout_floor_s: Minimum batch wait timeout in seconds.
+        timeout_ceil_s: Maximum batch wait timeout in seconds.
+        timeout_latency_multiplier: Multiplier applied to median latency to compute timeout.
+        warmup_steps: Number of warmup inference steps before probing.
+    """
+
+    min_batch_size: int = 128
+    max_batch_size_cap: int = 16384
+    probe_steps: int = 3
+    backoff_factor: float = 0.8
+    timeout_floor_s: float = 0.01
+    timeout_ceil_s: float = 1.0
+    timeout_latency_multiplier: float = 2.0
+    warmup_steps: int = 2
+
+
+@dataclass
+class AutobatchResult:
+    """
+    Result from autobatch probing.
+
+    Attributes:
+        max_batch_size: Optimal maximum batch size in atoms.
+        batch_wait_timeout_s: Optimal batch wait timeout in seconds.
+        median_latency_s: Median inference latency observed during probing.
+        probe_timestamp: Unix timestamp when probing was performed.
+    """
+
+    max_batch_size: int
+    batch_wait_timeout_s: float
+    median_latency_s: float
+    probe_timestamp: float = field(default_factory=time.time)
+
+
+def _expand_probe_data(
+    data_list: list[AtomicData], target_num_atoms: int
+) -> list[AtomicData]:
+    """
+    Expand probe data by repeating items to reach target atom count.
+
+    Args:
+        data_list: List of AtomicData objects to use as base data.
+        target_num_atoms: Target total number of atoms for the batch.
+
+    Returns:
+        List of AtomicData objects with total atoms >= target_num_atoms.
+    """
+    if not data_list:
+        raise ValueError("data_list cannot be empty")
+
+    base_num_atoms = sum(data.natoms.sum().item() for data in data_list)
+
+    if base_num_atoms >= target_num_atoms:
+        return data_list
+
+    num_repeats = (target_num_atoms + base_num_atoms - 1) // base_num_atoms
+
+    expanded_list = []
+    for _ in range(num_repeats):
+        expanded_list.extend(data_list)
+
+    return expanded_list
+
+
+def probe_optimal_batch_size(
+    predict_unit: MLIPPredictUnit,
+    probe_data: list[AtomicData],
+    config: AutobatchConfig | None = None,
+) -> AutobatchResult:
+    """
+    Probe for optimal batch size and timeout using runtime GPU memory behavior.
+
+    This function performs a binary search-like probing to find the maximum
+    batch size that doesn't cause OOM errors, then derives an appropriate
+    batch wait timeout from observed latencies.
+
+    Args:
+        predict_unit: The MLIPPredictUnit to probe with.
+        probe_data: List of AtomicData objects to use for probing. If the total
+            number of atoms is less than the target batch size being probed,
+            the data will be repeated to reach the target size.
+        config: Autobatch configuration. Uses defaults if None.
+
+    Returns:
+        AutobatchResult with optimal parameters.
+    """
+    if config is None:
+        config = AutobatchConfig()
+
+    if not probe_data:
+        raise ValueError("probe_data cannot be empty")
+
+    device = predict_unit.device
+
+    # For CPU, use conservative defaults
+    if "cuda" not in str(device):
+        logging.info("Autobatch probing skipped for CPU device, using defaults")
+        return AutobatchResult(
+            max_batch_size=config.min_batch_size,
+            batch_wait_timeout_s=config.timeout_ceil_s,
+            median_latency_s=0.1,
+        )
+
+    logging.info("Starting autobatch probing...")
+
+    free_mem, total_mem = (
+        (0, 0) if not torch.cuda.is_available() else torch.cuda.mem_get_info()
+    )
+    logging.info(
+        f"GPU memory: {free_mem / 1e9:.2f}GB free / {total_mem / 1e9:.2f}GB total"
+    )
+
+    # Warmup the model using the provided probe data
+    logging.info(f"Running {config.warmup_steps} warmup steps...")
+    warmup_batch = atomicdata_list_to_batch(probe_data)
+    for _ in range(config.warmup_steps):
+        try:
+            predict_unit.predict(warmup_batch, undo_element_references=False)
+        except Exception as e:
+            logging.warning(f"Warmup step failed: {e}")
+    torch.cuda.empty_cache()
+
+    # Binary search for optimal batch size
+    low = config.min_batch_size
+    high = config.max_batch_size_cap
+    best_batch_size = low
+    latencies: list[float] = []
+
+    logging.info(f"Probing batch sizes in range [{low}, {high}]...")
+
+    while low <= high:
+        mid = (low + high) // 2
+        success = True
+        step_latencies = []
+
+        logging.debug(f"Testing batch size: {mid} atoms")
+
+        for step in range(config.probe_steps):
+            try:
+                expanded_data = _expand_probe_data(probe_data, mid)
+                batch = atomicdata_list_to_batch(expanded_data)
+
+                torch.cuda.synchronize()
+                start = time.perf_counter()
+                predict_unit.predict(batch, undo_element_references=False)
+                torch.cuda.synchronize()
+                elapsed = time.perf_counter() - start
+
+                step_latencies.append(elapsed)
+                logging.debug(f"  Step {step + 1}: {elapsed:.4f}s")
+
+            except torch.OutOfMemoryError:
+                logging.debug(f"  OOM at batch size {mid}")
+                success = False
+                torch.cuda.empty_cache()
+                break
+            except Exception as e:
+                logging.warning(f"  Probe failed at batch size {mid}: {e}")
+                success = False
+                break
+
+        if success:
+            best_batch_size = mid
+            latencies.extend(step_latencies)
+            low = mid + 1
+            logging.debug(f"  Success at {mid}, trying larger...")
+        else:
+            high = mid - 1
+            logging.debug(f"  Failed at {mid}, trying smaller...")
+
+    # Apply backoff factor for safety margin
+    final_batch_size = int(best_batch_size * config.backoff_factor)
+    final_batch_size = max(final_batch_size, config.min_batch_size)
+
+    # Compute timeout from latencies
+    if latencies:
+        sorted_latencies = sorted(latencies)
+        median_latency = sorted_latencies[len(sorted_latencies) // 2]
+        timeout = median_latency * config.timeout_latency_multiplier
+        timeout = max(config.timeout_floor_s, min(timeout, config.timeout_ceil_s))
+    else:
+        median_latency = 0.1
+        timeout = config.timeout_ceil_s
+
+    result = AutobatchResult(
+        max_batch_size=final_batch_size,
+        batch_wait_timeout_s=timeout,
+        median_latency_s=median_latency,
+    )
+
+    logging.info(
+        f"Autobatch probing complete: max_batch_size={result.max_batch_size}, "
+        f"timeout={result.batch_wait_timeout_s:.4f}s, "
+        f"median_latency={result.median_latency_s:.4f}s"
+    )
+
+    return result
