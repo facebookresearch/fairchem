@@ -34,8 +34,20 @@ jobs:
       statuses: write
     strategy:
       max-parallel: 10
+      fail-fast: false
       matrix:
         python_version: ['3.11', '3.13']
+        # tests/perf is run by perf-test.yml on a separate cadence.
+        # tests/applications and tests/lammps are run by integration-test.yml
+        # and test_lammps_gpu respectively. Both shards below intentionally
+        # exclude those paths.
+        # YAML anchor: shard list is reused by test_cpu_sweep below.
+        # Do not reorder jobs (the alias must follow the anchor textually).
+        shard: &cpu_shards
+          - name: units
+            paths: tests/core/units
+          - name: core
+            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/data tests/demo
 
     steps:
       - name: Checkout code
@@ -48,7 +60,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/multi-trigger-setup
         with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -81,6 +93,7 @@ jobs:
           pip install packages/fairchem-core[torchsim]
 
       - name: Install additional dependencies
+        if: matrix.shard.name == 'core'
         run: |
           wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
           tar -xzvf v20.15.0.tar.gz
@@ -90,26 +103,30 @@ jobs:
           echo "$(readlink -f .)" >> $GITHUB_PATH
 
       - name: Download large test files
+        if: matrix.shard.name == 'core'
         run: coverage run -m fairchem.core.scripts.download_large_files oc
 
-      - name: Core tests
+      - name: Core tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # --exclude-models deselects tests locked to sweep models and
+        # removes sweep models from all-models parametrization. The
+        # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --cov-append --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
-      - name: Serial CPU tests
+      - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" tests -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
         uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: false
-          files: ./coverage.xml,./gpu-coverage.xml
+          files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
@@ -117,7 +134,7 @@ jobs:
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
-          files: ./junit.xml,./junit-serial.xml,./junit-gpu.xml
+          files: ./junit-${{ matrix.shard.name }}.xml,./junit-serial-${{ matrix.shard.name }}.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
@@ -126,7 +143,106 @@ jobs:
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
         with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
+
+  test_cpu_sweep:
+    runs-on: 32-core-ubuntu
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ['3.13']
+        sweep_model: [uma-s-1p1, uma-s-1p2]
+        shard: *cpu_shards
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Cache pip
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            packages/fairchem-core[dev,extras] \
+            packages/fairchem-data-oc[dev] \
+            packages/fairchem-data-omat \
+            packages/fairchem-data-omol[dev] \
+            packages/fairchem-demo-ocpapi[dev] \
+            -r tests/requirements.txt # pin test packages
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
+      - name: Install additional dependencies
+        if: matrix.shard.name == 'core'
+        run: |
+          wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
+          tar -xzvf v20.15.0.tar.gz
+          cd packmol-20.15.0
+          ./configure
+          make
+          echo "$(readlink -f .)" >> $GITHUB_PATH
+
+      - name: Download large test files
+        if: matrix.shard.name == 'core'
+        run: coverage run -m fairchem.core.scripts.download_large_files oc
+
+      - name: Sweep CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+
+      - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        # The core shard has no serial @pretrained tests, so the sweep
+        # serial step would collect zero tests there (pytest exit 5).
+        # Skip the step on core; only run on units.
+        if: matrix.shard.name == 'units'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml,./junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
+
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
@@ -135,10 +251,12 @@ jobs:
       # Needed to manually set commit status
       statuses: write
     strategy:
-      max-parallel: 1
+      fail-fast: false
       matrix:
         python_version: ['3.13']
-        shard:
+        # YAML anchor: shard list is reused by test_gpu_sweep below.
+        # Do not reorder jobs (the alias must follow the anchor textually).
+        shard: &gpu_shards
           - name: models
             paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts
           - name: units
@@ -179,22 +297,106 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # Note: These tests seem to fail if "-n auto" is added
+        # --exclude-models deselects tests locked to sweep models and
+        # removes sweep models from all-models parametrization. The
+        # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
-        # compile_gpu tests only exist in the models shard
-        if: matrix.shard.name == 'models'
+        # compile_gpu tests exist in both models and units shards.
+        # Sweep-eligible compile_gpu tests (e.g. @pretrained-locked to
+        # UMA-S) run in test_gpu_sweep, not here.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-gpu-${{ matrix.shard.name }}.xml,./junit-gpu-compile-${{ matrix.shard.name }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
 
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
+
+  test_gpu_sweep:
+    runs-on: 4-core-ubuntu-gpu-t4
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ['3.13']
+        sweep_model: [uma-s-1p1, uma-s-1p2]
+        shard: *gpu_shards
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install packages/fairchem-core[dev,extras] \
+          packages/fairchem-data-omol[dev] \
+          packages/fairchem-data-omat \
+          -r tests/requirements.txt # pin test packages
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
+      - name: Sweep tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+
+      - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
+        # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
+        # the base test_gpu compile step excludes via --exclude-models.
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+
+      - name: codecov-test-results
+        if: always()
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml,./junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
+
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_lammps_gpu:
     runs-on: 4-core-ubuntu-gpu-t4

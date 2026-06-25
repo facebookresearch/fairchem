@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  ASE vs LAMMPS energy/force agreement for a fairchem-backed
+        calculator running NVE, NPT, and Langevin molecular dynamics
+        on a bulk-C fcc(2,2,2) supercell. Verifies the LAMMPS bridge
+        produces the same thermodynamics as the ASE reference.
+Models: uma-s-1p1 (module-level pytestmark). Requires the `lammps`
+        Python module + LAMMPS shared library installed.
+CI:     test_lammps_gpu (its own dedicated job — separate runner with
+        the LAMMPS toolchain installed).
 """
 
 from __future__ import annotations
@@ -18,13 +27,15 @@ from ase.md.verlet import VelocityVerlet
 from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate import pretrained_mlip
+from tests.conftest import get_predict_unit_for_test
+
+pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 
 
-def run_ase_langevin():
+def run_ase_langevin(pretrained_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -53,10 +64,10 @@ def run_ase_langevin():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_nve():
+def run_ase_nve(pretrained_checkpoint):
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -82,7 +93,7 @@ def run_ase_nve():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_ase_npt():
+def run_ase_npt(pretrained_checkpoint):
     """Run ASE NPT-like using a Berendsen barostat approximation via NPT wrapper.
 
     ASE doesn't provide a direct NPT integrator in the core; here we mimic
@@ -94,7 +105,7 @@ def run_ase_npt():
     """
     atoms = bulk("C", "fcc", a=3.567, cubic=True)
     atoms = atoms.repeat((2, 2, 2))
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
@@ -138,24 +149,28 @@ def run_ase_npt():
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
-def run_lammps(input_file):
-    predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+def run_lammps(input_file, pretrained_checkpoint):
+    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
     lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_nve():
-    ase_kinetic, ase_pot = run_ase_nve()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_nve.file")
+def test_ase_vs_lammps_nve(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_nve(pretrained_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_nve.file", pretrained_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.1)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
 
 
 @pytest.mark.gpu()
-def test_ase_vs_lammps_npt():
-    ase_kinetic, ase_pot = run_ase_npt()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_npt.file")
+def test_ase_vs_lammps_npt(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_npt(pretrained_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_npt.file", pretrained_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
 
@@ -164,8 +179,10 @@ def test_ase_vs_lammps_npt():
     reason="This is more demo purposes, need to configure the right parameters for ASE langevin to match lammps"
 )
 @pytest.mark.gpu()
-def test_ase_vs_lammps_langevin():
-    ase_kinetic, ase_pot = run_ase_langevin()
-    lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_langevin.file")
+def test_ase_vs_lammps_langevin(pretrained_checkpoint):
+    ase_kinetic, ase_pot = run_ase_langevin(pretrained_checkpoint)
+    lammps_kinetic, lammps_pot = run_lammps(
+        "tests/lammps/lammps_langevin.file", pretrained_checkpoint
+    )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=1e-4)
     assert np.isclose(ase_pot, lammps_pot, rtol=1e-4)
