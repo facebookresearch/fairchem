@@ -32,6 +32,7 @@ project:
             - file: core/common_tasks/lammps.md
             - file: core/common_tasks/batch_inference.md
             - file: core/common_tasks/inference_batcher.md
+            - file: core/common_tasks/ray_serve_inference.md
             - file: core/common_tasks/ase_dataset_creation.md
             - file: core/common_tasks/training.md
             - file: core/common_tasks/evaluation.md
