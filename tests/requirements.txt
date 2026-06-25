@@ -20,7 +20,7 @@ ray[serve]==2.55.1
 # attribute 'label'` in test_rayserve_remote_task_multiple_concurrent.
 # Pin to 6.x until Ray ships a fix.
 protobuf<7
-ipykernel==7.2.0
+ipykernel==7.3.0
 jupyter_book==2.1.5
 pytest-xdist==3.8.0
 # Provides --suppress-no-test-exit-code so the CI workflow can stop
