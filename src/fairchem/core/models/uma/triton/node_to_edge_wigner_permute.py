@@ -19,23 +19,6 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
-
-
-def _permute_m_to_l(x: torch.Tensor) -> torch.Tensor:
-    """
-    Permute from M-major to L-major ordering.
-
-    Used in backward dW computation where we need L-major gradients.
-
-    Args:
-        x: Tensor with dim=1 of size 9 in M-major order
-
-    Returns:
-        Tensor in L-major order
-    """
-    return x[:, M_TO_L_GATHER_IDX, :]
-
 
 class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
     """
@@ -72,21 +55,14 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             dtype=x.dtype,
             device=x.device,
         )
-        x_edge = torch.empty(
-            (num_edges, 9, sphere_channels * 2),
-            dtype=x.dtype,
-            device=x.device,
-        )
-
-        # Ensure inputs are contiguous for Triton
-        x = x.contiguous()
 
         # ONLY kernel launch is opaque (via custom_op with mutates_args)
         torch.ops.fairchem._kernel_node_to_edge_wigner_permute(
-            x, edge_index, wigner, out, x_edge
+            x, edge_index, wigner, out
         )
 
-        ctx.save_for_backward(x_edge, edge_index, wigner)
+        # Save x (node features, ~36MB) instead of x_edge ([E,9,2C], ~1.8GB)
+        ctx.save_for_backward(x, edge_index, wigner)
         ctx.num_nodes = x.shape[0]
         return out
 
@@ -105,12 +81,9 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             None: edge_index has no gradient
             grad_wigner: [E, 9, 9]
         """
-        x_edge, edge_index, wigner = ctx.saved_tensors
+        x, edge_index, wigner = ctx.saved_tensors
         num_edges = edge_index.shape[1]
         sphere_channels = grad_out.shape[2] // 2
-
-        # Ensure grad_out is contiguous
-        grad_out = grad_out.contiguous()
 
         # Allocation VISIBLE to torch.compile
         grad_edge = torch.empty(
@@ -146,24 +119,17 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         grad_x_flat.index_add_(0, src_idx, grad_src)
         grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
 
-        # grad_wigner = dy @ x^T using block-sparse structure
-        # Convert grad to L-major for outer product
-        grad_l = _permute_m_to_l(grad_out)  # [E, 9, 2C]
-
-        E = x_edge.shape[0]
-        grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
-
-        # L=0 block (1x1)
-        grad_wigner[:, 0, 0] = (grad_l[:, 0, :] * x_edge[:, 0, :]).sum(dim=-1)
-
-        # L=1 block (3x3)
-        grad_wigner[:, 1:4, 1:4] = torch.bmm(
-            grad_l[:, 1:4, :], x_edge[:, 1:4, :].transpose(1, 2)
+        # Fused backward for dW: gather from nodes + M→L permute + outer product
+        grad_wigner_flat = torch.zeros(
+            (num_edges, 81),
+            dtype=wigner.dtype,
+            device=wigner.device,
         )
 
-        # L=2 block (5x5)
-        grad_wigner[:, 4:9, 4:9] = torch.bmm(
-            grad_l[:, 4:9, :], x_edge[:, 4:9, :].transpose(1, 2)
+        torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dw(
+            grad_out, x, edge_index, grad_wigner_flat
         )
+
+        grad_wigner = grad_wigner_flat.reshape(num_edges, 9, 9)
 
         return grad_x, None, grad_wigner
