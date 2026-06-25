@@ -12,6 +12,7 @@ import os
 from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
 from torchtnt.framework.fit import fit
+from torchtnt.framework.train import train
 
 from fairchem.core.common.utils import get_subdirectories_sorted_by_time
 from fairchem.core.components.runner import Runner
@@ -69,27 +70,21 @@ def get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | 
     return most_recent_viable_checkpoint
 
 
-class TrainEvalRunner(Runner):
+class _BaseTrainRunner(Runner):
     def __init__(
         self,
         train_dataloader: torch.utils.data.dataloader,
-        eval_dataloader: torch.utils.data.dataloader,
-        train_eval_unit: Union[TrainUnit, EvalUnit, Checkpointable],
+        train_unit: Union[TrainUnit, Checkpointable],
         callbacks: list[Callback] | None = None,
         max_epochs: int | None = 1,
-        evaluate_every_n_steps: Optional[int] = None,
         max_steps: int | None = None,
-        max_eval_steps_per_epoch: int | None = None,
         stop_before_timeout_min: float | None = None,
     ):
         self.train_dataloader = train_dataloader
-        self.eval_dataloader = eval_dataloader
-        self.train_eval_unit = train_eval_unit
+        self.train_unit = train_unit
         self.callbacks = callbacks if callbacks is not None else []
         self.max_epochs = max_epochs
         self.max_steps = max_steps
-        self.evaluate_every_n_steps = evaluate_every_n_steps
-        self.max_eval_steps_per_epoch = max_eval_steps_per_epoch
         self.stop_before_timeout_min = stop_before_timeout_min
 
         checkpoint_callbacks = [
@@ -100,11 +95,8 @@ class TrainEvalRunner(Runner):
             checkpoint_callbacks[0] if len(checkpoint_callbacks) == 1 else None
         )
         logging.info(f"Train Dataloader size {len(self.train_dataloader)}")
-        logging.info(f"Eval Dataloader size {len(self.eval_dataloader)}")
 
-    def run(self) -> None:
-        self._set_runner_callbacks(self.callbacks)
-
+    def _callbacks_with_timeout(self) -> list[Callback]:
         callbacks = self.callbacks
         if self.stop_before_timeout_min is not None:
             callbacks = [
@@ -114,17 +106,7 @@ class TrainEvalRunner(Runner):
                     stop_before_timeout_min=self.stop_before_timeout_min,
                 ),
             ]
-
-        fit(
-            self.train_eval_unit,
-            train_dataloader=self.train_dataloader,
-            eval_dataloader=self.eval_dataloader,
-            max_epochs=self.max_epochs,
-            max_steps=self.max_steps,
-            max_eval_steps_per_epoch=self.max_eval_steps_per_epoch,
-            callbacks=callbacks,
-            evaluate_every_n_steps=self.evaluate_every_n_steps,
-        )
+        return callbacks
 
     def _set_runner_callbacks(self, callbacks: list[Callback]) -> None:
         for callback in callbacks:
@@ -169,7 +151,7 @@ class TrainEvalRunner(Runner):
                 )
                 return False
 
-        self.train_eval_unit.save_state(checkpoint_location)
+        self.train_unit.save_state(checkpoint_location)
         return True
 
     def load_state(self, checkpoint_location: str | None) -> None:
@@ -192,4 +174,81 @@ class TrainEvalRunner(Runner):
                 logging.info("No existing checkpoints found, starting from scratch")
                 return
 
-        self.train_eval_unit.load_state(checkpoint_to_load)
+        self.train_unit.load_state(checkpoint_to_load)
+
+
+class TrainRunner(_BaseTrainRunner):
+    def __init__(
+        self,
+        train_dataloader: torch.utils.data.dataloader,
+        train_unit: Union[TrainUnit, Checkpointable],
+        callbacks: list[Callback] | None = None,
+        max_epochs: int | None = 1,
+        max_steps: int | None = None,
+        max_steps_per_epoch: int | None = None,
+        stop_before_timeout_min: float | None = None,
+    ):
+        super().__init__(
+            train_dataloader=train_dataloader,
+            train_unit=train_unit,
+            callbacks=callbacks,
+            max_epochs=max_epochs,
+            max_steps=max_steps,
+            stop_before_timeout_min=stop_before_timeout_min,
+        )
+        self.max_steps_per_epoch = max_steps_per_epoch
+
+    def run(self) -> None:
+        self._set_runner_callbacks(self.callbacks)
+
+        train(
+            train_unit=self.train_unit,
+            train_dataloader=self.train_dataloader,
+            max_epochs=self.max_epochs,
+            max_steps=self.max_steps,
+            max_steps_per_epoch=self.max_steps_per_epoch,
+            callbacks=self._callbacks_with_timeout(),
+        )
+
+
+class TrainEvalRunner(_BaseTrainRunner):
+    def __init__(
+        self,
+        train_dataloader: torch.utils.data.dataloader,
+        eval_dataloader: torch.utils.data.dataloader,
+        train_eval_unit: Union[TrainUnit, EvalUnit, Checkpointable],
+        callbacks: list[Callback] | None = None,
+        max_epochs: int | None = 1,
+        evaluate_every_n_steps: Optional[int] = None,
+        max_steps: int | None = None,
+        max_eval_steps_per_epoch: int | None = None,
+        stop_before_timeout_min: float | None = None,
+    ):
+        super().__init__(
+            train_dataloader=train_dataloader,
+            train_unit=train_eval_unit,
+            callbacks=callbacks,
+            max_epochs=max_epochs,
+            max_steps=max_steps,
+            stop_before_timeout_min=stop_before_timeout_min,
+        )
+        self.eval_dataloader = eval_dataloader
+        self.train_eval_unit = train_eval_unit
+        self.evaluate_every_n_steps = evaluate_every_n_steps
+        self.max_eval_steps_per_epoch = max_eval_steps_per_epoch
+
+        logging.info(f"Eval Dataloader size {len(self.eval_dataloader)}")
+
+    def run(self) -> None:
+        self._set_runner_callbacks(self.callbacks)
+
+        fit(
+            self.train_eval_unit,
+            train_dataloader=self.train_dataloader,
+            eval_dataloader=self.eval_dataloader,
+            max_epochs=self.max_epochs,
+            max_steps=self.max_steps,
+            max_eval_steps_per_epoch=self.max_eval_steps_per_epoch,
+            callbacks=self._callbacks_with_timeout(),
+            evaluate_every_n_steps=self.evaluate_every_n_steps,
+        )

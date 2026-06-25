@@ -221,6 +221,7 @@ class WandBSingletonLogger:
         entity: str,
         group: str | None = None,
         job_type: str | None = None,
+        tags: list[str] | None = None,
         settings: wandb.Settings | None = None,
     ) -> None:
         wandb.init(
@@ -233,6 +234,7 @@ class WandBSingletonLogger:
             resume="allow",
             group=group,
             job_type=job_type,
+            tags=tags,
             settings=settings,
         )
 
