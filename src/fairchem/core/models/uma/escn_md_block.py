@@ -16,6 +16,10 @@ from torch.profiler import record_function
 from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.parallelism.graph_parallel_a2a import (
+    GPContext,
+    all_to_all_collect,
+)
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
@@ -77,7 +81,8 @@ class Edgewise(torch.nn.Module):
             )
             extra_m0_output_channels = self.lmax * self.hidden_channels
         elif self.act_type == "s2":
-            # NOTE: this is the only place where the SO3 grid of the edges (lmax/mmax) is used
+            # NOTE: this is the only place where the SO3 grid of the
+            # edges (lmax/mmax) is used
             self.act = SeparableS2Activation_M(
                 lmax=self.lmax,
                 mmax=self.mmax,
@@ -117,28 +122,60 @@ class Edgewise(torch.nn.Module):
         wigner,
         wigner_inv_envelope,
         total_atoms_across_gp_ranks,
-        node_offset: int = 0,
+        scatter_target: torch.Tensor | None = None,
+        gp_ctx: GPContext | None = None,
+        send_indices: torch.Tensor | None = None,
     ):
-        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
-        if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                x, total_atoms_across_gp_ranks
-            )
+        """
+        Forward pass with support for both all-gather and all-to-all GP.
+
+        When gp_ctx is provided, uses all-to-all to collect only the
+        needed remote embeddings. Otherwise falls back to all-gather.
+
+        Args:
+            scatter_target: Pre-computed local target indices [E] for
+                scattering edge messages to nodes. For allgather, this
+                is ``edge_index[1]`` mapped to local partition space.
+                For A2A, derived from ``gp_ctx.edge_index_local[1]``.
+                If None, defaults to ``edge_index[1]`` (no GP).
+        """
+        if gp_ctx is not None and gp_utils.initialized():
+            # All-to-all path: collect only needed remote embeddings.
+            with record_function("a2a_collect"):
+                x_received = all_to_all_collect(x, gp_ctx, send_indices)
+                x_full = torch.cat([x, x_received], dim=0)
+                edge_index_local = gp_ctx.edge_index_local
+            local_scatter_target = edge_index_local[1]
+        elif gp_utils.initialized():
+            # Legacy all-gather path
+            with record_function("allgather_collect"):
+                x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                    x, total_atoms_across_gp_ranks
+                )
+            edge_index_local = edge_index
+            local_scatter_target = scatter_target
         else:
             x_full = x
+            edge_index_local = edge_index
+            local_scatter_target = (
+                scatter_target if scatter_target is not None else edge_index[1]
+            )
 
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x_full,
                 x.shape[0],
                 x_edge,
-                edge_index,
+                edge_index_local,
                 wigner,
                 wigner_inv_envelope,
-                node_offset,
+                local_scatter_target,
             )
-        edge_index_partitions = edge_index.split(
+        edge_index_partitions = edge_index_local.split(
             self.activation_checkpoint_chunk_size, dim=1
+        )
+        scatter_target_partitions = local_scatter_target.split(
+            self.activation_checkpoint_chunk_size
         )
         wigner_partitions = wigner.split(self.activation_checkpoint_chunk_size, dim=0)
         wigner_inv_partitions = wigner_inv_envelope.split(
@@ -146,8 +183,8 @@ class Edgewise(torch.nn.Module):
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
         new_embeddings = []
-        # when chunking, we need to keep track of the start index of the chunk and give this information
-        # to the mole layers
+        # when chunking, we need to keep track of the start index
+        # of the chunk and give this information to the mole layers
         ac_mole_start_idx = 0
 
         for idx in range(len(edge_index_partitions)):
@@ -160,7 +197,7 @@ class Edgewise(torch.nn.Module):
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
-                    node_offset,
+                    scatter_target_partitions[idx],
                     ac_mole_start_idx,
                     use_reentrant=False,
                 )
@@ -179,11 +216,11 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner,
         wigner_inv_envelope,
-        node_offset: int = 0,
+        scatter_target: torch.Tensor | None = None,
         ac_mole_start_idx: int = 0,
     ):
-        # here we need to update the ac_start_idx of the mole layers under here for this chunking to
-        # work properly with MoLE together
+        # here we need to update the ac_start_idx of the mole layers
+        # under here for this chunking to work properly with MoLE
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         with record_function("SO2Conv"):
@@ -196,9 +233,8 @@ class Edgewise(torch.nn.Module):
             new_embedding = self.backend.permute_wigner_inv_edge_to_node(
                 x_message,
                 wigner_inv_envelope,
-                edge_index,
+                scatter_target if scatter_target is not None else edge_index[1],
                 x_original_shape,
-                node_offset,
             )
 
         # reset ac start index
@@ -354,7 +390,9 @@ class eSCNMD_Block(torch.nn.Module):
         wigner_inv_envelope,
         total_atoms_across_gp_ranks,
         sys_node_embedding=None,
-        node_offset: int = 0,
+        scatter_target: torch.Tensor | None = None,
+        gp_ctx: GPContext | None = None,
+        send_indices: torch.Tensor | None = None,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -370,7 +408,9 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner,
                 wigner_inv_envelope,
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
-                node_offset=node_offset,
+                scatter_target=scatter_target,
+                gp_ctx=gp_ctx,
+                send_indices=send_indices,
             )
             x = x + x_res
 

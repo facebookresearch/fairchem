@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from copy import deepcopy
 
 import numpy as np
@@ -197,8 +198,17 @@ def test_multiple_dataset_predict(internal_graph_gen_version):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
-    """Implementation of parallel predict unit test."""
+def _test_parallel_predict_unit_impl(
+    workers, device, checkpointing, graph_gen_version, gp_mode=None
+):
+    """
+    Implementation of parallel predict unit test.
+
+    Args:
+        gp_mode: Optional dict with GP overrides, e.g.
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}.
+            If None, uses default GP settings (allgather + index_split).
+    """
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -213,12 +223,17 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_v
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
 
+    overrides = None
+    if gp_mode is not None:
+        overrides = {"backbone": gp_mode}
+
     seed_everywhere(seed)
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
+        overrides=overrides,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -248,37 +263,72 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_v
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (2, False, 2),
-        (1, False, 3),
-        (1, True, 3),
-        (2, False, 3),
+        # Default GP mode (allgather + index_split)
+        (1, False, 2, None),
+        (2, False, 2, None),
+        (1, False, 3, None),
+        (1, True, 3, None),
+        (2, False, 3, None),
+        # A2A + spatial (requires workers >= 2 for actual GP)
+        (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # A2A + index_split
+        (
+            2,
+            False,
+            2,
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+        ),
     ],
 )
-def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
-    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version, gp_mode):
+    _test_parallel_predict_unit_impl(
+        workers, "cpu", checkpointing, graph_gen_version, gp_mode
+    )
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (1, True, 2),
-        (1, True, 3),
-        (1, False, 3),
-        # (2, False),
-        # (2, True),
+        # Default GP mode (allgather + index_split)
+        (1, False, 2, None),
+        (1, True, 2, None),
+        (1, True, 3, None),
+        (1, False, 3, None),
+        # GP modes with 1 worker — verifies code paths don't crash
+        # (single rank = no actual GP comms, but exercises config flow)
+        (1, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (
+            1,
+            False,
+            2,
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+        ),
+        # For local 8-GPU runs: uncomment to test multi-worker GPU GP
+        # (2, False, 2, None),
+        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
     ],
 )
-def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
-    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version, gp_mode):
+    _test_parallel_predict_unit_impl(
+        workers, "cuda", checkpointing, graph_gen_version, gp_mode
+    )
 
 
-def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
-    """Implementation of parallel predict unit batch test."""
+def _test_parallel_predict_unit_batch_impl(
+    workers, device, checkpointing, gp_mode=None
+):
+    """
+    Implementation of parallel predict unit batch test.
+
+    Args:
+        gp_mode: Optional dict with GP overrides, e.g.
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}.
+            If None, uses default GP settings (allgather + index_split).
+    """
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -313,11 +363,17 @@ def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
     )
     atomic_data = atomicdata_list_to_batch([h2o_data, o_data])
     seed_everywhere(seed)
+
+    overrides = None
+    if gp_mode is not None:
+        overrides = {"backbone": gp_mode}
+
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
+        overrides=overrides,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -345,28 +401,34 @@ def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, gp_mode",
     [
-        (1, False),
-        (2, True),
+        (1, False, None),
+        (2, True, None),
+        # A2A + spatial with batch (exercises halo bail-out for multi-system)
+        (
+            2,
+            False,
+            {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"},
+        ),
     ],
 )
-def test_parallel_predict_unit_batch(workers, checkpointing):
-    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+def test_parallel_predict_unit_batch(workers, checkpointing, gp_mode):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing, gp_mode)
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, gp_mode",
     [
-        (1, True),
-        (1, False),
-        # (2, True),
-        # (2, False),
+        (1, True, None),
+        (1, False, None),
+        # (2, True, None),
+        # (2, False, None),
     ],
 )
-def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
-    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing, gp_mode):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing, gp_mode)
 
 
 @pytest.mark.gpu()
@@ -1004,7 +1066,17 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
-def test_merge_mole_md_consistency(workers, ensemble, device):
+@pytest.mark.parametrize(
+    "gp_mode",
+    [
+        None,  # default allgather + index_split
+        # A2A + spatial — tests multi-step MD with spatial repartitioning
+        {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"},
+        # A2A + index_split — tests A2A with contiguous partitioning
+        {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+    ],
+)
+def test_merge_mole_md_consistency(workers, ensemble, device, gp_mode):
     """Test merge_mole vs no-merge consistency over MD trajectory.
 
     Runs 3 trials:
@@ -1015,8 +1087,15 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     Compares the relative drift of A-C against baseline A-B to ensure
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
+
+    When gp_mode is not None, passes backbone overrides to enable
+    A2A graph parallel with the specified partition strategy.
     """
     import torch
+
+    # A2A GP modes require workers >= 2 to actually exercise multi-rank
+    if gp_mode is not None and workers < 2:
+        pytest.skip("A2A GP mode requires workers >= 2")
 
     torch.use_deterministic_algorithms(True)
 
@@ -1093,6 +1172,9 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
             "stresses": np.array(stresses),
         }
 
+    # Build overrides for GP mode
+    overrides = {"backbone": gp_mode} if gp_mode is not None else None
+
     # Trial A: no merge
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
     predict_unit_A = pretrained_mlip.get_predict_unit(
@@ -1100,6 +1182,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        overrides=overrides,
     )
     calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
     results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
@@ -1111,6 +1194,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        overrides=overrides,
     )
     calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
     results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
@@ -1119,7 +1203,11 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     # Trial C: merge
     settings_merge = InferenceSettings(merge_mole=True, **base_settings)
     predict_unit_C = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device=device, inference_settings=settings_merge, workers=workers
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_merge,
+        workers=workers,
+        overrides=overrides,
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
@@ -1822,4 +1910,98 @@ def test_execution_mode_not_set_when_conditions_not_met(model_name):
     assert predict_unit.inference_settings.execution_mode is None, (
         f"Expected execution_mode to be None when activation_checkpointing=True, "
         f"got {predict_unit.inference_settings.execution_mode}"
+    )
+
+
+# =========================================================================
+# Full-model GP correctness: no-GP vs all-gather vs A2A
+# Skipped on CI (no multi-GPU), run locally or via SLURM
+# =========================================================================
+
+_skip_if_ci = pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Multi-GPU test, skipped in CI",
+)
+
+
+@_skip_if_ci
+@pytest.mark.gpu()
+@pytest.mark.parametrize("num_atoms", [10, 50, 100])
+@pytest.mark.parametrize(
+    "workers, gp_mode",
+    [
+        # All-gather (default GP)
+        (1, None),
+        (2, None),
+        (4, None),
+        # A2A + spatial
+        (1, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (4, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        # A2A + index_split
+        (1, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+        (2, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+        (4, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+    ],
+)
+def test_full_model_gp_correctness(num_atoms, workers, gp_mode):
+    seed = 42
+    model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    ifsets = InferenceSettings(
+        tf32=False,
+        merge_mole=True,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+
+    overrides = None
+    if gp_mode is not None:
+        overrides = {"backbone": gp_mode}
+
+    seed_everywhere(seed)
+    ppunit = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device="cuda",
+        inference_settings=ifsets,
+        num_workers=workers,
+        overrides=overrides,
+    )
+    pp_results = ppunit.predict(atomic_data)
+    distutils.cleanup_gp_ray()
+
+    seed_everywhere(seed)
+    ref_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=ifsets
+    )
+    ref_results = ref_unit.predict(atomic_data)
+
+    assert torch.allclose(
+        pp_results["energy"].detach().cpu(),
+        ref_results["energy"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Energy mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"pp={pp_results['energy'].item():.6f}, "
+        f"ref={ref_results['energy'].item():.6f}"
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu(),
+        ref_results["forces"].detach().cpu(),
+        atol=FORCE_TOL,
+    ), (
+        f"Forces mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"max_diff={torch.max(torch.abs(pp_results['forces'].detach().cpu() - ref_results['forces'].detach().cpu())).item():.6e}"
+    )
+    assert torch.allclose(
+        pp_results["stress"].detach().cpu(),
+        ref_results["stress"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Stress mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}"
     )
