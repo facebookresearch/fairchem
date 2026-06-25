@@ -1654,6 +1654,56 @@ def _test_untrained_hessian(checkpoint_path, device):
     assert torch.allclose(hessian, hessian.T, atol=1e-5), "Hessian is not symmetric"
 
 
+@pytest.mark.gpu()
+def test_hessian_activation_checkpointing(conserving_mole_checkpoint):
+    """
+    Test that hessian is identical with and without activation checkpointing on GPU.
+    """
+    from ase.build import molecule
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    results = {}
+    for ac in (False, True):
+        torch.manual_seed(42)
+        torch.cuda.manual_seed_all(42)
+        settings = InferenceSettings(
+            predict_untrained_forces={"omol"},
+            predict_untrained_hessian={"omol"},
+            hessian_vmap=True,
+            activation_checkpointing=ac,
+        )
+        predictor = MLIPPredictUnit(
+            conserving_mole_checkpoint[0],
+            device="cuda",
+            inference_settings=settings,
+        )
+        preds = predictor.predict(batch)
+        results[ac] = {
+            "energy": preds["energy"].detach().cpu(),
+            "forces": preds["forces"].detach().cpu(),
+            "hessian": preds["hessian"].detach().cpu(),
+        }
+
+    assert torch.allclose(
+        results[False]["energy"], results[True]["energy"], atol=1e-5
+    ), "Energy differs with activation checkpointing"
+    assert torch.allclose(
+        results[False]["forces"], results[True]["forces"], atol=1e-5
+    ), "Forces differ with activation checkpointing"
+    assert torch.allclose(
+        results[False]["hessian"], results[True]["hessian"], atol=1e-5
+    ), "Hessian differs with activation checkpointing"
+
+
 def test_hessian_batch_size_validation(conserving_mole_checkpoint):
     """Test that hessian computation fails for batch_size > 1."""
     settings = InferenceSettings(
