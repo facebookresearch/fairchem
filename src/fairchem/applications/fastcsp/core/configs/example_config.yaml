@@ -47,6 +47,8 @@ pre_relaxation_filter:
   assign_groups: true        # run dedup blocker + assign group_index. Default false
   remove_duplicates: true    # drop all-but-one per group (representative = closest
                              # to the group-median density_generated). Default false
+  remove_problematic: false  # Remove structures that failed generation-time validity
+                             # checks (correct_z, molecule_matches_reference)
   # StructureMatcher tolerances (looser than post-relax)
   ltol: 0.3                  # lattice tolerance.  Default 0.2
   stol: 0.4                  # site tolerance (Å). Default 0.3

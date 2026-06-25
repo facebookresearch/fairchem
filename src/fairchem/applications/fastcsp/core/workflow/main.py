@@ -162,6 +162,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_problematic=pre_relax_config["remove_problematic"],
             remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
@@ -193,6 +194,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
             relax_config=relax_config,
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
@@ -233,6 +235,7 @@ def main(args: argparse.Namespace) -> None:
             density_tol=post_relax_config["density_tol"],
             energy_tol=post_relax_config["energy_tol"],
             apply_niggli_filter=post_relax_config["apply_niggli_filter"],
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(

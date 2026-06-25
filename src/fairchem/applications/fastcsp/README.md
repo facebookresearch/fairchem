@@ -204,9 +204,11 @@ FastCSP uses YAML configuration files to control all workflow parameters. Exampl
   `vars.{Z, spg_distribution_type, num_structures_per_spg, read_z_from_file,
   read_spg_from_file}`) and SLURM block
 - `pre_relaxation_filter`: Pre-ML deduplication
-  (`assign_groups`, `remove_duplicates`, `ltol`/`stol`/`angle_tol`,
+  (`assign_groups`, `remove_duplicates`, `remove_problematic`, `ltol`/`stol`/`angle_tol`,
   `bin_by_conf`/`bin_by_z`/`bin_by_spg`, `density_bin_size`, `density_tol`,
-  `apply_niggli_filter`, `npartitions`)
+  `apply_niggli_filter`, `npartitions`). Set `remove_problematic: true` to drop structures whose
+  generation-time validity flags (`correct_z`, `molecule_matches_reference`) are False before
+  relaxation.
 - `relax`: ML relaxation settings
   (`calculator`, `optimizer`, `fmax`, `max_steps`, `fix_symmetry`,
   `relax_cell`, `write_traj`, `traj_interval`) and SLURM block
