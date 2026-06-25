@@ -3,6 +3,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Inference-performance regression check — measures throughput
+        (atoms/sec) on a bulk-MgO supercell for each pretrained
+        model and writes a PerformanceReport. Drives the dashboard
+        used to catch perf regressions.
+Models: parametrized via models_to_test() — every registered
+        model not excluded by --exclude-models. Bare @pretrained
+        marker at module level (any model is valid).
+CI:     perf-test.yml (separate cadence; not part of test.yml /
+        test_gpu / test_gpu_sweep).
 """
 
 from __future__ import annotations
@@ -16,12 +26,14 @@ import pytest
 import torch
 from ase.build import bulk, make_supercell
 
-from fairchem.core import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
+from tests.conftest import get_predict_unit_for_test, models_to_test
 from tests.perf.performance_report import MeasurementStats, PerformanceReport
 
 if TYPE_CHECKING:
     from ase import Atoms
+
+pytestmark = pytest.mark.pretrained
 
 
 # The scope here ensures that the same report instance is passed to every
@@ -59,9 +71,13 @@ class InferenceTestCase:
     structures: list[Atoms]
 
 
-def generate_test_cases() -> list[InferenceTestCase]:
+def generate_test_cases(models: list[str]) -> list[InferenceTestCase]:
     """
     Generates a list of inference test cases to run.
+
+    Args:
+        models: model names (or paths) to benchmark; one InferenceTestCase
+            is produced per (model, device) combination.
 
     Returns:
         A list of test cases that should be run when measuring the
@@ -92,12 +108,25 @@ def generate_test_cases() -> list[InferenceTestCase]:
             device=device,
             structures=structures,
         )
-        for model in pretrained_mlip.available_models
+        for model in models
         for device in devices
     ]
 
 
-@pytest.mark.parametrize("test_case", generate_test_cases())
+def pytest_generate_tests(metafunc):
+    """
+    Pick models for ``test_pretrained_models`` from ``models_to_test()``,
+    which respects ``--sweep-model`` and ``--exclude-models``.
+    """
+    if metafunc.function.__name__ != "test_pretrained_models":
+        return
+    if "test_case" not in metafunc.fixturenames:
+        return
+    metafunc.parametrize(
+        "test_case", generate_test_cases(models_to_test(metafunc.config))
+    )
+
+
 def test_pretrained_models(test_case, performance_report) -> None:
     """
     Evaluates the performance of all of the input inference test cases.
@@ -110,7 +139,7 @@ def test_pretrained_models(test_case, performance_report) -> None:
     max_time_sec: float = 600
 
     # Setup the predictor
-    predictor = pretrained_mlip.get_predict_unit(
+    predictor = get_predict_unit_for_test(
         model_name=test_case.model,
         device=test_case.device,
     )
@@ -122,9 +151,8 @@ def test_pretrained_models(test_case, performance_report) -> None:
     #
     # In real tests at the time this was written, this saved around 20
     # minutes when using github runners (1 hour 10 minutes -> 49 minutes).
-    for task in predictor.dataset_to_tasks.keys():
+    for task in predictor.dataset_to_tasks:
         for atoms in test_case.structures:
-
             # Setup the prediction task
             atomic_data = AtomicData.from_ase(
                 input_atoms=atoms,
@@ -197,7 +225,7 @@ class MeanConvergenceChecker:
 
     def __init__(
         self,
-        relative_mean_change_threshold: float = 0.002, # 0.2%
+        relative_mean_change_threshold: float = 0.002,  # 0.2%
         required_samples_below_threshold: int = 3,
     ) -> None:
         """
@@ -253,7 +281,7 @@ class MeanConvergenceChecker:
         """
 
         # Grab the most recent relative mean changes
-        changes = self._mean_change_history[-self._required_samples_below_threshold:]
+        changes = self._mean_change_history[-self._required_samples_below_threshold :]
 
         # Converged only if the most recent "required_samples_below_threshold"
         # changes are all below "relative_mean_change_threshold"
