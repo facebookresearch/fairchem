@@ -23,4 +23,10 @@ protobuf<7
 ipykernel==7.2.0
 jupyter_book==2.1.5
 pytest-xdist==3.8.0
+# Provides --suppress-no-test-exit-code so the CI workflow can stop
+# treating pytest exit 5 ("no tests collected") as a failure without
+# shell-idiom workarounds. Used by .github/workflows/test.yml in every
+# pytest step where a shard / sweep / marker combo can legitimately
+# collect zero tests.
+pytest-custom-exit-code==0.3.0
 nvalchemi-toolkit-ops==0.3.1
