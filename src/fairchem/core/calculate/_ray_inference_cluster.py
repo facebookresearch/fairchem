@@ -304,6 +304,7 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
 def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
+    cancel_on_exit: bool = False,
 ) -> str | tuple[str, Any]:
     """
     Start a Ray cluster with the given configuration.
@@ -314,6 +315,8 @@ def start_ray_cluster(
         config: Complete cluster configuration from _build_cluster_config.
         return_cluster: If True, return (head_file, cluster) tuple for
             lifecycle management. If False, return just head_file string.
+        cancel_on_exit: If True, register an emergency scancel safety net for
+            interpreter exit and handled termination signals.
 
     Returns:
         Path to head.json file, or (head_file, RayCluster) if
@@ -332,6 +335,7 @@ def start_ray_cluster(
         cluster_id=config.get("cluster_id"),
         worker_wait_timeout_seconds=config.get("worker_wait_timeout_seconds", 300),
         temp_dir_template=config.get("temp_dir_template"),
+        cancel_on_exit=cancel_on_exit,
     )
 
     cluster.start_head(
@@ -454,7 +458,11 @@ def get_slurm_inference_raycluster(
                 cluster_config_overrides=cluster_config_overrides,
             )
 
-            head_file, cluster = start_ray_cluster(cluster_config, return_cluster=True)
+            head_file, cluster = start_ray_cluster(
+                cluster_config,
+                return_cluster=True,
+                cancel_on_exit=True,
+            )
 
             with open(head_file) as f:
                 head_info = json.load(f)

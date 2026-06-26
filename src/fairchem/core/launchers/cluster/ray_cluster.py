@@ -15,6 +15,7 @@ import logging
 import os
 import random
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -30,6 +31,52 @@ import submitit
 from submitit.helpers import Checkpointable, DelayedSubmission
 
 logger = logging.getLogger(__name__)
+
+_SIGNAL_CANCEL_CLUSTERS = set()
+_PREVIOUS_SIGNAL_HANDLERS = {}
+_SIGNAL_CANCEL_HANDLERS_INSTALLED = False
+
+
+def _cancel_clusters_and_chain(signum, frame):
+    for cluster in list(_SIGNAL_CANCEL_CLUSTERS):
+        cluster._atexit_cancel()
+
+    previous = _PREVIOUS_SIGNAL_HANDLERS.get(signum)
+    if callable(previous):
+        previous(signum, frame)
+    elif previous == signal.SIG_IGN:
+        return
+    elif signum == signal.SIGINT:
+        raise KeyboardInterrupt
+    else:
+        raise SystemExit(128 + signum)
+
+
+def _register_signal_cancel_cluster(cluster):
+    global _SIGNAL_CANCEL_HANDLERS_INSTALLED
+
+    _SIGNAL_CANCEL_CLUSTERS.add(cluster)
+    if _SIGNAL_CANCEL_HANDLERS_INSTALLED:
+        return
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        _PREVIOUS_SIGNAL_HANDLERS[sig] = signal.getsignal(sig)
+        signal.signal(sig, _cancel_clusters_and_chain)
+    _SIGNAL_CANCEL_HANDLERS_INSTALLED = True
+
+
+def _unregister_signal_cancel_cluster(cluster):
+    global _SIGNAL_CANCEL_HANDLERS_INSTALLED
+
+    _SIGNAL_CANCEL_CLUSTERS.discard(cluster)
+    if _SIGNAL_CANCEL_CLUSTERS or not _SIGNAL_CANCEL_HANDLERS_INSTALLED:
+        return
+
+    for sig, previous_handler in _PREVIOUS_SIGNAL_HANDLERS.items():
+        with suppress(Exception):
+            signal.signal(sig, previous_handler)
+    _PREVIOUS_SIGNAL_HANDLERS.clear()
+    _SIGNAL_CANCEL_HANDLERS_INSTALLED = False
 
 
 def kill_proc_tree(pid, including_parent=True):
@@ -104,6 +151,8 @@ def scancel(job_ids: list[str]):
     Args:
         job_ids (List[str]): A list of job IDs to cancel.
     """
+    if not job_ids:
+        return
     root_ids = list(set([i.split("_", maxsplit=2)[0] for i in job_ids]))
     subprocess.check_call(["scancel"] + root_ids)
 
@@ -532,6 +581,12 @@ class RayCluster:
         self._cancel_on_exit = cancel_on_exit
         if cancel_on_exit:
             atexit.register(self._atexit_cancel)
+            try:
+                _register_signal_cancel_cluster(self)
+            except Exception:
+                logger.debug(
+                    "Could not register RayCluster signal cleanup", exc_info=True
+                )
 
     def start_head_and_workers(
         self,
@@ -655,7 +710,10 @@ class RayCluster:
         )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
         logger.info(f"cluster {self.state.cluster_id} shutdown")
-        atexit.unregister(self._atexit_cancel)
+        with suppress(Exception):
+            atexit.unregister(self._atexit_cancel)
+        with suppress(Exception):
+            _unregister_signal_cancel_cluster(self)
 
     def _atexit_cancel(self):
         """
@@ -673,6 +731,8 @@ class RayCluster:
         # uncaught exception or KeyboardInterrupt before __exit__ still cancels jobs.
         if not self._cancel_on_exit:
             atexit.register(self._atexit_cancel)
+            with suppress(Exception):
+                _register_signal_cancel_cluster(self)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
