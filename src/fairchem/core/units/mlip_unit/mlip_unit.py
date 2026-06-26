@@ -57,6 +57,7 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
+from fairchem.core.models.uma.compat import apply_uma_compat_fixups
 from fairchem.core.units.mlip_unit.utils import load_inference_model
 
 if TYPE_CHECKING:
@@ -125,15 +126,17 @@ def convert_train_checkpoint_to_inference_checkpoint(
     )  # DCP model config
     train_eval_unit_state = inference_ckpt["config"]["runner"]["train_eval_unit"]
     unit_state = inference_ckpt["unit_state"]
-    torch.save(
-        MLIPInferenceCheckpoint(
-            model_state_dict=unit_state["model"],
-            ema_state_dict=unit_state["ema"],
-            model_config=train_eval_unit_state["model"],
-            tasks_config=train_eval_unit_state["tasks"],
-        ),
-        checkpoint_loc,
+    final_ckpt = MLIPInferenceCheckpoint(
+        model_state_dict=unit_state["model"],
+        ema_state_dict=unit_state["ema"],
+        model_config=train_eval_unit_state["model"],
+        tasks_config=train_eval_unit_state["tasks"],
     )
+    # Tag UMA generation (back-fill model_id for 1.1, hard-fail on 1.0)
+    # so the converted inference checkpoint is correctly identified by
+    # subsequent loads.
+    apply_uma_compat_fixups(final_ckpt, checkpoint_location=checkpoint_loc)
+    torch.save(final_ckpt, checkpoint_loc)
 
 
 def initialize_finetuning_model(
