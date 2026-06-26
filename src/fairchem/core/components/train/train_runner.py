@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 from torchtnt.framework.fit import fit
 
 from fairchem.core.common.utils import get_subdirectories_sorted_by_time
-from fairchem.core.components.runner import Runner
 from fairchem.core.components.callbacks import (
     StopBeforeTimeoutCallback,
     TrainCheckpointCallback,
 )
+from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
     import torch
