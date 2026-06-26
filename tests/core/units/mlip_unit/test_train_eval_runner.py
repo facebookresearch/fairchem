@@ -18,7 +18,7 @@ from omegaconf import OmegaConf
 from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import assign_device_for_local_rank
 from fairchem.core.common.test_utils import init_local_distributed_process_group
-from fairchem.core.components.train.callbacks import (
+from fairchem.core.components.callbacks import (
     StopBeforeTimeoutCallback,
     TrainCheckpointCallback,
 )

@@ -60,6 +60,6 @@ runner:
       expected_loss: ${expected_loss}
       expected_max_steps: ${max_steps}
       expected_max_epochs: ${max_epochs}
-    - _target_: fairchem.core.components.train.callbacks.TrainCheckpointCallback
+    - _target_: fairchem.core.components.callbacks.TrainCheckpointCallback
       checkpoint_every_n_steps: 0
       max_saved_checkpoints: 10

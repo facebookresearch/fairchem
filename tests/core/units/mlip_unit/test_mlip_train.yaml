@@ -57,7 +57,7 @@ runner:
   max_epochs: ${max_epochs}
   max_steps: ${max_steps}
   callbacks:
-      - _target_: fairchem.core.components.train.callbacks.TrainCheckpointCallback
+      - _target_: fairchem.core.components.callbacks.TrainCheckpointCallback
         checkpoint_every_n_steps: ${checkpoint_every}
         max_saved_checkpoints: 10
       - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback

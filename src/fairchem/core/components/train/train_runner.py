@@ -15,7 +15,7 @@ from torchtnt.framework.fit import fit
 
 from fairchem.core.common.utils import get_subdirectories_sorted_by_time
 from fairchem.core.components.runner import Runner
-from fairchem.core.components.train.callbacks import (
+from fairchem.core.components.callbacks import (
     StopBeforeTimeoutCallback,
     TrainCheckpointCallback,
 )
