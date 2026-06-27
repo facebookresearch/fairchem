@@ -553,6 +553,7 @@ class MLIPTrainEvalUnit(
 
         self.last_loss = None
         self.last_grad_norm = None
+        self.last_eval_metrics = None
         self.num_params = sum(p.numel() for p in model.parameters())
         if self.logger:
             self.logger.log_summary(
@@ -845,6 +846,8 @@ class MLIPTrainEvalUnit(
 
     def on_eval_epoch_end(self, state: State) -> None:
         metrics = self.eval_unit.on_eval_epoch_end(state)
+        # Store metrics for checkpoint callback access
+        self.last_eval_metrics = metrics
         if self.logger is not None:
             self.logger.log(metrics, commit=False)
         # Need to manually reshard the FSDP ema model: https://github.com/pytorch/pytorch/issues/117421#issuecomment-1890948734, otherwise we don't update the ema model weights correctly
