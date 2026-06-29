@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  InferenceBatcher — the Ray-backed batched-inference wrapper
+        around a fairchem predictor. Initialization, context-manager
+        lifecycle, batch-vs-serial consistency, runtime checkpoint
+        swap, graceful shutdown, and concurrent multi-batcher runs.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark).
+Markers: @serial (Ray subprocesses can't share workers) + @gpu.
+CI:     test_gpu_sweep (models shard, serial step only).
 """
 
 from __future__ import annotations
@@ -23,8 +31,13 @@ from ray import serve
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate._batch import InferenceBatcher
 
-# mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
-pytestmark = [pytest.mark.serial, pytest.mark.gpu]
+# mark all tests in this module as serial (Ray needs serial execution due to
+# large number of subprocesses) and pretrained (sweep-eligible).
+pytestmark = [
+    pytest.mark.serial,
+    pytest.mark.gpu,
+    pytest.mark.pretrained("uma-s-1p2"),
+]
 
 
 @pytest.fixture(autouse=True)
@@ -96,9 +109,9 @@ def ray_controlled():
 
 
 @pytest.fixture()
-def inference_batcher(ray_session, uma_predict_unit):
+def inference_batcher(ray_session, declared_predict_unit):
     batcher = InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
@@ -129,9 +142,9 @@ def inference_batcher(ray_session, uma_predict_unit):
         ),
     ],
 )
-def test_initialization_options(ray_session, uma_predict_unit, kwargs, assert_fn):
+def test_initialization_options(ray_session, declared_predict_unit, kwargs, assert_fn):
     batcher = InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=16,
         batch_wait_timeout_s=0.1,
         num_replicas=1,
@@ -141,9 +154,9 @@ def test_initialization_options(ray_session, uma_predict_unit, kwargs, assert_fn
     batcher.shutdown(shutdown_ray=False)
 
 
-def test_context_manager_enter_exit(ray_session, uma_predict_unit):
+def test_context_manager_enter_exit(ray_session, declared_predict_unit):
     with InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=16,
         batch_wait_timeout_s=0.1,
         num_replicas=1,
@@ -161,7 +174,7 @@ def test_context_manager_enter_exit(ray_session, uma_predict_unit):
         executor.submit(time.sleep, 1)
 
 
-def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
+def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
     """Test that batched and serial calculations produce consistent results."""
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
 
@@ -182,7 +195,7 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
         )
     )
     results_serial = [
-        calculate_properties(atoms, uma_predict_unit) for atoms in atoms_list
+        calculate_properties(atoms, declared_predict_unit) for atoms in atoms_list
     ]
 
     assert len(results_batched) == len(results_serial)
@@ -192,11 +205,11 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
 
 
 def test_checkpoint_swap_with_energy_verification(
-    ray_session, uma_predict_unit, uma_predict_unit_alt
+    ray_session, declared_predict_unit, uma_predict_unit_alt
 ):
     """Test that checkpoint swapping produces different energies and swapping back recovers originals."""
     batcher = InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
@@ -225,7 +238,7 @@ def test_checkpoint_swap_with_energy_verification(
             abs(e_initial - e_swapped) > 1e-5
         ), f"Energies should differ between models but got {e_initial} and {e_swapped}"
 
-    batcher.update_checkpoint(uma_predict_unit)
+    batcher.update_checkpoint(declared_predict_unit)
 
     energies_restored = []
     for atoms in atoms_list:
@@ -236,10 +249,10 @@ def test_checkpoint_swap_with_energy_verification(
     batcher.shutdown(shutdown_ray=False)
 
 
-def test_batcher_shutdown(ray_controlled, uma_predict_unit):
+def test_batcher_shutdown(ray_controlled, declared_predict_unit):
     """Test that shutdown(shutdown_ray=True) cleans up all resources including Ray."""
     batcher = InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
@@ -267,13 +280,13 @@ def test_batcher_shutdown(ray_controlled, uma_predict_unit):
     ],
 )
 def test_multiple_batchers(
-    ray_session, uma_predict_unit, uma_predict_unit_alt, same_model
+    ray_session, declared_predict_unit, uma_predict_unit_alt, same_model
 ):
     """Test that multiple InferenceBatchers can coexist on the same Ray cluster."""
-    predict_unit2 = uma_predict_unit if same_model else uma_predict_unit_alt
+    predict_unit2 = declared_predict_unit if same_model else uma_predict_unit_alt
 
     batcher1 = InferenceBatcher(
-        predict_unit=uma_predict_unit,
+        predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
