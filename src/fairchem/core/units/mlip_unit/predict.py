@@ -788,6 +788,39 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         return self._dataset_to_tasks
 
 
+_DEFAULT_BATCH_SERVER_TIMEOUT_S = 600.0
+
+
+def _resolve_batch_server_timeout() -> float | None:
+    """Read ``FAIRCHEM_BATCH_SERVER_TIMEOUT_S`` once per construction.
+
+    Returns the float seconds to pass as ``DeploymentResponse.result``'s
+    ``timeout_s`` (Ray Serve's blocking wait kwarg). ``"none"`` /
+    ``"0"`` / negative values disable the bound. Malformed values fall
+    back to the default with a warning so a typo can't silently revert
+    to an indefinite wait.
+    """
+    raw = os.environ.get("FAIRCHEM_BATCH_SERVER_TIMEOUT_S")
+    if raw is None:
+        return _DEFAULT_BATCH_SERVER_TIMEOUT_S
+    cleaned = raw.strip().lower()
+    if cleaned in ("none", ""):
+        return None
+    try:
+        val = float(cleaned)
+    except ValueError:
+        logging.warning(
+            "FAIRCHEM_BATCH_SERVER_TIMEOUT_S=%r is not a number; "
+            "falling back to default %.1fs.",
+            raw,
+            _DEFAULT_BATCH_SERVER_TIMEOUT_S,
+        )
+        return _DEFAULT_BATCH_SERVER_TIMEOUT_S
+    if val <= 0:
+        return None
+    return val
+
+
 class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     """
     PredictUnit wrapper that uses Ray Serve for batched inference.
@@ -803,6 +836,14 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     Can be constructed directly with a server handle, or via
     ``from_deployment_connection_info`` to connect to an already-running deployment.
+
+    Every blocking ``.result()`` on a Ray Serve future is bounded by a
+    per-call timeout sourced from the ``FAIRCHEM_BATCH_SERVER_TIMEOUT_S``
+    environment variable (default ``600.0`` seconds). A wedged handle
+    or unresponsive replica surfaces as a clean ``TimeoutError`` instead
+    of an indefinite hang.  Use the env var to override; set to a
+    floating-point number of seconds, or to ``"none"`` / ``"0"`` to
+    disable the timeout entirely.
     """
 
     _handle_cache: ClassVar[dict[str, DeploymentHandle]] = {}
@@ -836,6 +877,23 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             )
         self.server_handle = server_handle
         self._multiplexed_model_id = multiplexed_model_id
+        # Identity-based cache for ``validate_atoms_data``.
+        # ``ase_calculator.calculate()`` calls validate on every
+        # optimizer step with the same ``atoms.info`` dict object;
+        # validation only mutates that dict in place to add defaults
+        # (charge, spin, ...). After the first call the dict is
+        # saturated, so any subsequent call on the same dict is
+        # guaranteed redundant. We key on ``(id(info), task_name)``;
+        # since this unit holds no reference to the dict itself, this
+        # is purely a fast-path skip and cannot extend its lifetime.
+        self._validated_info_keys: set[tuple[int, str]] = set()
+        # Per-call ``.result()`` timeout (seconds). Sourced from
+        # ``FAIRCHEM_BATCH_SERVER_TIMEOUT_S`` so callers can override
+        # without code changes (tests can shrink it to fail fast;
+        # users on slow CPUs can lengthen it). ``None`` disables the
+        # bound entirely so behavior matches the pre-timeout default
+        # if someone needs it.
+        self._request_timeout_s = _resolve_batch_server_timeout()
 
     @property
     def multiplexed_model_id(self) -> str | None:
@@ -899,7 +957,9 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.remote(data, undo_element_references).result()
+        result = self.server_handle.remote(data, undo_element_references).result(
+            timeout_s=self._request_timeout_s
+        )
         return result
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
@@ -910,32 +970,44 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         model-specific rather than hardcoded.  The server runs
         ``predict_unit.validate_atoms_data`` on a stub ``Atoms`` and
         returns the mutated ``atoms.info`` dict which is applied locally.
+
+        Skips the Ray Serve round-trip when the same ``atoms.info``
+        dict object has already been validated for this task: the
+        server's validation is purely defaulting and was applied to
+        the dict in place on the first call, so subsequent calls
+        with the same dict are no-ops. ``ase_calculator.calculate()``
+        calls this on every optimizer step — without the skip, each
+        step pays a network hop.
         """
+        key = (id(atoms.info), task_name)
+        if key in self._validated_info_keys:
+            return
         updated_info = self.server_handle.validate_atoms_data.remote(
             dict(atoms.info), task_name
-        ).result()
+        ).result(timeout_s=self._request_timeout_s)
         atoms.info.update(updated_info)
+        self._validated_info_keys.add(key)
 
     @cached_property
     def dataset_to_tasks(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
             "dataset_to_tasks"
-        ).result()
+        ).result(timeout_s=self._request_timeout_s)
 
     @cached_property
     def atom_refs(self) -> dict | None:
-        return self.server_handle.get_predict_unit_attribute.remote(
-            "atom_refs"
-        ).result()
+        return self.server_handle.get_predict_unit_attribute.remote("atom_refs").result(
+            timeout_s=self._request_timeout_s
+        )
 
     @cached_property
     def inference_settings(self) -> InferenceSettings:
         return self.server_handle.get_predict_unit_attribute.remote(
             "inference_settings"
-        ).result()
+        ).result(timeout_s=self._request_timeout_s)
 
     @cached_property
     def form_elem_refs(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
             "form_elem_refs"
-        ).result()
+        ).result(timeout_s=self._request_timeout_s)

@@ -29,6 +29,13 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
     UNIT_RESUME_CONFIG,
 )
+from tests.conftest import (
+    excluded_models,
+    get_predict_unit_for_test,
+    sweep_model,
+    sweep_refs_from,
+    uma_models,
+)
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_uma_dataset,
@@ -382,41 +389,77 @@ def fake_uma_dataset(tmp_path_factory):
     return data_dir
 
 
-@pytest.fixture(scope="session")
-def uma_s_1p1_checkpoint():
-    """Session-scoped pretrained uma-s-1p1 checkpoint path (cached by HuggingFace Hub)."""
-    from fairchem.core.calculate.pretrained_mlip import (
-        pretrained_checkpoint_path_from_name,
-    )
-
-    return pretrained_checkpoint_path_from_name("uma-s-1p1")
-
-
-@pytest.fixture(scope="session")
-def uma_s_1p2_checkpoint():
-    """Session-scoped pretrained uma-s-1p2 checkpoint path (cached by HuggingFace Hub)."""
-    from fairchem.core.calculate.pretrained_mlip import (
-        pretrained_checkpoint_path_from_name,
-    )
-
-    return pretrained_checkpoint_path_from_name("uma-s-1p2")
-
-
 # _LOCAL_CHECKPOINT = "/checkpoint/ocp/shared/uma_checkpoints/uma_sm_1p2.pt"
 @pytest.fixture(scope="session")
-def uma_predict_unit():
-    """Predict unit using the first available UMA model."""
-    # return load_predict_unit(_LOCAL_CHECKPOINT, device="cpu")
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+def uma_predict_unit(request):
+    """
+    Predict unit for some UMA model — sweep-aware and exclude-aware.
+
+    * If ``--sweep-model`` is set, loads that checkpoint (name or path).
+    * Otherwise picks the first registered UMA model NOT in
+      ``--exclude-models``. This ensures the base CI job (which excludes
+      ``uma-s-1p1`` and ``uma-s-1p2`` so the sweep jobs own those
+      models) does not silently load an excluded model — which would
+      both violate the partition contract and double-run that model.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
+    sweep = sweep_model(request.config)
+    if sweep:
+        return get_predict_unit_for_test(
+            sweep,
+            device=device,
+            refs_from=sweep_refs_from(request.config),
+        )
+    excluded = excluded_models(request.config)
+    candidates = [m for m in uma_models() if m not in excluded]
+    if not candidates:
+        pytest.skip(
+            "No UMA model available outside --exclude-models — sweep jobs "
+            "should be used instead."
+        )
+    return pretrained_mlip.get_predict_unit(candidates[0], device=device)
 
 
 @pytest.fixture(scope="session")
-def uma_predict_unit_alt():
-    """Predict unit using the second available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if len(uma_models) < 2:
+def uma_predict_unit_alt(request):
+    """
+    Predict unit for a UMA model different from the one ``uma_predict_unit`` uses.
+
+    When ``--sweep-model`` is a registered UMA model, picks any other UMA
+    model. When sweep is unset, picks the second UMA model alphabetically.
+    Skips when ``--sweep-model`` is a filesystem path — we cannot reliably
+    tell which registered model (if any) corresponds to the path, so we
+    cannot guarantee this fixture returns a *different* one.
+    """
+    available_uma = uma_models()
+    if len(available_uma) < 2:
         pytest.skip("Fewer than 2 UMA models available")
+    sweep = sweep_model(request.config)
+    if sweep and sweep not in available_uma:
+        # path-style sweep — primary model identity is opaque
+        pytest.skip("--sweep-model is a path; cannot pick a distinct UMA model")
+    candidates = (
+        [m for m in available_uma if m != sweep] if sweep else available_uma[1:]
+    )
+    if not candidates:
+        pytest.skip("No UMA model available that differs from sweep model")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(uma_models[1], device=device)
+    return pretrained_mlip.get_predict_unit(candidates[0], device=device)
+
+
+@pytest.fixture(scope="module")
+def declared_predict_unit(pretrained_checkpoint, request):
+    """
+    Predict unit for the model(s) declared in the test's ``@pretrained(...)`` marker.
+
+    Parametrized by the root conftest ``pytest_generate_tests`` hook, which reads
+    model names from the ``@pytest.mark.pretrained("uma-s-1p1", ...)`` decorator.
+
+    Shared across test modules — import via fixture dependency (just add
+    ``declared_predict_unit`` to the test function signature).  Module-scoped so
+    the model is loaded once per (module, model-name) pair.
+    """
+    return get_predict_unit_for_test(
+        pretrained_checkpoint,
+        refs_from=sweep_refs_from(request.config),
+    )
