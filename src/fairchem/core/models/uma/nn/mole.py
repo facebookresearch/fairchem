@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -8,18 +9,23 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import math
-from contextlib import suppress
 from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-fairchem_cpp_found = False
-with suppress(ModuleNotFoundError):
-    import fairchem_cpp  # try to use DGL if available
+# MOLEDGL routes its segment-MM through ``fairchem.core.common.segmentmm``,
+# which wraps cuBLAS via nvmath-python. The driver itself lazily checks
+# for nvmath at first call (see ``_ensure_nvmath_available``), so this
+# import is always safe even on CPU-only / non-CUDA installs.
+from fairchem.core.common import segmentmm as nvmath_segmentmm
 
-    fairchem_cpp_found = True
+# Default GEMM dispatch for MOLEDGL. Per-call override is supported via
+# the ``use_grouped_gemm`` kwarg on ``MOLEDGL.forward``.
+# - True  : cublasGemmGroupedBatchedEx (single launch covering all segments).
+# - False : Python loop of cublasGemmEx calls (one per segment).
+USE_GROUPED_GEMM = True
 
 
 def interval_intersection(interval1, interval2):
@@ -101,23 +107,41 @@ class MOLEDGL(torch.nn.Module):
 
         self.global_mole_tensors = global_mole_tensors
 
-    def forward(self, x):
+    def forward(self, x, use_grouped_gemm: bool | None = None):
+        """Forward pass through the per-segment GEMM cascade.
+
+        Args:
+            x: Input tensor, shape ``(N, in_features)`` or
+                ``(N, S, in_features)``.
+            use_grouped_gemm: Optional per-call override. If ``None`` (default),
+                falls back to the module-level ``USE_GROUPED_GEMM`` flag. Set
+                ``True`` for one ``cublasGemmGroupedBatchedEx`` call covering
+                all segments, or ``False`` for a Python loop of ``cublasGemmEx``
+                calls (one per segment).
+        """
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
             weights = torch.einsum(
                 "eoi, be->bio",
                 self.weights,
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
+        if use_grouped_gemm is None:
+            use_grouped_gemm = USE_GROUPED_GEMM
+        use_grouped_gemm = bool(use_grouped_gemm)
         x_shape = x.shape
         if x.ndim == 2:
-            r = fairchem_cpp.ops.segment_mm(
-                x, weights, self.global_mole_tensors.mole_sizes
+            r = nvmath_segmentmm.segment_mm(
+                x,
+                weights,
+                self.global_mole_tensors.mole_sizes,
+                use_grouped_gemm=use_grouped_gemm,
             )
         elif x.ndim == 3:
-            r = fairchem_cpp.ops.segment_mm(
+            r = nvmath_segmentmm.segment_mm(
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_mole_tensors.mole_sizes * x_shape[1],
+                use_grouped_gemm=use_grouped_gemm,
             ).reshape(*x_shape[:-1], -1)
         else:
             raise ValueError("x.ndim not in (2,3) not allowed")
