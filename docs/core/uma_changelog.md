@@ -21,7 +21,7 @@ This page documents the release history of UMA models, including new features, i
 
 UMA 1.0 checkpoints are no longer supported (their MoE `include_self` behavior diverges from later releases); loading one raises a `RuntimeError`. To use a 1.0 checkpoint, `pip install 'fairchem-core<=2.21.0'`.
 
-Loading now requires a generation tag. UMA 1.1 (which ships without one) is auto-tagged `model_id = "UMA-1.1"` in memory; UMA 1.2+ already carry `model_id`; a checkpoint with neither `model_id` nor `backbone.model_version` is rejected. When training, set `model_id` on the model config (e.g. `model_id: UMA-1.2.1`).
+Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without one) is auto-tagged `model_id = "UMA-1.1"` in memory; UMA 1.2+ already carry `model_id`; a checkpoint with neither `model_id` nor `backbone.model_version` is rejected. When training, set `model_id` on the model config (e.g. `model_id: UMA-1.2.1`).
 
 ---
 
