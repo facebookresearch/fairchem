@@ -18,24 +18,30 @@ before the model is instantiated. Two concrete behaviors:
   shim: it should be deprecated and removed once UMA 1.1 is no longer
   supported.
 
-Call sites
-----------
-The fixup must run at every raw I/O boundary that loads a checkpoint:
+Call site
+---------
+The fixup runs at a single chokepoint:
 
-1. :func:`fairchem.core.units.mlip_unit.utils.load_inference_model` — the
-   generic Hydra loader (safety net for any direct caller).
-2. :class:`fairchem.core.units.mlip_unit.predict.MLIPPredictUnit` —
-   ``MLIPPredictUnit.__init__`` does its own ``torch.load`` and reads the
-   config before delegating to ``load_inference_model``. Hooking here means
-   UMA 1.0 raises before the ~1 GB tensor allocation, and downstream calls
-   see the patched config.
-3. :func:`fairchem.core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint`
-   — converts a DCP train checkpoint into a fresh inference checkpoint. The
-   fixup runs on the new ``MLIPInferenceCheckpoint`` before it is written to
-   disk, so finetune-derived inference checkpoints come out correctly tagged.
+:func:`fairchem.core.units.mlip_unit.utils.load_inference_model` — the
+generic Hydra loader that every load-and-instantiate path funnels through,
+applied right after ``torch.load`` and before the ~1 GB
+``hydra.utils.instantiate``. Both inference (``MLIPPredictUnit.__init__``,
+which delegates here via ``preloaded_checkpoint``) and finetuning
+(``initialize_finetuning_model``) reach it, so a UMA 1.0 checkpoint is
+rejected before instantiation and a UMA 1.1 ``model_id`` is back-filled
+in-memory on every load.
 
-:func:`apply_uma_compat_fixups` is idempotent — calling it from all three
-sites (and accidentally multiple times) is safe.
+The classification is cheap and the back-fill is idempotent, so this is the
+only place it needs to live. Two paths deliberately do *not* hook it:
+
+* ``MLIPPredictUnit.__init__`` does its own early ``torch.load`` to peek at
+  ``backbone.lmax/mmax/model`` before instantiation, but those reads do not
+  depend on the fixup, and it then delegates to ``load_inference_model`` —
+  so no separate call is needed there.
+* ``convert_train_checkpoint_to_inference_checkpoint`` writes a fresh
+  inference checkpoint from train state without tagging it. The model_id is
+  therefore *not* persisted to that file; it is re-derived in-memory each
+  time the file is loaded through ``load_inference_model``.
 
 Override-bypass policy
 ----------------------
@@ -50,9 +56,10 @@ Known gaps
   instantiates tasks, not the model — out of scope for this gate.
 * ``MLIPTrainEvalUnit._execute_load_state`` resumes a DCP train run via
   ``dcp.load`` directly into an already-instantiated model — also out of
-  scope. The first subsequent ``save_state`` routes through
-  ``convert_train_checkpoint_to_inference_checkpoint`` where the fixup
-  *does* fire, so the persisted inference checkpoint is still tagged.
+  scope. ``save_state`` then writes an inference checkpoint via
+  ``convert_train_checkpoint_to_inference_checkpoint`` *without* tagging it;
+  the ``model_id`` is back-filled in-memory when that file is later loaded
+  through ``load_inference_model``, not persisted to disk.
 """
 
 from __future__ import annotations

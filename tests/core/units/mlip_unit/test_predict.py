@@ -1895,13 +1895,15 @@ def test_uma_1p1_predict_unit_has_model_id(uma_1p1_predict_unit):
 
 def test_uma_1p1_finetune_propagates_model_id():
     """When finetuning starts from UMA 1.1, the back-filled `model_id` is
-    stashed onto `model.finetune_model_full_config` so a subsequent
-    `save_state` persists it into the new checkpoint."""
+    stashed onto `model.finetune_model_full_config` (the fixup runs inside
+    `load_inference_model`, which `initialize_finetuning_model` delegates to)."""
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+
     ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
     model = initialize_finetuning_model(ckpt, overrides=None, heads=None)
-    assert (
-        model.finetune_model_full_config["model_id"] == UMA_1P1_MODEL_ID
-    )
+    assert model.finetune_model_full_config["model_id"] == UMA_1P1_MODEL_ID
 
 
 def test_uma_1p0_predict_unit_raises():
@@ -1912,7 +1914,9 @@ def test_uma_1p0_predict_unit_raises():
         # Best-effort discovery in the local HF cache.
         from pathlib import Path
 
-        cache_root = Path("~/.cache/fairchem/models--facebook--UMA/snapshots").expanduser()
+        cache_root = Path(
+            "~/.cache/fairchem/models--facebook--UMA/snapshots"
+        ).expanduser()
         candidates = sorted(cache_root.glob("*/checkpoints/uma-s-1.pt"))
         uma_1p0_path = str(candidates[0]) if candidates else None
     if uma_1p0_path is None or not os.path.exists(uma_1p0_path):
