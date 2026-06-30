@@ -49,11 +49,11 @@ after ``torch.load`` and before ``hydra.utils.instantiate``. Both inference
 
 Future generations
 ------------------
-When a new generation ships with a different MoE composition behavior, update the
-``include_self_bug`` rule in :func:`apply_uma_compat_fixups`, update the table
-above + ``uma_changelog.md``, extend
-:data:`_UMA_MODEL_ID_RE` if the ``model_id`` format changes (e.g. patch
-versions), and add a test in ``tests/core/models/uma/test_compat.py``.
+When a new generation ships, update the ``include_self_bug`` rule in
+:func:`apply_uma_compat_fixups` (only 1.2 is currently special) and the
+generation branches in :func:`get_uma_version`, refresh the table above +
+``uma_changelog.md``, and add a test in
+``tests/core/models/uma/test_compat.py``.
 
 Known gaps
 ----------
@@ -68,10 +68,8 @@ Known gaps
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 if TYPE_CHECKING:
@@ -87,9 +85,6 @@ UMA_1P1_MODEL_ID = "UMA-1.1"
 # this repo: fairchem_core-2.21.0-2-g28c7f4ba6).
 _LAST_UMA_1P0_FAIRCHEM_VERSION = "2.21.0"
 
-# Accepts "UMA-1.X" or "UMA-S-1.X" / "UMA-M-1.X" / "UMA-L-1.X" historical forms.
-_UMA_MODEL_ID_RE = re.compile(r"^UMA(?:-[SML])?-1\.(\d+)$")
-
 # Hydra registry short-name for the UMA MoE backbone.
 _UMA_BACKBONE_SHORT_NAME = "escnmd_moe_backbone"
 # Suffix of the fully-qualified backbone class path used in shipped checkpoints.
@@ -97,98 +92,63 @@ _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 
 
 def _is_uma_backbone(backbone_model: object) -> bool:
-    if not isinstance(backbone_model, str):
-        return False
-    if backbone_model == _UMA_BACKBONE_SHORT_NAME:
-        return True
-    if backbone_model.endswith(_UMA_BACKBONE_FQN_SUFFIX):
-        return True
-    # Defensive: resolve via the registry in case of subclasses.
-    try:
-        from fairchem.core.common.registry import registry
-        from fairchem.core.models.uma.escn_moe import eSCNMDMoeBackbone
-
-        cls = registry.get_model_class(backbone_model)
-    except Exception:
-        return False
-    return isinstance(cls, type) and issubclass(cls, eSCNMDMoeBackbone)
+    return isinstance(backbone_model, str) and (
+        backbone_model == _UMA_BACKBONE_SHORT_NAME
+        or backbone_model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
+    )
 
 
 def _match_version(value: object, target: float) -> bool:
-    """Return True iff ``value`` parses to a float ≈ ``target``."""
+    """Return True iff ``value`` equals ``target`` (handles float or str)."""
     try:
-        return bool(np.isclose(float(value), target))
+        return float(value) == target
     except (TypeError, ValueError):
         return False
 
 
 def _normalize_model_id(value: object) -> str | None:
-    if value is None:
-        return None
+    """Return a stripped model_id, or None if absent/blank/non-string."""
     if not isinstance(value, str):
         return None
-    stripped = value.strip()
-    return stripped or None
+    return value.strip() or None
 
 
 def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
-    """Classify a checkpoint's ``model_config`` by UMA generation.
+    """Classify a checkpoint by UMA generation.
 
-    Returns one of:
+    Shipped signatures: 1.0 = neither field set; 1.1 = ``model_version`` only;
+    1.2 = ``model_id`` only. A ``model_id`` is matched on its trailing version,
+    so a future model_id-tagged 1.2.1 / 1.3 is not mistaken for 1.2.
 
-    * ``"1.0"`` / ``"1.1"`` / ``"1.2"`` — a recognized UMA generation.
-    * ``"unidentified"`` — a UMA backbone with neither ``model_id`` nor
-      ``backbone.model_version`` (the on-disk signature of a deprecated UMA 1.0
-      checkpoint, or an untagged freshly-trained model). Rejected on load.
-    * ``"unknown_uma"`` — a UMA backbone with a ``model_id`` /
-      ``model_version`` that does not match any known generation (e.g. a future
-      UMA 1.3, or a user-customized ``model_id``).
-    * ``"not_uma"`` — not a UMA checkpoint, a missing/corrupt ``model_config``,
-      or no backbone declared.
+    Returns ``"1.0"`` / ``"1.1"`` / ``"1.2"`` for a recognized generation;
+    ``"unidentified"`` when neither field is set (rejected on load);
+    ``"unknown_uma"`` for a UMA backbone that matches nothing known (future
+    release or user-customized ``model_id``); ``"not_uma"`` otherwise.
     """
     if not isinstance(model_config, (dict, DictConfig)):
         return "not_uma"
-
     backbone = model_config.get("backbone", {})
-    if not isinstance(backbone, (dict, DictConfig)):
+    if not isinstance(backbone, (dict, DictConfig)) or not _is_uma_backbone(
+        backbone.get("model")
+    ):
         return "not_uma"
 
-    if not _is_uma_backbone(backbone.get("model")):
-        return "not_uma"
+    model_id = _normalize_model_id(model_config.get("model_id"))
+    model_version = backbone.get("model_version")
 
-    mid = _normalize_model_id(model_config.get("model_id"))
-    if mid is not None:
-        match = _UMA_MODEL_ID_RE.match(mid)
-        if match:
-            minor = int(match.group(1))
-            if minor == 1:
-                return "1.1"
-            if minor == 2:
-                return "1.2"
-            logging.warning(
-                f"Unknown UMA minor version in model_id={mid!r}; "
-                "treating as unknown_uma."
-            )
-            return "unknown_uma"
-        # A user-customized model_id is respected — we don't reclassify
-        # the checkpoint based on backbone.model_version in that case
-        # (the user has explicitly named their derivative).
+    if model_id is None and model_version is None:
+        return "unidentified"  # 1.0 / untagged -> rejected on load
+    if model_id is None:  # legacy: identified by model_version
+        if _match_version(model_version, 1.0):
+            return "1.0"
+        if _match_version(model_version, 1.1):
+            return "1.1"
         return "unknown_uma"
-
-    mv = backbone.get("model_version")
-    if mv is None:
-        # No model_id AND no model_version: cannot identify the generation.
-        return "unidentified"
-    if _match_version(mv, 1.0):
-        return "1.0"
-    if _match_version(mv, 1.1):
-        return "1.1"
-    if _match_version(mv, 1.2):
+    if model_id.endswith("-1.2"):
         return "1.2"
-    logging.warning(
-        f"Unknown UMA backbone.model_version={mv!r}; treating as unknown_uma."
-    )
-    return "unknown_uma"
+    if model_id.endswith("-1.1"):
+        return "1.1"
+    return "unknown_uma"  # 1.2.1+, 1.3, or a user-customized model_id
 
 
 def _raise_uma_1p0(
@@ -219,9 +179,9 @@ def _raise_uma_1p0(
         f"(model_id={mid!r}, backbone.model_version={mv!r}).\n"
         f"\n"
         f"UMA 1.0 has a known semantic divergence in "
-        f"`fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone` (the "
-        f"composition-reduction `include_self` flag branches on "
-        f"`np.isclose(self.model_version, 1.0)`). Loading 1.0 weights with "
+        f"`fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone` (its "
+        f"composition-reduction `include_self` behavior differs from 1.1/1.2). "
+        f"Loading 1.0 weights with "
         f"the current code would produce numerically different results "
         f"than the original release, so this is a hard failure.\n"
         f"\n"
