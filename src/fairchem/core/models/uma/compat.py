@@ -2,64 +2,64 @@
 
 This module classifies a loaded :class:`MLIPInferenceCheckpoint` by UMA
 generation and applies in-place fixups to the checkpoint's ``model_config``
-before the model is instantiated. Two concrete behaviors:
+before the model is instantiated. ``model_id`` is the source of truth for the
+generation. Concrete behaviors:
 
-* **UMA 1.0 is deprecated and raises.** UMA 1.0 has a known semantic
-  divergence with later releases (the ``include_self`` flag in the
-  composition reduction at ``escn_moe.py``'s ``set_MOLE_coefficients``
-  branches on ``np.isclose(self.model_version, 1.0)``). Silent loads
-  would produce numerically different results than UMA 1.1/1.2, so we
-  hard-fail rather than ship a deprecation cycle.
-* **UMA 1.1 gets ``model_id`` back-filled** to the constant ``"UMA-1.1"``
-  if missing. Shipped UMA 1.1 checkpoints carry ``backbone.model_version=1.1``
-  but no top-level ``model_id`` (only 1.2 does). Back-filling here makes
-  ``HydraModel.model_id`` reflect the generation for downstream consumers
-  (logging, serving, surgery scripts). This back-fill is a transitional
-  shim: it should be deprecated and removed once UMA 1.1 is no longer
-  supported.
+* **Unidentified / UMA 1.0 are rejected.** A UMA backbone with neither a
+  ``model_id`` nor a ``backbone.model_version`` cannot be classified — this is
+  also the on-disk signature of a deprecated UMA 1.0 checkpoint — so it raises
+  with an actionable message (set ``model_id``, or ``pip install
+  'fairchem-core<=2.21.0'`` to use a genuine 1.0). An *explicit*
+  ``model_version == 1.0`` raises with the 1.0-specific deprecation message.
+* **UMA 1.1 gets ``model_id`` back-filled** to ``"UMA-1.1"`` if missing.
+  Shipped UMA 1.1 checkpoints carry ``backbone.model_version=1.1`` but no
+  top-level ``model_id`` (1.2+ ships ``model_id``). Back-filling makes
+  ``HydraModel.model_id`` reflect the generation for downstream consumers. This
+  is a transitional shim: deprecate/remove once UMA 1.1 is unsupported.
+* **``include_self_bug`` is set per generation** on the backbone config. The
+  ``include_self`` flag in the MoE composition reduction
+  (``escn_moe.eSCNMDMoeBackbone.set_MOLE_coefficients``) differs per generation.
+  The shim writes the authoritative value into ``backbone.include_self_bug``
+  before instantiation, so the backbone consumes a plain bool and never inspects
+  the version itself:
+
+  | Generation | Identified by | ``include_self_bug`` |
+  |---|---|---|
+  | 1.1 | ``model_version == 1.1`` (model_id back-filled) | ``False`` |
+  | 1.2 | ``model_id`` (e.g. ``UMA-S-1.2``) | ``True`` |
+  | 1.2.1+ | ``model_id`` (e.g. ``UMA-1.2.1``) | ``False`` |
+
+  The mapping lives in :data:`_UMA_INCLUDE_SELF` / :func:`uma_include_self_bug`
+  (default ``False``). 1.0 never reaches the lookup (rejected first).
+
+``model_version`` is no longer read for behavior — only as the legacy classifier
+fallback that identifies shipped 1.1. Its backbone default is unchanged.
 
 Call site
 ---------
 The fixup runs at a single chokepoint:
+:func:`fairchem.core.units.mlip_unit.utils.load_inference_model`, applied right
+after ``torch.load`` and before ``hydra.utils.instantiate``. Both inference
+(``MLIPPredictUnit.__init__``, via ``preloaded_checkpoint``) and finetuning
+(``initialize_finetuning_model``) reach it. It runs *before* any caller
+``overrides`` are merged, so a caller may still override ``model_id`` /
+``backbone.include_self_bug`` post-fixup (used by tests).
 
-:func:`fairchem.core.units.mlip_unit.utils.load_inference_model` — the
-generic Hydra loader that every load-and-instantiate path funnels through,
-applied right after ``torch.load`` and before the ~1 GB
-``hydra.utils.instantiate``. Both inference (``MLIPPredictUnit.__init__``,
-which delegates here via ``preloaded_checkpoint``) and finetuning
-(``initialize_finetuning_model``) reach it, so a UMA 1.0 checkpoint is
-rejected before instantiation and a UMA 1.1 ``model_id`` is back-filled
-in-memory on every load.
-
-The classification is cheap and the back-fill is idempotent, so this is the
-only place it needs to live. Two paths deliberately do *not* hook it:
-
-* ``MLIPPredictUnit.__init__`` does its own early ``torch.load`` to peek at
-  ``backbone.lmax/mmax/model`` before instantiation, but those reads do not
-  depend on the fixup, and it then delegates to ``load_inference_model`` —
-  so no separate call is needed there.
-* ``convert_train_checkpoint_to_inference_checkpoint`` writes a fresh
-  inference checkpoint from train state without tagging it. The model_id is
-  therefore *not* persisted to that file; it is re-derived in-memory each
-  time the file is loaded through ``load_inference_model``.
-
-Override-bypass policy
-----------------------
-The fixup runs *before* any caller-supplied ``overrides`` are merged into
-``model_config``. A user cannot bypass the UMA 1.0 gate by passing
-``overrides={"backbone": {"model_version": 1.1}}``. A user CAN, post-fixup,
-force a different ``model_id`` via ``overrides={"model_id": "MY-ID"}``.
+Future generations
+------------------
+When a new generation ships with a different MoE composition behavior, add it to
+:data:`_UMA_INCLUDE_SELF`, update the table above + ``uma_changelog.md``, extend
+:data:`_UMA_MODEL_ID_RE` if the ``model_id`` format changes (e.g. patch
+versions), and add a test in ``tests/core/models/uma/test_compat.py``.
 
 Known gaps
 ----------
-* ``load_tasks`` (utils.py) does its own ``torch.load`` but only
-  instantiates tasks, not the model — out of scope for this gate.
-* ``MLIPTrainEvalUnit._execute_load_state`` resumes a DCP train run via
-  ``dcp.load`` directly into an already-instantiated model — also out of
-  scope. ``save_state`` then writes an inference checkpoint via
-  ``convert_train_checkpoint_to_inference_checkpoint`` *without* tagging it;
-  the ``model_id`` is back-filled in-memory when that file is later loaded
-  through ``load_inference_model``, not persisted to disk.
+* ``load_tasks`` (utils.py) does its own ``torch.load`` but only instantiates
+  tasks, not the model — out of scope.
+* ``convert_train_checkpoint_to_inference_checkpoint`` writes a fresh inference
+  checkpoint from train state *without* tagging it; identity/flag are re-derived
+  in-memory when that file is later loaded through ``load_inference_model``, not
+  persisted to disk.
 """
 
 from __future__ import annotations
@@ -75,9 +75,22 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
-UmaVersion = Literal["1.0", "1.1", "1.2", "unknown_uma", "not_uma"]
+UmaVersion = Literal["1.0", "1.1", "1.2", "unidentified", "unknown_uma", "not_uma"]
 
 UMA_1P1_MODEL_ID = "UMA-1.1"
+
+# include_self for the MoE composition reduction, keyed by classified generation.
+# Only 1.2 uses True; 1.1 and 1.2.1+ use False (the default). 1.0 is rejected
+# before this lookup. WHEN A NEW GENERATION SHIPS WITH DIFFERENT COMPOSITION
+# BEHAVIOR: add it here, update the module docstring table + uma_changelog.md,
+# and add a test in tests/core/models/uma/test_compat.py.
+_UMA_INCLUDE_SELF: dict[str, bool] = {"1.2": True}
+
+
+def uma_include_self_bug(version: str) -> bool:
+    """Return ``include_self`` for the MoE composition reduction of ``version``."""
+    return _UMA_INCLUDE_SELF.get(version, False)
+
 
 # Last fairchem-core release that supports UMA 1.0 (git describe --tags on
 # this repo: fairchem_core-2.21.0-2-g28c7f4ba6).
@@ -133,11 +146,14 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     Returns one of:
 
     * ``"1.0"`` / ``"1.1"`` / ``"1.2"`` — a recognized UMA generation.
-    * ``"unknown_uma"`` — a UMA backbone with a ``model_id`` or
-      ``model_version`` that does not match any known generation
-      (e.g. a future UMA 1.3 release).
-    * ``"not_uma"`` — not a UMA checkpoint (esen, AllScAIP, ...), a
-      missing/corrupt ``model_config``, or no backbone declared.
+    * ``"unidentified"`` — a UMA backbone with neither ``model_id`` nor
+      ``backbone.model_version`` (the on-disk signature of a deprecated UMA 1.0
+      checkpoint, or an untagged freshly-trained model). Rejected on load.
+    * ``"unknown_uma"`` — a UMA backbone with a ``model_id`` /
+      ``model_version`` that does not match any known generation (e.g. a future
+      UMA 1.3, or a user-customized ``model_id``).
+    * ``"not_uma"`` — not a UMA checkpoint, a missing/corrupt ``model_config``,
+      or no backbone declared.
     """
     if not isinstance(model_config, (dict, DictConfig)):
         return "not_uma"
@@ -169,12 +185,15 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
         return "unknown_uma"
 
     mv = backbone.get("model_version")
+    if mv is None:
+        # No model_id AND no model_version: cannot identify the generation.
+        return "unidentified"
+    if _match_version(mv, 1.0):
+        return "1.0"
     if _match_version(mv, 1.1):
         return "1.1"
     if _match_version(mv, 1.2):
         return "1.2"
-    if mv is None or _match_version(mv, 1.0):
-        return "1.0"
     logging.warning(
         f"Unknown UMA backbone.model_version={mv!r}; treating as unknown_uma."
     )
@@ -225,6 +244,46 @@ def _raise_uma_1p0(
     )
 
 
+def _raise_unidentified_uma(
+    model_config: dict | DictConfig,
+    checkpoint_location: str | None,
+) -> None:
+    path_str = (
+        checkpoint_location if checkpoint_location is not None else "<unknown path>"
+    )
+    raise RuntimeError(
+        f"UMA checkpoint identity required but not found at {path_str!r}: the "
+        f"checkpoint has neither a top-level `model_id` nor a "
+        f"`backbone.model_version`, so its generation cannot be determined.\n"
+        f"\n"
+        f"This is either (a) a freshly-trained UMA model that was not tagged, or "
+        f"(b) a deprecated UMA 1.0 checkpoint (which shipped with neither field).\n"
+        f"\n"
+        f"To fix (a), set a `model_id` on the model config when training (e.g. "
+        f"`model_id: UMA-1.2.1`), or tag an existing checkpoint in place:\n"
+        f"    ckpt = torch.load(path, weights_only=False)\n"
+        f"    ckpt.model_config['model_id'] = 'UMA-1.2.1'\n"
+        f"    torch.save(ckpt, path)\n"
+        f"\n"
+        f"For (b), install the last fairchem-core release that supported UMA 1.0:\n"
+        f"    pip install 'fairchem-core<={_LAST_UMA_1P0_FAIRCHEM_VERSION}'"
+    )
+
+
+def _set_backbone_include_self_bug(
+    model_config: dict | DictConfig, value: bool
+) -> None:
+    """Authoritatively set ``backbone.include_self_bug`` (always overwrite)."""
+    backbone = model_config.get("backbone")
+    if not isinstance(backbone, (dict, DictConfig)):
+        return
+    if isinstance(backbone, DictConfig):
+        with open_dict(backbone):
+            backbone["include_self_bug"] = value
+    else:
+        backbone["include_self_bug"] = value
+
+
 def _backfill_uma_1p1_model_id(model_config: dict | DictConfig) -> bool:
     """Set ``model_config['model_id'] = "UMA-1.1"`` if absent. Returns True if mutated."""
     existing = _normalize_model_id(model_config.get("model_id"))
@@ -256,37 +315,36 @@ def apply_uma_compat_fixups(
     model_config = getattr(checkpoint, "model_config", None)
     version = get_uma_version(model_config)
 
+    if version == "not_uma":
+        return
+
     if version == "1.0":
         _raise_uma_1p0(model_config, checkpoint_location)
+
+    if version == "unidentified":
+        _raise_unidentified_uma(model_config, checkpoint_location)
 
     if version == "1.1":
         mutated = _backfill_uma_1p1_model_id(model_config)
         if mutated:
             logging.warning(
-                f"UMA 1.1 checkpoint at {checkpoint_location!r} had no "
-                f"model_id; back-filled model_id={UMA_1P1_MODEL_ID!r}. "
-                "This will be persisted to disk if the checkpoint is "
-                "subsequently saved (e.g. at the end of a finetune)."
+                f"UMA 1.1 checkpoint at {checkpoint_location!r} had no model_id; "
+                f"back-filled model_id={UMA_1P1_MODEL_ID!r}. This back-fill is "
+                "in-memory only (re-derived on every load), not persisted."
             )
-        return
-
-    if version == "1.2":
-        mid = (
-            model_config.get("model_id")
-            if isinstance(model_config, (dict, DictConfig))
-            else None
-        )
+    elif version == "1.2":
+        mid = model_config.get("model_id")
         logging.info(
             f"Loaded UMA 1.2 checkpoint: model_id={mid!r}, "
             f"path={checkpoint_location!r}"
         )
-        return
-
-    if version == "unknown_uma":
+    elif version == "unknown_uma":
         logging.warning(
             f"UMA checkpoint at {checkpoint_location!r} could not be classified "
-            "into a known generation (1.1 or 1.2); no fixups applied."
+            "into a known generation; defaulting include_self_bug=False."
         )
-        return
 
-    # not_uma: silent no-op.
+    # Authoritatively set the per-generation MoE composition flag for every
+    # surviving UMA backbone (1.1 / 1.2 / unknown_uma). Always overwrite so a
+    # re-saved finetune config cannot carry a stale value.
+    _set_backbone_include_self_bug(model_config, uma_include_self_bug(version))

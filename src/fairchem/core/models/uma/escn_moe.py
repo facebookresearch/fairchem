@@ -65,12 +65,19 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_single: bool = False,
         moe_type: str = "so2",
         model_version: float = 1.0,
+        include_self_bug: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
         self.model_version = model_version
+        # include_self for the MoE composition reduction (index_reduce_ below).
+        # This is a per-UMA-generation quirk, NOT a tunable: only UMA 1.2 uses
+        # True; 1.1 and 1.2.1+ use False. It is set authoritatively at load time
+        # by fairchem.core.models.uma.compat.apply_uma_compat_fixups from the
+        # checkpoint's model_id. Consumed here (not forwarded to super()).
+        self.include_self_bug = include_self_bug
         if num_experts > 0:
             convert_model_to_MOLE_model(
                 model=self,
@@ -146,7 +153,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
-                    include_self=np.isclose(self.model_version, 1.0).item(),
+                    include_self=self.include_self_bug,  # per-generation; set by compat.py
                 )
                 embeddings.append(composition.unsqueeze(0))
             embeddings.append(csd_mixed_emb[None])

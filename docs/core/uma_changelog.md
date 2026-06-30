@@ -31,6 +31,16 @@ Otherwise, switch to UMA 1.1 (`uma-s-1p1`, `uma-m-1p1`).
 
 UMA 1.1 checkpoints ship without a top-level `model_id`. The compat shim back-fills `model_id = "UMA-1.1"` at load time so downstream consumers can dispatch on `HydraModel.model_id`. The back-fill is applied in-memory on every load rather than written to disk, so checkpoints (including finetune-derived ones) are re-tagged each time they are loaded.
 
+**Checkpoint identity is now required to load.** A UMA checkpoint that has *neither* a top-level `model_id` *nor* a `backbone.model_version` cannot be classified (this is also the on-disk signature of a deprecated 1.0 checkpoint) and is rejected with an actionable error. When training a new model, set `model_id` on the `HydraModel` config (e.g. `model_id: UMA-1.2.1`). To tag an already-trained checkpoint in place:
+
+```python
+ckpt = torch.load(path, weights_only=False)
+ckpt.model_config["model_id"] = "UMA-1.2.1"
+torch.save(ckpt, path)
+```
+
+The MoE composition-reduction `include_self` flag is handled automatically per generation by the compat shim (1.1 → `False`, 1.2 → `True`, 1.2.1+ → `False`); it is set on the backbone config at load time and does not need to be specified by users.
+
 ---
 
 ## UMA 1.2

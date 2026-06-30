@@ -5,7 +5,6 @@ and in-place ``model_id`` back-fill.
 from __future__ import annotations
 
 import logging
-import re
 
 import pytest
 from omegaconf import OmegaConf
@@ -41,18 +40,19 @@ def uma_cfg(*, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQ
 
 
 # ---------------------------------------------------------------------------
-# UMA 1.0 — hard fail
+# Unidentified (no model_id + no model_version) and explicit UMA 1.0 — hard fail
 # ---------------------------------------------------------------------------
 
 
-def test_uma_1p0_raises():
+def test_unidentified_raises():
+    """No model_id and no model_version -> cannot classify -> raise."""
     cfg = uma_cfg()  # no model_id, no model_version
     ckpt = make_fake_checkpoint(cfg)
     with pytest.raises(RuntimeError) as exc_info:
         apply_uma_compat_fixups(ckpt, checkpoint_location="/path/to/uma-s-1.pt")
     msg = str(exc_info.value)
-    assert "UMA 1.0" in msg
-    assert "fairchem-core<=2.21.0" in msg
+    assert "identity required" in msg
+    assert "fairchem-core<=2.21.0" in msg  # names the deprecated-1.0 possibility
     assert "/path/to/uma-s-1.pt" in msg
 
 
@@ -221,8 +221,42 @@ def test_dictconfig_uma_1p2_classified():
     assert get_uma_version(cfg) == "1.2"
 
 
-def test_dictconfig_uma_1p0_raises():
+def test_dictconfig_unidentified_raises():
     cfg = OmegaConf.create(uma_cfg())
     ckpt = make_fake_checkpoint(cfg)
-    with pytest.raises(RuntimeError, match="UMA 1.0"):
+    with pytest.raises(RuntimeError, match="identity required"):
         apply_uma_compat_fixups(ckpt)
+
+
+# ---------------------------------------------------------------------------
+# include_self_bug — set per generation on the backbone config
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        ({"model_version": "1.1"}, False),  # 1.1
+        ({"model_id": "UMA-S-1.2"}, True),  # 1.2 (S)
+        ({"model_id": "UMA-M-1.2"}, True),  # 1.2 (M variant)
+        ({"model_id": "UMA-1.2.1"}, False),  # 1.2.1+ (unknown_uma -> default)
+    ],
+)
+def test_apply_sets_include_self_bug(kwargs, expected):
+    cfg = uma_cfg(**kwargs)
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["backbone"]["include_self_bug"] is expected
+
+
+def test_include_self_bug_set_under_struct_mode():
+    """The flag write must work on a struct-mode DictConfig (open_dict path)."""
+    cfg = OmegaConf.create(uma_cfg(model_id="UMA-S-1.2"))
+    OmegaConf.set_struct(cfg, True)
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["backbone"]["include_self_bug"] is True
+
+
+def test_uma_1p2_m_variant_classified():
+    assert get_uma_version(uma_cfg(model_id="UMA-M-1.2")) == "1.2"

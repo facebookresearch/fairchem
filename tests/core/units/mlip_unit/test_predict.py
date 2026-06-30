@@ -1923,3 +1923,90 @@ def test_uma_1p0_predict_unit_raises():
         pytest.skip("No UMA 1.0 checkpoint available; set UMA_1P0_PATH to test.")
     with pytest.raises(RuntimeError, match="UMA 1.0"):
         MLIPPredictUnit(uma_1p0_path, device="cpu")
+
+
+# include_self_bug — exercised on REAL trained UMA configs via fixtures/overrides
+# ---------------------------------------------------------------------------
+
+
+def _oc20_batch(dataset_dir):
+    """A single-system batch the trained K2L2 fixtures can run (oc20 task)."""
+    from fairchem.core.datasets import data_list_collater
+    from fairchem.core.datasets.ase_datasets import AseDBDataset
+
+    db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
+    sample = AtomicData.from_ase(
+        db.get_atoms(0),
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+    )
+    sample["dataset"] = "oc20"
+    return data_list_collater([sample], otf_graph=True)
+
+
+def test_direct_mole_loaded_sets_include_self_bug(direct_mole_checkpoint):
+    """End-to-end: a real MoE checkpoint tagged UMA-S-1.2 loads with the compat
+    shim resolving include_self_bug=True on the instantiated backbone."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_mole_checkpoint
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu.model.module.backbone.include_self_bug is True
+
+
+def test_include_self_bug_has_teeth(direct_mole_checkpoint, fake_uma_dataset):
+    """Toggling include_self_bug (load override, merged after the shim) must
+    change MoE outputs — proves the flag is wired into set_MOLE_coefficients
+    (num_experts>0, use_composition_embedding=True)."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_mole_checkpoint
+    pu_true = load_predict_unit(
+        ckpt, device="cpu", overrides={"backbone": {"include_self_bug": True}}
+    )
+    pu_false = load_predict_unit(
+        ckpt, device="cpu", overrides={"backbone": {"include_self_bug": False}}
+    )
+    assert pu_true.model.module.backbone.include_self_bug is True
+    assert pu_false.model.module.backbone.include_self_bug is False
+
+    out_true = pu_true.predict(_oc20_batch(fake_uma_dataset))
+    out_false = pu_false.predict(_oc20_batch(fake_uma_dataset))
+    assert not torch.allclose(out_true["energy"], out_false["energy"])
+
+
+def test_direct_checkpoint_loads_after_tagging(direct_checkpoint):
+    """Regression: a freshly-trained (now tagged) checkpoint loads instead of
+    being rejected as UMA 1.0."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_checkpoint
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu is not None
+
+
+def test_untagged_checkpoint_raises(direct_checkpoint, tmp_path):
+    """Stripping identity from a real checkpoint -> load raises identity-required."""
+    from omegaconf import OmegaConf, open_dict
+
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_checkpoint
+    obj = torch.load(ckpt, map_location="cpu", weights_only=False)
+    mc = obj.model_config
+    if OmegaConf.is_config(mc):
+        with open_dict(mc):
+            mc.pop("model_id", None)
+            mc["backbone"].pop("model_version", None)
+    else:
+        mc.pop("model_id", None)
+        mc.get("backbone", {}).pop("model_version", None)
+
+    stripped = str(tmp_path / "untagged_inference.pt")
+    torch.save(obj, stripped)
+    with pytest.raises(RuntimeError, match="identity required"):
+        load_predict_unit(stripped, device="cpu")
