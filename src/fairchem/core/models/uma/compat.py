@@ -5,8 +5,6 @@ to ``backbone.model_version`` for legacy 1.1) and fixes up its ``model_config``
 in place at load time (in ``load_inference_model``, before instantiation):
 
 * **UMA 1.1** ships without a ``model_id`` — back-fill it to ``"UMA-1.1"``.
-* **UMA 1.0 / untagged** (neither ``model_id`` nor ``model_version``) can't be
-  classified and is rejected.
 * **UMA 1.2+** are already tagged, non-UMA is ignored — no-op.
 
 The MoE ``include_self`` quirk is not handled here: the backbone derives it from
