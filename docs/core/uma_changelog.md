@@ -27,7 +27,7 @@ To use a UMA 1.0 checkpoint, install the last release that supports it:
 pip install 'fairchem-core<=2.21.0'
 ```
 
-Otherwise, switch to UMA 1.1 (`uma-s-1p1`, `uma-m-1p1`) or UMA 1.2 (`uma-s-1p2`).
+Otherwise, switch to UMA 1.1 (`uma-s-1p1`, `uma-m-1p1`).
 
 UMA 1.1 checkpoints ship without a top-level `model_id`. The compat shim back-fills `model_id = "UMA-1.1"` at load time so downstream consumers can dispatch on `HydraModel.model_id`. The back-fill persists into any subsequent finetune checkpoint.
 
