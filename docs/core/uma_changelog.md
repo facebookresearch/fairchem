@@ -19,27 +19,9 @@ This page documents the release history of UMA models, including new features, i
 
 ## Library compatibility — UMA 1.0 deprecation
 
-UMA 1.0 checkpoints (e.g. `uma-s-1.pt`) are **no longer supported** in current `fairchem-core` releases. Loading a UMA 1.0 checkpoint raises a `RuntimeError` at load time, because UMA 1.0 has a known semantic divergence with later releases (its MoE composition-reduction `include_self` behavior differs) — silently running a UMA 1.0 checkpoint through current code would produce numerically different results than the original release.
+UMA 1.0 checkpoints are no longer supported (their MoE `include_self` behavior diverges from later releases); loading one raises a `RuntimeError`. To use a 1.0 checkpoint, `pip install 'fairchem-core<=2.21.0'`.
 
-To use a UMA 1.0 checkpoint, install the last release that supports it:
-
-```bash
-pip install 'fairchem-core<=2.21.0'
-```
-
-Otherwise, switch to UMA 1.1 (`uma-s-1p1`, `uma-m-1p1`).
-
-UMA 1.1 checkpoints ship without a top-level `model_id`. The compat shim back-fills `model_id = "UMA-1.1"` at load time so downstream consumers can dispatch on `HydraModel.model_id`. The back-fill is applied in-memory on every load rather than written to disk, so checkpoints (including finetune-derived ones) are re-tagged each time they are loaded.
-
-**Checkpoint identity is now required to load.** A UMA checkpoint that has *neither* a top-level `model_id` *nor* a `backbone.model_version` cannot be classified (this is also the on-disk signature of a deprecated 1.0 checkpoint) and is rejected with an actionable error. When training a new model, set `model_id` on the `HydraModel` config (e.g. `model_id: UMA-1.2.1`). To tag an already-trained checkpoint in place:
-
-```python
-ckpt = torch.load(path, weights_only=False)
-ckpt.model_config["model_id"] = "UMA-1.2.1"
-torch.save(ckpt, path)
-```
-
-The MoE composition-reduction `include_self` flag is handled automatically per generation: the backbone derives it from the checkpoint's `model_id` (1.2 → `True`; 1.1 and 1.2.1+ → `False`), so users do not need to specify it.
+Loading now requires a generation tag. UMA 1.1 (which ships without one) is auto-tagged `model_id = "UMA-1.1"` in memory; UMA 1.2+ already carry `model_id`; a checkpoint with neither `model_id` nor `backbone.model_version` is rejected. When training, set `model_id` on the model config (e.g. `model_id: UMA-1.2.1`).
 
 ---
 
