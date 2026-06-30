@@ -14,11 +14,9 @@ before the model is instantiated. Two concrete behaviors:
   if missing. Shipped UMA 1.1 checkpoints carry ``backbone.model_version=1.1``
   but no top-level ``model_id`` (only 1.2 does). Back-filling here makes
   ``HydraModel.model_id`` reflect the generation for downstream consumers
-  (logging, serving, surgery scripts).
-
-Sub-size (S / M / L) is intentionally not encoded — inside a single major.minor
-release UMA variants are similar enough that downstream code does not need
-to dispatch on size. The back-fill is the bare ``"UMA-1.1"``.
+  (logging, serving, surgery scripts). This back-fill is a transitional
+  shim: it should be deprecated and removed once UMA 1.1 is no longer
+  supported.
 
 Call sites
 ----------
@@ -180,10 +178,24 @@ def _raise_uma_1p0(
     model_config: dict | DictConfig,
     checkpoint_location: str | None,
 ) -> None:
-    mid = model_config.get("model_id") if isinstance(model_config, (dict, DictConfig)) else None
-    backbone = model_config.get("backbone", {}) if isinstance(model_config, (dict, DictConfig)) else {}
-    mv = backbone.get("model_version") if isinstance(backbone, (dict, DictConfig)) else None
-    path_str = checkpoint_location if checkpoint_location is not None else "<unknown path>"
+    mid = (
+        model_config.get("model_id")
+        if isinstance(model_config, (dict, DictConfig))
+        else None
+    )
+    backbone = (
+        model_config.get("backbone", {})
+        if isinstance(model_config, (dict, DictConfig))
+        else {}
+    )
+    mv = (
+        backbone.get("model_version")
+        if isinstance(backbone, (dict, DictConfig))
+        else None
+    )
+    path_str = (
+        checkpoint_location if checkpoint_location is not None else "<unknown path>"
+    )
     raise RuntimeError(
         f"UMA 1.0 checkpoints are no longer supported in this version of "
         f"fairchem-core. Detected UMA 1.0 from checkpoint at {path_str!r} "
@@ -252,7 +264,11 @@ def apply_uma_compat_fixups(
         return
 
     if version == "1.2":
-        mid = model_config.get("model_id") if isinstance(model_config, (dict, DictConfig)) else None
+        mid = (
+            model_config.get("model_id")
+            if isinstance(model_config, (dict, DictConfig))
+            else None
+        )
         logging.info(
             f"Loaded UMA 1.2 checkpoint: model_id={mid!r}, "
             f"path={checkpoint_location!r}"
