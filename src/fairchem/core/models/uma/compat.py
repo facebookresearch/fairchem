@@ -90,28 +90,6 @@ _UMA_BACKBONE_SHORT_NAME = "escnmd_moe_backbone"
 _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 
 
-def _is_uma_backbone(backbone_model: object) -> bool:
-    return isinstance(backbone_model, str) and (
-        backbone_model == _UMA_BACKBONE_SHORT_NAME
-        or backbone_model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
-    )
-
-
-def _match_version(value: object, target: float) -> bool:
-    """Return True iff ``value`` equals ``target`` (handles float or str)."""
-    try:
-        return float(value) == target
-    except (TypeError, ValueError):
-        return False
-
-
-def _normalize_model_id(value: object) -> str | None:
-    """Return a stripped model_id, or None if absent/blank/non-string."""
-    if not isinstance(value, str):
-        return None
-    return value.strip() or None
-
-
 def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     """Classify a checkpoint by UMA generation from the three real signatures.
 
@@ -119,29 +97,28 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     ``model_id`` only (matched on its trailing ``-1.2`` so a future
     model_id-tagged 1.2.1 / 1.3 is not mistaken for 1.2).
 
-    Returns ``"1.1"`` / ``"1.2"`` for a recognized generation;
-    ``"unidentified"`` when neither field is set — the UMA 1.0 / untagged
-    signature, rejected on load; ``"unknown_uma"`` for a UMA backbone that
-    matches nothing known (future release or user-customized ``model_id``);
-    ``"not_uma"`` otherwise.
+    Returns ``"1.1"`` / ``"1.2"`` for a recognized generation; ``"unidentified"``
+    when neither field is set (the UMA 1.0 / untagged signature, rejected on
+    load); ``"unknown_uma"`` for a UMA backbone matching nothing known (future
+    release or user-customized ``model_id``); ``"not_uma"`` otherwise.
     """
     if not isinstance(model_config, (dict, DictConfig)):
         return "not_uma"
     backbone = model_config.get("backbone", {})
-    if not isinstance(backbone, (dict, DictConfig)) or not _is_uma_backbone(
-        backbone.get("model")
+    model = backbone.get("model") if isinstance(backbone, (dict, DictConfig)) else None
+    if not isinstance(model, str) or not (
+        model == _UMA_BACKBONE_SHORT_NAME or model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
     ):
         return "not_uma"
 
-    model_id = _normalize_model_id(model_config.get("model_id"))
+    model_id = model_config.get("model_id")
+    model_id = model_id.strip() if isinstance(model_id, str) else ""
     model_version = backbone.get("model_version")
 
-    if model_id is None and model_version is None:
+    if not model_id and model_version is None:
         return "unidentified"  # UMA 1.0 (ships with neither) or untagged-new
-    if (
-        model_id is None
-    ):  # legacy: identified by model_version (only 1.1 ships this way)
-        return "1.1" if _match_version(model_version, 1.1) else "unknown_uma"
+    if not model_id:  # legacy: identified by model_version (only 1.1 ships this way)
+        return "1.1" if model_version in (1.1, "1.1") else "unknown_uma"
     return "1.2" if model_id.endswith("-1.2") else "unknown_uma"
 
 
@@ -185,23 +162,16 @@ def _set_backbone_include_self_bug(
         backbone["include_self_bug"] = value
 
 
-def _backfill_uma_1p1_model_id(model_config: dict | DictConfig) -> bool:
-    """Set ``model_config['model_id'] = "UMA-1.1"`` if absent. Returns True if mutated."""
-    existing = _normalize_model_id(model_config.get("model_id"))
-    if existing is not None:
-        return False
+def _backfill_uma_1p1_model_id(model_config: dict | DictConfig) -> None:
+    """Set ``model_id = "UMA-1.1"`` in-memory (transient, not persisted).
+
+    Only reached for a UMA 1.1 checkpoint, which by construction has no model_id.
+    """
     if isinstance(model_config, DictConfig):
         with open_dict(model_config):
-            OmegaConf.update(
-                model_config,
-                "model_id",
-                UMA_1P1_MODEL_ID,
-                merge=False,
-                force_add=True,
-            )
+            OmegaConf.update(model_config, "model_id", UMA_1P1_MODEL_ID, force_add=True)
     else:
         model_config["model_id"] = UMA_1P1_MODEL_ID
-    return True
 
 
 def apply_uma_compat_fixups(
@@ -223,17 +193,14 @@ def apply_uma_compat_fixups(
         _raise_unidentified_uma(model_config, checkpoint_location)
 
     if version == "1.1":
-        mutated = _backfill_uma_1p1_model_id(model_config)
-        if mutated:
-            logging.warning(
-                f"UMA 1.1 checkpoint at {checkpoint_location!r} had no model_id; "
-                f"back-filled model_id={UMA_1P1_MODEL_ID!r}. This back-fill is "
-                "in-memory only (re-derived on every load), not persisted."
-            )
+        _backfill_uma_1p1_model_id(model_config)
+        logging.warning(
+            f"UMA 1.1 checkpoint at {checkpoint_location!r} had no model_id; "
+            f"back-filled model_id={UMA_1P1_MODEL_ID!r} (in-memory, not persisted)."
+        )
     elif version == "1.2":
-        mid = model_config.get("model_id")
         logging.info(
-            f"Loaded UMA 1.2 checkpoint: model_id={mid!r}, "
+            f"Loaded UMA 1.2 checkpoint: model_id={model_config.get('model_id')!r}, "
             f"path={checkpoint_location!r}"
         )
     elif version == "unknown_uma":
