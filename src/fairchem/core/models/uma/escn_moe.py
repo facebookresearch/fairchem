@@ -74,7 +74,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         # UMA generation id, set by HydraModel after construction (and, for
         # legacy 1.1 checkpoints, back-filled at load by
         # fairchem.core.models.uma.compat). Drives the per-generation MoE
-        # composition `include_self` quirk in set_MOLE_coefficients.
+        # composition `include_self` bug in set_MOLE_coefficients.
         self.model_id = None
         if num_experts > 0:
             convert_model_to_MOLE_model(
@@ -151,7 +151,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
-                    # UMA 1.2 quirk: only the 1.2 generation uses include_self=True.
+                    # UMA 1.2 bug: only the 1.2 generation uses include_self=True.
                     include_self=(self.model_id == "UMA-S-1.2"),
                 )
                 embeddings.append(composition.unsqueeze(0))

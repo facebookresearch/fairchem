@@ -7,7 +7,7 @@ in place at load time (in ``load_inference_model``, before instantiation):
 * **UMA 1.1** ships without a ``model_id`` — back-fill it to ``"UMA-1.1"``.
 * **UMA 1.2+** are already tagged, non-UMA is ignored — no-op.
 
-The MoE ``include_self`` quirk is not handled here: the backbone derives it from
+The MoE ``include_self`` bug is not handled here: the backbone derives it from
 ``model_id`` (``eSCNMDMoeBackbone.set_MOLE_coefficients``; only 1.2 uses True).
 
 Transitional: remove the 1.1 back-fill once UMA 1.1 is deprecated, and delete
