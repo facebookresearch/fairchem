@@ -40,12 +40,16 @@ def uma_cfg(*, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQ
 
 
 # ---------------------------------------------------------------------------
-# Unidentified (no model_id + no model_version) and explicit UMA 1.0 — hard fail
+# UMA 1.0 / untagged (neither model_id nor model_version) — hard fail
 # ---------------------------------------------------------------------------
 
 
 def test_unidentified_raises():
-    """No model_id and no model_version -> cannot classify -> raise."""
+    """No model_id and no model_version -> cannot classify -> raise.
+
+    This is the on-disk signature of a deprecated UMA 1.0 checkpoint (which ships
+    with neither field) and of an untagged freshly-trained model.
+    """
     cfg = uma_cfg()  # no model_id, no model_version
     ckpt = make_fake_checkpoint(cfg)
     with pytest.raises(RuntimeError) as exc_info:
@@ -54,20 +58,6 @@ def test_unidentified_raises():
     assert "identity required" in msg
     assert "fairchem-core<=2.21.0" in msg  # names the deprecated-1.0 possibility
     assert "/path/to/uma-s-1.pt" in msg
-
-
-def test_uma_1p0_raises_with_explicit_version_1p0():
-    cfg = uma_cfg(model_version=1.0)
-    ckpt = make_fake_checkpoint(cfg)
-    with pytest.raises(RuntimeError, match="UMA 1.0"):
-        apply_uma_compat_fixups(ckpt)
-
-
-def test_uma_1p0_raises_with_string_version_1p0():
-    cfg = uma_cfg(model_version="1.0")
-    ckpt = make_fake_checkpoint(cfg)
-    with pytest.raises(RuntimeError, match="UMA 1.0"):
-        apply_uma_compat_fixups(ckpt)
 
 
 # ---------------------------------------------------------------------------
@@ -103,14 +93,17 @@ def test_uma_1p1_idempotent_bare(caplog):
 
 
 @pytest.mark.parametrize("subsize_id", ["UMA-S-1.1", "UMA-M-1.1", "UMA-L-1.1"])
-def test_uma_1p1_idempotent_with_subsize_suffix(subsize_id, caplog):
-    """Historical/external checkpoints may use the S/M/L-suffixed form."""
+def test_uma_1p1_model_id_not_reclassified(subsize_id, caplog):
+    """Only 1.2 is special by model_id. A 1.1-style model_id is treated as
+    unknown_uma — still include_self_bug=False, and model_id left untouched
+    (never re-back-filled)."""
     cfg = uma_cfg(model_version="1.1", model_id=subsize_id)
     ckpt = make_fake_checkpoint(cfg)
-    assert get_uma_version(cfg) == "1.1"
+    assert get_uma_version(cfg) == "unknown_uma"
     with caplog.at_level(logging.WARNING):
         apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == subsize_id  # untouched
+    assert ckpt.model_config["backbone"]["include_self_bug"] is False
     assert not any("back-filled" in r.getMessage() for r in caplog.records)
 
 

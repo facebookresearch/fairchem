@@ -5,12 +5,11 @@ generation and applies in-place fixups to the checkpoint's ``model_config``
 before the model is instantiated. ``model_id`` is the source of truth for the
 generation. Concrete behaviors:
 
-* **Unidentified / UMA 1.0 are rejected.** A UMA backbone with neither a
-  ``model_id`` nor a ``backbone.model_version`` cannot be classified — this is
-  also the on-disk signature of a deprecated UMA 1.0 checkpoint — so it raises
-  with an actionable message (set ``model_id``, or ``pip install
-  'fairchem-core<=2.21.0'`` to use a genuine 1.0). An *explicit*
-  ``model_version == 1.0`` raises with the 1.0-specific deprecation message.
+* **UMA 1.0 / untagged checkpoints are rejected.** UMA 1.0 ships with neither a
+  ``model_id`` nor a ``backbone.model_version``; a checkpoint with neither cannot
+  be classified (it is either a deprecated 1.0 or an untagged freshly-trained
+  model), so it raises with an actionable message (set ``model_id``, or
+  ``pip install 'fairchem-core<=2.21.0'`` to use a genuine 1.0).
 * **UMA 1.1 gets ``model_id`` back-filled** to ``"UMA-1.1"`` if missing.
   Shipped UMA 1.1 checkpoints carry ``backbone.model_version=1.1`` but no
   top-level ``model_id`` (1.2+ ships ``model_id``). Back-filling makes
@@ -76,7 +75,7 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
-UmaVersion = Literal["1.0", "1.1", "1.2", "unidentified", "unknown_uma", "not_uma"]
+UmaVersion = Literal["1.1", "1.2", "unidentified", "unknown_uma", "not_uma"]
 
 UMA_1P1_MODEL_ID = "UMA-1.1"
 
@@ -114,16 +113,17 @@ def _normalize_model_id(value: object) -> str | None:
 
 
 def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
-    """Classify a checkpoint by UMA generation.
+    """Classify a checkpoint by UMA generation from the three real signatures.
 
-    Shipped signatures: 1.0 = neither field set; 1.1 = ``model_version`` only;
-    1.2 = ``model_id`` only. A ``model_id`` is matched on its trailing version,
-    so a future model_id-tagged 1.2.1 / 1.3 is not mistaken for 1.2.
+    Shipped: 1.0 = neither field set; 1.1 = ``model_version`` only; 1.2 =
+    ``model_id`` only (matched on its trailing ``-1.2`` so a future
+    model_id-tagged 1.2.1 / 1.3 is not mistaken for 1.2).
 
-    Returns ``"1.0"`` / ``"1.1"`` / ``"1.2"`` for a recognized generation;
-    ``"unidentified"`` when neither field is set (rejected on load);
-    ``"unknown_uma"`` for a UMA backbone that matches nothing known (future
-    release or user-customized ``model_id``); ``"not_uma"`` otherwise.
+    Returns ``"1.1"`` / ``"1.2"`` for a recognized generation;
+    ``"unidentified"`` when neither field is set — the UMA 1.0 / untagged
+    signature, rejected on load; ``"unknown_uma"`` for a UMA backbone that
+    matches nothing known (future release or user-customized ``model_id``);
+    ``"not_uma"`` otherwise.
     """
     if not isinstance(model_config, (dict, DictConfig)):
         return "not_uma"
@@ -137,62 +137,12 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     model_version = backbone.get("model_version")
 
     if model_id is None and model_version is None:
-        return "unidentified"  # 1.0 / untagged -> rejected on load
-    if model_id is None:  # legacy: identified by model_version
-        if _match_version(model_version, 1.0):
-            return "1.0"
-        if _match_version(model_version, 1.1):
-            return "1.1"
-        return "unknown_uma"
-    if model_id.endswith("-1.2"):
-        return "1.2"
-    if model_id.endswith("-1.1"):
-        return "1.1"
-    return "unknown_uma"  # 1.2.1+, 1.3, or a user-customized model_id
-
-
-def _raise_uma_1p0(
-    model_config: dict | DictConfig,
-    checkpoint_location: str | None,
-) -> None:
-    mid = (
-        model_config.get("model_id")
-        if isinstance(model_config, (dict, DictConfig))
-        else None
-    )
-    backbone = (
-        model_config.get("backbone", {})
-        if isinstance(model_config, (dict, DictConfig))
-        else {}
-    )
-    mv = (
-        backbone.get("model_version")
-        if isinstance(backbone, (dict, DictConfig))
-        else None
-    )
-    path_str = (
-        checkpoint_location if checkpoint_location is not None else "<unknown path>"
-    )
-    raise RuntimeError(
-        f"UMA 1.0 checkpoints are no longer supported in this version of "
-        f"fairchem-core. Detected UMA 1.0 from checkpoint at {path_str!r} "
-        f"(model_id={mid!r}, backbone.model_version={mv!r}).\n"
-        f"\n"
-        f"UMA 1.0 has a known semantic divergence in "
-        f"`fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone` (its "
-        f"composition-reduction `include_self` behavior differs from 1.1/1.2). "
-        f"Loading 1.0 weights with "
-        f"the current code would produce numerically different results "
-        f"than the original release, so this is a hard failure.\n"
-        f"\n"
-        f"To use this checkpoint, install the last fairchem-core release "
-        f"that supported UMA 1.0:\n"
-        f"    pip install 'fairchem-core<={_LAST_UMA_1P0_FAIRCHEM_VERSION}'\n"
-        f"\n"
-        f"To use a current release, switch to UMA 1.1 or UMA 1.2 (see "
-        f"`facebook/UMA` on Hugging Face, or "
-        f"`fairchem.core.calculate.pretrained_mlip.available_models`)."
-    )
+        return "unidentified"  # UMA 1.0 (ships with neither) or untagged-new
+    if (
+        model_id is None
+    ):  # legacy: identified by model_version (only 1.1 ships this way)
+        return "1.1" if _match_version(model_version, 1.1) else "unknown_uma"
+    return "1.2" if model_id.endswith("-1.2") else "unknown_uma"
 
 
 def _raise_unidentified_uma(
@@ -268,9 +218,6 @@ def apply_uma_compat_fixups(
 
     if version == "not_uma":
         return
-
-    if version == "1.0":
-        _raise_uma_1p0(model_config, checkpoint_location)
 
     if version == "unidentified":
         _raise_unidentified_uma(model_config, checkpoint_location)
