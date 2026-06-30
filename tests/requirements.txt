@@ -2,17 +2,31 @@
 ase==3.28.0
 ase-db-backends==0.11.0
 e3nn==0.6.0
-huggingface-hub==1.10.2
+huggingface-hub==1.19.0
 setuptools<83.0.0
 torch==2.8.0
 torchtnt==0.2.4
-numba==0.65.0
-numpy==2.4.4
-scikit-learn==1.7.2
+numba==0.65.1
+numpy==2.4.6
+scikit-learn==1.9.0
 lmdb==1.6.2
-pymatgen==v2026.3.23
-ray[serve]==2.55.0
+pymatgen==v2026.5.4
+ray[serve]==2.55.1
+# Ray Serve 2.55.1 declares `protobuf>=3.20.3` with no upper bound, but is
+# not compatible with protobuf 7.x. The 7.x release (mid-June 2026) removed
+# `FieldDescriptor.label`, which Ray Serve's gRPC serialization path uses:
+# https://github.com/ray-project/ray/issues/... — see CI failure
+# `AttributeError: 'google._upb._message.FieldDescriptor' object has no
+# attribute 'label'` in test_rayserve_remote_task_multiple_concurrent.
+# Pin to 6.x until Ray ships a fix.
+protobuf<7
 ipykernel==7.2.0
-jupyter_book==2.1.4
+jupyter_book==2.1.5
 pytest-xdist==3.8.0
-nvalchemi-toolkit-ops==0.2.0
+# Provides --suppress-no-test-exit-code so the CI workflow can stop
+# treating pytest exit 5 ("no tests collected") as a failure without
+# shell-idiom workarounds. Used by .github/workflows/test.yml in every
+# pytest step where a shard / sweep / marker combo can legitimately
+# collect zero tests.
+pytest-custom-exit-code==0.3.0
+nvalchemi-toolkit-ops==0.3.1

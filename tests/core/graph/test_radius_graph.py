@@ -3,6 +3,17 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  radius-graph construction — fcc/molecular/water-box structure
+        helpers, partition utilities, multi-radius PBC graph builders
+        (versions 2 and 3), edge filtering, and mixed-PBC inference
+        consistency (the only @pretrained-locked test in this file).
+Models: uma-s-1p1, uma-s-1p2 only on
+        TestMixedPBCBatch::test_inference_results_match_mixed_vs_individual
+        (per-test @pretrained lock). All other tests in this file
+        are model-agnostic and run in the base CPU partition.
+CI:     test (core shard) — non-pretrained tests.
+        test_gpu_sweep (models shard) — the one @pretrained test.
 """
 
 from __future__ import annotations
@@ -35,6 +46,7 @@ from fairchem.core.graph.radius_graph_pbc import (
     radius_graph_pbc_v2,
     sum_partitions,
 )
+from fairchem.core.graph.radius_graph_pbc_nvidia import nvalchemiops_installed
 
 
 class TestSumPartitions:
@@ -1415,3 +1427,257 @@ def test_generate_graph_batch_partition(
 
     assert torch.allclose(combined_distances, edge_distance_no_partition)
     assert torch.allclose(combined_distance_vecs, edge_distance_vec_no_partition)
+
+
+# ==============================================================================
+# Tests for mixed-PBC batches (radius_graph_pbc_v2)
+# ==============================================================================
+
+
+def _extract_system_edges(graph_dict, atom_offset, natoms):
+    """Return edge_index and cell_offsets for one system in a batched graph.
+
+    Edges are included only when both endpoints belong to the system (indices
+    in [atom_offset, atom_offset + natoms)).  The returned edge_index has atom
+    indices re-zeroed to start from 0 so they can be compared directly with
+    the single-system graph.
+    """
+    lo, hi = atom_offset, atom_offset + natoms
+    src, dst = graph_dict["edge_index"]
+    mask = (src >= lo) & (src < hi) & (dst >= lo) & (dst < hi)
+    edge_index = graph_dict["edge_index"][:, mask] - atom_offset
+    cell_offsets = graph_dict["cell_offsets"][mask]
+    return edge_index, cell_offsets
+
+
+@pytest.mark.parametrize(
+    "radius_pbc_version",
+    [
+        2,
+        pytest.param(
+            3,
+            marks=pytest.mark.skipif(
+                not nvalchemiops_installed(), reason="nvalchemiops not installed"
+            ),
+        ),
+    ],
+)
+class TestMixedPBCBatch:
+    """Tests that radius_graph_pbc_v2 and radius_graph_pbc_nvidia handle batches with mixed PBC correctly.
+
+    The fundamental invariant: running two systems with different PBC flags in
+    the same batch must produce exactly the same per-system graph as running
+    each system alone in its own batch.
+    """
+
+    CUTOFF = 6.0
+    MAX_NEIGHBORS = 300
+
+    def _gen(self, batch, radius_pbc_version):
+        return generate_graph(
+            batch,
+            cutoff=self.CUTOFF,
+            max_neighbors=self.MAX_NEIGHBORS,
+            enforce_max_neighbors_strictly=False,
+            radius_pbc_version=radius_pbc_version,
+            pbc=batch.pbc,
+        )
+
+    def test_three_systems_different_pbc(self, radius_pbc_version):
+        """Three systems — 3D periodic, 2D periodic slab, 0D molecule — in one batch."""
+        # 3D periodic bulk
+        cu = build.bulk("Cu")
+        cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+        # 2D periodic slab (periodic in xy, not z)
+        slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+        slab.pbc = [True, True, False]
+        slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+        # 0D molecule
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        cu_graph = self._gen(atomicdata_list_to_batch([cu_data]), radius_pbc_version)
+        slab_graph = self._gen(
+            atomicdata_list_to_batch([slab_data]), radius_pbc_version
+        )
+        h2o_graph = self._gen(atomicdata_list_to_batch([h2o_data]), radius_pbc_version)
+
+        mixed_batch = atomicdata_list_to_batch([cu_data, slab_data, h2o_data])
+        assert mixed_batch.pbc.shape == (3, 3)
+        mixed_graph = self._gen(mixed_batch, radius_pbc_version)
+
+        cu_natoms = len(cu)
+        slab_natoms = len(slab)
+
+        ei_cu, co_cu = _extract_system_edges(mixed_graph, 0, cu_natoms)
+        ei_slab, co_slab = _extract_system_edges(mixed_graph, cu_natoms, slab_natoms)
+        ei_h2o, co_h2o = _extract_system_edges(
+            mixed_graph, cu_natoms + slab_natoms, len(h2o)
+        )
+
+        assert check_features_match(
+            cu_graph["edge_index"], cu_graph["cell_offsets"], ei_cu, co_cu
+        )
+        assert check_features_match(
+            slab_graph["edge_index"], slab_graph["cell_offsets"], ei_slab, co_slab
+        )
+        assert check_features_match(
+            h2o_graph["edge_index"], h2o_graph["cell_offsets"], ei_h2o, co_h2o
+        )
+
+    def test_periodic_system_has_more_edges_than_nonperiodic(self, radius_pbc_version):
+        """Sanity check: bulk has more edges in mixed batch than if treated as non-periodic."""
+        pt = build.bulk("Pt")
+        pt_data_pbc = AtomicData.from_ase(pt, task_name="omat")
+
+        pt_nopbc = pt.copy()
+        pt_nopbc.pbc = False
+        pt_data_nopbc = AtomicData.from_ase(pt_nopbc, task_name="omat")
+
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        mixed_graph = self._gen(
+            atomicdata_list_to_batch([pt_data_pbc, h2o_data]), radius_pbc_version
+        )
+        nopbc_graph = self._gen(
+            atomicdata_list_to_batch([pt_data_nopbc, h2o_data]), radius_pbc_version
+        )
+
+        ei_pbc, _ = _extract_system_edges(mixed_graph, 0, len(pt))
+        ei_nopbc, _ = _extract_system_edges(nopbc_graph, 0, len(pt))
+
+        assert ei_pbc.shape[1] > ei_nopbc.shape[1]
+
+    def test_nonperiodic_molecule_has_no_periodic_images(self, radius_pbc_version):
+        """In a mixed batch, a non-periodic molecule must have only zero cell offsets."""
+        pt = build.bulk("Pt")
+        pt_data = AtomicData.from_ase(pt, task_name="omat")
+
+        h2o = molecule("H2O")
+        h2o.pbc = False
+        h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+        mixed_graph = self._gen(
+            atomicdata_list_to_batch([pt_data, h2o_data]), radius_pbc_version
+        )
+        _, co_h2o = _extract_system_edges(mixed_graph, len(pt), len(h2o))
+
+        assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
+
+    @pytest.mark.gpu()
+    @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+    def test_inference_results_match_mixed_vs_individual(
+        self, radius_pbc_version, pretrained_checkpoint
+    ):
+        """End-to-end inference on a mixed-PBC batch must match per-system individual results."""
+        from tests.conftest import get_predict_unit_for_test
+
+        predictor = get_predict_unit_for_test(
+            pretrained_checkpoint,
+            overrides={"backbone": {"radius_pbc_version": radius_pbc_version}},
+        )
+
+        # 3D periodic bulk
+        cu = build.bulk("Cu")
+        cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+        # 2D periodic slab (periodic in xy, not z)
+        slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+        slab.pbc = [True, True, False]
+        slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+        cu_batch = atomicdata_list_to_batch([cu_data])
+        slab_batch = atomicdata_list_to_batch([slab_data])
+        mixed_batch = atomicdata_list_to_batch([cu_data, slab_data])
+
+        out_cu = predictor.predict(cu_batch)
+        out_slab = predictor.predict(slab_batch)
+        out_mixed = predictor.predict(mixed_batch)
+
+        energy_key = next(k for k in out_mixed if "energy" in k)
+        force_key = next((k for k in out_mixed if "force" in k), None)
+
+        assert torch.allclose(
+            out_mixed[energy_key][0], out_cu[energy_key][0], atol=1e-4
+        ), f"Mixed batch energy for Cu differs from individual: {out_mixed[energy_key][0]} vs {out_cu[energy_key][0]}"
+        assert torch.allclose(
+            out_mixed[energy_key][1], out_slab[energy_key][0], atol=1e-4
+        ), f"Mixed batch energy for slab differs from individual: {out_mixed[energy_key][1]} vs {out_slab[energy_key][0]}"
+
+        if force_key is not None:
+            cu_natoms = len(cu)
+            assert torch.allclose(
+                out_mixed[force_key][:cu_natoms], out_cu[force_key], atol=1e-4
+            ), "Mixed batch Cu forces differ from individual"
+            assert torch.allclose(
+                out_mixed[force_key][cu_natoms:], out_slab[force_key], atol=1e-4
+            ), "Mixed batch slab forces differ from individual"
+
+
+def test_v2_v3_mixed_pbc_produce_identical_edges():
+    """radius_pbc_version 2 and 3 must produce identical edges for mixed-PBC batches."""
+    if not nvalchemiops_installed():
+        pytest.skip("nvalchemiops not installed")
+
+    cu = build.bulk("Cu")
+    cu_data = AtomicData.from_ase(cu, task_name="omat")
+
+    slab = build.fcc111("Al", size=(2, 2, 3), vacuum=10.0, periodic=True)
+    slab.pbc = [True, True, False]
+    slab_data = AtomicData.from_ase(slab, task_name="omat")
+
+    h2o = molecule("H2O")
+    h2o.pbc = False
+    h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+    mixed_batch = atomicdata_list_to_batch([cu_data, slab_data, h2o_data])
+    cutoff = 6.0
+    max_neighbors = 300
+
+    graph_v2 = generate_graph(
+        mixed_batch,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=mixed_batch.pbc,
+    )
+    graph_v3 = generate_graph(
+        mixed_batch,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=3,
+        pbc=mixed_batch.pbc,
+    )
+
+    assert torch.equal(
+        graph_v2["neighbors"], graph_v3["neighbors"]
+    ), f"Neighbor counts differ: v2={graph_v2['neighbors']}, v3={graph_v3['neighbors']}"
+    edges_v2 = _graph_dict_to_edge_set(graph_v2)
+    edges_v3 = _graph_dict_to_edge_set(graph_v3)
+    assert edges_v2 == edges_v3, (
+        f"Edge sets differ between v2 and v3 for mixed-PBC batch.\n"
+        f"Only in v2: {edges_v2 - edges_v3}\n"
+        f"Only in v3: {edges_v3 - edges_v2}"
+    )
+
+
+def test_radius_graph_pbc_v1_raises_on_mixed_pbc():
+    """radius_graph_pbc (v1) must raise RuntimeError for mixed-PBC batches."""
+    pt = build.bulk("Pt")
+    pt_data = AtomicData.from_ase(pt, task_name="omat")
+
+    h2o = molecule("H2O")
+    h2o.cell = [[12, 0, 0], [0, 12, 0], [0, 0, 12]]
+    h2o.pbc = False
+    h2o_data = AtomicData.from_ase(h2o, task_name="omol")
+
+    mixed_batch = atomicdata_list_to_batch([pt_data, h2o_data])
+    with pytest.raises(RuntimeError, match="mixed PBC"):
+        radius_graph_pbc(mixed_batch, radius=6.0, max_num_neighbors_threshold=300)

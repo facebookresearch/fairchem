@@ -130,6 +130,11 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         results_dir = Path(self.job_config.metadata.results_dir)
         sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
 
+        # Save the initial atoms before MD begins.
+        init_atoms_file = results_dir / "init_atoms.extxyz"
+        if not init_atoms_file.exists():
+            ase.io.write(str(init_atoms_file), self._atoms, format="extxyz")
+
         trajectory_file = results_dir / "trajectory.parquet"
         log_file = results_dir / "thermo.log"
 
@@ -302,7 +307,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
             elif hasattr(self._trajectory_writer, "flush"):
                 self._trajectory_writer.flush()
 
-        atoms_path = checkpoint_dir / "checkpoint.xyz"
+        atoms_path = checkpoint_dir / "checkpoint.extxyz"
         self._atoms.info["md_step"] = self._dyn.get_number_of_steps()
         ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
@@ -346,7 +351,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         Args:
             checkpoint_dir: Directory containing checkpoint files.
         """
-        atoms_path = checkpoint_dir / "checkpoint.xyz"
+        atoms_path = checkpoint_dir / "checkpoint.extxyz"
         state_path = checkpoint_dir / "md_state.json"
 
         if not atoms_path.exists() or not state_path.exists():
