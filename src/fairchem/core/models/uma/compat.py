@@ -85,18 +85,6 @@ def _raise_unidentified_uma(
     )
 
 
-def _backfill_uma_1p1_model_id(model_config: dict | DictConfig) -> None:
-    """Set ``model_id = "UMA-1.1"`` in-memory (transient, not persisted).
-
-    Only reached for a UMA 1.1 checkpoint, which by construction has no model_id.
-    """
-    if isinstance(model_config, DictConfig):
-        with open_dict(model_config):
-            OmegaConf.update(model_config, "model_id", UMA_1P1_MODEL_ID, force_add=True)
-    else:
-        model_config["model_id"] = UMA_1P1_MODEL_ID
-
-
 def apply_uma_compat_fixups(
     checkpoint: MLIPInferenceCheckpoint,
     checkpoint_location: str | None = None,
@@ -104,10 +92,10 @@ def apply_uma_compat_fixups(
     """Reject untagged checkpoints and back-fill the UMA 1.1 ``model_id``.
 
     The only legacy fixup needed: UMA 1.1 ships without a ``model_id``, so it is
-    back-filled to ``"UMA-1.1"`` in-memory. UMA 1.2+ are already tagged → no-op;
-    non-UMA → no-op. A checkpoint with neither ``model_id`` nor ``model_version``
-    (UMA 1.0 / untagged) is rejected. Idempotent. ``include_self`` is derived
-    from ``model_id`` by the backbone, not here.
+    back-filled to ``"UMA-1.1"`` in-memory (transient, not persisted). UMA 1.2+
+    are already tagged → no-op; non-UMA → no-op. A checkpoint with neither
+    ``model_id`` nor ``model_version`` (UMA 1.0 / untagged) is rejected.
+    Idempotent. ``include_self`` is derived from ``model_id`` by the backbone.
     """
     model_config = getattr(checkpoint, "model_config", None)
     version = get_uma_version(model_config)
@@ -115,5 +103,12 @@ def apply_uma_compat_fixups(
     if version == "unidentified":
         _raise_unidentified_uma(model_config, checkpoint_location)
     if version == "1.1":
-        _backfill_uma_1p1_model_id(model_config)
+        # Back-fill model_id (UMA 1.1 by construction has none).
+        if isinstance(model_config, DictConfig):
+            with open_dict(model_config):
+                OmegaConf.update(
+                    model_config, "model_id", UMA_1P1_MODEL_ID, force_add=True
+                )
+        else:
+            model_config["model_id"] = UMA_1P1_MODEL_ID
     # 1.2 / 1.2.1+ / unknown_uma / not_uma: no-op.
