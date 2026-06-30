@@ -33,7 +33,7 @@ from ase.mep import DyNEB
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
 images = traj[0:10]
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 
 neb = DyNEB(images, k=1)
 for image in images:
