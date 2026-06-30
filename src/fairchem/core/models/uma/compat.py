@@ -1,59 +1,19 @@
-"""UMA-specific checkpoint compatibility shim.
+"""UMA checkpoint compatibility shim.
 
-This module classifies a loaded :class:`MLIPInferenceCheckpoint` by UMA
-generation and applies in-place fixups to the checkpoint's ``model_config``
-before the model is instantiated. ``model_id`` is the source of truth for the
-generation. Concrete behaviors:
+Classifies a loaded checkpoint by UMA generation (from ``model_id``, falling back
+to ``backbone.model_version`` for legacy 1.1) and fixes up its ``model_config``
+in place at load time (in ``load_inference_model``, before instantiation):
 
-* **UMA 1.0 / untagged checkpoints are rejected.** UMA 1.0 ships with neither a
-  ``model_id`` nor a ``backbone.model_version``; a checkpoint with neither cannot
-  be classified (it is either a deprecated 1.0 or an untagged freshly-trained
-  model), so it raises with an actionable message (set ``model_id``, or
-  ``pip install 'fairchem-core<=2.21.0'`` to use a genuine 1.0).
-* **UMA 1.1 gets ``model_id`` back-filled** to ``"UMA-1.1"`` if missing.
-  Shipped UMA 1.1 checkpoints carry ``backbone.model_version=1.1`` but no
-  top-level ``model_id`` (1.2+ ships ``model_id``). Back-filling makes
-  ``HydraModel.model_id`` reflect the generation for downstream consumers. This
-  is a transitional shim: deprecate/remove once UMA 1.1 is unsupported.
+* **UMA 1.1** ships without a ``model_id`` — back-fill it to ``"UMA-1.1"``.
+* **UMA 1.0 / untagged** (neither ``model_id`` nor ``model_version``) can't be
+  classified and is rejected.
+* **UMA 1.2+** are already tagged, non-UMA is ignored — no-op.
 
-This shim does nothing else: UMA 1.2+ are already tagged (no-op) and non-UMA
-checkpoints are ignored.
+The MoE ``include_self`` quirk is not handled here: the backbone derives it from
+``model_id`` (``eSCNMDMoeBackbone.set_MOLE_coefficients``; only 1.2 uses True).
 
-``include_self`` (the MoE composition-reduction quirk) is NOT handled here. It is
-a property of the generation, derived by the backbone from its ``model_id``:
-``eSCNMDMoeBackbone.set_MOLE_coefficients`` uses ``include_self = (model_id ==
-"UMA-S-1.2")`` — only UMA 1.2 uses ``True``; 1.1 and 1.2.1+ use ``False``.
-``HydraModel`` propagates ``model_id`` to the backbone after construction.
-
-``model_version`` is no longer read for behavior — only as the legacy classifier
-fallback that identifies shipped 1.1.
-
-Call site
----------
-The fixup runs at a single chokepoint:
-:func:`fairchem.core.units.mlip_unit.utils.load_inference_model`, applied right
-after ``torch.load`` and before ``hydra.utils.instantiate``. Both inference
-(``MLIPPredictUnit.__init__``, via ``preloaded_checkpoint``) and finetuning
-(``initialize_finetuning_model``) reach it. It runs *before* any caller
-``overrides`` are merged, so a caller may still override ``model_id`` post-fixup
-(used by tests).
-
-Future generations
-------------------
-When a new generation ships, update the generation branches in
-:func:`get_uma_version` (and the ``include_self`` rule in
-``eSCNMDMoeBackbone.set_MOLE_coefficients`` if its composition behavior differs),
-refresh ``uma_changelog.md``, and add a test in
-``tests/core/models/uma/test_compat.py``.
-
-Known gaps
-----------
-* ``load_tasks`` (utils.py) does its own ``torch.load`` but only instantiates
-  tasks, not the model — out of scope.
-* ``convert_train_checkpoint_to_inference_checkpoint`` writes a fresh inference
-  checkpoint from train state *without* tagging it; identity/flag are re-derived
-  in-memory when that file is later loaded through ``load_inference_model``, not
-  persisted to disk.
+Transitional: remove the 1.1 back-fill once UMA 1.1 is deprecated, and delete
+this module entirely once both UMA 1.1 and 1.2 are deprecated.
 """
 
 from __future__ import annotations
