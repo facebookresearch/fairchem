@@ -29,8 +29,10 @@ generation. Concrete behaviors:
   | 1.2 | ``model_id`` (e.g. ``UMA-S-1.2``) | ``True`` |
   | 1.2.1+ | ``model_id`` (e.g. ``UMA-1.2.1``) | ``False`` |
 
-  The mapping lives in :data:`_UMA_INCLUDE_SELF` / :func:`uma_include_self_bug`
-  (default ``False``). 1.0 never reaches the lookup (rejected first).
+  Only UMA 1.2 uses ``True`` — the shim sets ``include_self_bug = (version ==
+  "1.2")``, where ``version`` comes from :func:`get_uma_version` (so any 1.2
+  size variant — ``UMA-S-1.2`` / ``UMA-M-1.2`` / bare ``UMA-1.2`` — is covered).
+  1.0 never reaches this (rejected first).
 
 ``model_version`` is no longer read for behavior — only as the legacy classifier
 fallback that identifies shipped 1.1. Its backbone default is unchanged.
@@ -47,8 +49,9 @@ after ``torch.load`` and before ``hydra.utils.instantiate``. Both inference
 
 Future generations
 ------------------
-When a new generation ships with a different MoE composition behavior, add it to
-:data:`_UMA_INCLUDE_SELF`, update the table above + ``uma_changelog.md``, extend
+When a new generation ships with a different MoE composition behavior, update the
+``include_self_bug`` rule in :func:`apply_uma_compat_fixups`, update the table
+above + ``uma_changelog.md``, extend
 :data:`_UMA_MODEL_ID_RE` if the ``model_id`` format changes (e.g. patch
 versions), and add a test in ``tests/core/models/uma/test_compat.py``.
 
@@ -78,18 +81,6 @@ if TYPE_CHECKING:
 UmaVersion = Literal["1.0", "1.1", "1.2", "unidentified", "unknown_uma", "not_uma"]
 
 UMA_1P1_MODEL_ID = "UMA-1.1"
-
-# include_self for the MoE composition reduction, keyed by classified generation.
-# Only 1.2 uses True; 1.1 and 1.2.1+ use False (the default). 1.0 is rejected
-# before this lookup. WHEN A NEW GENERATION SHIPS WITH DIFFERENT COMPOSITION
-# BEHAVIOR: add it here, update the module docstring table + uma_changelog.md,
-# and add a test in tests/core/models/uma/test_compat.py.
-_UMA_INCLUDE_SELF: dict[str, bool] = {"1.2": True}
-
-
-def uma_include_self_bug(version: str) -> bool:
-    """Return ``include_self`` for the MoE composition reduction of ``version``."""
-    return _UMA_INCLUDE_SELF.get(version, False)
 
 
 # Last fairchem-core release that supports UMA 1.0 (git describe --tags on
@@ -345,6 +336,6 @@ def apply_uma_compat_fixups(
         )
 
     # Authoritatively set the per-generation MoE composition flag for every
-    # surviving UMA backbone (1.1 / 1.2 / unknown_uma). Always overwrite so a
-    # re-saved finetune config cannot carry a stale value.
-    _set_backbone_include_self_bug(model_config, uma_include_self_bug(version))
+    # surviving UMA backbone (1.1 / 1.2 / unknown_uma). Only 1.2 uses True.
+    # Always overwrite so a re-saved finetune config cannot carry a stale value.
+    _set_backbone_include_self_bug(model_config, version == "1.2")

@@ -1887,10 +1887,19 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
 # ---------------------------------------------------------------------------
 
 
-def test_uma_1p1_predict_unit_has_model_id(uma_1p1_predict_unit):
+def test_uma_1p1_predict_unit_has_model_id():
     """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
     back-fills it to `"UMA-1.1"` at load time."""
-    assert uma_1p1_predict_unit.model.module.model_id == UMA_1P1_MODEL_ID
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu.model.module.model_id == UMA_1P1_MODEL_ID
+    # UMA 1.1 -> include_self_bug False (only 1.2 is True).
+    assert pu.model.module.backbone.include_self_bug is False
 
 
 def test_uma_1p1_finetune_propagates_model_id():
