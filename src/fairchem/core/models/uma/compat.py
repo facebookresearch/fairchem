@@ -58,7 +58,6 @@ Known gaps
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Literal
 
 from omegaconf import DictConfig, OmegaConf, open_dict
@@ -159,8 +158,4 @@ def apply_uma_compat_fixups(
         _raise_unidentified_uma(model_config, checkpoint_location)
     if version == "1.1":
         _backfill_uma_1p1_model_id(model_config)
-        logging.warning(
-            f"UMA 1.1 checkpoint at {checkpoint_location!r} had no model_id; "
-            f"back-filled model_id={UMA_1P1_MODEL_ID!r} (in-memory, not persisted)."
-        )
     # 1.2 / 1.2.1+ / unknown_uma / not_uma: no-op.

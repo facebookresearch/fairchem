@@ -4,8 +4,6 @@ and in-place ``model_id`` back-fill.
 
 from __future__ import annotations
 
-import logging
-
 import pytest
 from omegaconf import OmegaConf
 
@@ -65,44 +63,36 @@ def test_unidentified_raises():
 # ---------------------------------------------------------------------------
 
 
-def test_uma_1p1_string_model_version_backfills(caplog):
+def test_uma_1p1_string_model_version_backfills():
     cfg = uma_cfg(model_version="1.1")
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.WARNING):
-        apply_uma_compat_fixups(ckpt, checkpoint_location="/p.pt")
+    apply_uma_compat_fixups(ckpt, checkpoint_location="/p.pt")
     assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
-    assert any("UMA 1.1" in r.getMessage() for r in caplog.records)
 
 
-def test_uma_1p1_float_model_version_backfills(caplog):
+def test_uma_1p1_float_model_version_backfills():
     cfg = uma_cfg(model_version=1.1)
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.WARNING):
-        apply_uma_compat_fixups(ckpt)
+    apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
 
 
-def test_uma_1p1_idempotent_bare(caplog):
+def test_uma_1p1_idempotent_bare():
     cfg = uma_cfg(model_version="1.1", model_id=UMA_1P1_MODEL_ID)
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.WARNING):
-        apply_uma_compat_fixups(ckpt)
+    apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
-    # No backfill warning on idempotent path.
-    assert not any("back-filled" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.parametrize("subsize_id", ["UMA-S-1.1", "UMA-M-1.1", "UMA-L-1.1"])
-def test_uma_1p1_model_id_not_reclassified(subsize_id, caplog):
+def test_uma_1p1_model_id_not_reclassified(subsize_id):
     """Only 1.2 is special by model_id. A 1.1-style model_id is treated as
     unknown_uma, and model_id left untouched (never re-back-filled)."""
     cfg = uma_cfg(model_version="1.1", model_id=subsize_id)
     ckpt = make_fake_checkpoint(cfg)
     assert get_uma_version(cfg) == "unknown_uma"
-    with caplog.at_level(logging.WARNING):
-        apply_uma_compat_fixups(ckpt)
+    apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == subsize_id  # untouched
-    assert not any("back-filled" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -129,32 +119,28 @@ def test_uma_1p2_bare_no_op():
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_uma_id_warns_no_op(caplog):
+def test_unknown_uma_id_no_op():
     """Future UMA 1.3 must not be silently treated as 1.2."""
     cfg = uma_cfg(model_id="UMA-1.3")
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.WARNING):
-        assert get_uma_version(cfg) == "unknown_uma"
-        apply_uma_compat_fixups(ckpt)
+    assert get_uma_version(cfg) == "unknown_uma"
+    apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == "UMA-1.3"  # untouched
 
 
-def test_user_customized_model_id_preserved(caplog):
+def test_user_customized_model_id_preserved():
     cfg = uma_cfg(model_version="1.1", model_id="my-cool-finetune")
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.WARNING):
-        apply_uma_compat_fixups(ckpt)
+    apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == "my-cool-finetune"
 
 
-def test_non_uma_no_op(caplog):
+def test_non_uma_no_op():
     cfg = {"backbone": {"model": "fairchem.core.models.esen.esen_backbone.ESEN"}}
     ckpt = make_fake_checkpoint(cfg)
-    with caplog.at_level(logging.INFO):
-        assert get_uma_version(cfg) == "not_uma"
-        apply_uma_compat_fixups(ckpt)
+    assert get_uma_version(cfg) == "not_uma"
+    apply_uma_compat_fixups(ckpt)
     assert "model_id" not in ckpt.model_config
-    assert not any("UMA" in r.getMessage() for r in caplog.records)
 
 
 def test_short_registry_name_backbone():
