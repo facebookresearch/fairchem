@@ -1898,8 +1898,8 @@ def test_uma_1p1_predict_unit_has_model_id():
     ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
     pu = load_predict_unit(ckpt, device="cpu")
     assert pu.model.module.model_id == UMA_1P1_MODEL_ID
-    # UMA 1.1 -> include_self_bug False (only 1.2 is True).
-    assert pu.model.module.backbone.include_self_bug is False
+    # model_id is propagated to the backbone (drives include_self).
+    assert pu.model.module.backbone.model_id == UMA_1P1_MODEL_ID
 
 
 def test_uma_1p1_finetune_propagates_model_id():
@@ -1934,7 +1934,7 @@ def test_uma_1p0_predict_unit_raises():
         MLIPPredictUnit(uma_1p0_path, device="cpu")
 
 
-# include_self_bug — exercised on REAL trained UMA configs via fixtures/overrides
+# include_self (derived from model_id) — exercised on REAL trained UMA configs
 # ---------------------------------------------------------------------------
 
 
@@ -1957,31 +1957,30 @@ def _oc20_batch(dataset_dir):
     return data_list_collater([sample], otf_graph=True)
 
 
-def test_direct_mole_loaded_sets_include_self_bug(direct_mole_checkpoint):
-    """End-to-end: a real MoE checkpoint tagged UMA-S-1.2 loads with the compat
-    shim resolving include_self_bug=True on the instantiated backbone."""
+def test_direct_mole_loaded_propagates_model_id(direct_mole_checkpoint):
+    """A real MoE checkpoint tagged UMA-S-1.2 loads with model_id propagated to
+    the backbone (which is what drives include_self=True for 1.2)."""
     from fairchem.core.units.mlip_unit import load_predict_unit
 
     ckpt, _ = direct_mole_checkpoint
     pu = load_predict_unit(ckpt, device="cpu")
-    assert pu.model.module.backbone.include_self_bug is True
+    assert pu.model.module.backbone.model_id == "UMA-S-1.2"
 
 
-def test_include_self_bug_has_teeth(direct_mole_checkpoint, fake_uma_dataset):
-    """Toggling include_self_bug (load override, merged after the shim) must
-    change MoE outputs — proves the flag is wired into set_MOLE_coefficients
-    (num_experts>0, use_composition_embedding=True)."""
+def test_model_id_drives_include_self_has_teeth(
+    direct_mole_checkpoint, fake_uma_dataset
+):
+    """The backbone derives include_self from model_id, so overriding model_id at
+    load (merged after the shim, propagated to the backbone) must change MoE
+    outputs — proving it is wired into set_MOLE_coefficients (num_experts>0,
+    use_composition_embedding=True). UMA-S-1.2 -> True; anything else -> False."""
     from fairchem.core.units.mlip_unit import load_predict_unit
 
     ckpt, _ = direct_mole_checkpoint
-    pu_true = load_predict_unit(
-        ckpt, device="cpu", overrides={"backbone": {"include_self_bug": True}}
-    )
-    pu_false = load_predict_unit(
-        ckpt, device="cpu", overrides={"backbone": {"include_self_bug": False}}
-    )
-    assert pu_true.model.module.backbone.include_self_bug is True
-    assert pu_false.model.module.backbone.include_self_bug is False
+    pu_true = load_predict_unit(ckpt, device="cpu", overrides={"model_id": "UMA-S-1.2"})
+    pu_false = load_predict_unit(ckpt, device="cpu", overrides={"model_id": "UMA-1.1"})
+    assert pu_true.model.module.backbone.model_id == "UMA-S-1.2"
+    assert pu_false.model.module.backbone.model_id == "UMA-1.1"
 
     out_true = pu_true.predict(_oc20_batch(fake_uma_dataset))
     out_false = pu_false.predict(_oc20_batch(fake_uma_dataset))

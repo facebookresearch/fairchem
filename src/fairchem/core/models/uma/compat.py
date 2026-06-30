@@ -15,26 +15,18 @@ generation. Concrete behaviors:
   top-level ``model_id`` (1.2+ ships ``model_id``). Back-filling makes
   ``HydraModel.model_id`` reflect the generation for downstream consumers. This
   is a transitional shim: deprecate/remove once UMA 1.1 is unsupported.
-* **``include_self_bug`` is set per generation** on the backbone config. The
-  ``include_self`` flag in the MoE composition reduction
-  (``escn_moe.eSCNMDMoeBackbone.set_MOLE_coefficients``) differs per generation.
-  The shim writes the authoritative value into ``backbone.include_self_bug``
-  before instantiation, so the backbone consumes a plain bool and never inspects
-  the version itself:
 
-  | Generation | Identified by | ``include_self_bug`` |
-  |---|---|---|
-  | 1.1 | ``model_version == 1.1`` (model_id back-filled) | ``False`` |
-  | 1.2 | ``model_id`` (e.g. ``UMA-S-1.2``) | ``True`` |
-  | 1.2.1+ | ``model_id`` (e.g. ``UMA-1.2.1``) | ``False`` |
+This shim does nothing else: UMA 1.2+ are already tagged (no-op) and non-UMA
+checkpoints are ignored.
 
-  Only UMA 1.2 uses ``True`` — the shim sets ``include_self_bug = (version ==
-  "1.2")``, where ``version`` comes from :func:`get_uma_version` (so any 1.2
-  size variant — ``UMA-S-1.2`` / ``UMA-M-1.2`` / bare ``UMA-1.2`` — is covered).
-  1.0 never reaches this (rejected first).
+``include_self`` (the MoE composition-reduction quirk) is NOT handled here. It is
+a property of the generation, derived by the backbone from its ``model_id``:
+``eSCNMDMoeBackbone.set_MOLE_coefficients`` uses ``include_self = (model_id ==
+"UMA-S-1.2")`` — only UMA 1.2 uses ``True``; 1.1 and 1.2.1+ use ``False``.
+``HydraModel`` propagates ``model_id`` to the backbone after construction.
 
 ``model_version`` is no longer read for behavior — only as the legacy classifier
-fallback that identifies shipped 1.1. Its backbone default is unchanged.
+fallback that identifies shipped 1.1.
 
 Call site
 ---------
@@ -43,15 +35,15 @@ The fixup runs at a single chokepoint:
 after ``torch.load`` and before ``hydra.utils.instantiate``. Both inference
 (``MLIPPredictUnit.__init__``, via ``preloaded_checkpoint``) and finetuning
 (``initialize_finetuning_model``) reach it. It runs *before* any caller
-``overrides`` are merged, so a caller may still override ``model_id`` /
-``backbone.include_self_bug`` post-fixup (used by tests).
+``overrides`` are merged, so a caller may still override ``model_id`` post-fixup
+(used by tests).
 
 Future generations
 ------------------
-When a new generation ships, update the ``include_self_bug`` rule in
-:func:`apply_uma_compat_fixups` (only 1.2 is currently special) and the
-generation branches in :func:`get_uma_version`, refresh the table above +
-``uma_changelog.md``, and add a test in
+When a new generation ships, update the generation branches in
+:func:`get_uma_version` (and the ``include_self`` rule in
+``eSCNMDMoeBackbone.set_MOLE_coefficients`` if its composition behavior differs),
+refresh ``uma_changelog.md``, and add a test in
 ``tests/core/models/uma/test_compat.py``.
 
 Known gaps
@@ -148,20 +140,6 @@ def _raise_unidentified_uma(
     )
 
 
-def _set_backbone_include_self_bug(
-    model_config: dict | DictConfig, value: bool
-) -> None:
-    """Authoritatively set ``backbone.include_self_bug`` (always overwrite)."""
-    backbone = model_config.get("backbone")
-    if not isinstance(backbone, (dict, DictConfig)):
-        return
-    if isinstance(backbone, DictConfig):
-        with open_dict(backbone):
-            backbone["include_self_bug"] = value
-    else:
-        backbone["include_self_bug"] = value
-
-
 def _backfill_uma_1p1_model_id(model_config: dict | DictConfig) -> None:
     """Set ``model_id = "UMA-1.1"`` in-memory (transient, not persisted).
 
@@ -178,38 +156,23 @@ def apply_uma_compat_fixups(
     checkpoint: MLIPInferenceCheckpoint,
     checkpoint_location: str | None = None,
 ) -> None:
-    """Classify ``checkpoint`` and apply in-place UMA-generation fixups.
+    """Reject untagged checkpoints and back-fill the UMA 1.1 ``model_id``.
 
-    See module docstring for the full contract. Idempotent. Safe to call on
-    non-UMA checkpoints (no-op).
+    The only legacy fixup needed: UMA 1.1 ships without a ``model_id``, so it is
+    back-filled to ``"UMA-1.1"`` in-memory. UMA 1.2+ are already tagged → no-op;
+    non-UMA → no-op. A checkpoint with neither ``model_id`` nor ``model_version``
+    (UMA 1.0 / untagged) is rejected. Idempotent. ``include_self`` is derived
+    from ``model_id`` by the backbone, not here.
     """
     model_config = getattr(checkpoint, "model_config", None)
     version = get_uma_version(model_config)
 
-    if version == "not_uma":
-        return
-
     if version == "unidentified":
         _raise_unidentified_uma(model_config, checkpoint_location)
-
     if version == "1.1":
         _backfill_uma_1p1_model_id(model_config)
         logging.warning(
             f"UMA 1.1 checkpoint at {checkpoint_location!r} had no model_id; "
             f"back-filled model_id={UMA_1P1_MODEL_ID!r} (in-memory, not persisted)."
         )
-    elif version == "1.2":
-        logging.info(
-            f"Loaded UMA 1.2 checkpoint: model_id={model_config.get('model_id')!r}, "
-            f"path={checkpoint_location!r}"
-        )
-    elif version == "unknown_uma":
-        logging.warning(
-            f"UMA checkpoint at {checkpoint_location!r} could not be classified "
-            "into a known generation; defaulting include_self_bug=False."
-        )
-
-    # Authoritatively set the per-generation MoE composition flag for every
-    # surviving UMA backbone (1.1 / 1.2 / unknown_uma). Only 1.2 uses True.
-    # Always overwrite so a re-saved finetune config cannot carry a stale value.
-    _set_backbone_include_self_bug(model_config, version == "1.2")
+    # 1.2 / 1.2.1+ / unknown_uma / not_uma: no-op.

@@ -95,15 +95,13 @@ def test_uma_1p1_idempotent_bare(caplog):
 @pytest.mark.parametrize("subsize_id", ["UMA-S-1.1", "UMA-M-1.1", "UMA-L-1.1"])
 def test_uma_1p1_model_id_not_reclassified(subsize_id, caplog):
     """Only 1.2 is special by model_id. A 1.1-style model_id is treated as
-    unknown_uma — still include_self_bug=False, and model_id left untouched
-    (never re-back-filled)."""
+    unknown_uma, and model_id left untouched (never re-back-filled)."""
     cfg = uma_cfg(model_version="1.1", model_id=subsize_id)
     ckpt = make_fake_checkpoint(cfg)
     assert get_uma_version(cfg) == "unknown_uma"
     with caplog.at_level(logging.WARNING):
         apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == subsize_id  # untouched
-    assert ckpt.model_config["backbone"]["include_self_bug"] is False
     assert not any("back-filled" in r.getMessage() for r in caplog.records)
 
 
@@ -222,33 +220,8 @@ def test_dictconfig_unidentified_raises():
 
 
 # ---------------------------------------------------------------------------
-# include_self_bug — set per generation on the backbone config
+# 1.2 size-variant classification
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "kwargs,expected",
-    [
-        ({"model_version": "1.1"}, False),  # 1.1
-        ({"model_id": "UMA-S-1.2"}, True),  # 1.2 (S)
-        ({"model_id": "UMA-M-1.2"}, True),  # 1.2 (M variant)
-        ({"model_id": "UMA-1.2.1"}, False),  # 1.2.1+ (unknown_uma -> default)
-    ],
-)
-def test_apply_sets_include_self_bug(kwargs, expected):
-    cfg = uma_cfg(**kwargs)
-    ckpt = make_fake_checkpoint(cfg)
-    apply_uma_compat_fixups(ckpt)
-    assert ckpt.model_config["backbone"]["include_self_bug"] is expected
-
-
-def test_include_self_bug_set_under_struct_mode():
-    """The flag write must work on a struct-mode DictConfig (open_dict path)."""
-    cfg = OmegaConf.create(uma_cfg(model_id="UMA-S-1.2"))
-    OmegaConf.set_struct(cfg, True)
-    ckpt = make_fake_checkpoint(cfg)
-    apply_uma_compat_fixups(ckpt)
-    assert ckpt.model_config["backbone"]["include_self_bug"] is True
 
 
 def test_uma_1p2_m_variant_classified():

@@ -4,9 +4,6 @@ moe_layer_type: ${moe_layer_type}
 num_experts: ${num_experts} # 8
 use_global_embedding: False
 use_composition_embedding: True
-# UMA 1.2 MoE composition quirk; preserves this test backbone's prior
-# include_self=True behavior (was np.isclose(model_version=1.0, 1.0)).
-include_self_bug: True
 max_num_elements: 100
 sphere_channels: 16
 lmax: 2

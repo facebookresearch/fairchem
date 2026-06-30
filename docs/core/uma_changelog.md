@@ -19,7 +19,7 @@ This page documents the release history of UMA models, including new features, i
 
 ## Library compatibility — UMA 1.0 deprecation
 
-UMA 1.0 checkpoints (e.g. `uma-s-1.pt`) are **no longer supported** in current `fairchem-core` releases. Loading a UMA 1.0 checkpoint raises a `RuntimeError` at load time, because UMA 1.0 has a known semantic divergence with later releases (the composition-reduction `include_self` flag in `eSCNMDMoeBackbone` branches on `np.isclose(self.model_version, 1.0)`) — silently running a UMA 1.0 checkpoint through current code would produce numerically different results than the original release.
+UMA 1.0 checkpoints (e.g. `uma-s-1.pt`) are **no longer supported** in current `fairchem-core` releases. Loading a UMA 1.0 checkpoint raises a `RuntimeError` at load time, because UMA 1.0 has a known semantic divergence with later releases (its MoE composition-reduction `include_self` behavior differs) — silently running a UMA 1.0 checkpoint through current code would produce numerically different results than the original release.
 
 To use a UMA 1.0 checkpoint, install the last release that supports it:
 
@@ -39,7 +39,7 @@ ckpt.model_config["model_id"] = "UMA-1.2.1"
 torch.save(ckpt, path)
 ```
 
-The MoE composition-reduction `include_self` flag is handled automatically per generation by the compat shim (1.1 → `False`, 1.2 → `True`, 1.2.1+ → `False`); it is set on the backbone config at load time and does not need to be specified by users.
+The MoE composition-reduction `include_self` flag is handled automatically per generation: the backbone derives it from the checkpoint's `model_id` (1.2 → `True`; 1.1 and 1.2.1+ → `False`), so users do not need to specify it.
 
 ---
 
