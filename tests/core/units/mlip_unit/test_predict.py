@@ -2016,5 +2016,5 @@ def test_untagged_checkpoint_raises(direct_checkpoint, tmp_path):
 
     stripped = str(tmp_path / "untagged_inference.pt")
     torch.save(obj, stripped)
-    with pytest.raises(RuntimeError, match="identity required"):
+    with pytest.raises(RuntimeError, match="no model_id"):
         load_predict_unit(stripped, device="cpu")

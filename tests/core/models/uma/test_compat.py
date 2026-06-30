@@ -55,7 +55,7 @@ def test_unidentified_raises():
     with pytest.raises(RuntimeError) as exc_info:
         apply_uma_compat_fixups(ckpt, checkpoint_location="/path/to/uma-s-1.pt")
     msg = str(exc_info.value)
-    assert "identity required" in msg
+    assert "no model_id" in msg
     assert "fairchem-core<=2.21.0" in msg  # names the deprecated-1.0 possibility
     assert "/path/to/uma-s-1.pt" in msg
 
@@ -215,7 +215,7 @@ def test_dictconfig_uma_1p2_classified():
 def test_dictconfig_unidentified_raises():
     cfg = OmegaConf.create(uma_cfg())
     ckpt = make_fake_checkpoint(cfg)
-    with pytest.raises(RuntimeError, match="identity required"):
+    with pytest.raises(RuntimeError, match="no model_id"):
         apply_uma_compat_fixups(ckpt)
 
 

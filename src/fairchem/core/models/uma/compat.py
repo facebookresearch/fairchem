@@ -122,21 +122,9 @@ def _raise_unidentified_uma(
         checkpoint_location if checkpoint_location is not None else "<unknown path>"
     )
     raise RuntimeError(
-        f"UMA checkpoint identity required but not found at {path_str!r}: the "
-        f"checkpoint has neither a top-level `model_id` nor a "
-        f"`backbone.model_version`, so its generation cannot be determined.\n"
-        f"\n"
-        f"This is either (a) a freshly-trained UMA model that was not tagged, or "
-        f"(b) a deprecated UMA 1.0 checkpoint (which shipped with neither field).\n"
-        f"\n"
-        f"To fix (a), set a `model_id` on the model config when training (e.g. "
-        f"`model_id: UMA-1.2.1`), or tag an existing checkpoint in place:\n"
-        f"    ckpt = torch.load(path, weights_only=False)\n"
-        f"    ckpt.model_config['model_id'] = 'UMA-1.2.1'\n"
-        f"    torch.save(ckpt, path)\n"
-        f"\n"
-        f"For (b), install the last fairchem-core release that supported UMA 1.0:\n"
-        f"    pip install 'fairchem-core<={_LAST_UMA_1P0_FAIRCHEM_VERSION}'"
+        f"UMA checkpoint at {path_str!r} has no model_id. If this is a deprecated "
+        f"UMA 1.0 checkpoint, install fairchem-core<={_LAST_UMA_1P0_FAIRCHEM_VERSION}; "
+        f"otherwise set a model_id on the model config (e.g. model_id: UMA-1.2.1)."
     )
 
 
