@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
-UmaVersion = Literal["1.1", "1.2", "unidentified", "unknown_uma", "not_uma"]
+UmaVersion = Literal["not_uma", "unidentified", "1.1", "tagged"]
 
 UMA_1P1_MODEL_ID = "UMA-1.1"
 
@@ -38,16 +38,15 @@ _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 
 
 def get_uma_version(model_config: dict | None) -> UmaVersion:
-    """Classify a checkpoint by UMA generation from the three real signatures.
+    """Classify what fix-up a checkpoint needs (see :func:`apply_uma_compat_fixups`).
 
-    Shipped: 1.0 = neither field set; 1.1 = ``model_version`` only; 1.2 =
-    ``model_id`` only (matched on its trailing ``-1.2`` so a future
-    model_id-tagged 1.2.1 / 1.3 is not mistaken for 1.2).
-
-    Returns ``"1.1"`` / ``"1.2"`` for a recognized generation; ``"unidentified"``
-    when neither field is set (the UMA 1.0 / untagged signature, rejected on
-    load); ``"unknown_uma"`` for a UMA backbone matching nothing known (future
-    release or user-customized ``model_id``); ``"not_uma"`` otherwise.
+    * ``"not_uma"`` — not a UMA backbone.
+    * ``"1.1"`` — legacy UMA 1.1: no ``model_id`` but ``backbone.model_version ==
+      1.1`` → back-fill ``model_id``.
+    * ``"unidentified"`` — UMA backbone with neither ``model_id`` nor
+      ``model_version`` (UMA 1.0 / untagged-new) → rejected on load.
+    * ``"tagged"`` — already has a ``model_id`` (UMA 1.2+ or custom) → no-op. The
+      1.2 ``include_self`` rule lives in the backbone, keyed on ``model_id``.
     """
     if not isinstance(model_config, dict):
         return "not_uma"
@@ -59,14 +58,11 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
         return "not_uma"
 
     model_id = model_config.get("model_id")
-    model_id = model_id.strip() if isinstance(model_id, str) else ""
-    model_version = backbone.get("model_version")
-
-    if not model_id and model_version is None:
-        return "unidentified"  # UMA 1.0 (ships with neither) or untagged-new
-    if not model_id:  # legacy: identified by model_version (only 1.1 ships this way)
-        return "1.1" if model_version in (1.1, "1.1") else "unknown_uma"
-    return "1.2" if model_id.endswith("-1.2") else "unknown_uma"
+    if isinstance(model_id, str) and model_id.strip():
+        return "tagged"  # 1.2+ / custom — backbone reads model_id for include_self
+    if backbone.get("model_version") in (1.1, "1.1"):
+        return "1.1"  # legacy: no model_id, model_version says 1.1
+    return "unidentified"  # UMA 1.0 / untagged (no model_id, no model_version)
 
 
 def _raise_unidentified_uma(checkpoint_location: str | None) -> None:
@@ -100,4 +96,4 @@ def apply_uma_compat_fixups(
     if version == "1.1":
         # Back-fill model_id (UMA 1.1 by construction has none).
         model_config["model_id"] = UMA_1P1_MODEL_ID
-    # 1.2 / 1.2.1+ / unknown_uma / not_uma: no-op.
+    # "tagged" (1.2+) / "not_uma": no-op.

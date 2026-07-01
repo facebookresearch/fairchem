@@ -85,11 +85,11 @@ def test_uma_1p1_idempotent_bare():
 
 @pytest.mark.parametrize("subsize_id", ["UMA-S-1.1", "UMA-M-1.1", "UMA-L-1.1"])
 def test_uma_1p1_model_id_not_reclassified(subsize_id):
-    """Only 1.2 is special by model_id. A 1.1-style model_id is treated as
-    unknown_uma, and model_id left untouched (never re-back-filled)."""
+    """A checkpoint that already has a model_id is 'tagged' (no-op); it is never
+    re-back-filled, regardless of what the model_id says."""
     cfg = uma_cfg(model_version="1.1", model_id=subsize_id)
     ckpt = make_fake_checkpoint(cfg)
-    assert get_uma_version(cfg) == "unknown_uma"
+    assert get_uma_version(cfg) == "tagged"
     apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == subsize_id  # untouched
 
@@ -118,11 +118,12 @@ def test_uma_1p2_bare_no_op():
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_uma_id_no_op():
-    """Future UMA 1.3 must not be silently treated as 1.2."""
+def test_future_model_id_tagged_no_op():
+    """A future/unknown model_id (e.g. UMA-1.3) is 'tagged' → no-op, untouched.
+    (Its include_self is decided by the backbone from model_id.)"""
     cfg = uma_cfg(model_id="UMA-1.3")
     ckpt = make_fake_checkpoint(cfg)
-    assert get_uma_version(cfg) == "unknown_uma"
+    assert get_uma_version(cfg) == "tagged"
     apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == "UMA-1.3"  # untouched
 
@@ -179,9 +180,9 @@ def test_whitespace_model_id_treated_as_absent():
 
 
 # ---------------------------------------------------------------------------
-# 1.2 size-variant classification
+# 1.2 size variant is tagged (no-op); the backbone decides its include_self
 # ---------------------------------------------------------------------------
 
 
-def test_uma_1p2_m_variant_classified():
-    assert get_uma_version(uma_cfg(model_id="UMA-M-1.2")) == "1.2"
+def test_uma_1p2_m_variant_tagged():
+    assert get_uma_version(uma_cfg(model_id="UMA-M-1.2")) == "tagged"
