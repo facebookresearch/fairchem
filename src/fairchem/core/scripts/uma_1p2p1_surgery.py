@@ -182,7 +182,7 @@ def uma_1p2_surgery(checkpoint_path: str, output_dir: str) -> tuple[str, str]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Perform checkpoint surgery on UMA 1.2"
+        description="Perform checkpoint surgery on UMA 1.2.1"
     )
     parser.add_argument("--checkpoint-in", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
