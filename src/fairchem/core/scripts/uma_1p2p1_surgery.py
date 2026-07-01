@@ -19,24 +19,6 @@ from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 
 def add_omat_rattle_support(checkpoint):
     """Stage 1: Add omat_rattle support (matches notebook)."""
-    # dataset_mapping = {
-    #     "oc20": "oc20",
-    #     "oc22": "oc22",
-    #     "oc25": "oc25",
-    #     "omol": "omol",
-    #     "omat": "omat",
-    #     "omat_rattle": "omat",
-    #     "odac": "odac",
-    #     "omc": "omc",
-    # }
-
-    # del checkpoint.model_config["backbone"]["dataset_list"]
-    # checkpoint.model_config["backbone"]["dataset_mapping"] = dataset_mapping
-
-    # del checkpoint.model_config["heads"]["energyandforcehead"]["dataset_names"]
-    # checkpoint.model_config["heads"]["energyandforcehead"][
-    #     "dataset_mapping"
-    # ] = dataset_mapping
 
     checkpoint.model_state_dict[
         "backbone.dataset_embedding.dataset_emb_dict.omat_rattle.weight"
@@ -113,8 +95,7 @@ def remove_omat_rattle(checkpoint):
 
     # Add single atom support
     checkpoint.model_config["supports_single_atoms"] = True
-    checkpoint.model_config["model_id"] = "UMA-S-1.2"
-    checkpoint.model_config["backbone"]["model_version"] = 1.21
+    checkpoint.model_config["model_id"] = "UMA-S-1.2.1"
     checkpoint.model_config["backbone"]["moe_layer_type"] = "pytorch"
     return checkpoint
 
