@@ -124,11 +124,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Load checkpoint first to get model type. UMA compat fixups (1.0
-        # hard-fail, 1.1 model_id back-fill) are applied downstream in
-        # load_inference_model, which this path reaches via preloaded_checkpoint
-        # below. The config reads here only touch backbone.lmax/mmax/model, none
-        # of which the fixup changes, so no separate call is needed.
+        # Load checkpoint first to get model type; UMA compat fixups run downstream in load_inference_model.
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
         )
