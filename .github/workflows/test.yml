@@ -28,6 +28,24 @@ env:
 jobs:
   test:
     runs-on: 32-core-ubuntu
+    # Explicit `name:` overrides GitHub Actions' default check-run name.
+    # Without it, GitHub auto-expands EVERY field of the object-typed
+    # `shard` matrix entry — including `shard.paths` — into a
+    # >100-character truncated string like
+    # `test (3.13, core, tests/core/models tests/core/graph ...`.
+    # That diverges from the short custom status emitted by
+    # multi-trigger-setup, forcing branch protection to pick one event
+    # type's names and break the others.
+    #
+    # We use a literal job key (`test`) rather than `${{ github.job }}`
+    # because `github.job` is only populated inside the execution of
+    # `steps:` per the GitHub docs, and resolves to null at job-level
+    # `name:` evaluation time. The literal matches what `github.job`
+    # would have produced and matches the multi-trigger-setup template
+    # verbatim, so the auto-generated check-run name and the custom
+    # commit status now share a single string set across all event
+    # types (push, merge_group, workflow_run, workflow_dispatch).
+    name: 'test (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
     permissions:
       contents: read
       # Needed to manually set commit status
@@ -147,6 +165,9 @@ jobs:
 
   test_cpu_sweep:
     runs-on: 32-core-ubuntu
+    # See `test` job above for the `name:` rationale (literal job key,
+    # not `${{ github.job }}`, to avoid the null-at-job-level pitfall).
+    name: 'test_cpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
     permissions:
       contents: read
       statuses: write
@@ -246,6 +267,8 @@ jobs:
 
   test_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
+    # See `test` job above for the `name:` rationale.
+    name: 'test_gpu (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
     permissions:
       contents: read
       # Needed to manually set commit status
@@ -329,6 +352,8 @@ jobs:
 
   test_gpu_sweep:
     runs-on: 4-core-ubuntu-gpu-t4
+    # See `test` job above for the `name:` rationale.
+    name: 'test_gpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
     permissions:
       contents: read
       statuses: write
