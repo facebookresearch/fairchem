@@ -13,14 +13,17 @@ import multiprocessing as mp
 import os
 from collections import defaultdict
 from functools import partial
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd  # Noqa: TCH002
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.structure import get_structure_group
 from p_tqdm import p_map
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from tqdm import tqdm
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def process_structure_group(

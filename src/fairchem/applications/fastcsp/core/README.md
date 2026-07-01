@@ -87,6 +87,7 @@ genarris:
 pre_relaxation_filter:
   assign_groups: true        # run dedup blocker
   remove_duplicates: true    # drop all-but-one per group (rep = closest-to-median density)
+  remove_problematic: false  # drop structures whose generation-time validity flags are False (default: false)
   ltol: 0.3                  # StructureMatcher tolerances (looser than post-relax)
   stol: 0.4
   angle_tol: 5

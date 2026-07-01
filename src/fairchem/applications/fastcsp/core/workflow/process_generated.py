@@ -38,7 +38,12 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     get_process_slurm_config,
     submit_slurm_jobs,
 )
-from fairchem.applications.fastcsp.core.utils.structure import get_partition_id
+from fairchem.applications.fastcsp.core.utils.structure import (
+    check_correct_z,
+    check_molecule_matches_reference,
+    get_partition_id,
+    load_reference_graph,
+)
 from p_tqdm import p_map
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.io.cif import CifWriter
@@ -46,6 +51,8 @@ from tqdm import tqdm
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import networkx as nx
 
 
 def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -81,6 +88,9 @@ def get_pre_relax_filter_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     match_config = config.get("pre_relaxation_filter", {})
     return {
+        "remove_problematic": match_config.get(
+            "remove_problematic", False
+        ),  # default keep problematic structures (matches post_relaxation_filter)
         "assign_groups": match_config.get(
             "assign_groups", False
         ),  # default assign group indices to similar structures
@@ -121,6 +131,7 @@ def structure_to_row(
     conf_id: str,
     z_val: int,
     npartitions: int = 1000,
+    reference_graph: nx.Graph | None = None,
 ) -> dict:
     """
     Convert structure data to standardized DataFrame row format.
@@ -170,12 +181,17 @@ def structure_to_row(
         "cif_generated": cif_str,
         "partition_id": get_partition_id(unique_structure_id, npartitions),
         "structure_generated": structure,
+        "validity.crystal_generated.correct_z": check_correct_z(structure, z_val),
+        "validity.crystal_generated.molecule_matches_reference": check_molecule_matches_reference(
+            structure, reference_graph
+        ),
     }
 
 
 def process_genarris_outputs_single(
     input_dir: Path,
     output_dir: Path,
+    remove_problematic: bool = False,
     remove_duplicates: bool = False,
     ltol: float = 0.3,
     stol: float = 0.4,
@@ -215,6 +231,7 @@ def process_genarris_outputs_single(
     num_cpus = max(len(os.sched_getaffinity(0)), 1)
     # input_dir is the conformer-level directory: .../<mol_id>/<conf_id>
     conf_id = input_dir.name
+    reference_graph = load_reference_graph(input_dir, conf_id)
     mol_id = input_dir.parent.name
     logger.info(f"Processing {input_dir} (mol_id={mol_id}, conf_id={conf_id})")
 
@@ -276,12 +293,20 @@ def process_genarris_outputs_single(
         logger.warning(f"No structures found in {input_dir}")
         return
 
-    # Pass 2: parallel structure_to_row conversion
+    # Pass 2: parallel structure_to_row conversion. ``reference_graph`` is
+    # threaded through so the generation-time validity flags (correct_z,
+    # molecule_matches_reference) are computed in-worker.
     def _convert(item):
         hash_id, struct_dict, z_val = item
         try:
             return structure_to_row(
-                hash_id, struct_dict, mol_id, conf_id, z_val, npartitions
+                hash_id,
+                struct_dict,
+                mol_id,
+                conf_id,
+                z_val,
+                npartitions,
+                reference_graph=reference_graph,
             )
         except Exception as e:
             logger.warning(f"Failed to convert structure {hash_id} in {input_dir}: {e}")
@@ -296,13 +321,27 @@ def process_genarris_outputs_single(
     all_rows = [r for r in rows if r is not None]
 
     structures_df = pd.DataFrame(all_rows)
-    if assign_groups:
+
+    # Separate structures that failed the generation-time validity checks.
+    valid_mask = (
+        structures_df["validity.crystal_generated.correct_z"]
+        & structures_df["validity.crystal_generated.molecule_matches_reference"]
+    )
+    problematic_structures_df = structures_df[~valid_mask]
+    structures_df_filtered = structures_df[valid_mask]
+    logger.info(
+        f"Pre-relax validity split for {input_dir}: "
+        f"{len(structures_df_filtered)} valid / {len(problematic_structures_df)} problematic "
+        f"(of {len(structures_df)} total)"
+    )
+
+    if assign_groups and not structures_df_filtered.empty:
         # Pre-relax dedup blocker = (mol_id, Z, conf_id, spg_generated,
         # density-bin @ density_bin_size). Representative per group = row
         # whose density_generated is closest to the group median (robust to
         # high-density packing artefacts).
-        structures_df = deduplicate_structures(
-            structures_df,
+        structures_df_filtered = deduplicate_structures(
+            structures_df_filtered,
             structure_col="structure_generated",
             conf_col="conf_id" if bin_by_conf else None,
             z_col="z" if bin_by_z else None,
@@ -321,6 +360,20 @@ def process_genarris_outputs_single(
             keep_col="density_generated",
             n_jobs=num_cpus,
         )
+    if assign_groups:
+        problematic_structures_df["group_index"] = (
+            "-1"  # Mark problematic structures with group "-1" (string to match
+        )
+        #         deduplicate_structures' f"{hash}_{subgroup}" dtype)
+
+    if not remove_problematic:
+        # Reintegrate problematic structures if not removing them
+        logger.info("Reintegrating problematic structures")
+        structures_df = pd.concat(
+            [structures_df_filtered, problematic_structures_df], ignore_index=True
+        )
+    else:
+        structures_df = structures_df_filtered
     structures_df = structures_df.drop(columns=["structure_generated"])
     structures_df.to_parquet(
         output_dir,
@@ -334,6 +387,7 @@ def process_genarris_outputs(
     input_dir: Path,
     output_dir: Path,
     pre_relax_config: dict[str, Any],
+    remove_problematic: bool = False,
     remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
@@ -354,6 +408,8 @@ def process_genarris_outputs(
         input_dir: Root directory containing multiple molecule directories
         output_dir: Output directory where processed results will be saved
         pre_relax_config: Configuration dictionary containing SLURM and processing parameters
+        remove_problematic: Whether to drop structures that failed the generation-time
+                            validity checks before deduplication (default: False)
         remove_duplicates: Whether to perform deduplication (default: False)
         ltol: Lattice parameter tolerance for structure deduplication
         stol: Site tolerance for structure deduplication
@@ -393,6 +449,7 @@ def process_genarris_outputs(
                     (conf_dir, processed_dir),
                     {
                         "remove_duplicates": remove_duplicates,
+                        "remove_problematic": remove_problematic,
                         "ltol": ltol,
                         "stol": stol,
                         "angle_tol": angle_tol,

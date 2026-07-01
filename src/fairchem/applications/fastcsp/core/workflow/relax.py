@@ -37,7 +37,10 @@ from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
+    check_connectivity_unchanged,
+    check_correct_z,
+    check_molecule_matches_reference,
+    load_reference_graph,
 )
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -257,7 +260,11 @@ def relax_atoms(atoms, relax_config, calc):
 
 
 def relax_structures(
-    input_files, output_dir, relax_config, column_name="cif_generated"
+    input_files,
+    output_dir,
+    relax_config,
+    column_name="cif_generated",
+    generated_structures_dir=None,
 ):
     """Relax crystal structures from Parquet files using ML potentials."""
     logger = get_central_logger()
@@ -274,6 +281,26 @@ def relax_structures(
         logger.debug(f"Relaxing structures from {input_file}")
 
         structures_df = pd.read_parquet(input_file)
+
+        # Build the reference-molecule graph once per (mol, conf). The reference
+        # XYZ lives at <generated_structures>/<mol>/<conf>/<conf>.xyz (.sdf, .mol
+        # also accepted). When generated_structures_dir is not provided, fall
+        # back to deriving it from input_file's location.
+        mol_id = str(structures_df["mol_id"].iloc[0])
+        conf_id = str(structures_df["conf_id"].iloc[0])
+        if generated_structures_dir is None:
+            # input_file: <root>/raw_structures/<mol>/<conf>/partition_id=*/*.parquet
+            try:
+                derived_root = input_file.parents[4]
+                generated_conf_dir = (
+                    derived_root / "generated_structures" / mol_id / conf_id
+                )
+            except IndexError:
+                generated_conf_dir = None
+        else:
+            generated_conf_dir = Path(generated_structures_dir) / mol_id / conf_id
+        reference_graph = load_reference_graph(generated_conf_dir, conf_id)
+
         atoms_list = (
             structures_df[column_name]
             .apply(
@@ -281,7 +308,9 @@ def relax_structures(
             )
             .to_numpy()
         )
-        # Deep copy atoms for connectivity validation (relaxation modifies in-place)
+        # Deep-copy the pre-relax atoms so the post-relax bond-matrix
+        # comparison (check_connectivity_unchanged) has the original
+        # JmolNN adjacency on hand. relax_atoms() mutates atoms in place.
         atoms_list_original = [atoms.copy() for atoms in atoms_list]
         structure_ids_list = structures_df["structure_id"].to_numpy().astype(str)
 
@@ -343,9 +372,23 @@ def relax_structures(
             atoms.info["converged"] for atoms in atoms_relaxed
         ]
 
-        # Validate structural integrity after relaxation
-        structures_df["validity.connectivity_unchanged"] = [
-            check_no_changes_in_covalent_matrix(atoms_initial, atoms_final)
+        # Validate structural integrity after relaxation using reference-anchored
+        # checks on the relaxed structure: (a) Z (molecule count) matches the
+        # canonical Z value, and (b) every fragment is isomorphic to the
+        # reference molecular graph.
+        structures_df["validity.crystal_relaxed.correct_z"] = [
+            check_correct_z(structure, int(z))
+            for structure, z in zip(structures_relaxed, structures_df["z"])
+        ]
+        structures_df["validity.crystal_relaxed.molecule_matches_reference"] = [
+            check_molecule_matches_reference(structure, reference_graph)
+            for structure in structures_relaxed
+        ]
+        # Strict init↔final bond-matrix equality (no site permutation).
+        # Catches any bond broken / formed during relax, independent of the
+        # reference-anchored checks above.
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = [
+            check_connectivity_unchanged(atoms_initial, atoms_final)
             for atoms_initial, atoms_final in zip(atoms_list_original, atoms_relaxed)
         ]
         # Save results to Parquet
@@ -356,8 +399,25 @@ def relax_structures(
         )
 
 
-def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif_generated"):
-    """Submit parallel structure relaxation jobs to SLURM."""
+def run_relax_jobs(
+    input_dir,
+    output_dir,
+    relax_config,
+    column_name="cif_generated",
+    generated_structures_dir=None,
+):
+    """Submit parallel structure relaxation jobs to SLURM.
+
+    Args:
+        input_dir: Directory containing input parquet files (e.g., raw_structures/).
+        output_dir: Destination for relaxed parquet output.
+        relax_config: Relaxation parameters.
+        column_name: Name of the input CIF column.
+        generated_structures_dir: Optional path to the workspace's
+            generated_structures/ directory; used by each worker to locate the
+            per-conformer reference XYZ for the relaxed-side validity flags.
+            If None, the worker derives it from input_file.parents[4].
+    """
 
     logger = get_central_logger()
 
@@ -393,6 +453,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif_generat
                 output_dir,
                 relax_config,
                 column_name,
+                generated_structures_dir,
             )
             jobs.append(job)
 
@@ -438,6 +499,7 @@ if __name__ == "__main__":
         output_dir=relax_output_dir / "relaxed_structures",
         relax_config=relax_config,
         column_name="cif_generated",
+        generated_structures_dir=root / "generated_structures",
     )
     logger = get_central_logger()
     logger.info(f"Started {len(jobs)} relaxation jobs")
