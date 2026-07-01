@@ -19,7 +19,7 @@ ray[serve]==2.55.1
 # `AttributeError: 'google._upb._message.FieldDescriptor' object has no
 # attribute 'label'` in test_rayserve_remote_task_multiple_concurrent.
 # Pin to 6.x until Ray ships a fix.
-protobuf<7
+protobuf<8
 ipykernel==7.2.0
 jupyter_book==2.1.5
 pytest-xdist==3.8.0
