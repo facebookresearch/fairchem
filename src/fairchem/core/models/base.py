@@ -374,9 +374,7 @@ class HydraModel(nn.Module, HydraInterfaceMixin):
                 "Backbone not specified and not found in the starting checkpoint"
             )
 
-        # Propagate the model generation id to the backbone so it can apply
-        # generation-specific behavior (e.g. the UMA 1.2 include_self quirk in
-        # eSCNMDMoeBackbone). See fairchem.core.models.uma.compat.
+        # Propagate the generation id so the backbone can apply version-specific behavior.
         self.backbone.model_id = self.model_id
 
         if freeze_backbone:
