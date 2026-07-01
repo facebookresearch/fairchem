@@ -1,0 +1,188 @@
+"""Tests for fairchem.core.models.uma.compat — UMA generation classifier
+and in-place ``model_id`` back-fill.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from fairchem.core.models.uma.compat import (
+    UMA_1P1_MODEL_ID,
+    apply_uma_compat_fixups,
+    get_uma_version,
+)
+from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+
+UMA_BACKBONE_FQN = "fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone"
+UMA_BACKBONE_SHORT = "escnmd_moe_backbone"
+
+
+def make_fake_checkpoint(model_config) -> MLIPInferenceCheckpoint:
+    """Build a real ``MLIPInferenceCheckpoint`` with empty state for tests."""
+    return MLIPInferenceCheckpoint(
+        model_config=model_config,
+        model_state_dict={},
+        ema_state_dict={},
+        tasks_config={},
+    )
+
+
+def uma_cfg(*, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQN):
+    cfg = {"backbone": {"model": backbone_model}}
+    if model_version is not None:
+        cfg["backbone"]["model_version"] = model_version
+    if model_id is not None:
+        cfg["model_id"] = model_id
+    return cfg
+
+
+# ---------------------------------------------------------------------------
+# UMA 1.0 / untagged (neither model_id nor model_version) — hard fail
+# ---------------------------------------------------------------------------
+
+
+def test_unidentified_raises():
+    """No model_id and no model_version -> cannot classify -> raise.
+
+    This is the on-disk signature of a deprecated UMA 1.0 checkpoint (which ships
+    with neither field) and of an untagged freshly-trained model.
+    """
+    cfg = uma_cfg()  # no model_id, no model_version
+    ckpt = make_fake_checkpoint(cfg)
+    with pytest.raises(RuntimeError) as exc_info:
+        apply_uma_compat_fixups(ckpt, checkpoint_location="/path/to/uma-s-1.pt")
+    msg = str(exc_info.value)
+    assert "no model_id" in msg
+    assert "fairchem-core<=2.21.0" in msg  # names the deprecated-1.0 possibility
+    assert "/path/to/uma-s-1.pt" in msg
+
+
+# ---------------------------------------------------------------------------
+# UMA 1.1 — classification + back-fill
+# ---------------------------------------------------------------------------
+
+
+def test_uma_1p1_string_model_version_backfills():
+    cfg = uma_cfg(model_version="1.1")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt, checkpoint_location="/p.pt")
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+def test_uma_1p1_float_model_version_backfills():
+    cfg = uma_cfg(model_version=1.1)
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+def test_uma_1p1_idempotent_bare():
+    cfg = uma_cfg(model_version="1.1", model_id=UMA_1P1_MODEL_ID)
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+@pytest.mark.parametrize("subsize_id", ["UMA-S-1.1", "UMA-M-1.1", "UMA-L-1.1"])
+def test_uma_1p1_model_id_not_reclassified(subsize_id):
+    """A checkpoint that already has a model_id is 'tagged' (no-op); it is never
+    re-back-filled, regardless of what the model_id says."""
+    cfg = uma_cfg(model_version="1.1", model_id=subsize_id)
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "tagged"
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == subsize_id  # untouched
+
+
+# ---------------------------------------------------------------------------
+# UMA 1.2 — no-op
+# ---------------------------------------------------------------------------
+
+
+def test_uma_1p2_no_op():
+    cfg = uma_cfg(model_id="UMA-S-1.2")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == "UMA-S-1.2"
+
+
+def test_uma_1p2_bare_no_op():
+    cfg = uma_cfg(model_id="UMA-1.2")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == "UMA-1.2"
+
+
+# ---------------------------------------------------------------------------
+# Unknown / user-customized / non-UMA
+# ---------------------------------------------------------------------------
+
+
+def test_future_model_id_tagged_no_op():
+    """A future/unknown model_id (e.g. UMA-1.3) is 'tagged' → no-op, untouched.
+    (Its include_self is decided by the backbone from model_id.)"""
+    cfg = uma_cfg(model_id="UMA-1.3")
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "tagged"
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == "UMA-1.3"  # untouched
+
+
+def test_user_customized_model_id_preserved():
+    cfg = uma_cfg(model_version="1.1", model_id="my-cool-finetune")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == "my-cool-finetune"
+
+
+def test_non_uma_no_op():
+    cfg = {"backbone": {"model": "fairchem.core.models.esen.esen_backbone.ESEN"}}
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "not_uma"
+    apply_uma_compat_fixups(ckpt)
+    assert "model_id" not in ckpt.model_config
+
+
+def test_short_registry_name_backbone():
+    cfg = uma_cfg(model_version="1.1", backbone_model=UMA_BACKBONE_SHORT)
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "1.1"
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+def test_none_model_config():
+    ckpt = make_fake_checkpoint(None)
+    assert get_uma_version(None) == "not_uma"
+    apply_uma_compat_fixups(ckpt)  # must not raise
+
+
+def test_empty_backbone_dict_treated_as_not_uma():
+    cfg = {"backbone": {}}
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "not_uma"
+    apply_uma_compat_fixups(ckpt)
+    assert "model_id" not in ckpt.model_config
+
+
+def test_empty_string_model_id_treated_as_absent():
+    cfg = uma_cfg(model_version="1.1", model_id="")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+def test_whitespace_model_id_treated_as_absent():
+    cfg = uma_cfg(model_version="1.1", model_id="   ")
+    ckpt = make_fake_checkpoint(cfg)
+    apply_uma_compat_fixups(ckpt)
+    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+# ---------------------------------------------------------------------------
+# 1.2 size variant is tagged (no-op); the backbone decides its include_self
+# ---------------------------------------------------------------------------
+
+
+def test_uma_1p2_m_variant_tagged():
+    assert get_uma_version(uma_cfg(model_id="UMA-M-1.2")) == "tagged"

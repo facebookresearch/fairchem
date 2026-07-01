@@ -374,6 +374,9 @@ class HydraModel(nn.Module, HydraInterfaceMixin):
                 "Backbone not specified and not found in the starting checkpoint"
             )
 
+        # Propagate the generation id so the backbone can apply version-specific behavior.
+        self.backbone.model_id = self.model_id
+
         if freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False

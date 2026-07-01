@@ -124,7 +124,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Load checkpoint first to get model type
+        # Load checkpoint first to get model type; UMA compat fixups run downstream in load_inference_model.
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
         )

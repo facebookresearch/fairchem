@@ -37,8 +37,10 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.models.uma.compat import UMA_1P1_MODEL_ID
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
+from fairchem.core.units.mlip_unit.mlip_unit import initialize_finetuning_model
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
@@ -1878,3 +1880,133 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
         f"Expected execution_mode to be None when activation_checkpointing=True, "
         f"got {predict_unit.inference_settings.execution_mode}"
     )
+
+
+# ---------------------------------------------------------------------------
+# UMA compat / model_id fixups (see fairchem.core.models.uma.compat)
+# ---------------------------------------------------------------------------
+
+
+def test_uma_1p1_predict_unit_has_model_id():
+    """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
+    back-fills it to `"UMA-1.1"` at load time."""
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu.model.module.model_id == UMA_1P1_MODEL_ID
+    # model_id is propagated to the backbone (drives include_self).
+    assert pu.model.module.backbone.model_id == UMA_1P1_MODEL_ID
+
+
+def test_uma_1p1_finetune_propagates_model_id():
+    """When finetuning starts from UMA 1.1, the back-filled `model_id` is
+    stashed onto `model.finetune_model_full_config` (the fixup runs inside
+    `load_inference_model`, which `initialize_finetuning_model` delegates to)."""
+    from fairchem.core.calculate.pretrained_mlip import (
+        pretrained_checkpoint_path_from_name,
+    )
+
+    ckpt = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    model = initialize_finetuning_model(ckpt, overrides=None, heads=None)
+    assert model.finetune_model_full_config["model_id"] == UMA_1P1_MODEL_ID
+
+
+def test_uma_1p0_predict_unit_raises():
+    """UMA 1.0 checkpoints must hard-fail with an actionable message.
+    Skips if no UMA 1.0 checkpoint is locally available."""
+    uma_1p0_path = os.environ.get("UMA_1P0_PATH")
+    if uma_1p0_path is None:
+        # Best-effort discovery in the local HF cache.
+        from pathlib import Path
+
+        cache_root = Path(
+            "~/.cache/fairchem/models--facebook--UMA/snapshots"
+        ).expanduser()
+        candidates = sorted(cache_root.glob("*/checkpoints/uma-s-1.pt"))
+        uma_1p0_path = str(candidates[0]) if candidates else None
+    if uma_1p0_path is None or not os.path.exists(uma_1p0_path):
+        pytest.skip("No UMA 1.0 checkpoint available; set UMA_1P0_PATH to test.")
+    with pytest.raises(RuntimeError, match="UMA 1.0"):
+        MLIPPredictUnit(uma_1p0_path, device="cpu")
+
+
+# include_self (derived from model_id) — exercised on REAL trained UMA configs
+# ---------------------------------------------------------------------------
+
+
+def _oc20_batch(dataset_dir):
+    """A single-system batch the trained K2L2 fixtures can run (oc20 task)."""
+    from fairchem.core.datasets import data_list_collater
+    from fairchem.core.datasets.ase_datasets import AseDBDataset
+
+    db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
+    sample = AtomicData.from_ase(
+        db.get_atoms(0),
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+    )
+    sample["dataset"] = "oc20"
+    return data_list_collater([sample], otf_graph=True)
+
+
+def test_direct_mole_loaded_propagates_model_id(direct_mole_checkpoint):
+    """A real MoE checkpoint tagged UMA-S-1.2 loads with model_id propagated to
+    the backbone (which is what drives include_self=True for 1.2)."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_mole_checkpoint
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu.model.module.backbone.model_id == "UMA-S-1.2"
+
+
+def test_model_id_drives_include_self_has_teeth(
+    direct_mole_checkpoint, fake_uma_dataset
+):
+    """The backbone derives include_self from model_id, so overriding model_id at
+    load (merged after the shim, propagated to the backbone) must change MoE
+    outputs — proving it is wired into set_MOLE_coefficients (num_experts>0,
+    use_composition_embedding=True). UMA-S-1.2 -> True; anything else -> False."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_mole_checkpoint
+    pu_true = load_predict_unit(ckpt, device="cpu", overrides={"model_id": "UMA-S-1.2"})
+    pu_false = load_predict_unit(ckpt, device="cpu", overrides={"model_id": "UMA-1.1"})
+    assert pu_true.model.module.backbone.model_id == "UMA-S-1.2"
+    assert pu_false.model.module.backbone.model_id == "UMA-1.1"
+
+    out_true = pu_true.predict(_oc20_batch(fake_uma_dataset))
+    out_false = pu_false.predict(_oc20_batch(fake_uma_dataset))
+    assert not torch.allclose(out_true["energy"], out_false["energy"])
+
+
+def test_direct_checkpoint_loads_after_tagging(direct_checkpoint):
+    """Regression: a freshly-trained (now tagged) checkpoint loads instead of
+    being rejected as UMA 1.0."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_checkpoint
+    pu = load_predict_unit(ckpt, device="cpu")
+    assert pu is not None
+
+
+def test_untagged_checkpoint_raises(direct_checkpoint, tmp_path):
+    """Stripping the model_id from a real checkpoint -> load raises."""
+    from fairchem.core.units.mlip_unit import load_predict_unit
+
+    ckpt, _ = direct_checkpoint
+    obj = torch.load(ckpt, map_location="cpu", weights_only=False)
+    obj.model_config.pop("model_id", None)
+    obj.model_config["backbone"].pop("model_version", None)
+
+    stripped = str(tmp_path / "untagged_inference.pt")
+    torch.save(obj, stripped)
+    with pytest.raises(RuntimeError, match="no model_id"):
+        load_predict_unit(stripped, device="cpu")
