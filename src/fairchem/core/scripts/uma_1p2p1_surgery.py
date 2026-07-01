@@ -32,7 +32,8 @@ def add_omat_rattle_support(checkpoint):
         "module.backbone.dataset_embedding.dataset_emb_dict.omat.weight"
     ].clone()
 
-    checkpoint.model_config["model_id"] = "UMA-S-1.2"
+    checkpoint.model_config["model_id"] = "UMA-S-1.2.1"
+    checkpoint.model_config["backbone"]["moe_layer_type"] = "pytorch"
     return checkpoint
 
 
