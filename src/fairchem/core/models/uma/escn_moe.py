@@ -71,10 +71,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
         self.model_version = model_version
-        # UMA generation id, set by HydraModel after construction (and, for
-        # legacy 1.1 checkpoints, back-filled at load by
-        # fairchem.core.models.uma.compat). Drives the per-generation MoE
-        # composition `include_self` bug in set_MOLE_coefficients.
+        # UMA generation id (set by HydraModel); drives the include_self bug below.
         self.model_id = None
         if num_experts > 0:
             convert_model_to_MOLE_model(
