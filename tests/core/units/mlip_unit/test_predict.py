@@ -1998,21 +1998,13 @@ def test_direct_checkpoint_loads_after_tagging(direct_checkpoint):
 
 
 def test_untagged_checkpoint_raises(direct_checkpoint, tmp_path):
-    """Stripping identity from a real checkpoint -> load raises identity-required."""
-    from omegaconf import OmegaConf, open_dict
-
+    """Stripping the model_id from a real checkpoint -> load raises."""
     from fairchem.core.units.mlip_unit import load_predict_unit
 
     ckpt, _ = direct_checkpoint
     obj = torch.load(ckpt, map_location="cpu", weights_only=False)
-    mc = obj.model_config
-    if OmegaConf.is_config(mc):
-        with open_dict(mc):
-            mc.pop("model_id", None)
-            mc["backbone"].pop("model_version", None)
-    else:
-        mc.pop("model_id", None)
-        mc.get("backbone", {}).pop("model_version", None)
+    obj.model_config.pop("model_id", None)
+    obj.model_config["backbone"].pop("model_version", None)
 
     stripped = str(tmp_path / "untagged_inference.pt")
     torch.save(obj, stripped)
