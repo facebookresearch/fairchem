@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from omegaconf import DictConfig, OmegaConf, open_dict
-
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
@@ -39,7 +37,7 @@ _UMA_BACKBONE_SHORT_NAME = "escnmd_moe_backbone"
 _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 
 
-def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
+def get_uma_version(model_config: dict | None) -> UmaVersion:
     """Classify a checkpoint by UMA generation from the three real signatures.
 
     Shipped: 1.0 = neither field set; 1.1 = ``model_version`` only; 1.2 =
@@ -51,10 +49,10 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     load); ``"unknown_uma"`` for a UMA backbone matching nothing known (future
     release or user-customized ``model_id``); ``"not_uma"`` otherwise.
     """
-    if not isinstance(model_config, (dict, DictConfig)):
+    if not isinstance(model_config, dict):
         return "not_uma"
     backbone = model_config.get("backbone", {})
-    model = backbone.get("model") if isinstance(backbone, (dict, DictConfig)) else None
+    model = backbone.get("model") if isinstance(backbone, dict) else None
     if not isinstance(model, str) or not (
         model == _UMA_BACKBONE_SHORT_NAME or model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
     ):
@@ -71,10 +69,7 @@ def get_uma_version(model_config: dict | DictConfig | None) -> UmaVersion:
     return "1.2" if model_id.endswith("-1.2") else "unknown_uma"
 
 
-def _raise_unidentified_uma(
-    model_config: dict | DictConfig,
-    checkpoint_location: str | None,
-) -> None:
+def _raise_unidentified_uma(checkpoint_location: str | None) -> None:
     path_str = (
         checkpoint_location if checkpoint_location is not None else "<unknown path>"
     )
@@ -101,14 +96,8 @@ def apply_uma_compat_fixups(
     version = get_uma_version(model_config)
 
     if version == "unidentified":
-        _raise_unidentified_uma(model_config, checkpoint_location)
+        _raise_unidentified_uma(checkpoint_location)
     if version == "1.1":
         # Back-fill model_id (UMA 1.1 by construction has none).
-        if isinstance(model_config, DictConfig):
-            with open_dict(model_config):
-                OmegaConf.update(
-                    model_config, "model_id", UMA_1P1_MODEL_ID, force_add=True
-                )
-        else:
-            model_config["model_id"] = UMA_1P1_MODEL_ID
+        model_config["model_id"] = UMA_1P1_MODEL_ID
     # 1.2 / 1.2.1+ / unknown_uma / not_uma: no-op.

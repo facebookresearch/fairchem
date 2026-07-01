@@ -5,7 +5,6 @@ and in-place ``model_id`` back-fill.
 from __future__ import annotations
 
 import pytest
-from omegaconf import OmegaConf
 
 from fairchem.core.models.uma.compat import (
     UMA_1P1_MODEL_ID,
@@ -177,32 +176,6 @@ def test_whitespace_model_id_treated_as_absent():
     ckpt = make_fake_checkpoint(cfg)
     apply_uma_compat_fixups(ckpt)
     assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
-
-
-# ---------------------------------------------------------------------------
-# DictConfig + override-bypass policy
-# ---------------------------------------------------------------------------
-
-
-def test_dictconfig_backfill_under_struct_mode():
-    """OmegaConf struct mode must not block the back-fill (uses open_dict)."""
-    cfg = OmegaConf.create(uma_cfg(model_version="1.1"))
-    OmegaConf.set_struct(cfg, True)
-    ckpt = make_fake_checkpoint(cfg)
-    apply_uma_compat_fixups(ckpt)
-    assert ckpt.model_config["model_id"] == UMA_1P1_MODEL_ID
-
-
-def test_dictconfig_uma_1p2_classified():
-    cfg = OmegaConf.create(uma_cfg(model_id="UMA-S-1.2"))
-    assert get_uma_version(cfg) == "1.2"
-
-
-def test_dictconfig_unidentified_raises():
-    cfg = OmegaConf.create(uma_cfg())
-    ckpt = make_fake_checkpoint(cfg)
-    with pytest.raises(RuntimeError, match="no model_id"):
-        apply_uma_compat_fixups(ckpt)
 
 
 # ---------------------------------------------------------------------------
