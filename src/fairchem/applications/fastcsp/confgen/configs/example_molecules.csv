@@ -1,0 +1,11 @@
+name,smiles,initial_pool_size,rmsd_thresh,cluster_energy_thresh,max_steps,energy_window,select_for_fastcsp
+aspirin,CC(=O)Oc1ccccc1C(=O)O,500,0.20,2.0,150,40.0,6
+ibuprofen,CC(C)Cc1ccc(cc1)C(C)C(=O)O,1200,0.20,1.5,200,50.0,15
+paracetamol,CC(=O)Nc1ccc(O)cc1,200,0.20,2.0,100,40.0,3
+caffeine,Cn1cnc2c1c(=O)n(C)c(=O)n2C,50,0.25,1.5,100,40.0,1
+glycine,NCC(=O)O,200,0.20,2.0,100,40.0,3
+S-ibuprofen,CC(C)Cc1ccc(cc1)[C@@H](C)C(=O)O,1200,0.20,1.5,200,50.0,15
+L-alanine,C[C@@H](N)C(=O)O,200,0.20,2.0,100,40.0,3
+D-glucose,OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O,800,0.20,1.5,200,50.0,12
+L-menthol,CC(C)[C@@H]1CC[C@@H](C)C[C@H]1O,500,0.20,1.5,150,40.0,9
+trans-stilbene,c1ccc(/C=C/c2ccccc2)cc1,200,0.20,1.5,100,40.0,3

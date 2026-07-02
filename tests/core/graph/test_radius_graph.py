@@ -3,6 +3,17 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  radius-graph construction — fcc/molecular/water-box structure
+        helpers, partition utilities, multi-radius PBC graph builders
+        (versions 2 and 3), edge filtering, and mixed-PBC inference
+        consistency (the only @pretrained-locked test in this file).
+Models: uma-s-1p1, uma-s-1p2 only on
+        TestMixedPBCBatch::test_inference_results_match_mixed_vs_individual
+        (per-test @pretrained lock). All other tests in this file
+        are model-agnostic and run in the base CPU partition.
+CI:     test (core shard) — non-pretrained tests.
+        test_gpu_sweep (models shard) — the one @pretrained test.
 """
 
 from __future__ import annotations
@@ -1559,12 +1570,15 @@ class TestMixedPBCBatch:
         assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
 
     @pytest.mark.gpu()
-    def test_inference_results_match_mixed_vs_individual(self, radius_pbc_version):
+    @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+    def test_inference_results_match_mixed_vs_individual(
+        self, radius_pbc_version, pretrained_checkpoint
+    ):
         """End-to-end inference on a mixed-PBC batch must match per-system individual results."""
-        from fairchem.core.calculate import pretrained_mlip
+        from tests.conftest import get_predict_unit_for_test
 
-        predictor = pretrained_mlip.get_predict_unit(
-            "uma-s-1p1",
+        predictor = get_predict_unit_for_test(
+            pretrained_checkpoint,
             overrides={"backbone": {"radius_pbc_version": radius_pbc_version}},
         )
 

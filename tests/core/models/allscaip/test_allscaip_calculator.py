@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  FAIRChemCalculator over the AllScAIP-OMol102M conserving
+        checkpoint — single H2O molecule energies/forces, batched
+        prediction, and compile-mode (torch.compile) GPU path.
+Models: allscaip-md-conserving-all-omol (module-level pytestmark).
+        This is a legacy model — runs in the base GPU job, NOT in
+        the UMA-S sweep partition.
+CI:     test_gpu (models shard) — base, since the model isn't UMA-S
+        and isn't covered by --exclude-models.
 """
 
 from __future__ import annotations
@@ -18,8 +27,10 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"
 
-# mark all tests in this module as gpu tests
-pytestmark = pytest.mark.gpu
+# mark all tests in this module as gpu tests using the allscaip pretrained
+# checkpoint. The pretrained marker lets --exclude-models / --sweep-model
+# partition correctly.
+pytestmark = [pytest.mark.gpu, pytest.mark.pretrained(ALLSCAIP_MODEL)]
 
 
 @pytest.fixture(scope="module")
