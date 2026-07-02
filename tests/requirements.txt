@@ -11,7 +11,7 @@ numpy==2.4.6
 scikit-learn==1.9.0
 lmdb==1.6.2
 pymatgen==v2026.5.4
-ray[serve]==2.55.1
+ray[serve]==2.56.0
 # Ray Serve 2.55.1 declares `protobuf>=3.20.3` with no upper bound, but is
 # not compatible with protobuf 7.x. The 7.x release (mid-June 2026) removed
 # `FieldDescriptor.label`, which Ray Serve's gRPC serialization path uses:
