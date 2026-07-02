@@ -3,6 +3,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  Stress-tensor prediction parity between the legacy and the
+        new (declared-output) GradRegressConfig code paths, on both
+        single-system and batched inputs (bulk Cu, slab fcc(111)),
+        under applied strain.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). The two
+        old-vs-new tests are calibrated and currently locked to
+        uma-s-1p1 only via per-test @pretrained.
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations
@@ -16,13 +25,14 @@ import torch
 from ase.build import bulk, fcc111
 
 import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
 
 if TYPE_CHECKING:
     from ase import Atoms
 
     from fairchem.core.models.uma.escn_md import GradRegressConfig
+
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
 def apply_strain(atoms: Atoms, strain: np.ndarray) -> Atoms:
@@ -56,11 +66,6 @@ def slab_atoms() -> Atoms:
 def bulk_atoms() -> Atoms:
     atoms = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
     return atoms
-
-
-@pytest.fixture()
-def uma_predict_unit(request):
-    return pretrained_mlip.get_predict_unit("uma-s-1p1")
 
 
 def get_displacement_and_cell(
@@ -297,8 +302,9 @@ def compute_stress_from_cell_displacement(
 
 
 @pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.parametrize("atoms_fixture", ["bulk_atoms", "slab_atoms"])
-def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_unit):
+def test_stress_old_vs_new_single_system(request, atoms_fixture, declared_predict_unit):
     """
     Test that old and new stress implementations give identical results for single systems.
 
@@ -313,7 +319,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
     apply_strain(atoms, strain)
 
     # Get the model
-    model = uma_predict_unit.model.module
+    model = declared_predict_unit.model.module
     backbone = model.backbone
     efs_head = model.output_heads["energyandforcehead"].head
 
@@ -370,7 +376,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
             atomic_data_new.batch,
             training=False,
         )
-        # preds = uma_predict_unit.predict(atomic_data_new)
+        # preds = declared_predict_unit.predict(atomic_data_new)
         # stress_new = preds["stress"]
 
     npt.assert_allclose(
@@ -383,7 +389,10 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
 
 
 @pytest.mark.gpu()
-def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_unit):
+@pytest.mark.pretrained("uma-s-1p1")
+def test_stress_old_vs_new_batch_prediction(
+    bulk_atoms, slab_atoms, declared_predict_unit
+):
     """
     Test that old and new stress implementations give identical results for batch predictions.
 
@@ -427,7 +436,7 @@ def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_
     atoms_list = [bulk_1, bulk_2, slab_1, bulk_3, slab_2, slab_3]
 
     # Get the model
-    model = uma_predict_unit.model.module
+    model = declared_predict_unit.model.module
     backbone = model.backbone
     efs_head = model.output_heads["energyandforcehead"].head
     energy_block = efs_head.energy_block

@@ -284,6 +284,15 @@ def get_slurm_config(
             "timeout_min": normalized_config.get("time", 1000),
         }
 
+        # Forward a GPU request when the module needs one (e.g. free_energy).
+        # gpus_per_node lives in standard_flags, so it would otherwise be
+        # dropped by the pass-through loop below and never reach submitit.
+        gpus_per_node = normalized_config.get(
+            "gpus_per_node", module_defaults[module_name].get("gpus_per_node")
+        )
+        if gpus_per_node is not None:
+            slurm_params["gpus_per_node"] = gpus_per_node
+
         # Handle additional SLURM flags (already normalized to snake_case)
         for key, value in normalized_config.items():
             if key not in standard_flags:
