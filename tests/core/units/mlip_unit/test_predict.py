@@ -1056,7 +1056,9 @@ def test_batch_server_predict_unit_multiple_systems(
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_merge_mole_md_consistency(workers, ensemble, device, pretrained_checkpoint):
+def test_merge_mole_md_consistency(
+    workers, ensemble, device, pretrained_checkpoint, torch_deterministic_warn
+):
     """Test merge_mole vs no-merge consistency over MD trajectory.
 
     Runs 3 trials:
@@ -1068,10 +1070,6 @@ def test_merge_mole_md_consistency(workers, ensemble, device, pretrained_checkpo
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
     """
-    import torch
-
-    torch.use_deterministic_algorithms(True)
-
     from ase import units
     from ase.md.langevin import Langevin
     from ase.md.nptberendsen import NPTBerendsen
