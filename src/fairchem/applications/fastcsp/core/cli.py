@@ -28,7 +28,7 @@ Available Workflow Stages:
   relax                         Perform UMA-based structure relaxations
   filter                        Filtering and duplicate removal for ranking
   evaluate                      Compare against experimental structures
-  free_energy                   Compute free energy corrections
+  calculate_free_energy          Compute free energy corrections
 
 Usage:
   fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
@@ -55,7 +55,7 @@ Example:
             "relax",
             "filter",
             "evaluate",  # optional, can require CSD API License
-            "free_energy",  # optional, TODO: implement "free_energy"
+            "compute_free_energy",  # optional
         ],
         default=["generate", "process_generated", "relax", "filter"],
         help="Workflow stages to execute (in order). Default: generate process_generated relax filter",

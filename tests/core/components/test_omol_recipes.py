@@ -4,10 +4,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Unit tests for the OMol evaluation recipes.
-
-These tests verify the functionality of molecular property evaluation functions
-used for assessing machine learning interatomic potentials against DFT reference data.
+Tests:  OMol evaluation recipes — molecular-property functions
+        (conformers, distance_scaling, ieea, ligand_pocket,
+        ligand_strain, protonation, relax_job) used for assessing
+        MLIPs against DFT reference data.
+Models: uma-s-1p1 (module-level pytestmark). A unittest.TestCase
+        subclass consumes pretrained_checkpoint via the fallback
+        branch (pytest_generate_tests doesn't parametrize TestCase).
+CI:     test_gpu_sweep (models shard, uma-s-1p1 only).
 """
 
 from __future__ import annotations
@@ -15,10 +19,11 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+import pytest
 from ase import Atoms
 from ase.optimize import BFGS
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.calculate.recipes.omol import (
     conformers,
     distance_scaling,
@@ -31,10 +36,17 @@ from fairchem.core.components.calculate.recipes.omol import (
     singlepoint,
     spin_gap,
 )
+from tests.conftest import get_predict_unit_for_test
+
+pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 
 
 class TestOmolRecipes(unittest.TestCase):
     """Test suite for OMol calculation recipes."""
+
+    @pytest.fixture(autouse=True)
+    def _inject_uma_checkpoint(self, pretrained_checkpoint):
+        self._uma_checkpoint = pretrained_checkpoint
 
     def setUp(self):
         """Set up common test fixtures."""
@@ -61,7 +73,7 @@ class TestOmolRecipes(unittest.TestCase):
         self.test_atoms = self.water_atoms.copy()
 
         # Real ASE Calculator using FAIRChem
-        predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cpu")
+        predictor = get_predict_unit_for_test(self._uma_checkpoint, device="cpu")
         self.calculator = FAIRChemCalculator(predictor, task_name="omol")
 
         # Mock optimization flags

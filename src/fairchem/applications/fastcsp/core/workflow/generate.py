@@ -27,6 +27,7 @@ Dependencies:
 from __future__ import annotations
 
 import ast
+import json
 import shutil
 from configparser import ConfigParser
 from pathlib import Path
@@ -64,7 +65,7 @@ def create_gnrs_submit_script(
         gnrs_config: Genarris configuration containing execution parameters:
             - mpi_launcher: MPI command to use (default: "mpirun")
             - python_cmd: Python executable path (default: "python")
-            - genarris_script: Genarris main script name (default: "genarris_master.py")
+            - genarris_cli: Genarris main script name (default: "genarris_cli.py")
         genarris_slurm_config: SLURM resource allocation parameters
         single_gnrs_folder: Directory where the SLURM script will be created
 
@@ -76,14 +77,36 @@ def create_gnrs_submit_script(
     for key, value in genarris_slurm_config.items():
         slurm_script += f"#SBATCH --{key}={value}\n"
 
+    # SBATCH directives and MPI binding flags are cluster-specific (SMT layout,
+    # cgroup behavior, OpenMPI version), so we don't inject defaults here.
+    # Put any extra `#SBATCH --foo=bar` directives in `genarris.slurm` and any
+    # mpirun flags (e.g. "--bind-to none/hwthread/core --map-by core") in
+    # `genarris.mpi_extra_args` in the YAML config.
+    mpi_extra_args = gnrs_config.get("mpi_extra_args", "")
+    np_ranks = (
+        genarris_slurm_config.get("nodes", 1) * genarris_slurm_config["ntasks-per-node"]
+    )
+
+    # Optional environment setup commands (e.g. `module load`, `source venv`)
+    # executed on the compute node before mpirun. Provide as a list of shell
+    # lines or a single string under `genarris.env_setup` in the YAML config.
+    env_setup = gnrs_config.get("env_setup", "")
+    if isinstance(env_setup, (list, tuple)):
+        env_setup_block = "\n".join(str(line) for line in env_setup)
+    else:
+        env_setup_block = str(env_setup)
+    if env_setup_block and not env_setup_block.endswith("\n"):
+        env_setup_block += "\n"
+
     slurm_script += f"""#SBATCH --output={single_gnrs_folder}/slurm.out
 #SBATCH --error={single_gnrs_folder}/slurm.err
 
+{env_setup_block}
 ulimit -s unlimited
 export OMP_NUM_THREADS=1
 
-{gnrs_config.get("mpi_launcher", "mpirun")} -np {genarris_slurm_config.get("nodes", 1) * genarris_slurm_config["ntasks-per-node"]} \\
-    {gnrs_config.get("python_cmd", "python")} {gnrs_config.get("genarris_script", "genarris_master.py")} {single_gnrs_folder}/ui.conf > {single_gnrs_folder}/Genarris.out
+{gnrs_config.get("mpi_launcher", "mpirun")} {mpi_extra_args} -np {np_ranks} \\
+    {gnrs_config.get("python_cmd", "python")} {gnrs_config.get("genarris_cli", "cli.py")} --config {single_gnrs_folder}/ui.conf > {single_gnrs_folder}/Genarris.out
 """
 
     with open(single_gnrs_folder / "slurm.sh", "w") as f:
@@ -96,7 +119,7 @@ def create_gnrs_config(
     mol_name: str,
     geometry_path: str | Path,
     num_structures: int,
-    spg_info: str,
+    spg_distribution_type: str | list[int],
     Z: int,
 ):
     """
@@ -112,7 +135,7 @@ def create_gnrs_config(
         mol_name: Identifier for the molecule being processed
         geometry_path: Path to the molecular geometry file (XYZ, SDF, etc.)
         num_structures: Number of crystal structures to generate
-        spg_info: Space group specification (number or symbol)
+        spg_distribution_type: Space group distribution type ("standard" or custom list[int])
         Z: Number of molecules per unit cell (Z-value)
 
     Side Effects:
@@ -123,10 +146,10 @@ def create_gnrs_config(
         config.read_file(config_file)
 
     config["master"]["name"] = mol_name
-    config["master"]["molecule_path"] = str(geometry_path)
+    config["master"]["molecule_path"] = json.dumps([str(geometry_path)])
     config["master"]["Z"] = str(Z)
     config["generation"]["num_structures_per_spg"] = str(num_structures)
-    config["generation"]["spg_distribution_type"] = spg_info
+    config["generation"]["spg_distribution_type"] = spg_distribution_type
 
     with open(output_dir / "ui.conf", "w") as f:
         config.write(f)
@@ -143,9 +166,11 @@ def create_genarris_jobs(
     logger = get_central_logger()
     logger.info(f"Starting Genarris generation for {mol_info['name']}")
 
-    gnrs_base_config = gnrs_config.get("base_config")
+    gnrs_base_config = gnrs_config.get("genarris_base_config")
     if gnrs_base_config is None:
-        raise KeyError("Genarris 'base_config' section is missing in the config file.")
+        raise KeyError(
+            "Genarris 'genarris_base_config' section is missing in the config file."
+        )
     logger.info(f"Using Genarris base configuration: {gnrs_base_config}")
 
     # Parameters for each Genarris run
@@ -159,14 +184,38 @@ def create_genarris_jobs(
 
     z_list = [str(z) for z in gnrs_vars.get("Z", [1])]
     num_structures_per_spg = gnrs_vars.get("num_structures_per_spg", 500)
-    spg_info = gnrs_vars.get("spg_info", "standard")
+    spg_distribution_type = gnrs_vars.get("spg_distribution_type", "standard")
+
+    # Per-row override: if the molecules.csv contains a `num_structures_per_spg`
+    # column with a non-empty value for this molecule, it overrides the global default.
+    row_n = mol_info.get("num_structures_per_spg")
+    if (
+        row_n is not None
+        and not (isinstance(row_n, float) and pd.isna(row_n))
+        and str(row_n).strip() != ""
+    ):
+        num_structures_per_spg = int(float(row_n))
+        logger.info(
+            f"Overriding num_structures_per_spg={num_structures_per_spg} for {mol_info['name']} from CSV."
+        )
 
     # molecule specific spg and z_list info from csv file if provided
-    if gnrs_vars.get("read_spg_from_file", False):
-        spg_info = str(ast.literal_eval(mol_info["spg"]))
+    # mol_info["z"] is a list of z_values
+    # mol_info["spg"] is a list of lists of spg values that correspond to each z_value
     if gnrs_vars.get("read_z_from_file", False):
         z_list = [str(z) for z in ast.literal_eval(mol_info["z"])]
-
+    if gnrs_vars.get("read_spg_from_file", False):
+        spg_distribution_type = ast.literal_eval(mol_info["spg"])
+    if spg_distribution_type == "standard":
+        spg_distribution_type = ["standard"] * len(z_list)
+    if isinstance(spg_distribution_type[0], int):
+        spg_distribution_type = [spg_distribution_type]
+    if len(spg_distribution_type) == 1 and len(z_list) > 1:
+        spg_distribution_type = spg_distribution_type * len(z_list)
+    if len(spg_distribution_type) != len(z_list):
+        raise ValueError(
+            f"Length of spg_distribution_type {spg_distribution_type} does not match length of z_list {z_list} for molecule {mol_info['name']}."
+        )
     mol = mol_info["name"]  # System name
 
     # conf_path can be a geometry file or
@@ -174,7 +223,7 @@ def create_genarris_jobs(
     # conformers in .xyz, .extxyz, or .mol formats
     allowed_extensions = [".xyz", ".extxyz", ".mol"]
 
-    conf_path = Path(mol_info["molecule_path"])
+    conf_path = Path(mol_info["conformers_path"])
     if conf_path.is_file():
         if Path(conf_path).suffix not in allowed_extensions:
             raise TypeError(
@@ -194,7 +243,7 @@ def create_genarris_jobs(
 
     jobs = []
     for conf, conf_path in conf_name_list.items():  # for each conformer
-        for z in z_list:
+        for i, z in enumerate(z_list):
             single_gnrs_folder = output_dir / mol / conf / z
             single_gnrs_folder.mkdir(parents=True, exist_ok=True)
 
@@ -211,7 +260,7 @@ def create_genarris_jobs(
                     geometry_path=new_conf_path,
                     Z=z,
                     num_structures=num_structures_per_spg,
-                    spg_info=spg_info,
+                    spg_distribution_type=str(spg_distribution_type[i]),
                 )
 
             # Create SLURM submission script if it doesn't exist
@@ -225,7 +274,6 @@ def create_genarris_jobs(
             # Create submitit command function to execute the SLURM script
             shell = shutil.which("bash") or shutil.which("zsh") or "/bin/sh"
             gnrs_function = submitit.helpers.CommandFunction(
-                # f"zsh {single_gnrs_folder / 'slurm.sh'}".split(),
                 [shell, f"{single_gnrs_folder}/slurm.sh"],
                 cwd=single_gnrs_folder,
             )
@@ -273,7 +321,7 @@ def run_genarris_jobs(
             )
 
     logger.info(
-        f"Submitted {len(jobs)} Genarris jobs: {jobs[0].job_id.split('_')[0] if jobs else ''}"
+        f"Submitted {len(jobs)} Genarris array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
     )
     return jobs
 

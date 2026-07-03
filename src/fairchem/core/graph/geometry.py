@@ -1,9 +1,15 @@
-"""Geometry utilities for atomic systems."""
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import torch
+from ase.geometry.minkowski_reduction import minkowski_reduce
 
 
 def wrap_positions(
@@ -11,7 +17,8 @@ def wrap_positions(
     cell: np.ndarray | torch.Tensor,
     pbc: np.ndarray | torch.Tensor | bool,
 ) -> np.ndarray | torch.Tensor:
-    """Wrap positions into the unit cell along periodic dimensions.
+    """
+    Wrap positions into the unit cell along periodic dimensions.
 
     Equivalent to ase.geometry.wrap_positions with eps=0.  Dispatches to a
     pure-torch path for tensor inputs (stays on GPU, no autograd break) and
@@ -20,7 +27,7 @@ def wrap_positions(
     Args:
         pos: Cartesian positions, shape (n_atoms, 3).
         cell: Unit cell with rows as lattice vectors, shape (3, 3).
-        pbc: Periodic boundary flags — scalar bool, shape (3,), or (n_atoms, 3).
+        pbc: Periodic boundary flags — scalar bool or shape (3,).
 
     Returns:
         Wrapped positions, same type and shape as pos.
@@ -42,7 +49,8 @@ def wrap_positions_torch(
     cell: torch.Tensor,
     pbc: torch.Tensor,
 ) -> torch.Tensor:
-    """Wrap positions into the unit cell (torch, batched per-atom cells).
+    """
+    Wrap positions into the unit cell (torch, batched per-atom cells).
 
     Each atom carries its own cell matrix — the natural layout after
     ``data.cell[data.batch]``.  Non-periodic dimensions are left unchanged.
@@ -55,19 +63,46 @@ def wrap_positions_torch(
     Returns:
         Wrapped positions, shape (n_atoms, 3).
     """
-    # frac = pos @ inv(cell)  (row-vector form)
     frac = torch.linalg.solve(cell.transpose(1, 2), pos.unsqueeze(-1)).squeeze(-1)
     frac = torch.where(pbc, frac % 1.0, frac)
-    # pos = frac @ cell  (row-vector form)
     return (frac.unsqueeze(1) @ cell).squeeze(1)
+
+
+def compute_minkowski_op(
+    cell: torch.Tensor,
+    pbc: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute Minkowski reduction operator for a single cell.
+
+    Args:
+        cell: Unit cell, shape (3, 3) or (1, 3, 3).
+        pbc: Periodic flags, shape (3,) or (1, 3).
+
+    Returns:
+        Integer reduction operator, shape matching input (3, 3) or (1, 3, 3).
+    """
+    squeeze = cell.dim() == 2
+    c = cell.squeeze(0) if not squeeze else cell
+    p = pbc.squeeze(0) if pbc.dim() == 2 else pbc
+
+    _, op = minkowski_reduce(c.detach().cpu().numpy(), pbc=p.detach().cpu().numpy())
+    op_t = torch.tensor(op, dtype=cell.dtype, device=cell.device)
+
+    if not squeeze:
+        return op_t.unsqueeze(0)
+    return op_t
 
 
 def minimum_image_displacement(
     dr: torch.Tensor,
     cell: torch.Tensor,
     pbc: torch.Tensor,
+    batch: torch.Tensor | None = None,
+    minkowski_op: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Apply minimum image convention to displacement vectors (torch, batched per-atom cells).
+    """
+    Apply minimum image convention to displacement vectors.
 
     Uses Minkowski reduction to transform the cell into a compact basis where
     a 27-neighbour search is guaranteed to find the true shortest image.  This
@@ -76,39 +111,63 @@ def minimum_image_displacement(
 
     Args:
         dr: Displacement vectors, shape (n_atoms, 3).
-        cell: Per-atom unit cells with rows as lattice vectors, (n_atoms, 3, 3).
-        pbc: Per-atom periodic flags, shape (n_atoms, 3).
+        cell: Unit cells — either per-system (n_systems, 3, 3) when ``batch``
+            is provided, or per-atom (n_atoms, 3, 3).
+        pbc: Periodic flags — either per-system (n_systems, 3) when ``batch``
+            is provided, or per-atom (n_atoms, 3).
+        batch: System index for each atom, shape (n_atoms,).  When provided,
+            ``cell`` and ``pbc`` are per-system and will be expanded
+            internally.
+        minkowski_op: Precomputed Minkowski reduction operators, per-system
+            (n_systems, 3, 3).  If ``None``, computed on the fly.
 
     Returns:
         Minimum-image displacements, shape (n_atoms, 3).
     """
-    # Minkowski-reduce each unique cell so the 27-neighbour search is
-    # guaranteed to find the true shortest image.  The reduction is cheap
-    # integer arithmetic on 3x3 matrices; we only call it once per unique
-    # (cell, pbc) pair and broadcast the result back.
-    rcell = _minkowski_reduce_batched(cell, pbc)
+    if not pbc.any():
+        return dr
 
-    # Convert to fractional coordinates in the reduced cell and center
-    # periodic dims in [-0.5, 0.5)
+    if batch is not None:
+        pbc_per_atom = torch.atleast_2d(pbc)[batch]
+        cell_per_atom = cell[batch]
+    else:
+        pbc_per_atom = pbc
+        cell_per_atom = cell
+
+    eye = torch.eye(3, dtype=cell_per_atom.dtype, device=cell_per_atom.device)
+    off_diag_max = (cell_per_atom * (1.0 - eye)).abs().max()
+    if off_diag_max < 1e-10:
+        diag = torch.diagonal(cell_per_atom, dim1=1, dim2=2)
+        frac = dr / diag
+        frac = torch.where(pbc_per_atom, frac - torch.round(frac), frac)
+        return frac * diag
+
+    system_cell = cell if batch is not None else cell_per_atom
+    system_pbc = torch.atleast_2d(pbc) if batch is not None else pbc_per_atom
+    if minkowski_op is not None:
+        ops = minkowski_op if batch is None else minkowski_op
+        rcell_system = torch.bmm(ops.to(dtype=system_cell.dtype), system_cell)
+    else:
+        rcell_system = _minkowski_reduce_batched(system_cell, system_pbc)
+    if batch is not None:
+        rcell = rcell_system[batch]
+    else:
+        rcell = rcell_system
+
     frac = torch.linalg.solve(rcell.transpose(1, 2), dr.unsqueeze(-1)).squeeze(-1)
-    frac = torch.where(pbc, frac - torch.floor(frac + 0.5), frac)
+    frac = torch.where(pbc_per_atom, frac - torch.floor(frac + 0.5), frac)
 
-    # All 27 shift combinations: {-1, 0, 1}^3 -> (27, 3)
     r = torch.tensor([-1, 0, 1], dtype=frac.dtype, device=frac.device)
-    shifts = torch.cartesian_prod(r, r, r)  # (27, 3)
+    shifts = torch.cartesian_prod(r, r, r)
 
-    # Zero out shifts along non-periodic dimensions: (n, 1, 3) * (27, 3) -> (n, 27, 3)
-    shifts_masked = shifts.unsqueeze(0) * pbc.unsqueeze(1).to(frac.dtype)
+    shifts_masked = shifts.unsqueeze(0) * pbc_per_atom.unsqueeze(1).to(frac.dtype)
 
-    # Candidate fractional coords: (n, 27, 3)
     candidates_frac = frac.unsqueeze(1) + shifts_masked
 
-    # Convert to Cartesian via reduced cell: (n, 27, 3) @ (n, 3, 3) -> (n, 27, 3)
     candidates_cart = torch.bmm(candidates_frac, rcell)
 
-    # Select the shortest image per atom
-    lengths = torch.linalg.norm(candidates_cart, dim=2)  # (n, 27)
-    indices = torch.argmin(lengths, dim=1)  # (n,)
+    lengths = torch.linalg.norm(candidates_cart, dim=2)
+    indices = torch.argmin(lengths, dim=1)
     return candidates_cart[torch.arange(dr.shape[0], device=dr.device), indices]
 
 
@@ -116,37 +175,29 @@ def _minkowski_reduce_batched(
     cell: torch.Tensor,
     pbc: torch.Tensor,
 ) -> torch.Tensor:
-    """Minkowski-reduce unique (cell, pbc) pairs and broadcast back.
+    """
+    Minkowski-reduce each cell in a batch.
 
     Computes integer unimodular operators ``op`` via ASE (cheap integer
     arithmetic on 3x3 matrices), then applies ``rcell = op @ cell`` in
-    torch so that ``cell`` stays in the autograd graph.  Each unique
-    (cell, pbc) pair is reduced only once.
+    torch so that ``cell`` stays in the autograd graph.
 
     Args:
-        cell: Per-atom unit cells, shape (n_atoms, 3, 3).
-        pbc: Per-atom periodic flags, shape (n_atoms, 3).
+        cell: Unit cells, shape (n_systems, 3, 3).
+        pbc: Periodic flags, shape (n_systems, 3).
 
     Returns:
-        Reduced cells, shape (n_atoms, 3, 3), same dtype/device as cell.
+        Reduced cells, shape (n_systems, 3, 3), same dtype/device as cell.
     """
-    from ase.geometry.minkowski_reduction import minkowski_reduce
-
     cell_cpu = cell.detach().cpu()
     pbc_cpu = pbc.detach().cpu()
     n = cell.shape[0]
 
-    # Collect integer operators for each unique (cell, pbc) pair
     ops = torch.empty(n, 3, 3, dtype=cell.dtype, device=cell.device)
-    cache: dict[tuple, torch.Tensor] = {}
     for i in range(n):
-        key = (cell_cpu[i].numpy().tobytes(), pbc_cpu[i].numpy().tobytes())
-        if key not in cache:
-            _, op = minkowski_reduce(cell_cpu[i].numpy(), pbc=pbc_cpu[i].numpy())
-            cache[key] = torch.tensor(op, dtype=cell.dtype, device=cell.device)
-        ops[i] = cache[key]
+        _, op = minkowski_reduce(cell_cpu[i].numpy(), pbc=pbc_cpu[i].numpy())
+        ops[i] = torch.tensor(op, dtype=cell.dtype, device=cell.device)
 
-    # op @ cell in torch — gradients flow through cell
     return torch.bmm(ops, cell)
 
 
