@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  UMA Hessian inference — analytical (autograd) Hessian vs
+        numerical finite-difference Hessian, Hessian symmetry, and
+        the vmap-vs-loop code paths. Uses a single H2O molecule.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark).
+        test_hessian_vs_numerical is xfailed today (open work on
+        numerical / autograd Hessian agreement).
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations
@@ -15,12 +23,14 @@ import torch
 from ase.build import molecule
 from numpy import testing as npt
 
-from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit import InferenceSettings
+from tests.conftest import get_predict_unit_for_test
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
+
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
 def get_numerical_hessian(
@@ -99,10 +109,10 @@ def get_numerical_hessian(
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
-def test_hessian(vmap):
+def test_hessian(vmap, pretrained_checkpoint):
     """Test Hessian calculation using MLIPPredictUnit directly."""
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+    predict_unit = get_predict_unit_for_test(
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=vmap
@@ -129,17 +139,17 @@ def test_hessian(vmap):
 
 @pytest.mark.xfail(reason="Need to fix the numerical/autograd Hessian calculation")
 @pytest.mark.gpu()
-def test_hessian_vs_numerical():
+def test_hessian_vs_numerical(pretrained_checkpoint):
     """Test that analytical and numerical Hessians are close."""
-    hessian_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+    hessian_unit = get_predict_unit_for_test(
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True
         ),
     )
-    forces_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+    forces_unit = get_predict_unit_for_test(
+        pretrained_checkpoint,
         device="cuda",
     )
 
@@ -174,10 +184,10 @@ def test_hessian_vs_numerical():
 
 
 @pytest.mark.gpu()
-def test_hessian_symmetry():
+def test_hessian_symmetry(pretrained_checkpoint):
     """Test that the Hessian matrix is symmetric."""
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1",
+    predict_unit = get_predict_unit_for_test(
+        pretrained_checkpoint,
         device="cuda",
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True

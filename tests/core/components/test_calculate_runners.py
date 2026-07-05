@@ -3,6 +3,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Tests:  CPU-only tests for the calculate runners (ElasticityRunner,
+        SinglePointRunner, RelaxationRunner) and their checkpoint /
+        resume / stop semantics on the AtomsDatasetSequence. Uses
+        a synthetic EMT calculator (no pretrained model needed).
+Models: none (uses EMT). No @pretrained marker; runs in the base
+        CPU partition unconditionally.
+CI:     test (core shard) — base CPU job.
 """
 
 from __future__ import annotations
@@ -11,7 +19,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pytest
 from ase.build import bulk
 from ase.calculators.emt import EMT
 
@@ -68,7 +75,6 @@ def _make_atoms_list(n: int):
     return atoms_list
 
 
-@pytest.mark.gpu()
 def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
     elastic_runner = ElasticityRunner(
         calculator, input_data=AtomsDatasetSequence(dummy_binary_dataset)
@@ -107,7 +113,6 @@ def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
     assert len(results) == len(dummy_binary_dataset) // 2
 
 
-@pytest.mark.gpu()
 def test_singlepoint_runner(calculator, dummy_binary_dataset, tmp_path):
     # Test basic instantiation
     singlepoint_runner = SinglePointRunner(
@@ -147,7 +152,6 @@ def test_singlepoint_runner(calculator, dummy_binary_dataset, tmp_path):
     assert singlepoint_runner.save_state("dummy_checkpoint") is True
 
 
-@pytest.mark.gpu()
 def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
     # Test basic instantiation
     relaxation_runner = RelaxationRunner(

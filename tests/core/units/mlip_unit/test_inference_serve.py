@@ -4,14 +4,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests for the Ray Serve inference server.
-
-Three testing modes:
-1. Ray remote tasks: Tests run as Ray remote tasks submitted to the cluster.
-   These test the typical usage pattern where calculations are submitted as Ray tasks.
-2. External client: Tests run from outside Ray, connecting to the inference server.
-   These test the client-side code that connects to an existing service.
-3. Multiplexed server: Tests for on-demand model loading via MultiplexedBatchPredictServer.
+Tests:  Ray Serve inference server in three modes:
+        1. Ray remote tasks (typical usage — submit as Ray tasks).
+        2. External client (run from outside Ray, connect to the
+           live deployment).
+        3. Multiplexed server (on-demand model loading via
+           MultiplexedBatchPredictServer).
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Locked to
+        UMA-S only because the base GPU runner OOMs with uma-m-1p1's
+        Ray Serve replicas.
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from ase import Atoms
 from ase.build import bulk
 from ray import serve
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.batch_server import (
     get_ray_connection_info,
     setup_batch_predict_server,
@@ -39,13 +41,14 @@ from fairchem.core.components.batch_server import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+from tests.conftest import sweep_model, uma_models
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
 
-pytestmark = pytest.mark.gpu
+pytestmark = [pytest.mark.gpu, pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 
 
 @pytest.fixture()
@@ -272,12 +275,29 @@ def test_rayserve_external_vs_local_comparison(
 
 
 @pytest.fixture()
-def uma_multiplexed_model_id():
-    """Return the multiplexed model ID for the first available UMA model."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if not uma_models:
+def uma_multiplexed_model_id(request):
+    """
+    Multiplexed model ID for the sweep model, or first available UMA model.
+
+    Honors ``--sweep-model`` so per-model sweep CI jobs target the
+    requested checkpoint. Skips when the sweep value is a filesystem
+    path — the multiplexed server is keyed by registered model name,
+    so paths cannot be exercised here.
+    """
+    available_uma = uma_models()
+    if not available_uma:
         pytest.skip("No UMA models available")
-    return f"{uma_models[0]}:default"
+    sweep = sweep_model(request.config)
+    if sweep:
+        if sweep not in available_uma:
+            pytest.skip(
+                f"--sweep-model={sweep!r} is not a registered UMA model; "
+                "multiplexed server tests need a registered name."
+            )
+        model = sweep
+    else:
+        model = available_uma[0]
+    return f"{model}:default"
 
 
 @pytest.fixture()
@@ -346,12 +366,19 @@ def test_multiplexed_single_model(
 
 def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_model_id):
     """Test switching between two different model keys."""
-    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    if len(uma_models) < 2:
+    available_uma = uma_models()
+    if len(available_uma) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
+    # uma_multiplexed_model_id already encodes the sweep target (or first
+    # UMA model). Pick any other UMA model as the second key.
+    primary = uma_multiplexed_model_id.split(":")[0]
+    other_candidates = [m for m in available_uma if m != primary]
+    if not other_candidates:
+        pytest.skip("No second UMA model available that differs from the primary")
+
     key_a = uma_multiplexed_model_id
-    key_b = f"{uma_models[1]}:default"
+    key_b = f"{other_candidates[0]}:default"
 
     unit_a = BatchServerPredictUnit.from_deployment_connection_info(
         multiplexed_model_id=key_a,
