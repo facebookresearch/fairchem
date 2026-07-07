@@ -11,15 +11,14 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-import platform
 import shutil
 import subprocess
-import tarfile
 import time
-import urllib.request
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+
+from fairchem.core.common.utils import download_and_extract, os_arch_for_download
 
 if TYPE_CHECKING:
     from fairchem.core.launchers.api import RayMetricsConfig
@@ -36,56 +35,25 @@ GRAFANA_AUTODOWNLOAD_VERSION = "11.4.0"
 METRICS_CONFIG_WAIT_SECONDS = 60
 
 
-def _os_arch_for_download() -> tuple[str, str]:
-    """Return (os_type, arch) strings used in Prometheus/Grafana release URLs."""
-    os_type = platform.system().lower()  # 'linux' / 'darwin'
-    machine = platform.machine().lower()
-    arch = {
-        "x86_64": "amd64",
-        "amd64": "amd64",
-        "aarch64": "arm64",
-        "arm64": "arm64",
-    }.get(machine, machine)
-    return os_type, arch
-
-
-def _download_and_extract(url: str, dest_dir: str) -> Path:
-    """
-    Download a ``.tar.gz`` from ``url`` and extract it into ``dest_dir``.
-
-    Returns the top-level extracted directory.
-    """
-    Path(dest_dir).mkdir(parents=True, exist_ok=True)
-    tar_path = Path(dest_dir) / "download.tar.gz"
-    logger.info(f"Downloading {url} ...")
-    urllib.request.urlretrieve(url, tar_path)
-    with tarfile.open(tar_path) as tar:
-        members = tar.getnames()
-        tar.extractall(dest_dir)
-    tar_path.unlink(missing_ok=True)
-    top = members[0].split("/")[0]
-    return Path(dest_dir) / top
-
-
 def _download_prometheus(dest_dir: str) -> Optional[str]:
     """Download a static Prometheus release; return the binary path or None."""
-    os_type, arch = _os_arch_for_download()
+    os_type, arch = os_arch_for_download()
     ver = PROMETHEUS_AUTODOWNLOAD_VERSION
     name = f"prometheus-{ver}.{os_type}-{arch}"
     url = (
         "https://github.com/prometheus/prometheus/releases/"
         f"download/v{ver}/{name}.tar.gz"
     )
-    binary = _download_and_extract(url, dest_dir) / "prometheus"
+    binary = download_and_extract(url, dest_dir) / "prometheus"
     return str(binary) if binary.exists() else None
 
 
 def _download_grafana(dest_dir: str) -> Optional[tuple[str, str]]:
     """Download a Grafana OSS release; return (binary, homepath) or None."""
-    os_type, arch = _os_arch_for_download()
+    os_type, arch = os_arch_for_download()
     ver = GRAFANA_AUTODOWNLOAD_VERSION
     url = f"https://dl.grafana.com/oss/release/grafana-{ver}.{os_type}-{arch}.tar.gz"
-    root = _download_and_extract(url, dest_dir)
+    root = download_and_extract(url, dest_dir)
     binary = root / "bin" / "grafana"
     if not binary.exists():
         binary = root / "bin" / "grafana-server"
