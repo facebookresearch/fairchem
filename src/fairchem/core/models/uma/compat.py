@@ -41,7 +41,7 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
     """Classify what fix-up a checkpoint needs (see :func:`apply_uma_compat_fixups`).
 
     * ``"not_uma"`` — not a UMA MoE backbone. This includes non-UMA models and
-      checkpoints that merely reuse ``eSCNMDMoeBackbone`` with ``num_experts == 0``
+      checkpoints that use ``eSCNMDMoeBackbone`` with ``num_experts == 0``
       (e.g. eSEN), which have no MoE path and therefore no model_id-gated behavior.
     * ``"1.1"`` — legacy UMA 1.1: no ``model_id`` but ``backbone.model_version ==
       1.1`` → back-fill ``model_id``.
