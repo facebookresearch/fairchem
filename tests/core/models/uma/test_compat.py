@@ -31,7 +31,7 @@ def uma_cfg(
     *, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQN, num_experts=8
 ):
     # num_experts>0 by default: real UMA checkpoints are MoE. The shim treats a
-    # shared-backbone checkpoint with num_experts<=0 (e.g. eSEN) as not_uma.
+    # shared-backbone checkpoint with num_experts==0 (e.g. eSEN) as not_uma.
     cfg = {"backbone": {"model": backbone_model, "num_experts": num_experts}}
     if model_version is not None:
         cfg["backbone"]["model_version"] = model_version

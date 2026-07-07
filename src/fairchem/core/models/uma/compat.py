@@ -63,7 +63,7 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
 
     # UMA uses num_experts > 0; eSCNMDMoeBackbone with num_experts == 0
     # (e.g. eSEN) is not UMA.
-    if not isinstance(backbone.get("num_experts"), int) or backbone["num_experts"] <= 0:
+    if not isinstance(backbone.get("num_experts"), int) or backbone["num_experts"] == 0:
         return "not_uma"
 
     model_id = model_config.get("model_id")
