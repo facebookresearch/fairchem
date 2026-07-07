@@ -71,7 +71,21 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
         self.model_version = model_version
+        self.moe_layer_type = moe_layer_type
         if num_experts > 0:
+            # The nvmath/cuBLAS dgl backend feeds the full per-system ``mole_sizes``
+            # to ``segment_mm`` in one shot; it does not implement the chunked
+            # ``ac_start_idx`` slicing that activation checkpointing requires. The
+            # two are mutually exclusive by design, so fail fast with a clear
+            # message instead of the cryptic out-of-bounds error segment_mm raises.
+            if moe_layer_type == "dgl" and kwargs.get(
+                "activation_checkpointing", False
+            ):
+                raise ValueError(
+                    "moe_layer_type='dgl' (nvmath/cuBLAS MOLE) is mutually exclusive "
+                    "with activation_checkpointing; set activation_checkpointing=False "
+                    "for the dgl backend."
+                )
             convert_model_to_MOLE_model(
                 model=self,
                 num_experts=num_experts,
@@ -89,6 +103,17 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
     def merge_MOLE_model(self, data):
         if self.num_experts == 0:
             return self
+        # Merging collapses the experts into a plain Linear, which never calls
+        # segment_mm; the dgl (nvmath/cuBLAS) layers also have no
+        # ``merged_linear_layer``. dgl and merge_mole are therefore mutually
+        # exclusive -- fail fast rather than crash inside the replace pass.
+        if getattr(self, "moe_layer_type", "pytorch") == "dgl":
+            raise ValueError(
+                "merge_mole is mutually exclusive with moe_layer_type='dgl' "
+                "(nvmath/cuBLAS MOLE): the merged path uses plain Linear and never "
+                "calls segment_mm. Use merge_mole=False with the dgl backend, or "
+                "moe_layer_type='pytorch' with merge_mole=True."
+            )
         csd_mixed_emb = self.csd_embedding(
             charge=data["charge"],
             spin=data["spin"],

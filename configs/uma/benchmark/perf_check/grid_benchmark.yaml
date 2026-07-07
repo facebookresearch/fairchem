@@ -1,0 +1,50 @@
+# Homogeneous size x batch grid inference benchmark.
+#
+# For each (system size, batch size) cell, times forward inference on batches
+# whose systems are all drawn from a tight window around the target atom count,
+# and validates accuracy against a cached fp64 baseline. Run once per backend
+# and pass reference_report on the second run to print a speedup grid.
+#
+# Baseline (pytorch MOLE):
+#   fairchem -c configs/uma/benchmark/perf_check/grid_benchmark.yaml \
+#     job.run_dir=/checkpoint/ocp/$USER/perf_grid \
+#     '+runner.overrides={backbone:{moe_layer_type:pytorch}}'
+#
+# nvmath grouped cuBLAS, compared against the baseline report:
+#   fairchem -c configs/uma/benchmark/perf_check/grid_benchmark.yaml \
+#     job.run_dir=/checkpoint/ocp/$USER/perf_grid \
+#     '+runner.overrides={backbone:{moe_layer_type:dgl}}' \
+#     runner.reference_report=/checkpoint/ocp/$USER/perf_grid/<run>/results/grid_benchmark_report.json
+#
+# nvmath looped cuBLAS: add runner.use_grouped_gemm=False
+
+defaults:
+  - job: local
+  - _self_
+
+checkpoint:
+  _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+  model_name: "uma-s-1p2"
+
+runner:
+  _target_: fairchem.core.components.benchmark.perf_check.GridPerfCheckRunner
+  checkpoint: ${checkpoint}
+  device: "cuda"
+  sizes: [10, 20, 40, 80, 160, 320]
+  batches: [4, 8, 16, 32, 64]
+  variants_per_size: 4
+  size_jitter: 0.1
+  task: "omat"
+  reps: 20
+  warmup: 5
+  seed: 42
+  use_grouped_gemm: True
+  check_accuracy: True
+  reference_report: null
+  inference_settings:
+    _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+    tf32: False
+    activation_checkpointing: False   # dgl and activation_checkpointing are mutually exclusive
+    merge_mole: False                 # dgl and merge_mole are mutually exclusive
+    compile: False
+    execution_mode: "general"
