@@ -118,6 +118,47 @@ def get_moe_backbone(composition_dropout: float = 0.0):
     )
 
 
+def test_dgl_activation_checkpointing_guard():
+    """dgl backend + activation_checkpointing must fail fast at build time."""
+    with pytest.raises(ValueError, match="activation_checkpointing"):
+        eSCNMDMoeBackbone(
+            max_num_elements=100,
+            sphere_channels=16,
+            lmax=2,
+            mmax=2,
+            otf_graph=True,
+            edge_channels=16,
+            num_distance_basis=8,
+            use_dataset_embedding=False,
+            always_use_pbc=False,
+            num_experts=4,
+            use_composition_embedding=True,
+            moe_layer_type="dgl",
+            activation_checkpointing=True,
+        )
+
+
+def test_dgl_merge_mole_guard():
+    """merge_MOLE_model on a dgl backbone must fail fast before touching data."""
+    backbone = eSCNMDMoeBackbone(
+        max_num_elements=100,
+        sphere_channels=16,
+        lmax=2,
+        mmax=2,
+        otf_graph=True,
+        edge_channels=16,
+        num_distance_basis=8,
+        use_dataset_embedding=False,
+        always_use_pbc=False,
+        num_experts=4,
+        use_composition_embedding=True,
+        moe_layer_type="dgl",
+    )
+    # The guard raises before ``data`` is dereferenced, so None is fine here.
+    with pytest.raises(ValueError, match="merge_mole is mutually exclusive"):
+        backbone.merge_MOLE_model(None)
+
+
 class TestCompositionDropout:
     """Tests for composition_dropout feature."""
 
