@@ -13,11 +13,11 @@ from abc import ABCMeta, abstractmethod
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-import hydra
 import torch
 from torch import nn
 
 from fairchem.core.common.registry import registry
+from fairchem.core.common.safe_hydra import safe_instantiate
 from fairchem.core.common.utils import (
     load_model_and_weights_from_checkpoint,
 )
@@ -231,7 +231,7 @@ class HydraInterfaceMixin:
         Args:
             tasks_config: List of task configurations from checkpoint
         """
-        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
+        tasks = [safe_instantiate(task_config) for task_config in tasks_config]
         self._tasks = {t.name: t for t in tasks}
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
         self.backbone.validate_tasks(self._dataset_to_tasks)

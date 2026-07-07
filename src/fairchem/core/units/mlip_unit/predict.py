@@ -18,7 +18,6 @@ from contextlib import nullcontext
 from functools import cached_property, wraps
 from typing import TYPE_CHECKING, ClassVar, Protocol
 
-import hydra
 import numpy as np
 import ray
 import torch
@@ -35,6 +34,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.common.safe_hydra import safe_instantiate
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
@@ -574,7 +574,7 @@ class MLIPWorkerLocal:
             world_size=self.world_size,
         )
         gp_utils.setup_graph_parallel_groups(self.world_size, backend)
-        self.predict_unit = hydra.utils.instantiate(self.predictor_config)
+        self.predict_unit = safe_instantiate(self.predictor_config)
         self.device = get_device_for_local_rank()
         logging.info(
             f"Worker {self.worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "

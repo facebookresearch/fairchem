@@ -11,11 +11,11 @@ from contextlib import contextmanager
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
-import hydra
 import torch
 from omegaconf import DictConfig
 
 from fairchem.core.common.registry import registry
+from fairchem.core.common.safe_hydra import safe_instantiate
 from fairchem.core.common.utils import load_state_dict, match_state_dict
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ def load_inference_model(
     if overrides is not None:
         checkpoint.model_config = update_configs(checkpoint.model_config, overrides)
 
-    model = hydra.utils.instantiate(checkpoint.model_config)
+    model = safe_instantiate(checkpoint.model_config)
     if use_ema:
         model = torch.optim.swa_utils.AveragedModel(model)
         model_dict = model.state_dict()
@@ -88,9 +88,7 @@ def load_tasks(checkpoint_location: str) -> list[Task]:
     checkpoint: MLIPInferenceCheckpoint = torch.load(
         checkpoint_location, map_location="cpu", weights_only=False
     )
-    return [
-        hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
-    ]
+    return [safe_instantiate(task_config) for task_config in checkpoint.tasks_config]
 
 
 @contextmanager
