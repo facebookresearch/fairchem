@@ -15,6 +15,7 @@ import clusterscope
 import hydra
 import ray
 import torch.distributed as dist
+from omegaconf import OmegaConf
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 
@@ -203,6 +204,9 @@ def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
 def ray_on_slurm_launch(config: DictConfig, log_dir: str):
     scheduler_config: SchedulerConfig = config.job.scheduler
     slurm_config: SlurmConfig = scheduler_config.slurm
+    # Convert the (OmegaConf) metrics config to a plain dataclass so it pickles
+    # cleanly through submitit to the head node.
+    metrics_config = OmegaConf.to_object(scheduler_config.ray_cluster.metrics)
     cluster = RayCluster(log_dir=Path(log_dir))
     cluster_reqs = {
         "slurm_account": slurm_config.account,
@@ -220,4 +224,5 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         payload=ray_entrypoint,
         job_config=config.job,
         runner_config=config.runner,
+        metrics_config=metrics_config,
     )
