@@ -1998,11 +1998,16 @@ def test_direct_checkpoint_loads_after_tagging(direct_checkpoint):
     assert pu is not None
 
 
-def test_untagged_checkpoint_raises(direct_checkpoint, tmp_path):
-    """Stripping the model_id from a real checkpoint -> load raises."""
+def test_untagged_checkpoint_raises(direct_mole_checkpoint, tmp_path):
+    """Stripping the model_id from a real MoE checkpoint -> load raises.
+
+    Uses a MoE (num_experts>0) checkpoint: the untagged-rejection only applies to
+    UMA MoE models, whose model_id gates composition behavior. A non-MoE
+    checkpoint (num_experts=0, e.g. eSEN) is classified not_uma and loads fine.
+    """
     from fairchem.core.units.mlip_unit import load_predict_unit
 
-    ckpt, _ = direct_checkpoint
+    ckpt, _ = direct_mole_checkpoint
     obj = torch.load(ckpt, map_location="cpu", weights_only=False)
     obj.model_config.pop("model_id", None)
     obj.model_config["backbone"].pop("model_version", None)
