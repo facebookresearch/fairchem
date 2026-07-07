@@ -61,9 +61,8 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
     ):
         return "not_uma"
 
-    # The eSCNMDMoeBackbone class is shared with non-UMA models (e.g. eSEN OC25,
-    # which sets num_experts=0). Only a MoE (num_experts > 0) checkpoint has the
-    # model_id-gated composition behavior; anything else is out of scope here.
+    # UMA uses num_experts > 0; eSCNMDMoeBackbone with num_experts == 0
+    # (e.g. eSEN) is not UMA.
     if not isinstance(backbone.get("num_experts"), int) or backbone["num_experts"] <= 0:
         return "not_uma"
 
