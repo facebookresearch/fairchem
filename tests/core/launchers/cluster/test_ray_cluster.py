@@ -24,6 +24,9 @@ from fairchem.core.launchers.cluster.ray_cluster import (
     HeadInfo,
     RayCluster,
     RayClusterState,
+    mk_symlinks,
+)
+from fairchem.core.launchers.cluster.ray_prometheus_metrics import (
     _metrics_env_updates,
     _MetricsPlan,
     _resolve_grafana,
@@ -31,7 +34,6 @@ from fairchem.core.launchers.cluster.ray_cluster import (
     _start_grafana,
     _start_metrics_servers,
     _start_prometheus,
-    mk_symlinks,
 )
 
 
@@ -459,7 +461,7 @@ class TestBinaryResolution:
             cfg = RayMetricsConfig(prometheus_binary=str(binary))
             assert _resolve_prometheus_binary(cfg, d) == str(binary)
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster.shutil.which")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics.shutil.which")
     def test_prometheus_from_path(self, mock_which):
         mock_which.return_value = "/usr/bin/prometheus"
         assert (
@@ -468,15 +470,19 @@ class TestBinaryResolution:
         )
 
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster.shutil.which", return_value=None
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics.shutil.which",
+        return_value=None,
     )
     def test_prometheus_missing_no_download(self, mock_which):
         # Not found and auto_download off -> None (skip), never downloads.
         assert _resolve_prometheus_binary(RayMetricsConfig(), "/tmp/dl") is None
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster._download_prometheus")
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster.shutil.which", return_value=None
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics._download_prometheus"
+    )
+    @patch(
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics.shutil.which",
+        return_value=None,
     )
     def test_prometheus_auto_download_only_when_enabled(self, mock_which, mock_dl):
         mock_dl.return_value = "/dl/prometheus"
@@ -488,8 +494,8 @@ class TestBinaryResolution:
         assert _resolve_prometheus_binary(cfg, "/tmp/dl") == "/dl/prometheus"
         mock_dl.assert_called_once()
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster._grafana_homepath")
-    @patch("fairchem.core.launchers.cluster.ray_cluster.shutil.which")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics._grafana_homepath")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics.shutil.which")
     def test_grafana_from_path(self, mock_which, mock_hp):
         mock_which.side_effect = lambda name: (
             "/usr/bin/grafana" if name == "grafana" else None
@@ -500,9 +506,10 @@ class TestBinaryResolution:
             "/opt/grafana",
         )
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster._download_grafana")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics._download_grafana")
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster.shutil.which", return_value=None
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics.shutil.which",
+        return_value=None,
     )
     def test_grafana_auto_download_only_when_enabled(self, mock_which, mock_dl):
         mock_dl.return_value = ("/dl/grafana/bin/grafana", "/dl/grafana")
@@ -555,7 +562,7 @@ class TestMetricsEnvUpdates:
 class TestServerCommands:
     """Prometheus/Grafana launch command + env construction."""
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.Popen")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics.subprocess.Popen")
     def test_start_prometheus_cmd(self, mock_popen):
         with tempfile.TemporaryDirectory() as d:
             _start_prometheus("/bin/prometheus", d, 9090, f"{d}/data", "7d")
@@ -565,7 +572,7 @@ class TestServerCommands:
             assert any(c.startswith("--web.listen-address=0.0.0.0:9090") for c in cmd)
             assert any(c == "--storage.tsdb.retention.time=7d" for c in cmd)
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.Popen")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics.subprocess.Popen")
     def test_start_grafana_cmd_and_env(self, mock_popen):
         with tempfile.TemporaryDirectory() as d:
             _start_grafana(
@@ -580,7 +587,7 @@ class TestServerCommands:
             assert "GF_PATHS_PROVISIONING" in env
             assert env["RAY_PROMETHEUS_HOST"] == "http://localhost:9090"
 
-    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.Popen")
+    @patch("fairchem.core.launchers.cluster.ray_prometheus_metrics.subprocess.Popen")
     def test_start_grafana_server_binary_no_subcommand(self, mock_popen):
         with tempfile.TemporaryDirectory() as d:
             _start_grafana(
@@ -647,7 +654,7 @@ class TestStartMetricsServersGraceful:
         assert servers.grafana_port is None
 
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster._wait_for_metrics_configs",
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics._wait_for_metrics_configs",
         return_value=False,
     )
     def test_missing_configs_skips(self, mock_wait):
@@ -659,11 +666,11 @@ class TestStartMetricsServersGraceful:
         assert servers.prometheus_port is None
 
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster._start_prometheus",
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics._start_prometheus",
         side_effect=RuntimeError("boom"),
     )
     @patch(
-        "fairchem.core.launchers.cluster.ray_cluster._wait_for_metrics_configs",
+        "fairchem.core.launchers.cluster.ray_prometheus_metrics._wait_for_metrics_configs",
         return_value=True,
     )
     def test_start_failure_is_swallowed(self, mock_wait, mock_start):
