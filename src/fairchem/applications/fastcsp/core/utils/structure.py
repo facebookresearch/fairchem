@@ -145,7 +145,7 @@ def extract_molecules(structure: Structure) -> list[Atoms]:
     )
     lattice = structure.lattice.matrix
     cart_coords = structure.cart_coords
-    species = [str(s) for s in structure.species]
+    species = [s.specie.symbol for s in structure.species]
 
     atoms_list: list[Atoms] = []
     for comp_id in range(int(labels.max()) + 1):
