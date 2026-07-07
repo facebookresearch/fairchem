@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import atexit
 import threading
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 import numpy as np
 import torch
@@ -72,11 +72,9 @@ def _destroy_cached_handles() -> None:
         return
     with _HANDLE_LOCK:
         for handle in _CUBLAS_HANDLES.values():
-            try:
+            # Best effort cleanup at process teardown.
+            with suppress(Exception):
                 cublas.destroy(handle)
-            except Exception:
-                # Best effort cleanup at process teardown.
-                pass
         _CUBLAS_HANDLES.clear()
 
 
@@ -107,12 +105,24 @@ def _dtype_to_cublas_grouped(A: torch.Tensor) -> tuple[int, int]:
 def _dtype_to_cublas_gemm_ex(A: torch.Tensor) -> tuple[int, int, np.dtype]:
     dtype = A.dtype
     if dtype == torch.float32:
-        return int(cudaDataType.CUDA_R_32F), int(cublas.ComputeType.COMPUTE_32F), np.float32
+        return (
+            int(cudaDataType.CUDA_R_32F),
+            int(cublas.ComputeType.COMPUTE_32F),
+            np.float32,
+        )
     if dtype == torch.float16:
         # Match cublasGemmEx behavior for half kernels.
-        return int(cudaDataType.CUDA_R_16F), int(cublas.ComputeType.COMPUTE_16F), np.float16
+        return (
+            int(cudaDataType.CUDA_R_16F),
+            int(cublas.ComputeType.COMPUTE_16F),
+            np.float16,
+        )
     if dtype == torch.bfloat16:
-        return int(cudaDataType.CUDA_R_16BF), int(cublas.ComputeType.COMPUTE_32F), np.float32
+        return (
+            int(cudaDataType.CUDA_R_16BF),
+            int(cublas.ComputeType.COMPUTE_32F),
+            np.float32,
+        )
     raise TypeError(f"Unsupported dtype for nvmath segment_mm: {dtype}")
 
 
@@ -139,7 +149,9 @@ def _prepare_seglen(seglen_A: torch.Tensor) -> torch.Tensor:
     return seglen_A.to(dtype=torch.int32).contiguous()
 
 
-def _validate_forward_inputs(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor) -> None:
+def _validate_forward_inputs(
+    A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor
+) -> None:
     if A.device.type != "cuda" or B.device.type != "cuda":
         raise ValueError("segment_mm is CUDA-only in this nvmath driver.")
     if A.dim() != 2:
@@ -152,7 +164,9 @@ def _validate_forward_inputs(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.T
         raise ValueError("seglen_A length must match B.shape[0].")
 
 
-def _segment_mm_grouped(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor, *, b_trans: bool) -> torch.Tensor:
+def _segment_mm_grouped(
+    A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor, *, b_trans: bool
+) -> torch.Tensor:
     seg = _prepare_seglen(seglen_A)
     num_rel = int(seg.numel())
     if num_rel != int(B.shape[0]):
@@ -233,7 +247,9 @@ def _segment_mm_grouped(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor
     alpha = np.ones((num_rel,), dtype=np.float32)
     beta = np.zeros((num_rel,), dtype=np.float32)
 
-    device_index = A.device.index if A.device.index is not None else torch.cuda.current_device()
+    device_index = (
+        A.device.index if A.device.index is not None else torch.cuda.current_device()
+    )
     handle = _get_cached_handle(device_index)
     cublas.set_stream(handle, torch.cuda.current_stream(device=A.device).cuda_stream)
     with _host_pointer_mode(handle):
@@ -263,7 +279,9 @@ def _segment_mm_grouped(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor
     return C
 
 
-def _segment_mm_gemm_ex(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor, *, b_trans: bool) -> torch.Tensor:
+def _segment_mm_gemm_ex(
+    A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor, *, b_trans: bool
+) -> torch.Tensor:
     seg = _prepare_seglen(seglen_A)
     num_rel = int(seg.numel())
     if num_rel != int(B.shape[0]):
@@ -293,7 +311,9 @@ def _segment_mm_gemm_ex(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor
     op_n = int(cublas.Operation.N)
     op_t = int(cublas.Operation.T)
 
-    device_index = A.device.index if A.device.index is not None else torch.cuda.current_device()
+    device_index = (
+        A.device.index if A.device.index is not None else torch.cuda.current_device()
+    )
     handle = _get_cached_handle(device_index)
     cublas.set_stream(handle, torch.cuda.current_stream(device=A.device).cuda_stream)
     with _host_pointer_mode(handle):
@@ -348,10 +368,14 @@ def _segment_mm_gemm_ex(A: torch.Tensor, B: torch.Tensor, seglen_A: torch.Tensor
     return C
 
 
-def _segment_mm_backward_b_grouped(A: torch.Tensor, dC: torch.Tensor, seglen_A: torch.Tensor) -> torch.Tensor:
+def _segment_mm_backward_b_grouped(
+    A: torch.Tensor, dC: torch.Tensor, seglen_A: torch.Tensor
+) -> torch.Tensor:
     seg = _prepare_seglen(seglen_A)
     num_rel = int(seg.numel())
-    dB = torch.empty((num_rel, A.size(1), dC.size(1)), device=A.device, dtype=A.dtype).contiguous()
+    dB = torch.empty(
+        (num_rel, A.size(1), dC.size(1)), device=A.device, dtype=A.dtype
+    ).contiguous()
     if num_rel == 0:
         return dB
 
@@ -409,7 +433,9 @@ def _segment_mm_backward_b_grouped(A: torch.Tensor, dC: torch.Tensor, seglen_A: 
     alpha = np.ones((num_rel,), dtype=np.float32)
     beta = np.zeros((num_rel,), dtype=np.float32)
 
-    device_index = A.device.index if A.device.index is not None else torch.cuda.current_device()
+    device_index = (
+        A.device.index if A.device.index is not None else torch.cuda.current_device()
+    )
     handle = _get_cached_handle(device_index)
     cublas.set_stream(handle, torch.cuda.current_stream(device=A.device).cuda_stream)
     with _host_pointer_mode(handle):
@@ -439,10 +465,14 @@ def _segment_mm_backward_b_grouped(A: torch.Tensor, dC: torch.Tensor, seglen_A: 
     return dB
 
 
-def _segment_mm_backward_b_gemm_ex(A: torch.Tensor, dC: torch.Tensor, seglen_A: torch.Tensor) -> torch.Tensor:
+def _segment_mm_backward_b_gemm_ex(
+    A: torch.Tensor, dC: torch.Tensor, seglen_A: torch.Tensor
+) -> torch.Tensor:
     seg = _prepare_seglen(seglen_A)
     num_rel = int(seg.numel())
-    dB = torch.empty((num_rel, A.size(1), dC.size(1)), device=A.device, dtype=A.dtype).contiguous()
+    dB = torch.empty(
+        (num_rel, A.size(1), dC.size(1)), device=A.device, dtype=A.dtype
+    ).contiguous()
     if num_rel == 0:
         return dB
 
@@ -466,7 +496,9 @@ def _segment_mm_backward_b_gemm_ex(A: torch.Tensor, dC: torch.Tensor, seglen_A: 
     op_n = int(cublas.Operation.N)
     op_t = int(cublas.Operation.T)
 
-    device_index = A.device.index if A.device.index is not None else torch.cuda.current_device()
+    device_index = (
+        A.device.index if A.device.index is not None else torch.cuda.current_device()
+    )
     handle = _get_cached_handle(device_index)
     cublas.set_stream(handle, torch.cuda.current_stream(device=A.device).cuda_stream)
     with _host_pointer_mode(handle):
