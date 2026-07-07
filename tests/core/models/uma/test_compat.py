@@ -27,8 +27,12 @@ def make_fake_checkpoint(model_config) -> MLIPInferenceCheckpoint:
     )
 
 
-def uma_cfg(*, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQN):
-    cfg = {"backbone": {"model": backbone_model}}
+def uma_cfg(
+    *, model_version=None, model_id=None, backbone_model=UMA_BACKBONE_FQN, num_experts=8
+):
+    # num_experts>0 by default: real UMA checkpoints are MoE. The shim treats a
+    # shared-backbone checkpoint with num_experts<=0 (e.g. eSEN) as not_uma.
+    cfg = {"backbone": {"model": backbone_model, "num_experts": num_experts}}
     if model_version is not None:
         cfg["backbone"]["model_version"] = model_version
     if model_id is not None:
@@ -140,6 +144,21 @@ def test_non_uma_no_op():
     ckpt = make_fake_checkpoint(cfg)
     assert get_uma_version(cfg) == "not_uma"
     apply_uma_compat_fixups(ckpt)
+    assert "model_id" not in ckpt.model_config
+
+
+@pytest.mark.parametrize("num_experts", [0, None])
+def test_shared_backbone_without_experts_is_not_uma(num_experts):
+    """A checkpoint that reuses eSCNMDMoeBackbone but has no MoE experts (e.g.
+    eSEN OC25: num_experts=0, model_version=1.0, no model_id) must NOT be treated
+    as an untagged UMA 1.0 checkpoint — it has no model_id-gated MoE path, so it
+    loads unchanged rather than raising."""
+    cfg = uma_cfg(model_version=1.0, num_experts=num_experts)
+    if num_experts is None:
+        del cfg["backbone"]["num_experts"]
+    ckpt = make_fake_checkpoint(cfg)
+    assert get_uma_version(cfg) == "not_uma"
+    apply_uma_compat_fixups(ckpt)  # must not raise
     assert "model_id" not in ckpt.model_config
 
 

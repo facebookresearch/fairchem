@@ -40,10 +40,12 @@ _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 def get_uma_version(model_config: dict | None) -> UmaVersion:
     """Classify what fix-up a checkpoint needs (see :func:`apply_uma_compat_fixups`).
 
-    * ``"not_uma"`` — not a UMA backbone.
+    * ``"not_uma"`` — not a UMA MoE backbone. This includes non-UMA models and
+      checkpoints that merely reuse ``eSCNMDMoeBackbone`` with ``num_experts == 0``
+      (e.g. eSEN), which have no MoE path and therefore no model_id-gated behavior.
     * ``"1.1"`` — legacy UMA 1.1: no ``model_id`` but ``backbone.model_version ==
       1.1`` → back-fill ``model_id``.
-    * ``"unidentified"`` — UMA backbone with neither ``model_id`` nor
+    * ``"unidentified"`` — UMA MoE backbone with neither ``model_id`` nor
       ``model_version`` (UMA 1.0 / untagged-new) → rejected on load.
     * ``"tagged"`` — already has a ``model_id`` (UMA 1.2+ or custom) → no-op. The
       1.2 ``include_self`` rule lives in the backbone, keyed on ``model_id``.
@@ -51,10 +53,18 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
     if not isinstance(model_config, dict):
         return "not_uma"
     backbone = model_config.get("backbone", {})
-    model = backbone.get("model") if isinstance(backbone, dict) else None
+    if not isinstance(backbone, dict):
+        return "not_uma"
+    model = backbone.get("model")
     if not isinstance(model, str) or not (
         model == _UMA_BACKBONE_SHORT_NAME or model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
     ):
+        return "not_uma"
+
+    # The eSCNMDMoeBackbone class is shared with non-UMA models (e.g. eSEN OC25,
+    # which sets num_experts=0). Only a MoE (num_experts > 0) checkpoint has the
+    # model_id-gated composition behavior; anything else is out of scope here.
+    if not isinstance(backbone.get("num_experts"), int) or backbone["num_experts"] <= 0:
         return "not_uma"
 
     model_id = model_config.get("model_id")
