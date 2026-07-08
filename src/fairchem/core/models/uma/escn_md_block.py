@@ -138,19 +138,18 @@ class Edgewise(torch.nn.Module):
                 For A2A, derived from ``gp_ctx.edge_index_local[1]``.
                 If None, defaults to ``edge_index[1]`` (no GP).
         """
-        if gp_utils.is_a2a():
-            # All-to-all path: collect only needed remote embeddings.
-            with record_function("a2a_collect"):
-                x_received = all_to_all_collect(x, gp_ctx)
-                x_full = torch.cat([x, x_received], dim=0)
-                edge_index_local = gp_ctx.edge_index_local
-        elif gp_utils.initialized():
-            # Legacy all-gather path
-            with record_function("allgather_collect"):
-                x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                    x, total_atoms_across_gp_ranks
-                )
-            edge_index_local = edge_index
+        if gp_utils.initialized():
+            if gp_utils.is_a2a():
+                with record_function("a2a_collect"):
+                    x_received = all_to_all_collect(x, gp_ctx)
+                    x_full = torch.cat([x, x_received], dim=0)
+                    edge_index_local = gp_ctx.edge_index_local
+            else:
+                with record_function("allgather_collect"):
+                    x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                        x, total_atoms_across_gp_ranks
+                    )
+                edge_index_local = edge_index
         else:
             x_full = x
             edge_index_local = edge_index
