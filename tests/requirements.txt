@@ -21,7 +21,7 @@ ray[serve]==2.56.0
 # Pin to 6.x until Ray ships a fix.
 protobuf<7
 ipykernel==7.3.0
-jupyter_book==2.1.5
+jupyter_book==2.1.6
 pytest-xdist==3.8.0
 # Provides --suppress-no-test-exit-code so the CI workflow can stop
 # treating pytest exit 5 ("no tests collected") as a failure without
