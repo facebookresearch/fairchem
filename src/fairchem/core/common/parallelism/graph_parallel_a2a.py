@@ -65,8 +65,6 @@ class GPContext:
     Graph parallel context holding communication metadata for all-to-all.
 
     Runtime-only struct: every field is needed for the forward/backward pass.
-    Construction intermediates (node_partition, rank_assignments, needed_atoms,
-    global_to_local, etc.) are computed in build_gp_context but not stored.
 
     Attributes:
         rank: Current GP rank.
@@ -83,6 +81,7 @@ class GPContext:
         total_recv: Total number of embeddings to receive (sum of recv_splits).
         local_edge_idx: Indices into edge_index_local where source is a local atom.
         remote_edge_idx: Indices into edge_index_local where source is a remote atom.
+        rank_assignments: Rank owner for each atom, shape (total_atoms,).
     """
 
     rank: int
@@ -97,6 +96,7 @@ class GPContext:
     total_recv: int
     local_edge_idx: torch.Tensor
     remote_edge_idx: torch.Tensor
+    rank_assignments: torch.Tensor
 
 
 def _sparse_index_exchange(
@@ -358,6 +358,7 @@ def build_gp_context(
         total_recv=total_recv,
         local_edge_idx=local_edge_idx,
         remote_edge_idx=remote_edge_idx,
+        rank_assignments=rank_assignments,
     )
 
 

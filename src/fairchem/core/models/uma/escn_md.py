@@ -726,11 +726,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         node_partition=node_partition,
                     )
                 data_dict["gp_ctx"] = gp_ctx
-                # Store rank_assignments so output heads can reorder
-                # gathered forces/stress from partition-concatenated order
-                # back to global index order. Only needed for A2A where
-                # partitions are non-consecutive (spatial).
-                data_dict["gp_rank_assignments"] = rank_assignments
                 data_dict["scatter_target"] = gp_ctx.edge_index_local[1]
             else:
                 # Allgather: pre-compute local target indices for scatter
@@ -1241,8 +1236,9 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             # A2A spatial partitions are non-consecutive, so the
             # gathered forces are in partition-concatenated order
             # (NOT global index order). Reorder to match positions.
-            ra = data_dict.get("gp_rank_assignments", None)
-            if ra is not None:
+            gp_ctx = data_dict.get("gp_ctx", None)
+            if gp_ctx is not None:
+                ra = gp_ctx.rank_assignments
                 ws = gp_utils.get_gp_world_size()
                 perm = torch.cat(
                     [(ra == r).nonzero(as_tuple=True)[0] for r in range(ws)]
