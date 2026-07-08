@@ -8,12 +8,16 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
 from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+
+if TYPE_CHECKING:
+    from fairchem.core.common.parallelism.graph_partition import PartitionStrategy
 
 
 def _safe_all_to_all(
@@ -189,6 +193,47 @@ def _sparse_index_exchange(
     send_indices_global = recv_buf
 
     return send_counts, send_indices_global
+
+
+@torch.compiler.disable
+def compute_a2a_partition(
+    pos: torch.Tensor,
+    total_atoms: int,
+    device: torch.device,
+    world_size: int,
+    rank: int,
+    strategy: PartitionStrategy,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute rank assignments and local node partition for A2A graph parallel.
+
+    Args:
+        pos: Atom positions, shape (N, 3).
+        total_atoms: Total number of atoms.
+        device: Device for output tensors.
+        world_size: Number of GP ranks.
+        rank: Current GP rank.
+        strategy: Partitioning strategy (SPATIAL or INDEX_SPLIT).
+
+    Returns:
+        Tuple of (rank_assignments, node_partition) where rank_assignments
+        is shape (N,) mapping each atom to a rank, and node_partition is
+        the indices of atoms belonging to this rank.
+    """
+    from fairchem.core.common.parallelism.graph_partition import (
+        PartitionStrategy,
+        partition_atoms_index_split,
+        partition_atoms_spatial,
+    )
+
+    with record_function("a2a_partition"):
+        if strategy == PartitionStrategy.SPATIAL:
+            rank_assignments = partition_atoms_spatial(pos, world_size)
+        else:
+            rank_assignments = partition_atoms_index_split(
+                total_atoms, world_size, device
+            )
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    return rank_assignments, node_partition
 
 
 @torch.compiler.disable

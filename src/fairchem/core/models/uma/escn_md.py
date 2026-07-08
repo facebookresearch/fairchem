@@ -22,11 +22,10 @@ from fairchem.core.common import gp_utils
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
     GPContext,
     build_gp_context,
+    compute_a2a_partition,
 )
 from fairchem.core.common.parallelism.graph_partition import (
     PartitionStrategy,
-    partition_atoms_index_split,
-    partition_atoms_spatial,
 )
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
@@ -370,6 +369,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         self.edge_chunk_size = edge_chunk_size
         self.use_all_to_all_gp = use_all_to_all_gp
+        if self.use_all_to_all_gp:
+            gp_utils.set_gp_mode(gp_utils.GPMode.ALL_TO_ALL)
         self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
 
         # Allgather+spatial is not supported because allgather concatenates
@@ -611,34 +612,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
-    @torch.compiler.disable
-    def _compute_a2a_partition(
-        self,
-        pos: torch.Tensor,
-        total_atoms: int,
-        device: torch.device,
-        world_size: int,
-        rank: int,
-        strategy: PartitionStrategy,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute A2A rank assignments and node partition.
-
-        Separated from _generate_graph so that only the A2A-specific
-        partitioning is excluded from torch.compile.  The BL (all-gather)
-        path stays fully compilable.
-        """
-        with record_function("a2a_partition"):
-            if strategy == PartitionStrategy.SPATIAL:
-                rank_assignments = partition_atoms_spatial(pos, world_size)
-            else:
-                rank_assignments = partition_atoms_index_split(
-                    total_atoms, world_size, device
-                )
-        node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
-
-        return rank_assignments, node_partition
-
     def _generate_graph(self, data_dict):
         node_partition = None
         rank_assignments = None
@@ -653,7 +626,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # are identical, avoiding index mismatches that cause
                 # OOB crashes.
                 natoms = len(atomic_numbers_full)
-                rank_assignments, node_partition = self._compute_a2a_partition(
+                rank_assignments, node_partition = compute_a2a_partition(
                     pos=data_dict["pos"],
                     total_atoms=natoms,
                     device=atomic_numbers_full.device,

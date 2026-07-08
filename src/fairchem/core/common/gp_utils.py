@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import threading
+from enum import Enum
 
 import torch
 from torch import distributed as dist
@@ -25,6 +26,14 @@ https://github.com/facebookresearch/fairscale/blob/main/fairscale/nn/model_paral
 
 _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
+
+
+class GPMode(Enum):
+    ALLGATHER = "allgather"
+    ALL_TO_ALL = "all_to_all"
+
+
+_GP_MODE: GPMode | None = None
 
 _tls = threading.local()
 
@@ -133,6 +142,7 @@ def setup_gp(config) -> None:
 def cleanup_gp() -> None:
     global _DATA_PARALLEL_GROUP
     global _GRAPH_PARALLEL_GROUP
+    global _GP_MODE
     assert _GRAPH_PARALLEL_GROUP is not None
     assert _DATA_PARALLEL_GROUP is not None
     with contextlib.suppress(ValueError):
@@ -141,10 +151,24 @@ def cleanup_gp() -> None:
         dist.destroy_process_group(_GRAPH_PARALLEL_GROUP)
     _DATA_PARALLEL_GROUP = None
     _GRAPH_PARALLEL_GROUP = None
+    _GP_MODE = None
 
 
 def initialized() -> bool:
     return _GRAPH_PARALLEL_GROUP is not None
+
+
+def set_gp_mode(mode: GPMode) -> None:
+    global _GP_MODE
+    _GP_MODE = mode
+
+
+def get_gp_mode() -> GPMode | None:
+    return _GP_MODE
+
+
+def is_a2a() -> bool:
+    return _GP_MODE == GPMode.ALL_TO_ALL
 
 
 def get_dp_group():
