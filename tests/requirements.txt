@@ -6,7 +6,7 @@ huggingface-hub==1.21.0
 setuptools<83.0.0
 torch==2.8.0
 torchtnt==0.2.4
-numba==0.65.1
+numba==0.66.0
 numpy==2.4.6
 scikit-learn==1.9.0
 lmdb==1.6.2
