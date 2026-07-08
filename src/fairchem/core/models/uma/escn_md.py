@@ -834,9 +834,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Retrieve precomputed all-to-all context (needed for edge embedding
         # and message passing layers)
         gp_ctx: GPContext | None = data_dict.get("gp_ctx", None)
-        send_indices: torch.Tensor | None = None
-        if gp_ctx is not None:
-            send_indices = gp_ctx.send_indices
 
         # edge degree embedding
         with record_function("edge embedding"):
@@ -890,7 +887,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     sys_node_embedding=sys_node_embedding,
                     scatter_target=data_dict["scatter_target"],
                     gp_ctx=gp_ctx,
-                    send_indices=send_indices,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(

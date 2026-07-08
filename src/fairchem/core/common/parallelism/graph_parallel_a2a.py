@@ -570,7 +570,6 @@ class AllToAllCollect(torch.autograd.Function):
 def all_to_all_collect(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
-    send_indices: torch.Tensor,
 ) -> torch.Tensor:
     """
     High-level function to collect remote embeddings via all-to-all.
@@ -582,7 +581,6 @@ def all_to_all_collect(
     Args:
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
-        send_indices: Local indices of atoms to send.
 
     Returns:
         x_received: Remote atom embeddings,
@@ -590,7 +588,7 @@ def all_to_all_collect(
     """
     return AllToAllCollect.apply(
         x_local,
-        send_indices,
+        gp_ctx.send_indices,
         gp_ctx.send_counts,
         gp_ctx.recv_counts,
         gp_utils.get_gp_group(),

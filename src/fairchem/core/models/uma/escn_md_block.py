@@ -124,7 +124,6 @@ class Edgewise(torch.nn.Module):
         total_atoms_across_gp_ranks,
         scatter_target: torch.Tensor | None = None,
         gp_ctx: GPContext | None = None,
-        send_indices: torch.Tensor | None = None,
     ):
         """
         Forward pass with support for both all-gather and all-to-all GP.
@@ -142,7 +141,7 @@ class Edgewise(torch.nn.Module):
         if gp_ctx is not None and gp_utils.initialized():
             # All-to-all path: collect only needed remote embeddings.
             with record_function("a2a_collect"):
-                x_received = all_to_all_collect(x, gp_ctx, send_indices)
+                x_received = all_to_all_collect(x, gp_ctx)
                 x_full = torch.cat([x, x_received], dim=0)
                 edge_index_local = gp_ctx.edge_index_local
         elif gp_utils.initialized():
@@ -387,7 +386,6 @@ class eSCNMD_Block(torch.nn.Module):
         sys_node_embedding=None,
         scatter_target: torch.Tensor | None = None,
         gp_ctx: GPContext | None = None,
-        send_indices: torch.Tensor | None = None,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -405,7 +403,6 @@ class eSCNMD_Block(torch.nn.Module):
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 scatter_target=scatter_target,
                 gp_ctx=gp_ctx,
-                send_indices=send_indices,
             )
             x = x + x_res
 
