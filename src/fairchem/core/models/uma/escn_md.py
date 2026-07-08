@@ -731,9 +731,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # back to global index order. Only needed for A2A where
                 # partitions are non-consecutive (spatial).
                 data_dict["gp_rank_assignments"] = rank_assignments
-                # A2A scatter_target comes from gp_ctx.edge_index_local[1]
-                # which is set dynamically in InteractionBlock.forward().
-                data_dict["scatter_target"] = None
+                data_dict["scatter_target"] = gp_ctx.edge_index_local[1]
             else:
                 # Allgather: pre-compute local target indices for scatter
                 # operations. Maps global edge targets to 0-based local
@@ -753,17 +751,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         if graph_dict["edge_index"].shape[1] == 0:
             add_n_empty_edges(graph_dict, 1, self.cutoff)
-            # Also update scatter_target for the dummy edge (target=0)
-            if (
-                "scatter_target" in data_dict
-                and data_dict["scatter_target"] is not None
-            ):
+            if "scatter_target" in data_dict:
                 data_dict["scatter_target"] = torch.cat(
                     [
                         data_dict["scatter_target"].new_zeros(1),
                         data_dict["scatter_target"],
                     ]
                 )
+
+        if "scatter_target" not in data_dict:
+            data_dict["scatter_target"] = graph_dict["edge_index"][1]
 
         return graph_dict
 
@@ -870,17 +867,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                # scatter_target contains pre-computed local target indices
-                # for scattering edge messages to nodes. For A2A, use
-                # gp_ctx.edge_index_local[1] (already local). For allgather,
-                # use pre-computed global→local mapped targets.
-                (
-                    gp_ctx.edge_index_local[1]
-                    if gp_ctx is not None
-                    else data_dict.get(
-                        "scatter_target", default=graph_dict["edge_index"][1]
-                    )
-                ),
+                data_dict["scatter_target"],
                 wigner_inv_envelope,
             )
 
@@ -906,7 +893,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
-                    scatter_target=data_dict.get("scatter_target", default=None),
+                    scatter_target=data_dict["scatter_target"],
                     gp_ctx=gp_ctx,
                     send_indices=send_indices,
                 )

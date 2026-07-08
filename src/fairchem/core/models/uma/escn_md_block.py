@@ -145,7 +145,6 @@ class Edgewise(torch.nn.Module):
                 x_received = all_to_all_collect(x, gp_ctx, send_indices)
                 x_full = torch.cat([x, x_received], dim=0)
                 edge_index_local = gp_ctx.edge_index_local
-            local_scatter_target = edge_index_local[1]
         elif gp_utils.initialized():
             # Legacy all-gather path
             with record_function("allgather_collect"):
@@ -153,13 +152,9 @@ class Edgewise(torch.nn.Module):
                     x, total_atoms_across_gp_ranks
                 )
             edge_index_local = edge_index
-            local_scatter_target = scatter_target
         else:
             x_full = x
             edge_index_local = edge_index
-            local_scatter_target = (
-                scatter_target if scatter_target is not None else edge_index[1]
-            )
 
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
@@ -169,12 +164,12 @@ class Edgewise(torch.nn.Module):
                 edge_index_local,
                 wigner,
                 wigner_inv_envelope,
-                local_scatter_target,
+                scatter_target,
             )
         edge_index_partitions = edge_index_local.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
-        scatter_target_partitions = local_scatter_target.split(
+        scatter_target_partitions = scatter_target.split(
             self.activation_checkpoint_chunk_size
         )
         wigner_partitions = wigner.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -233,7 +228,7 @@ class Edgewise(torch.nn.Module):
             new_embedding = self.backend.permute_wigner_inv_edge_to_node(
                 x_message,
                 wigner_inv_envelope,
-                scatter_target if scatter_target is not None else edge_index[1],
+                scatter_target,
                 x_original_shape,
             )
 
