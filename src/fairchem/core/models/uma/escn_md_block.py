@@ -138,7 +138,7 @@ class Edgewise(torch.nn.Module):
                 For A2A, derived from ``gp_ctx.edge_index_local[1]``.
                 If None, defaults to ``edge_index[1]`` (no GP).
         """
-        if gp_ctx is not None and gp_utils.initialized():
+        if gp_utils.is_a2a():
             # All-to-all path: collect only needed remote embeddings.
             with record_function("a2a_collect"):
                 x_received = all_to_all_collect(x, gp_ctx)

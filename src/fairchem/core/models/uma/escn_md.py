@@ -1232,8 +1232,8 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             # A2A spatial partitions are non-consecutive, so the
             # gathered forces are in partition-concatenated order
             # (NOT global index order). Reorder to match positions.
-            gp_ctx = data_dict.get("gp_ctx", None)
-            if gp_ctx is not None:
+            if gp_utils.is_a2a():
+                gp_ctx = data_dict["gp_ctx"]
                 ra = gp_ctx.rank_assignments
                 ws = gp_utils.get_gp_world_size()
                 perm = torch.cat(
