@@ -635,9 +635,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
 
             graph_dict = generate_graph(
                 data_dict,
