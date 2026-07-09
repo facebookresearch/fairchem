@@ -169,10 +169,6 @@ def get_gp_config() -> GraphParallelConfig | None:
     return _GP_CONFIG
 
 
-def is_a2a() -> bool:
-    return _GP_CONFIG is not None and _GP_CONFIG.mode == "all_to_all"
-
-
 def get_dp_group():
     return _DATA_PARALLEL_GROUP
 

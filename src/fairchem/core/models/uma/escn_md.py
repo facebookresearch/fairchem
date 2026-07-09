@@ -596,7 +596,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             atomic_numbers_full = data_dict["atomic_numbers_full"]
             gp_config = gp_utils.get_gp_config()
 
-            if gp_utils.is_a2a():
+            if gp_config.mode == "all_to_all":
                 # All-to-all: compute rank_assignments FIRST, then derive
                 # node_partition from them.  This ensures the
                 # graph-generation partition and the GPContext partition
@@ -693,7 +693,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
 
             # Build GPContext for all-to-all communication
-            if gp_utils.is_a2a():
+            if gp_config.mode == "all_to_all":
                 with record_function("a2a_build_gp_context"):
                     gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],
@@ -1209,7 +1209,7 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             # A2A spatial partitions are non-consecutive, so the
             # gathered forces are in partition-concatenated order
             # (NOT global index order). Reorder to match positions.
-            if gp_utils.is_a2a():
+            if gp_utils.get_gp_config().mode == "all_to_all":
                 gp_ctx = data_dict["gp_ctx"]
                 ra = gp_ctx.rank_assignments
                 ws = gp_utils.get_gp_world_size()

@@ -139,7 +139,7 @@ class Edgewise(torch.nn.Module):
                 If None, defaults to ``edge_index[1]`` (no GP).
         """
         if gp_utils.initialized():
-            if gp_utils.is_a2a():
+            if gp_utils.get_gp_config().mode == "all_to_all":
                 with record_function("a2a_collect"):
                     x_received = all_to_all_collect(x, gp_ctx)
                     x_full = torch.cat([x, x_received], dim=0)
