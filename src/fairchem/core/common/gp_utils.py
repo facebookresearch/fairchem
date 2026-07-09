@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import threading
-from enum import Enum
+from dataclasses import dataclass
 
 import torch
 from torch import distributed as dist
@@ -28,12 +28,14 @@ _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
 
 
-class GPMode(Enum):
-    ALLGATHER = "allgather"
-    ALL_TO_ALL = "all_to_all"
+@dataclass
+class GraphParallelConfig:
+    group_size: int = 1
+    mode: str = "allgather"
+    partition: str = "index_split"
 
 
-_GP_MODE: GPMode | None = None
+_GP_CONFIG: GraphParallelConfig | None = None
 
 _tls = threading.local()
 
@@ -142,7 +144,7 @@ def setup_gp(config) -> None:
 def cleanup_gp() -> None:
     global _DATA_PARALLEL_GROUP
     global _GRAPH_PARALLEL_GROUP
-    global _GP_MODE
+    global _GP_CONFIG
     assert _GRAPH_PARALLEL_GROUP is not None
     assert _DATA_PARALLEL_GROUP is not None
     with contextlib.suppress(ValueError):
@@ -151,24 +153,24 @@ def cleanup_gp() -> None:
         dist.destroy_process_group(_GRAPH_PARALLEL_GROUP)
     _DATA_PARALLEL_GROUP = None
     _GRAPH_PARALLEL_GROUP = None
-    _GP_MODE = None
+    _GP_CONFIG = None
 
 
 def initialized() -> bool:
     return _GRAPH_PARALLEL_GROUP is not None
 
 
-def set_gp_mode(mode: GPMode) -> None:
-    global _GP_MODE
-    _GP_MODE = mode
+def set_gp_config(config: GraphParallelConfig) -> None:
+    global _GP_CONFIG
+    _GP_CONFIG = config
 
 
-def get_gp_mode() -> GPMode | None:
-    return _GP_MODE
+def get_gp_config() -> GraphParallelConfig | None:
+    return _GP_CONFIG
 
 
 def is_a2a() -> bool:
-    return _GP_MODE == GPMode.ALL_TO_ALL
+    return _GP_CONFIG is not None and _GP_CONFIG.mode == "all_to_all"
 
 
 def get_dp_group():

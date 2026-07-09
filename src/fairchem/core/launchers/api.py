@@ -15,6 +15,7 @@ from typing import Optional
 
 import clusterscope
 
+from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.common.utils import (
     StrEnum,
     get_commit_hash,
@@ -143,12 +144,32 @@ class JobConfig:
     metadata: Optional[Metadata] = (
         None  # omegaconf in python 3.9 does not backport annotations
     )
+    # Deprecated: use graph_parallel instead
     graph_parallel_group_size: Optional[int] = None
+    graph_parallel: GraphParallelConfig = field(
+        default_factory=lambda: GraphParallelConfig()
+    )
     # disable this if you want to lazily instantiate the runner later (for example: have a worker perform the instantiation after distributed env setup in SPMDWorker)
     recursive_instantiate_runner: bool = True
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
+        if self.graph_parallel_group_size is not None:
+            import warnings
+
+            warnings.warn(
+                "graph_parallel_group_size is deprecated, use graph_parallel instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if self.graph_parallel.group_size > 1:
+                raise ValueError(
+                    "Cannot specify both graph_parallel_group_size and "
+                    "graph_parallel.group_size. Use graph_parallel only."
+                )
+            self.graph_parallel = GraphParallelConfig(
+                group_size=self.graph_parallel_group_size
+            )
         try:
             cluster = clusterscope.cluster()
         except RuntimeError:

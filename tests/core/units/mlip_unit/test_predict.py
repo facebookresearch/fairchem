@@ -35,6 +35,7 @@ from ase.data import chemical_symbols
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.common import distutils
+from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
@@ -233,17 +234,13 @@ def _test_parallel_predict_unit_impl(
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
 
-    overrides = None
-    if gp_mode is not None:
-        overrides = {"backbone": gp_mode}
-
     seed_everywhere(seed)
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
-        overrides=overrides,
+        gp_config=gp_mode,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -280,12 +277,12 @@ def _test_parallel_predict_unit_impl(
         (1, False, 3, None),
         (1, True, 3, None),
         (2, False, 3, None),
-        (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
         (
             2,
             False,
             2,
-            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+            GraphParallelConfig(mode="all_to_all", partition="index_split"),
         ),
     ],
 )
@@ -306,17 +303,17 @@ def test_parallel_predict_unit_cpu(
         (1, True, 2, None),
         (1, True, 3, None),
         (1, False, 3, None),
-        (1, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
+        (1, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
         (
             1,
             False,
             2,
-            {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+            GraphParallelConfig(mode="all_to_all", partition="index_split"),
         ),
         # For local 8-GPU runs: uncomment to test multi-worker GPU GP
         # (2, False, 2, None),
-        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"}),
-        # (2, False, 2, {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"}),
+        # (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        # (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="index_split")),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
@@ -372,16 +369,12 @@ def _test_parallel_predict_unit_batch_impl(
     atomic_data = atomicdata_list_to_batch([h2o_data, o_data])
     seed_everywhere(seed)
 
-    overrides = None
-    if gp_mode is not None:
-        overrides = {"backbone": gp_mode}
-
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
-        overrides=overrides,
+        gp_config=gp_mode,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -417,7 +410,7 @@ def _test_parallel_predict_unit_batch_impl(
         (
             2,
             False,
-            {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"},
+            GraphParallelConfig(mode="all_to_all", partition="spatial"),
         ),
     ],
 )
@@ -1105,9 +1098,9 @@ def test_batch_server_predict_unit_multiple_systems(
     [
         None,  # default allgather + index_split
         # A2A + spatial — tests multi-step MD with spatial repartitioning
-        {"use_all_to_all_gp": True, "gp_partition_strategy": "spatial"},
+        GraphParallelConfig(mode="all_to_all", partition="spatial"),
         # A2A + index_split — tests A2A with contiguous partitioning
-        {"use_all_to_all_gp": True, "gp_partition_strategy": "index_split"},
+        GraphParallelConfig(mode="all_to_all", partition="index_split"),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
@@ -1209,9 +1202,6 @@ def test_merge_mole_md_consistency(
             "stresses": np.array(stresses),
         }
 
-    # Build overrides for GP mode
-    overrides = {"backbone": gp_mode} if gp_mode is not None else None
-
     # Trial A: no merge
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
     predict_unit_A = get_predict_unit_for_test(
@@ -1219,7 +1209,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
-        overrides=overrides,
+        gp_config=gp_mode,
     )
     calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
     results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
@@ -1231,7 +1221,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
-        overrides=overrides,
+        gp_config=gp_mode,
     )
     calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
     results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
@@ -1244,7 +1234,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_merge,
         workers=workers,
-        overrides=overrides,
+        gp_config=gp_mode,
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)

@@ -315,8 +315,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int = 1,
         execution_mode: str = "general",
-        use_all_to_all_gp: bool = False,
-        gp_partition_strategy: str = "index_split",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -368,28 +366,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
-        self.use_all_to_all_gp = use_all_to_all_gp
-        if self.use_all_to_all_gp:
-            gp_utils.set_gp_mode(gp_utils.GPMode.ALL_TO_ALL)
-        self.gp_partition_strategy = PartitionStrategy(gp_partition_strategy)
-
-        # Allgather+spatial is not supported because allgather concatenates
-        # per-rank tensors in rank order, which only matches global atom order
-        # for contiguous (index_split) partitions.  Spatial partitions are
-        # non-contiguous, so edge_index lookups into the allgathered tensor
-        # would reference wrong atoms.  Spatial partitioning is designed for
-        # A2A where only boundary atoms are exchanged.
-        if (
-            not self.use_all_to_all_gp
-            and self.gp_partition_strategy == PartitionStrategy.SPATIAL
-        ):
-            raise ValueError(
-                "Spatial partitioning is not supported with all-gather GP. "
-                "Allgather concatenates per-rank tensors in rank order, which "
-                "only matches global atom order for contiguous (index_split) "
-                "partitions. Use use_all_to_all_gp=True with spatial, or "
-                "gp_partition_strategy='index_split' with allgather."
-            )
 
         self.backend = get_execution_backend(execution_mode)
 
@@ -618,8 +594,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
+            gp_config = gp_utils.get_gp_config()
 
-            if self.use_all_to_all_gp:
+            if gp_utils.is_a2a():
                 # All-to-all: compute rank_assignments FIRST, then derive
                 # node_partition from them.  This ensures the
                 # graph-generation partition and the GPContext partition
@@ -632,7 +609,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     device=atomic_numbers_full.device,
                     world_size=gp_utils.get_gp_world_size(),
                     rank=gp_utils.get_gp_rank(),
-                    strategy=self.gp_partition_strategy,
+                    strategy=PartitionStrategy(gp_config.partition),
                 )
             else:
                 # All-gather: only supports contiguous (index_split)
@@ -716,7 +693,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
 
             # Build GPContext for all-to-all communication
-            if self.use_all_to_all_gp:
+            if gp_utils.is_a2a():
                 with record_function("a2a_build_gp_context"):
                     gp_ctx = build_gp_context(
                         edge_index=graph_dict["edge_index"],

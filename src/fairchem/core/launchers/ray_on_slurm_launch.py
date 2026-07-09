@@ -43,7 +43,7 @@ class SPMDWorker:
         worker_id: int,
         world_size: int,
         device: str,
-        gp_size: int | None = None,
+        gp_config=None,
         master_addr: str | None = None,
         master_port: int | None = None,
     ):
@@ -55,7 +55,7 @@ class SPMDWorker:
         self.master_port = get_free_port() if master_port is None else master_port
         self.worker_id = worker_id
         self.device = device
-        self.gp_size = gp_size
+        self.gp_config = gp_config
         self.world_size = world_size
         self.job_config = job_config
         setup_env_vars()
@@ -68,7 +68,7 @@ class SPMDWorker:
         master_address: str,
         master_port: int,
         device: str,
-        gp_size: int | None,
+        gp_config=None,
     ):
         setup_env_local_multi_gpu(worker_id, master_port, master_address)
         assign_device_for_local_rank(device == "cpu", 0)
@@ -78,8 +78,9 @@ class SPMDWorker:
             rank=worker_id,
             world_size=world_size,
         )
-        if gp_size is not None:
-            gp_utils.setup_graph_parallel_groups(gp_size, backend)
+        if gp_config is not None and gp_config.group_size > 1:
+            gp_utils.setup_graph_parallel_groups(gp_config.group_size, backend)
+            gp_utils.set_gp_config(gp_config)
 
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
@@ -93,7 +94,7 @@ class SPMDWorker:
                 master_address=self.master_address,
                 master_port=self.master_port,
                 device=self.device,
-                gp_size=self.gp_size,
+                gp_size=self.gp_config,
             )
             self.runner: Runner = hydra.utils.instantiate(self.runner_config)
             self.runner.job_config = self.job_config
@@ -110,7 +111,7 @@ class SPMDController(Runner):
         self.world_size = (
             job_config.scheduler.num_nodes * job_config.scheduler.ranks_per_node
         )
-        self.gp_group_size = job_config.graph_parallel_group_size
+        self.gp_config = job_config.graph_parallel
         self.ranks_per_node = job_config.scheduler.ranks_per_node
         self.num_nodes = job_config.scheduler.num_nodes
         num_gpus_per_group = (
@@ -141,7 +142,7 @@ class SPMDController(Runner):
             0,
             self.world_size,
             self.device,
-            self.gp_group_size,
+            self.gp_config,
             None,
             None,
         )
@@ -173,7 +174,7 @@ class SPMDController(Runner):
                     pg_idx * self.ranks_per_node + gpu_rank_on_node,
                     self.world_size,
                     self.device,
-                    self.gp_group_size,
+                    self.gp_config,
                     master_addr,
                     master_port,
                 )
