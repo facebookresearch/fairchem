@@ -576,8 +576,8 @@ class MLIPWorkerLocal:
             rank=self.worker_id,
             world_size=self.world_size,
         )
-        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
         if self.gp_config is not None:
+            gp_utils.setup_graph_parallel_groups(self.world_size, backend)
             gp_utils.set_gp_config(self.gp_config)
         self.predict_unit = hydra.utils.instantiate(self.predictor_config)
         self.device = get_device_for_local_rank()
