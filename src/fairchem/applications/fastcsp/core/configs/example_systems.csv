@@ -1,29 +1,39 @@
-name,conformers_path,refcode
-ACETAC,ACETAC03_mol.xyz,ACETAC
-AXOSOW,AXOSOW01_mol.xyz,AXOSOW01
-BOQQUT,BOQQUT_mol.xyz,BOQQUT
-BOQWIN,BOQWIN_mol.xyz,BOQWIN
-CAPRYL,CAPRYL_mol.xyz,CAPRYL
-CEBYUD,CEBYUD_mol.xyz,CEBYUD
-CILJIQ,CILJIQ_mol.xyz,"CILJIQ,CILJIQ01"
-CUMJOJ,CUMJOJ_mol.xyz,CUMJOJ
-DEZDUH,DEZDUH_mol.xyz,DEZDUH
-DOHFEM,DOHFEM_mol.xyz,DOHFEM
-GACGAU,GACGAU_mol.xyz,GACGAU
-GLYCIN,GLYCIN20_mol.xyz,"GLYCIN20,GLYCIN32,GLYCIN68,GLYCIN16,GLYCIN67"
-GOLHIB,GOLHIB_mol.xyz,GOLHIB
-GUFJOG,GUFJOG_mol.xyz,GUFJOG
-HURYUQ,HURYUQ_mol.xyz,HURYUQ
-IHEPUG,IHEPUG_mol.xyz,"IHEPUG02,IHEPUG"
-IMAZOL,IMAZOL06_mol.xyz,"IMAZOL06,IMAZOL25"
-LECZOL,LECZOL_mol.xyz,LECZOL
-NACJAF,NACJAF_mol.xyz,NACJAF
-NICOAM,NICOAM03_mol.xyz,"NICOAM03,NICOAM17"
-OBEQOD,OBEQOD_mol.xyz,OBEQOD
-OBEQUJ,OBEQUJ_mol.xyz,OBEQUJ
-PAHYON,PAHYON01_mol.xyz,PAHYON01
-ROHBUL,ROHBUL_mol.xyz,ROHBUL
-SOXLEX,SOXLEX01_mol.xyz,SOXLEX01
-UMIMIO,UMIMIO_mol.xyz,UMIMIO
-WEXREY,WEXREY_mol.xyz,WEXREY
-XULDUD,XULDUD_mol.xyz,"XULDUD01,XULDUD"
+subset,name,refcode,z,spg
+semi-rigid,ACETAC,ACETAC,"[1,2,3,4,6,8]","standard"
+semi-rigid,AXOSOW,AXOSOW01,"[1,2,3,4,6,8]","standard"
+semi-rigid,BOQQUT,BOQQUT,"[1,2,3,4,6,8]","standard"
+semi-rigid,BOQWIN,BOQWIN,"[1,2,3,4,6,8]","standard"
+semi-rigid,CAPRYL,CAPRYL,"[1,2,3,4,6,8]","standard"
+semi-rigid,CEBYUD,CEBYUD,"[1,2,3,4,6,8]","standard"
+semi-rigid,CILJIQ,"CILJIQ,CILJIQ01","[1,2,3,4,6,8]","standard"
+semi-rigid,CUMJOJ,CUMJOJ,"[1,2,3,4,6,8]","standard"
+semi-rigid,DEZDUH,DEZDUH,"[1,2,3,4,6,8]","standard"
+semi-rigid,DOHFEM,DOHFEM,"[1,2,3,4,6,8]","standard"
+semi-rigid,GACGAU,GACGAU,"[1,2,3,4,6,8]","standard"
+semi-rigid,GLYCIN,"GLYCIN20,GLYCIN32,GLYCIN68,GLYCIN16,GLYCIN67","[1,2,3,4,6,8]","standard"
+semi-rigid,GOLHIB,GOLHIB,"[1,2,3,4,6,8]","standard"
+semi-rigid,GUFJOG,GUFJOG,"[1,2,3,4,6,8]","standard"
+semi-rigid,HURYUQ,HURYUQ,"[1,2,3,4,6,8]","standard"
+semi-rigid,IHEPUG,IHEPUG,"[1,2,3,4,6,8]","standard"
+semi-rigid,IMAZOL,"IMAZOL06,IMAZOL25","[1,2,3,4,6,8]","standard"
+semi-rigid,LECZOL,LECZOL,"[1,2,3,4,6,8]","standard"
+semi-rigid,NACJAF,NACJAF,"[1,2,3,4,6,8]","standard"
+semi-rigid,NICOAM,"NICOAM03,NICOAM07,NICOAM17","[1,2,3,4,6,8]","standard"
+semi-rigid,OBEQOD,OBEQOD,"[1,2,3,4,6,8]","standard"
+semi-rigid,OBEQUJ,OBEQUJ,"[1,2,3,4,6,8]","standard"
+semi-rigid,PAHYON,PAHYON01,"[1,2,3,4,6,8]","standard"
+semi-rigid,ROHBUL,ROHBUL,"[1,2,3,4,6,8]","standard"
+semi-rigid,SOXLEX,SOXLEX01,"[1,2,3,4,6,8]","standard"
+semi-rigid,UMIMIO,UMIMIO,"[1,2,3,4,6,8]","standard"
+semi-rigid,WEXREY,WEXREY,"[1,2,3,4,6,8]","standard"
+semi-rigid,XULDUD,"XULDUD01,XULDUD","[1,2,3,4,6,8]","standard"
+flexible,BEDMIG,"BEDMIG01,BEDMIG08,BEDMIG03,BEDMIG06,BEDMIG05,BEDMIG19","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9, 60]]"
+flexible,BISMEV,"BISMEV05,BISMEV11,BISMEV02,BISMEV04","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,BIYSEH,"BIYSEH08,BIYSEH03,BIYSEH05,BIYSEH07,BIYSEH17","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9, 29]]"
+flexible,HAMTIZ,HAMTIZ01,"[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,OBEQET,OBEQET,"[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,QAXMEH,"QAXMEH32,QAXMEH03,QAXMEH05,QAXMEH59,QAXMEH60,QAXMEH81,QAXMEH01,QAXMEH53,QAXMEH04,QAXMEH12","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,UJIRIO,"UJIRIO,UJIRIO05","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,UNOGIN,"UNOGIN04,UNOGIN03,UNOGIN06,UNOGIN05","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,WIDBAO,WIDBAO,"[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"
+flexible,ZEHFUR,"ZEHFUR,ZEHFUR02_Amaj,ZEHFUR02_Amin","[1,2,3,4,6,8]","[[14, 2, 19, 4, 15, 61, 33, 1, 5, 9]]"

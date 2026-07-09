@@ -1,0 +1,167 @@
+# FastCSP end-to-end example config
+#
+# Runs all 7 stages against 2 molecular crystals from the JACS test set --
+# XULDUD (semi-rigid) and WIDBAO (flexible) -- starting from the
+# SMILES-derived conformers produced by ``confgen_config.yaml``. Sized for
+# a smoke test (50 structures per space group instead of production's 500).
+#
+# Run:
+#   fastcsp -c example/fastcsp_config.yaml \
+#           -s generate process_generated relax \
+#              compute_conformer_corrections filter evaluate compute_free_energy
+#
+# Replace <PROJECT_ROOT>, <PATH_TO_GENARRIS>, <PATH_TO_CSD_PYTHON>, and
+# <YOUR_PARTITION> with values for your setup. <PROJECT_ROOT> should be
+# the same one you used for ``confgen_config.yaml`` so this workflow can
+# find ``<PROJECT_ROOT>/conformers/<name>/*.xyz``.
+
+root: <PROJECT_ROOT>
+
+molecules: molecules.csv   # resolved relative to this config file
+
+# ---------------------------------------------------------------------------
+# Stage 1: Genarris structure generation
+# ---------------------------------------------------------------------------
+genarris:
+  mpi_launcher: <PATH_TO_MPIRUN>                    # e.g. /public/apps/openmpi/.../bin/mpirun
+  python_cmd: <PATH_TO_GENARRIS>/bin/python         # env with Genarris installed
+  genarris_cli: <PATH_TO_GENARRIS>/cli.py
+  genarris_base_config: genarris_base.conf          # sibling file in this dir
+  # (Optional) Compute-node environment setup, prepended to every slurm.sh
+  # env_setup:
+  #   - "source /etc/profile.d/modules.sh || true"
+  #   - "module load openmpi/3.1.1/gcc.7.3.0"
+  # mpi_extra_args: "--oversubscribe --bind-to none --mca btl self,vader,tcp"
+  vars:
+    num_structures_per_spg: 10    # small-scale smoke test; use 500+ in production
+    read_z_from_file: true        # per-molecule Z from molecules.csv
+    read_spg_from_file: true      # per-molecule spg from molecules.csv
+  slurm:
+    job-name: example_genarris
+    nodes: 1
+    ntasks-per-node: 20
+    time: 240
+    # partition: <YOUR_PARTITION>
+
+# ---------------------------------------------------------------------------
+# Stage 2: Pre-relaxation deduplication of Genarris outputs
+# ---------------------------------------------------------------------------
+pre_relaxation_filter:
+  assign_groups: true
+  remove_duplicates: true
+  ltol: 0.3
+  stol: 0.4
+  angle_tol: 5
+  bin_by_conf: true
+  bin_by_z: true
+  bin_by_spg: true
+  density_tol: 0.05             # cheap |Δρ| prefilter before sm.fit
+  npartitions: 1               # SLURM array size
+  slurm:
+    job-name: example_pre_relax_dedup
+    cpus_per_task: 1
+    mem_gb: 100
+    time: 240
+    # partition: <YOUR_PARTITION>
+
+# ---------------------------------------------------------------------------
+# Stage 3: ML relaxation with UMA
+# ---------------------------------------------------------------------------
+relax:
+  calculator: uma_sm_1p1_omc    # RECOMMENDED for organic molecular crystals
+  optimizer: BFGS
+  fmax: 0.01
+  max_steps: 1000
+  fix_symmetry: false
+  relax_cell: true
+  write_traj: false
+  slurm:
+    num_ranks: 1              # 1 GPU tasks
+    array_parallelism: 1
+    timeout_min: 240
+    # partition: <YOUR_PARTITION>
+
+# ---------------------------------------------------------------------------
+# Stage 4 (optional): Per-conformer fragment energy corrections
+# ---------------------------------------------------------------------------
+# Two-level: single-point with the relax calculator + a corrector calculator
+# on each PBC-unwrapped molecule, then energy_corrected = energy_relaxed
+# - sum_z E_original + sum_z E_corrector. Rewrites raw_structures/ in place.
+conformer_corrections:
+  corrector_calculator: uma_sm_1p1_omol   # gas-phase molecular task
+  separate_output: false
+  slurm:
+    num_ranks: 20
+    timeout_min: 240
+    # partition: <YOUR_PARTITION>
+
+# ---------------------------------------------------------------------------
+# Stage 5: Post-relaxation filtering + deduplication
+# ---------------------------------------------------------------------------
+post_relaxation_filter:
+  remove_problematic: true      # drop non-converged / connectivity-changed
+  assign_groups: true
+  remove_duplicates: true
+  energy_cutoff: 20             # kJ/mol above the global minimum
+  density_min_cutoff: 0.5
+  density_max_cutoff: 3.0
+  ltol: 0.2
+  stol: 0.3
+  angle_tol: 5
+  slurm:
+    job-name: example_post_relax_dedup
+    cpus_per_task: 40
+    mem_gb: 100
+    time: 240
+    # partition: <YOUR_PARTITION>
+
+# ---------------------------------------------------------------------------
+# Stage 6 (optional): Experimental structure evaluation
+# ---------------------------------------------------------------------------
+# Compare against experimental crystals. Set target_xtals_dir to a directory
+# of {refcode}.cif files (XULDUD + WIDBAO here need XULDUD.cif, XULDUD01.cif,
+# WIDBAO.cif). Or drop this whole block if you don't have experimental
+# references.
+evaluate:
+  target_xtals_dir: <PATH_TO_EXPERIMENTAL_CIFS>
+  method: pymatgen              # "pymatgen" (no license) or "csd" (needs CCDC API)
+  pymatgen:
+    match_params:
+      ltol: 0.2
+      stol: 0.3
+      angle_tol: 5
+    slurm:
+      job-name: example_eval_pymatgen
+      cpus_per_task: 20
+      mem_gb: 50
+      time: 240
+      # partition: <YOUR_PARTITION>
+  # csd:
+  #   python_cmd: <PATH_TO_CSD_PYTHON>/bin/python   # env with CSD API installed
+  #   num_cpus: 40
+
+# ---------------------------------------------------------------------------
+# Stage 7 (optional): Vibrational free energies (quasi-harmonic)
+# ---------------------------------------------------------------------------
+free_energy:
+  calculator: uma_sm_1p1_omc
+  input_directory: filtered_structures   # default; every filtered structure
+  match_only: false                      # set true (+ input_directory: matched_structures)
+                                         # to restrict to experiment-matched only
+  quasiharmonic: true
+  t_min: 0
+  t_max: 500
+  t_step: 10
+  structures_per_job: 5
+  compute_dos: false
+  slurm:
+    job-name: example_free_energy
+    gpus_per_node: 1
+    cpus_per_task: 10
+    mem_gb: 50
+    time: 480
+    # partition: <YOUR_PARTITION>
+
+logging:
+  level: INFO
+  console: true
