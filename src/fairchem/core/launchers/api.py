@@ -155,21 +155,25 @@ class JobConfig:
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
         if self.graph_parallel_group_size is not None:
-            import warnings
-
-            warnings.warn(
-                "graph_parallel_group_size is deprecated, use graph_parallel instead",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if self.graph_parallel.group_size > 1:
+            if (
+                self.graph_parallel.group_size > 1
+                and self.graph_parallel.group_size != self.graph_parallel_group_size
+            ):
                 raise ValueError(
                     "Cannot specify both graph_parallel_group_size and "
-                    "graph_parallel.group_size. Use graph_parallel only."
+                    "graph_parallel.group_size with different values. Use graph_parallel only."
                 )
-            self.graph_parallel = GraphParallelConfig(
-                group_size=self.graph_parallel_group_size
-            )
+            if self.graph_parallel.group_size <= 1:
+                import warnings
+
+                warnings.warn(
+                    "graph_parallel_group_size is deprecated, use graph_parallel instead",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                self.graph_parallel = GraphParallelConfig(
+                    group_size=self.graph_parallel_group_size
+                )
         try:
             cluster = clusterscope.cluster()
         except RuntimeError:
