@@ -20,7 +20,7 @@ genarris:
   mpi_launcher: /path/to/mpirun                       # MPI launcher: mpirun, srun, or custom path
   python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
   genarris_cli: /path/to/genarris_cli.py              # Path to Genarris cli script
-  genarris_base_config: configs/gnrs_base.conf        # Base Genarris configuration template
+  genarris_base_config: configs/genarris_base.conf    # Base Genarris configuration template
   # Structure generation parameters
   vars:
     Z: [1, 2, 3, 4, 6, 8]            # default [1]; ignored when read_z_from_file=true
@@ -93,7 +93,33 @@ relax:
     # time: 1000             # default 1000
 
 # ---------------------------------------------------------------------------
-# Stage 4: Post-relaxation filtering + deduplication
+# Stage 4 (optional): Per-conformer fragment energy corrections
+# ---------------------------------------------------------------------------
+# Extracts each PBC-unwrapped molecule from ``cif_relaxed`` and runs a
+# single-point energy with (a) the ``original_calculator`` used for relax
+# and (b) the ``corrector_calculator``. Writes ``energy_corrected`` and
+# related columns into the parquets (in place by default) via:
+#     energy_corrected = energy_relaxed - sum_z E_original + sum_z E_corrector
+# Enabled by adding ``compute_conformer_corrections`` to ``--stages``.
+conformer_corrections:
+  corrector_calculator: uma_sm_1p1_omol  # required; single UMA calculator key
+                                          # (see CHECKPOINTS in relax.py)
+  # original_calculator: uma_sm_1p1_omc   # (optional) defaults to relax.calculator
+  separate_output: false                  # (default false) if true, write corrected
+                                          # parquets under a mirrored subdir
+                                          # ``raw_conformer_corrected_structures/``
+                                          # instead of rewriting in place
+  slurm:
+    num_ranks: 32                         # number of independent correction tasks
+    # job-name: conformer_corrections     # default "conformer_corrections"
+    # gpus_per_node: 1                    # default 1
+    # cpus_per_task: 10                   # default 10
+    # mem_gb: 50                          # default 50
+    # time: 1000                          # default 1000
+    # array_parallelism: 8                # (optional) SLURM array parallelism cap
+
+# ---------------------------------------------------------------------------
+# Stage 5: Post-relaxation filtering + deduplication
 # ---------------------------------------------------------------------------
 post_relaxation_filter:
   # Property-based filtering
@@ -134,7 +160,7 @@ post_relaxation_filter:
     time: 1000
 
 # ---------------------------------------------------------------------------
-# Stage 5 (optional): Experimental structure evaluation
+# Stage 6 (optional): Experimental structure evaluation
 # ---------------------------------------------------------------------------
 evaluate:
   # Source of experimental crystals (use one of the two)
@@ -160,14 +186,20 @@ evaluate:
       time: 1000               # default 1000
 
 # ---------------------------------------------------------------------------
-# Stage 6 (optional, in development): Vibrational free energy corrections
+# Stage 7 (optional): Vibrational free energy corrections
 # ---------------------------------------------------------------------------
 # Enabled by adding ``compute_free_energy`` to ``--stages``. Reads the
-# matched parquet from the evaluate stage (``relax/.../matched_structures/``)
-# and writes per-structure thermo to ``relax/.../free_energy/``.
+# parquets under ``relax/.../<input_directory>/`` and writes per-structure
+# thermo to ``relax/.../free_energy/``.
 free_energy:
   calculator: uma_sm_1p1_omc   # UMA calculator key (must match a CHECKPOINTS entry
                                # in relax.py). Default uma_sm_1p1_omc.
+  # Input source (relative to relax_output_dir).
+  input_directory: filtered_structures  # default; the full filtered energy landscape.
+                                        # Set to ``matched_structures`` to restrict to the
+                                        # evaluate stage's output (required if you enable
+                                        # ``match_only`` below, since the ``match`` column
+                                        # is only written by evaluate).
   quasiharmonic: true          # quasi-harmonic approximation (volume sweep). Default true
   atom_disp: 0.01              # finite-difference displacement (Å). Default 0.01
   min_lengths: 15.0            # minimum supercell side length (Å) for phonon calc. Default 15.0
@@ -176,8 +208,11 @@ free_energy:
   t_max: 500                   # default 500
   t_step: 10                   # default 10
   # Workload selection / batching
-  match_only: true             # only structures matched to experiment by ``evaluate``.
-                               # Default true. Set false to run on all filtered structures.
+  match_only: false            # default false: run on every structure in ``input_directory``.
+                               # Set true to only run on structures matched to experiment;
+                               # requires ``input_directory`` to point at a source with the
+                               # ``match`` column (i.e. ``matched_structures``). Otherwise
+                               # the stage raises KeyError up front.
   energy_cutoff: null          # kJ/mol above the global minimum; null = no cutoff
   max_structures: null         # cap on structures per molecule; null = no cap
   structures_per_job: 10       # rows per SLURM task. Default 10

@@ -66,8 +66,45 @@ class SlurmConfig:
 
 
 @dataclass
+class RayMetricsConfig:
+    # Opt-in: start Prometheus + Grafana on the Ray head so the dashboard
+    # "Metrics" tab shows resource/training metrics. Off by default.
+    enabled: bool = False
+    # Explicit opt-in to download missing Prometheus/Grafana binaries from the
+    # internet on the head node. Never happens unless set to True.
+    auto_download: bool = False
+    # Binary discovery: None -> search PATH. Set to override with an explicit path.
+    prometheus_binary: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    grafana_binary: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    # Grafana needs its install "homepath" (dir containing public/, conf/).
+    # None -> auto-detect from the binary / conda / system locations.
+    grafana_homepath: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    # Ports: None -> auto-assign a free port. Pin for stable SSH tunnels.
+    prometheus_port: Optional[int] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    grafana_port: Optional[int] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    # Browser-facing Grafana URL for the dashboard's embedded iframes
+    # (RAY_GRAFANA_IFRAME_HOST). None -> http://localhost:<grafana_port>.
+    grafana_iframe_host: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    prometheus_retention: str = "15d"
+    scrape_interval: str = "5s"
+
+
+@dataclass
 class RayClusterConfig:
     head_gpus: int = 0
+    metrics: RayMetricsConfig = field(default_factory=lambda: RayMetricsConfig())
 
 
 @dataclass

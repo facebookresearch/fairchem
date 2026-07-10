@@ -72,6 +72,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -183,6 +189,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -290,6 +299,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -369,6 +384,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -446,6 +464,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 

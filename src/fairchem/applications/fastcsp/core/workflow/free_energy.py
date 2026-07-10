@@ -84,10 +84,15 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "t_max": fe_config.get("t_max", 500),
         "t_min": fe_config.get("t_min", 0),
         "structures_per_job": fe_config.get("structures_per_job", 10),
-        "match_only": fe_config.get("match_only", True),
+        "match_only": fe_config.get("match_only", False),
         "energy_cutoff": fe_config.get("energy_cutoff", None),
         "max_structures": fe_config.get("max_structures", None),
         "compute_dos": fe_config.get("compute_dos", False),
+        # Default to filtered_structures/ so the stage does not depend on the
+        # optional evaluate stage. If a user opts into ``match_only=True``,
+        # ``filter_structure_indices`` raises a clear error when the input
+        # parquets lack a ``match`` column (i.e. the eval stage never ran on
+        # them).
         "input_directory": fe_config.get("input_directory", "filtered_structures"),
         "slurm": fe_config.get("slurm", {}),
     }
@@ -404,6 +409,15 @@ def filter_structure_indices(
     match_only = fe_config.get("match_only", True)
     energy_cutoff = fe_config.get("energy_cutoff")
     max_structures = fe_config.get("max_structures")
+
+    if match_only and "match" not in structures_df.columns:
+        raise KeyError(
+            "free_energy.match_only=true but the input parquet has no 'match' "
+            "column. The 'match' column is written only by the ``evaluate`` "
+            "stage. Either set free_energy.input_directory to a source that "
+            "has been through evaluate (e.g. 'matched_structures') or set "
+            "free_energy.match_only=false to run on all structures."
+        )
 
     if not match_only and energy_cutoff is None and max_structures is None:
         return list(range(len(structures_df)))
