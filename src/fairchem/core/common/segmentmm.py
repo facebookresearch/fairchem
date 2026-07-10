@@ -3,8 +3,8 @@ Driver for the DGL ``segment_mm`` operation using nvmath cuBLAS bindings.
 
 This module provides a torch-autograd-compatible ``segment_mm`` function
 whose signature matches the historical ``fairchem_cpp.ops.segment_mm``
-op (``A, B, seglen_A``). It is the runtime backend used by ``MOLEDGL``
-when ``mole_layer_type=dgl`` is requested via the model config.
+op (``A, B, seglen_A``). It is the runtime backend used by ``MOLEDGL`` when
+the ``moe_layer_type=nvmath`` backend is requested via the model config.
 
 Two cuBLAS dispatch paths are exposed:
 

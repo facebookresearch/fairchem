@@ -841,7 +841,7 @@ class MixedPerfCheckRunner(Runner):
         self.oom_policy = oom_policy
         self.inference_settings = inference_settings
         # Model-construction overrides forwarded to the candidate predict unit
-        # (e.g. {"backbone": {"moe_layer_type": "dgl"}} to exercise the
+        # (e.g. {"backbone": {"moe_layer_type": "nvmath"}} to exercise the
         # nvmath/cuBLAS MOLEDGL path instead of the default pytorch MOLE path).
         # The fp64 accuracy baseline intentionally ignores these so both the
         # baseline and the nvmath candidate are scored against the same gold
@@ -1213,7 +1213,7 @@ class GridPerfCheckRunner(Runner):
         self.seed = int(seed)
         self.use_grouped_gemm = bool(use_grouped_gemm)
         self.check_accuracy = bool(check_accuracy)
-        # Candidate model overrides (e.g. {"backbone": {"moe_layer_type": "dgl"}}).
+        # Candidate model overrides (e.g. {"backbone": {"moe_layer_type": "nvmath"}}).
         # Normalized to plain Python so the run report stays JSON-serializable.
         if OmegaConf.is_config(overrides):
             overrides = OmegaConf.to_container(overrides, resolve=True)
@@ -1273,15 +1273,20 @@ class GridPerfCheckRunner(Runner):
             )
 
             checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
+        # Select grouped vs looped GEMM through the backbone config (not a module
+        # global): the MOLEDGL backends read moe_use_grouped_gemm at construction.
+        overrides = dict(self.overrides) if self.overrides else {}
+        backbone = dict(overrides.get("backbone", {}))
+        backbone["moe_use_grouped_gemm"] = self.use_grouped_gemm
+        overrides["backbone"] = backbone
         return MLIPPredictUnit(
             checkpoint,
             self.device,
-            overrides=self.overrides,
+            overrides=overrides,
             inference_settings=self.inference_settings,
         )
 
     def run(self) -> dict:
-        import fairchem.core.models.uma.nn.mole as mole_mod
         from fairchem.core.datasets.atomic_data import (
             AtomicData,
             atomicdata_list_to_batch,
@@ -1298,6 +1303,7 @@ class GridPerfCheckRunner(Runner):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(self.seed)
 
+        # grouped/looped is selected via backbone overrides in _build_predict_unit.
         predict_unit = self._build_predict_unit()
         atomic_pool = {
             size: [
@@ -1309,8 +1315,6 @@ class GridPerfCheckRunner(Runner):
 
         cells: dict[tuple[int, int], GridCellTiming] = {}
         per_system_errors: dict[str, dict[str, Any]] = {}
-        prev_grouped = mole_mod.USE_GROUPED_GEMM
-        mole_mod.USE_GROUPED_GEMM = self.use_grouped_gemm
         try:
             for size in self.sizes:
                 for batch in self.batches:
@@ -1346,7 +1350,6 @@ class GridPerfCheckRunner(Runner):
                         else:
                             raise
         finally:
-            mole_mod.USE_GROUPED_GEMM = prev_grouped
             del predict_unit
             gc.collect()
             if torch.cuda.is_available():

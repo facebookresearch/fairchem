@@ -13,10 +13,11 @@
 # nvmath grouped cuBLAS, compared against the baseline report:
 #   fairchem -c configs/uma/benchmark/perf_check/grid_benchmark.yaml \
 #     job.run_dir=/checkpoint/ocp/$USER/perf_grid \
-#     '+runner.overrides={backbone:{moe_layer_type:dgl}}' \
+#     '+runner.overrides={backbone:{moe_layer_type:nvmath}}' \
 #     runner.reference_report=/checkpoint/ocp/$USER/perf_grid/<run>/results/grid_benchmark_report.json
 #
 # nvmath looped cuBLAS: add runner.use_grouped_gemm=False
+# compiled fairchem_cpp backend: '+runner.overrides={backbone:{moe_layer_type:fairchem_cpp}}'
 
 defaults:
   - job: local

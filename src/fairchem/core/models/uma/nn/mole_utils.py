@@ -8,17 +8,51 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import functools
+from contextlib import suppress
 
 import torch
 import torch.nn as nn
 
+from fairchem.core.common import segmentmm
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEDGL,
     MOLEGlobals,
     norm_str_to_fn,
+    normalize_mole_layer_type,
 )
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
+
+# Optional compiled backend for the ``fairchem_cpp`` layer type. nvmath is
+# handled separately (segmentmm sets its own ``_HAS_NVMATH``); both are checked
+# at model-construction time in ``_make_segment_mm_fn`` so a missing backend
+# fails fast with a clear message rather than deep inside the forward pass.
+fairchem_cpp_found = False
+with suppress(ModuleNotFoundError):
+    import fairchem_cpp
+
+    fairchem_cpp_found = True
+
+
+def _make_segment_mm_fn(backend: str, use_grouped_gemm: bool):
+    """Bind the per-segment GEMM op ``(A, B, seglen) -> C`` for ``backend``.
+
+    Raises ``ImportError`` at construction time (not a stripped ``assert``) when
+    the selected backend's package is unavailable.
+    """
+    if backend == "fairchem_cpp":
+        if not fairchem_cpp_found:
+            raise ImportError(
+                "moe_layer_type='fairchem_cpp' requires the fairchem_cpp package."
+            )
+        return fairchem_cpp.ops.segment_mm
+    # nvmath
+    if not segmentmm._HAS_NVMATH:
+        raise ImportError(
+            "moe_layer_type='nvmath' requires nvmath-python (pip install "
+            "nvmath-python) and a CUDA-enabled PyTorch build."
+        )
+    return functools.partial(segmentmm.segment_mm, use_grouped_gemm=use_grouped_gemm)
 
 
 class MOLEInterface:
@@ -114,8 +148,16 @@ def replace_linear_with_shared_linear(
 
 
 def replace_MOLE_with_linear(
-    existing_mole_module: MOLE,
+    existing_mole_module,
 ):
+    # Capability guard: only the pytorch ``MOLE`` supports merging into a plain
+    # Linear. MOLEDGL backends have no ``merged_linear_layer``; fail clearly here
+    # in addition to the earlier merge_mole guard in the backbone.
+    if not hasattr(existing_mole_module, "merged_linear_layer"):
+        raise ValueError(
+            "merge_mole is not supported for MOLEDGL backends "
+            "(fairchem_cpp/nvmath); use moe_layer_type='pytorch'."
+        )
     return existing_mole_module.merged_linear_layer()
 
 
@@ -124,6 +166,7 @@ def replace_linear_with_MOLE(
     global_mole_tensors,
     num_experts,
     mole_layer_type,
+    use_grouped_gemm=True,
     cache=None,
 ):
     layer_identifier = (
@@ -134,16 +177,8 @@ def replace_linear_with_MOLE(
     if cache is not None and layer_identifier in cache:
         return cache[layer_identifier]
 
-    if mole_layer_type == "dgl":
-        # dispatch to nvmath+cuBLAS via the segmentmm.py driver
-        layer = MOLEDGL(
-            num_experts=num_experts,
-            global_mole_tensors=global_mole_tensors,
-            in_features=existing_linear_module.in_features,
-            out_features=existing_linear_module.out_features,
-            bias=existing_linear_module.bias is not None,
-        )
-    elif mole_layer_type == "pytorch":
+    mole_layer_type = normalize_mole_layer_type(mole_layer_type)
+    if mole_layer_type == "pytorch":
         layer = MOLE(
             num_experts=num_experts,
             global_mole_tensors=global_mole_tensors,
@@ -151,8 +186,15 @@ def replace_linear_with_MOLE(
             out_features=existing_linear_module.out_features,
             bias=existing_linear_module.bias is not None,
         )
-    else:
-        raise ValueError("mole_layer_type must be pytorch")
+    else:  # "fairchem_cpp" | "nvmath" -> MOLEDGL with a bound segment_mm op
+        layer = MOLEDGL(
+            num_experts=num_experts,
+            global_mole_tensors=global_mole_tensors,
+            in_features=existing_linear_module.in_features,
+            out_features=existing_linear_module.out_features,
+            bias=existing_linear_module.bias is not None,
+            segment_mm_fn=_make_segment_mm_fn(mole_layer_type, use_grouped_gemm),
+        )
     if cache is not None:
         cache[layer_identifier] = layer
     return layer
@@ -170,10 +212,15 @@ def convert_model_to_MOLE_model(
     mole_layer_type: str = "pytorch",
     mole_single: bool = False,
     mole_type: str = "so2",
+    mole_use_grouped_gemm: bool = True,
 ):
     model.num_experts = num_experts
     if model.num_experts == 0:
         return
+
+    # Normalize/validate once per model build (rejects legacy "dgl"); the
+    # per-layer factory below then receives the canonical string.
+    mole_layer_type = normalize_mole_layer_type(mole_layer_type)
 
     model.mole_type = mole_type
 
@@ -227,6 +274,7 @@ def convert_model_to_MOLE_model(
         num_experts=model.num_experts,
         global_mole_tensors=model.global_mole_tensors,
         mole_layer_type=mole_layer_type,
+        use_grouped_gemm=mole_use_grouped_gemm,
         cache={} if mole_single else None,
     )
 
