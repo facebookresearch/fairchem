@@ -168,7 +168,7 @@ class NVEMDRunner(CalculateRunner):
         opt.run(fmax=0.05, steps=1000)
 
         # run MD
-        MaxwellBoltzmannDistribution(atoms, temp * units.kB)
+        MaxwellBoltzmannDistribution(atoms, temperature_K=temp)
         integrator = VelocityVerlet(atoms=atoms, timestep=self.time_step * units.fs)
         logger = MDLogger(
             dyn=integrator,

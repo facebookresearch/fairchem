@@ -5,34 +5,18 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 Structure Conversion, Manipulation, and Validation Utilities for FastCSP
-
-This module provides essential utilities for handling crystal structures throughout
-the FastCSP workflow. It implements efficient conversions between different structure
-representations, validation algorithms for structural integrity, and functions
-for high-throughput crystal structure processing.
-
-Key Features:
-- Structure hashing for efficient comparison and caching
-- Distributed processing support with consistent partitioning
-- Chemical composition validation and bonding analysis
-- Quality control checks for structural integrity
-
-Structure Validation:
-- Atomic composition conservation (Z-number preservation via ``check_correct_z``)
-- Reference-anchored molecular topology check via
-  ``check_molecule_matches_reference``
-
-The module is designed for both individual structure operations and batch processing
-of large crystal structure datasets common in high-throughput materials discovery.
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections import deque
 from typing import TYPE_CHECKING
 
+import ase.io
 import networkx as nx
 import numpy as np
+from ase import Atoms
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
@@ -42,45 +26,37 @@ from scipy.sparse import csgraph
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ase import Atoms
 
-
+# ---------------------------------------------------------------------------
+# Conversion helpers
+# ---------------------------------------------------------------------------
 def cif_to_structure(cif: str) -> Structure | None:
-    """
-    Convert CIF (Crystallographic Information File) string to pymatgen Structure object.
-
-    Args:
-        cif: CIF format string containing crystal structure data
-
-    Returns:
-        Structure object if conversion successful, None if cif is empty/invalid
-    """
+    """Parse a CIF string to a pymatgen ``Structure`` (``None`` if empty/falsy)."""
     return Structure.from_str(cif, fmt="cif") if cif else None
 
 
 def cif_to_atoms(cif: str) -> Atoms | None:
-    """
-    Convert CIF string to ASE Atoms object.
-
-    Args:
-        cif: CIF format string containing crystal structure data
-
-    Returns:
-        ASE Atoms object if conversion successful, None if cif is empty/invalid
-    """
+    """Parse a CIF string to an ASE ``Atoms`` (``None`` if empty/falsy)."""
     return AseAtomsAdaptor.get_atoms(cif_to_structure(cif)) if cif else None
 
 
+def _to_structure(
+    structure_or_atoms: Structure | Atoms | None,
+) -> Structure | None:
+    """Coerce ``None`` / ``Structure`` / ``Atoms`` -> ``Structure`` / ``None``."""
+    if structure_or_atoms is None:
+        return None
+    if isinstance(structure_or_atoms, Structure):
+        return structure_or_atoms
+    return AseAtomsAdaptor.get_structure(structure_or_atoms)
+
+
+# ---------------------------------------------------------------------------
+# Partitioning / grouping keys
+# ---------------------------------------------------------------------------
 def get_partition_id(key: str, npartitions: int = 1000) -> int:
-    """
-    Generate consistent partition ID from key using MD5 hash.
-    """
-    key_encoded = key.encode("utf-8")
-    md5_hash = hashlib.md5()
-    md5_hash.update(key_encoded)
-    consistent_hash_hex = md5_hash.hexdigest()
-    consistent_hash_int = int(consistent_hash_hex, 16)
-    return consistent_hash_int % npartitions
+    """Return a deterministic ``key -> [0, npartitions)`` bucket (MD5-based)."""
+    return int(hashlib.md5(key.encode("utf-8")).hexdigest(), 16) % npartitions
 
 
 def get_structure_group(
@@ -93,23 +69,17 @@ def get_structure_group(
     energy: float | None = None,
     energy_bin_size: float | None = None,
 ) -> str:
-    """
-    Build a blocker-key string from mol_id, Z, and optional binned properties.
+    """Build a blocker-key string for deduplication grouping.
 
-    The key always starts with ``"{mol_id}"``. Each optional argument adds
-    a segment when set, in this order:
+    Key always starts with ``mol_id`` and includes ``z``. Each other optional
+    argument adds a segment when set, in order:
 
-    - ``conf_id``  -> ``"conf={id}"``
-    - ``z`` is always included as ``"zN"``
-    - ``spg``  -> ``"spgN"``  (generated space group, not the relaxed one)
-    - ``density`` + ``density_bin_size``  -> ``"d{bin:g}"``
-    - ``energy`` + ``energy_bin_size``    -> ``"e{bin:g}"``
+    - ``conf_id``  -> ``conf={id}``
+    - ``spg``      -> ``spgN`` (generated space group number)
+    - ``density`` + ``density_bin_size``  -> ``d{bin:g}``
+    - ``energy`` + ``energy_bin_size``    -> ``e{bin:g}``
 
-    Density and energy follow the same pattern: both the value *and* the bin
-    size must be provided to be included.
-
-    Returns:
-        Group-key string, e.g. ``"ACBNZA02_conf=0_z4_spg14_d1.5_e0.01"``.
+    Example: ``"ACBNZA02_conf=0_z4_spg14_d1.5_e0.01"``.
     """
     parts = [str(mol_id)]
     if conf_id is not None:
@@ -124,118 +94,117 @@ def get_structure_group(
     return "_".join(parts)
 
 
-def jmolnn_adjacency(
-    structure_or_atoms: Structure | Atoms,
-) -> np.ndarray:
-    """
-    Check if covalent bonding network is preserved after relaxation.
+# ---------------------------------------------------------------------------
+# JmolNN adjacency + graph primitives
+# ---------------------------------------------------------------------------
+def _adjacency_from_nn_info(nn_info: list[list[dict]]) -> np.ndarray:
+    """Build the 0/1 JmolNN adjacency matrix from a precomputed ``nn_info``.
 
-    Args:
-        initial_atoms: Structure before relaxation.
-        final_atoms: Structure after relaxation.
-
-    Returns:
-        True if bonding network unchanged, False otherwise.
+    Split off so callers that also need the raw ``nn_info`` (e.g. the periodic
+    image vectors in :func:`extract_molecules`) don't pay for a second
+    ``JmolNN().get_all_nn_info(structure)`` call.
     """
-    if isinstance(structure_or_atoms, Structure):
-        structure = structure_or_atoms
-    else:
-        structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
-    nn_info = JmolNN().get_all_nn_info(structure)
     n = len(nn_info)
     adj = np.zeros((n, n), dtype=int)
-    for i in range(n):
-        for entry in nn_info[i]:
-            adj[i, entry["site_index"]] = 1
+    for i, neighbours in enumerate(nn_info):
+        for nb in neighbours:
+            adj[i, nb["site_index"]] = 1
     return adj
 
 
-def check_correct_z(
-    structure_or_atoms: Structure | Atoms | None,
-    requested_z: int,
-) -> bool:
+def _labeled_graph(nn_matrix: np.ndarray, structure: Structure) -> nx.Graph:
+    """``nx.Graph`` from an adjacency matrix with an ``atomic_num`` per node.
+
+    ``atomic_num`` is what the categorical node match in the isomorphism test
+    keys off (see :func:`check_molecule_matches_reference`).
     """
-    Check whether the number of connected molecular fragments in the cell
-    matches the requested number of formula units (Z).
+    graph = nx.from_numpy_array(nn_matrix)
+    for i in range(nn_matrix.shape[0]):
+        graph.nodes[i]["atomic_num"] = structure[i].specie.number
+    return graph
 
-    Args:
-        structure_or_atoms: Pymatgen ``Structure`` or ASE ``Atoms`` for the
-            generated unit cell. Returns ``False`` if ``None``.
-        requested_z: Integer Z value the generator was asked for.
 
-    Returns:
-        True if the JmolNN connected-component count equals ``requested_z``,
-        False otherwise (or if the input is ``None``).
+def jmolnn_adjacency(
+    structure_or_atoms: Structure | Atoms,
+) -> np.ndarray:
+    """Return the 0/1 JmolNN adjacency matrix. Accepts ``Structure`` or ``Atoms``."""
+    return _adjacency_from_nn_info(
+        JmolNN().get_all_nn_info(_to_structure(structure_or_atoms))
+    )
+
+
+def extract_molecules(structure: Structure) -> list[Atoms]:
+    """One PBC-unwrapped ASE ``Atoms`` per connected molecular fragment.
+
+    Same JmolNN bond definition as :func:`jmolnn_adjacency`, plus a BFS that
+    undoes periodic wrapping.
     """
-    # Handle error cases where the structure couldn't be processed
-    if structure_or_atoms is None:
-        return False
+    nn_info = JmolNN().get_all_nn_info(structure)
+    _, labels = csgraph.connected_components(
+        _adjacency_from_nn_info(nn_info), directed=False
+    )
+    lattice = structure.lattice.matrix
+    cart_coords = structure.cart_coords
+    species = [s.specie.symbol for s in structure.species]
 
-    # Accept either a pymatgen Structure or an ASE Atoms; convert if needed
-    if isinstance(structure_or_atoms, Structure):
-        structure = structure_or_atoms
-    else:
-        structure = AseAtomsAdaptor.get_structure(structure_or_atoms)
+    atoms_list: list[Atoms] = []
+    for comp_id in range(int(labels.max()) + 1):
+        comp = np.where(labels == comp_id)[0]
+        anchor = int(comp[0])
+        offsets = {anchor: np.zeros(3)}
+        queue, visited = deque([anchor]), {anchor}
+        while queue:
+            u = queue.popleft()
+            for nb in nn_info[u]:
+                v = nb["site_index"]
+                if v in visited or labels[v] != comp_id:
+                    continue
+                # nn_info[u] gives v's periodic image relative to u, so adding
+                # is unconditionally correct (sign falls out naturally).
+                offsets[v] = offsets[u] + np.array(nb["image"], dtype=float)
+                visited.add(v)
+                queue.append(v)
+        positions = np.stack([cart_coords[i] + offsets[i] @ lattice for i in comp])
+        atoms_list.append(
+            Atoms(
+                symbols=[species[i] for i in comp],
+                positions=positions,
+                pbc=False,
+            )
+        )
+    return atoms_list
 
-    # Build adjacency matrix using Jmol bonding radii
-    nn_matrix = jmolnn_adjacency(structure)
 
-    # Connected-component count == observed number of molecular fragments
-    observed_z = csgraph.connected_components(nn_matrix)[0]
-    return observed_z == requested_z
-
-
+# ---------------------------------------------------------------------------
+# Reference-molecule graph (Genarris seed anchor)
+# ---------------------------------------------------------------------------
 def reference_graph_from_atoms(
     reference_atoms: Atoms | None,
 ) -> nx.Graph | None:
-    """
-    Build a NetworkX graph from a reference molecular conformer.
+    """Build an ``nx.Graph`` for a single-molecule reference conformer.
 
-    Nodes carry an ``atomic_num`` attribute; edges are JmolNN-derived covalent
-    bonds (bond order discarded). The reference ``.xyz`` is assumed to be a
-    single-molecule conformer (as produced by the Genarris seed pipeline).
-
-    Args:
-        reference_atoms: ASE ``Atoms`` for the reference single-molecule
-            conformer (typically read from the .xyz that seeded Genarris).
-
-    Returns:
-        ``nx.Graph`` for the reference molecule, or ``None`` if the input is
-        ``None``/empty or the adjacency cannot be built.
+    Nodes carry ``atomic_num``; edges are JmolNN-derived (bond order dropped).
+    Returns ``None`` on failure.
     """
     if reference_atoms is None:
         return None
-
     try:
         # XYZ-loaded molecules have no unit cell (cell rank < 3), which makes
         # AseAtomsAdaptor.get_structure raise LinAlgError on the singular
-        # lattice. Pad with a generously large cubic box so the molecule sits
-        # well inside and pymatgen can build a periodic Structure for JmolNN.
+        # lattice. Pad with a large cubic box so pymatgen can build a periodic
+        # Structure for JmolNN.
         if np.linalg.matrix_rank(np.array(reference_atoms.cell)) < 3:
             reference_atoms = reference_atoms.copy()
             reference_atoms.cell = np.eye(3) * 30.0
             reference_atoms.center()
             reference_atoms.pbc = True
-
         structure = AseAtomsAdaptor.get_structure(reference_atoms)
-
-        # Build adjacency matrix using Jmol bonding radii (same pattern as
-        # check_correct_z).
         nn_matrix = jmolnn_adjacency(structure)
-        n = nn_matrix.shape[0]
-        if n < 1:
+        if nn_matrix.shape[0] < 1:
             return None
-
-        # Build undirected nx.Graph from the adjacency matrix and attach
-        # atomic_num as a per-node attribute (used by the categorical node
-        # match in check_molecule_matches_reference).
-        graph = nx.from_numpy_array(nn_matrix)
-        for i in range(n):
-            graph.nodes[i]["atomic_num"] = structure[i].specie.number
-        return graph
+        return _labeled_graph(nn_matrix, structure)
     except Exception as e:
-        logger = get_central_logger()
-        logger.warning(f"Failed to build reference graph: {e}")
+        get_central_logger().warning(f"Failed to build reference graph: {e}")
         return None
 
 
@@ -243,44 +212,25 @@ def load_reference_graph(
     conf_dir: Path | None,
     conf_id: str,
 ) -> nx.Graph | None:
+    """Load ``<conf_dir>/<conf_id>.{xyz,sdf,mol}`` and return its reference graph.
+
+    Returns ``None`` (and logs) if the directory / file is missing or unreadable.
     """
-    Locate and load the per-conformer reference-molecule graph.
-
-    Searches ``conf_dir`` for ``<conf_id>.xyz``, ``.sdf``, or ``.mol`` (in that
-    order), reads the first match with ASE, and converts it to a NetworkX
-    graph via :func:`reference_graph_from_atoms`.
-
-    Args:
-        conf_dir: Directory containing ``<conf_id>.{xyz,sdf,mol}``. May be
-            ``None`` (e.g., when a caller failed to derive a path); in that
-            case the function logs and returns ``None``.
-        conf_id: Conformer identifier. Used as the filename stem.
-
-    Returns:
-        ``nx.Graph`` for the reference molecule, or ``None`` if the file
-        could not be located / parsed / converted to a graph.
-    """
-    import ase.io
-
     logger = get_central_logger()
-
     if conf_dir is None or not conf_dir.is_dir():
         logger.warning(
             f"No reference geometry directory for conf_id={conf_id} "
             f"(conf_dir={conf_dir}); reference graph will be None."
         )
         return None
-
     for ext in (".xyz", ".sdf", ".mol"):
         candidate = conf_dir / f"{conf_id}{ext}"
         if candidate.is_file():
             try:
-                reference_atoms = ase.io.read(candidate)
-                return reference_graph_from_atoms(reference_atoms)
+                return reference_graph_from_atoms(ase.io.read(candidate))
             except Exception as e:
                 logger.warning(f"Failed to read reference geometry {candidate}: {e}")
                 return None
-
     logger.warning(
         f"No reference geometry (.xyz/.sdf/.mol) for conf_id={conf_id} "
         f"in {conf_dir}; reference graph will be None."
@@ -288,58 +238,52 @@ def load_reference_graph(
     return None
 
 
+# ---------------------------------------------------------------------------
+# Validity checks
+# ---------------------------------------------------------------------------
+def check_correct_z(
+    structure_or_atoms: Structure | Atoms | None,
+    requested_z: int,
+) -> bool:
+    """True iff the JmolNN connected-component count equals ``requested_z``.
+
+    ``None`` inputs return ``False``.
+    """
+    structure = _to_structure(structure_or_atoms)
+    if structure is None:
+        return False
+    return csgraph.connected_components(jmolnn_adjacency(structure))[0] == requested_z
+
+
 def check_molecule_matches_reference(
     structure: Structure | Atoms | None,
     reference_graph: nx.Graph | None,
 ) -> bool:
+    """True iff every connected fragment is isomorphic to ``reference_graph``.
+
+    Each connected component of the full-cell JmolNN graph is compared to the
+    reference via ``nx.is_isomorphic`` with a categorical node match on
+    ``atomic_num``. Catches topology errors (tautomers, rearranged rings,
+    wrong functional groups) that :func:`check_correct_z` cannot.
+
+    ``False`` if either input is ``None`` or on exception.
     """
-    Check whether every connected molecular fragment in the cell is
-    isomorphic to the reference molecule.
-
-    For each connected component of the JmolNN adjacency, a subgraph view
-    is taken from the full-cell ``nx.Graph`` (which carries ``atomic_num``
-    per node). Each fragment is then compared to the reference via
-    ``nx.is_isomorphic`` with a categorical match on atomic number. This
-    catches topology errors (tautomers, rearranged rings, wrong functional
-    groups) that the count-only ``check_correct_z`` cannot detect.
-
-    Args:
-        structure: Pymatgen ``Structure`` or ASE ``Atoms`` for the
-            generated unit cell.
-        reference_graph: Reference molecular graph built via
-            ``reference_graph_from_atoms``.
-
-    Returns:
-        ``True`` iff every fragment in the cell is isomorphic to the
-        reference. ``False`` if any fragment mismatches, if either input is
-        ``None``, or on exception.
-    """
+    structure = _to_structure(structure)
     if structure is None or reference_graph is None:
         return False
-
     try:
-        if not isinstance(structure, Structure):
-            structure = AseAtomsAdaptor.get_structure(structure)
-        nn_matrix = jmolnn_adjacency(structure)
-        n = nn_matrix.shape[0]
-
-        # Build the full-cell graph once with atomic_num node attributes;
-        # take per-fragment subgraph views for the isomorphism comparison.
-        graph = nx.from_numpy_array(nn_matrix)
-        for i in range(n):
-            graph.nodes[i]["atomic_num"] = structure[i].specie.number
+        graph = _labeled_graph(jmolnn_adjacency(structure), structure)
         node_match = nx.algorithms.isomorphism.categorical_node_match("atomic_num", 0)
-
         for comp_nodes in nx.connected_components(graph):
-            fragment_graph = graph.subgraph(comp_nodes)
             if not nx.is_isomorphic(
-                fragment_graph, reference_graph, node_match=node_match
+                graph.subgraph(comp_nodes),
+                reference_graph,
+                node_match=node_match,
             ):
                 return False
         return True
     except Exception as e:
-        logger = get_central_logger()
-        logger.warning(f"Failed molecule-matches-reference check: {e}")
+        get_central_logger().warning(f"Failed molecule-matches-reference check: {e}")
         return False
 
 
@@ -347,20 +291,10 @@ def check_connectivity_unchanged(
     initial_structure_or_atoms: Structure | Atoms | None,
     final_structure_or_atoms: Structure | Atoms | None,
 ) -> bool:
-    """
-    Check whether the JmolNN bond matrix is exactly preserved between two
-    structures (pre-relax vs post-relax).
+    """True iff the JmolNN adjacency is element-wise equal between two cells.
 
-    Args:
-        initial_structure_or_atoms: Pre-relax cell as pymatgen ``Structure``
-            or ASE ``Atoms``. Returns ``False`` if ``None``.
-        final_structure_or_atoms: Post-relax cell, same type accepted.
-            Returns ``False`` if ``None``.
-
-    Returns:
-        ``True`` iff the two JmolNN adjacency matrices are element-wise
-        equal. ``False`` if either input is ``None``, if the structures
-        differ in atom count, or on exception.
+    Used to compare pre- vs post-relax topology. ``False`` if either input is
+    ``None``, if atom counts differ, or on exception.
     """
     if initial_structure_or_atoms is None or final_structure_or_atoms is None:
         return False
@@ -371,6 +305,5 @@ def check_connectivity_unchanged(
             return False
         return bool(np.array_equal(initial_adj, final_adj))
     except Exception as e:
-        logger = get_central_logger()
-        logger.warning(f"Failed connectivity-unchanged check: {e}")
+        get_central_logger().warning(f"Failed connectivity-unchanged check: {e}")
         return False
