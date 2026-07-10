@@ -118,6 +118,105 @@ def get_moe_backbone(composition_dropout: float = 0.0):
     )
 
 
+def _moe_backbone_kwargs(**extra):
+    kwargs = dict(
+        max_num_elements=100,
+        sphere_channels=16,
+        lmax=2,
+        mmax=2,
+        otf_graph=True,
+        edge_channels=16,
+        num_distance_basis=8,
+        use_dataset_embedding=False,
+        always_use_pbc=False,
+        num_experts=4,
+        use_composition_embedding=True,
+    )
+    kwargs.update(extra)
+    return kwargs
+
+
+def test_normalize_mole_layer_type():
+    from fairchem.core.models.uma.nn.mole import (
+        is_moledgl_backend,
+        normalize_mole_layer_type,
+    )
+
+    assert normalize_mole_layer_type("pytorch") == "pytorch"
+    assert normalize_mole_layer_type("nvmath") == "nvmath"
+    assert normalize_mole_layer_type("fairchem_cpp") == "fairchem_cpp"
+    # legacy "dgl" is rejected (it flipped meaning cpp->nvmath historically)
+    with pytest.raises(ValueError, match="no longer supported"):
+        normalize_mole_layer_type("dgl")
+    with pytest.raises(ValueError, match="must be one of"):
+        normalize_mole_layer_type("bogus")
+    assert is_moledgl_backend("nvmath")
+    assert is_moledgl_backend("fairchem_cpp")
+    assert not is_moledgl_backend("pytorch")
+
+
+def test_missing_backend_raises_importerror():
+    """Selecting an uninstalled backend fails at construction with ImportError."""
+    from fairchem.core.common import segmentmm
+    from fairchem.core.models.uma.nn.mole_utils import (
+        _make_segment_mm_fn,
+        fairchem_cpp_found,
+    )
+
+    if not segmentmm._HAS_NVMATH:
+        with pytest.raises(ImportError, match="nvmath"):
+            _make_segment_mm_fn("nvmath", True)
+    if not fairchem_cpp_found:
+        with pytest.raises(ImportError, match="fairchem_cpp"):
+            _make_segment_mm_fn("fairchem_cpp", True)
+
+
+def test_merge_capability_guard():
+    """replace_MOLE_with_linear rejects a MOLEDGL layer (no merged_linear_layer)."""
+    from fairchem.core.models.uma.nn.mole import MOLEDGL, MOLEGlobals
+    from fairchem.core.models.uma.nn.mole_utils import replace_MOLE_with_linear
+
+    layer = MOLEDGL(
+        num_experts=4,
+        in_features=8,
+        out_features=8,
+        global_mole_tensors=MOLEGlobals(
+            expert_mixing_coefficients=None, mole_sizes=None
+        ),
+        bias=True,
+        segment_mm_fn=lambda a, b, s: a,  # never called by the guard
+    )
+    with pytest.raises(ValueError, match="merge_mole is not supported"):
+        replace_MOLE_with_linear(layer)
+
+
+@pytest.mark.parametrize("backend", ["nvmath", "fairchem_cpp"])
+def test_moledgl_activation_checkpointing_guard(backend):
+    """Any MOLEDGL backend + activation_checkpointing fails fast at build time.
+
+    The guard runs before the backend op is bound, so it raises regardless of
+    whether nvmath/fairchem_cpp is installed.
+    """
+    with pytest.raises(ValueError, match="activation_checkpointing"):
+        eSCNMDMoeBackbone(
+            **_moe_backbone_kwargs(
+                moe_layer_type=backend, activation_checkpointing=True
+            )
+        )
+
+
+def test_moledgl_merge_mole_guard():
+    """merge_MOLE_model on a MOLEDGL backbone fails fast before touching data.
+
+    Built as pytorch (no backend package needed), then the layer-type attribute
+    is flipped to exercise the guard without requiring nvmath/fairchem_cpp.
+    """
+    backbone = eSCNMDMoeBackbone(**_moe_backbone_kwargs(moe_layer_type="pytorch"))
+    backbone.moe_layer_type = "nvmath"
+    with pytest.raises(ValueError, match="merge_mole is mutually exclusive"):
+        backbone.merge_MOLE_model(None)
+
+
 class TestCompositionDropout:
     """Tests for composition_dropout feature."""
 

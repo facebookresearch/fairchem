@@ -39,6 +39,7 @@ docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4
 adsorbml = ["dscribe", "x3dase", "scikit-image"]
 torchsim = ["torch-sim-atomistic>=0.6.0; python_version >= '3.12'"]
 extras = ["pymatgen>=2025.1.9", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops>=0.3.0", "pyarrow"]
+nvmath = ["nvmath-python>=0.8"]
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"

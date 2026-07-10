@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -8,18 +9,44 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import math
-from contextlib import suppress
 from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-fairchem_cpp_found = False
-with suppress(ModuleNotFoundError):
-    import fairchem_cpp  # try to use DGL if available
+# MOLEDGL runs its per-segment GEMM through a backend chosen at construction:
+#   * "nvmath"       -> fairchem.core.common.segmentmm (cuBLAS via nvmath-python)
+#   * "fairchem_cpp" -> the compiled fairchem_cpp.ops.segment_mm extension
+# Both are optional at import time; the concrete op is bound once by
+# ``replace_linear_with_MOLE`` and passed in as ``segment_mm_fn``.
 
-    fairchem_cpp_found = True
+# Canonical values accepted by ``moe_layer_type``. ``"dgl"`` is intentionally
+# NOT accepted: it historically meant fairchem_cpp but was later repurposed to
+# nvmath, so callers must now say which one explicitly.
+MOLE_LAYER_TYPES = frozenset({"pytorch", "fairchem_cpp", "nvmath"})
+# The subset backed by ``MOLEDGL`` (i.e. the per-segment cuBLAS/C++ ops). These
+# are CUDA-only and mutually exclusive with activation_checkpointing/merge_mole.
+_MOLEDGL_BACKENDS = frozenset({"fairchem_cpp", "nvmath"})
+
+
+def normalize_mole_layer_type(name: str) -> str:
+    """Validate a ``moe_layer_type`` string, rejecting the legacy ``"dgl"``."""
+    if name == "dgl":
+        raise ValueError(
+            "moe_layer_type='dgl' is no longer supported; use 'fairchem_cpp' "
+            "(compiled op) or 'nvmath' (cuBLAS via nvmath-python)."
+        )
+    if name not in MOLE_LAYER_TYPES:
+        raise ValueError(
+            f"moe_layer_type must be one of {sorted(MOLE_LAYER_TYPES)}; got {name!r}"
+        )
+    return name
+
+
+def is_moledgl_backend(name: str) -> bool:
+    """True if ``name`` selects a ``MOLEDGL`` (cuBLAS/C++) backend."""
+    return name in _MOLEDGL_BACKENDS
 
 
 def interval_intersection(interval1, interval2):
@@ -87,6 +114,8 @@ class MOLEDGL(torch.nn.Module):
         out_features,
         global_mole_tensors,
         bias: bool,
+        *,
+        segment_mm_fn,
     ):
         super().__init__()
 
@@ -100,6 +129,11 @@ class MOLEDGL(torch.nn.Module):
         )
 
         self.global_mole_tensors = global_mole_tensors
+        # Per-segment GEMM op ``(A, B, seglen) -> C``, bound to a concrete
+        # backend (nvmath/cuBLAS or fairchem_cpp) at construction time by
+        # ``replace_linear_with_MOLE``. Keeping it a stored callable means
+        # ``forward`` has no backend branch and no per-call closure.
+        self.segment_mm_fn = segment_mm_fn
 
     def forward(self, x):
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
@@ -110,11 +144,9 @@ class MOLEDGL(torch.nn.Module):
             )
         x_shape = x.shape
         if x.ndim == 2:
-            r = fairchem_cpp.ops.segment_mm(
-                x, weights, self.global_mole_tensors.mole_sizes
-            )
+            r = self.segment_mm_fn(x, weights, self.global_mole_tensors.mole_sizes)
         elif x.ndim == 3:
-            r = fairchem_cpp.ops.segment_mm(
+            r = self.segment_mm_fn(
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_mole_tensors.mole_sizes * x_shape[1],

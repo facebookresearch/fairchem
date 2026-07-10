@@ -13,11 +13,12 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
+from omegaconf import OmegaConf
 
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -50,7 +51,11 @@ BASELINE_SETTINGS = InferenceSettings(
 BASELINE_CACHE_FILE = "baseline_cache.json"
 MIXED_BASELINE_CACHE_FILE = "mixed_baseline_cache.json"
 MIXED_REPORT_FILE = "mixed_benchmark_report.json"
+GRID_BASELINE_CACHE_FILE = "grid_baseline_cache.json"
+GRID_REPORT_FILE = "grid_benchmark_report.json"
 DEFAULT_BATCH_SIZES: tuple[int, ...] = (4, 8, 16, 32, 64, 128, 256)
+DEFAULT_GRID_SIZES: tuple[int, ...] = (10, 20, 40, 80, 160, 320)
+DEFAULT_GRID_BATCHES: tuple[int, ...] = (4, 8, 16, 32, 64)
 
 
 def _baseline_cache_key(
@@ -821,6 +826,7 @@ class MixedPerfCheckRunner(Runner):
         pool_tasks: tuple[str, ...] = ("oc20", "omat", "omol", "odac", "omc"),
         oom_policy: str = "skip",
         inference_settings: InferenceSettings = inference_settings_default(),  # noqa: B008
+        overrides: dict | None = None,
     ):
         from fairchem.core.components.benchmark.systems import (
             get_diverse_benchmark_pool,
@@ -834,6 +840,16 @@ class MixedPerfCheckRunner(Runner):
         self.seed = int(seed)
         self.oom_policy = oom_policy
         self.inference_settings = inference_settings
+        # Model-construction overrides forwarded to the candidate predict unit
+        # (e.g. {"backbone": {"moe_layer_type": "nvmath"}} to exercise the
+        # nvmath/cuBLAS MOLEDGL path instead of the default pytorch MOLE path).
+        # The fp64 accuracy baseline intentionally ignores these so both the
+        # baseline and the nvmath candidate are scored against the same gold
+        # reference. Normalize OmegaConf containers (passed via the Hydra CLI)
+        # to plain Python so the run report stays JSON-serializable.
+        if OmegaConf.is_config(overrides):
+            overrides = OmegaConf.to_container(overrides, resolve=True)
+        self.overrides = overrides
         self.pool = get_diverse_benchmark_pool(
             seed=self.seed,
             size_buckets=tuple(pool_size_buckets),
@@ -881,7 +897,10 @@ class MixedPerfCheckRunner(Runner):
 
             checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
         return MLIPPredictUnit(
-            checkpoint, self.device, inference_settings=self.inference_settings
+            checkpoint,
+            self.device,
+            overrides=self.overrides,
+            inference_settings=self.inference_settings,
         )
 
     def run(self) -> dict:
@@ -942,6 +961,7 @@ class MixedPerfCheckRunner(Runner):
                 for name, r in baselines.items()
             },
             "inference_settings": str(self.inference_settings),
+            "overrides": self.overrides,
             "batch_sizes": list(self.batch_sizes),
             "warmup_steps": self.warmup_steps,
             "timed_steps": self.timed_steps,
@@ -965,6 +985,451 @@ class MixedPerfCheckRunner(Runner):
             json.dump(report, f, indent=2)
         logger.info("Mixed report saved to %s", report_path)
         return report
+
+    def save_state(self, _):
+        return
+
+    def load_state(self, _):
+        return
+
+
+@dataclass
+class GridCellTiming:
+    """
+    Forward-only timing for a single (system size, batch size) grid cell.
+    """
+
+    size: int
+    batch: int
+    reps: int
+    median_ms: float
+    mean_ms: float
+    std_ms: float
+    min_ms: float
+    max_ms: float
+    atoms_per_s: float
+    mean_atoms_per_batch: float
+    peak_gpu_memory_mb: float | None = None
+    oom: bool = False
+
+
+def _grid_baseline_cache_key(
+    checkpoint: str,
+    systems: list[BenchmarkSystem],
+    device: str,
+    seed: int,
+    sizes: tuple[int, ...],
+    variants_per_size: int,
+    jitter: float,
+    task: str,
+) -> str:
+    """
+    Cache key for the per-system fp64 baselines used by the grid runner.
+
+    Independent of the candidate backend (``overrides`` / ``use_grouped_gemm``)
+    so pytorch and dgl runs share one baseline, but scoped to the pool geometry
+    so a different grid cannot alias a stale baseline.
+    """
+    key_data = {
+        "checkpoint": checkpoint,
+        "systems": [{"name": s.name, "num_atoms": len(s.atoms)} for s in systems],
+        "device": device,
+        "seed": seed,
+        "sizes": list(sizes),
+        "variants_per_size": variants_per_size,
+        "jitter": jitter,
+        "task": task,
+        "baseline_settings": str(BASELINE_SETTINGS),
+    }
+    return hashlib.sha256(json.dumps(key_data, sort_keys=True).encode()).hexdigest()
+
+
+def _time_grid_cell(
+    predict_unit: MLIPPredictUnit,
+    atomic_pool: list,
+    size: int,
+    batch: int,
+    reps: int,
+    warmup: int,
+    seed: int,
+    device: str,
+) -> GridCellTiming:
+    """
+    Time ``reps`` homogeneous batches of ``batch`` systems drawn from ``atomic_pool``.
+
+    Collation is done outside the timed region; only ``predict`` is timed (CUDA
+    events on GPU). A per-cell RNG keyed by (seed, size, batch) makes the sampled
+    batches identical across backend runs regardless of OOM/order. Returns a cell
+    with ``oom=True`` on out-of-memory.
+    """
+    from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+
+    is_cuda = device == "cuda" and torch.cuda.is_available()
+    rng = np.random.default_rng([seed, size, batch])
+
+    def _one() -> tuple[float, int]:
+        idx = rng.integers(0, len(atomic_pool), size=batch)
+        data = atomicdata_list_to_batch([atomic_pool[i] for i in idx])
+        natoms = int(sum(int(atomic_pool[i].natoms.item()) for i in idx))
+        if is_cuda:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+            predict_unit.predict(data)
+            end.record()
+            torch.cuda.synchronize()
+            return start.elapsed_time(end), natoms
+        t0 = time.perf_counter()
+        predict_unit.predict(data)
+        return (time.perf_counter() - t0) * 1000.0, natoms
+
+    def _oom_cell() -> GridCellTiming:
+        return GridCellTiming(
+            size=size,
+            batch=batch,
+            reps=0,
+            median_ms=float("nan"),
+            mean_ms=float("nan"),
+            std_ms=float("nan"),
+            min_ms=float("nan"),
+            max_ms=float("nan"),
+            atoms_per_s=0.0,
+            mean_atoms_per_batch=0.0,
+            oom=True,
+        )
+
+    try:
+        if is_cuda:
+            torch.cuda.reset_peak_memory_stats()
+        for _ in range(warmup):
+            _one()
+        durations: list[float] = []
+        atoms: list[int] = []
+        for _ in range(reps):
+            dt, na = _one()
+            durations.append(dt)
+            atoms.append(na)
+    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        if _is_oom(e):
+            if is_cuda:
+                torch.cuda.empty_cache()
+            return _oom_cell()
+        raise
+
+    arr = np.array(durations)
+    med = float(np.median(arr))
+    mean_atoms = float(np.mean(atoms))
+    peak = torch.cuda.max_memory_allocated() / (1024**2) if is_cuda else None
+    return GridCellTiming(
+        size=size,
+        batch=batch,
+        reps=reps,
+        median_ms=med,
+        mean_ms=float(np.mean(arr)),
+        std_ms=float(np.std(arr)),
+        min_ms=float(np.min(arr)),
+        max_ms=float(np.max(arr)),
+        atoms_per_s=(mean_atoms * 1000.0 / med) if med > 0 else 0.0,
+        mean_atoms_per_batch=mean_atoms,
+        peak_gpu_memory_mb=peak,
+    )
+
+
+def format_grid(
+    cells: dict[tuple[int, int], GridCellTiming],
+    sizes: tuple[int, ...],
+    batches: tuple[int, ...],
+    key: str,
+    fmt: str,
+    title: str,
+) -> str:
+    """
+    Render a size x batch grid of one ``GridCellTiming`` field as a table.
+    """
+    label = "size\\batch"
+    lines = [title]
+    header = f"{label:>12}" + "".join(f"{b:>12}" for b in batches)
+    lines.append(header)
+    lines.append("-" * len(header))
+    for s in sizes:
+        row = f"{s:>12}"
+        for b in batches:
+            cell = cells.get((s, b))
+            if cell is None or cell.oom:
+                row += f"{'OOM':>12}"
+            else:
+                row += f"{getattr(cell, key):{fmt}}".rjust(12)
+        lines.append(row)
+    return "\n".join(lines)
+
+
+class GridPerfCheckRunner(Runner):
+    """
+    Benchmark inference across a homogeneous system-size x batch-size grid.
+
+    For each (size, batch) cell, times forward inference on batches whose systems
+    are all drawn from a tight window around the target size, and optionally
+    validates accuracy against a cached fp64 baseline. Run once per backend
+    (pytorch vs dgl-grouped vs dgl-looped); pass ``reference_report`` on a later
+    run to print a speedup grid vs that report.
+
+    Usage:
+        fairchem -c configs/uma/benchmark/perf_check/grid_benchmark.yaml \
+            '+runner.overrides={backbone:{moe_layer_type:pytorch}}'
+        fairchem -c configs/uma/benchmark/perf_check/grid_benchmark.yaml \
+            '+runner.overrides={backbone:{moe_layer_type:dgl}}' \
+            runner.reference_report=<baseline_run>/grid_benchmark_report.json
+    """
+
+    def __init__(
+        self,
+        checkpoint: str,
+        device: str = "cuda",
+        sizes: tuple[int, ...] = DEFAULT_GRID_SIZES,
+        batches: tuple[int, ...] = DEFAULT_GRID_BATCHES,
+        variants_per_size: int = 4,
+        size_jitter: float = 0.1,
+        task: str = "omat",
+        reps: int = 20,
+        warmup: int = 5,
+        seed: int = 42,
+        use_grouped_gemm: bool = True,
+        check_accuracy: bool = True,
+        overrides: dict | None = None,
+        reference_report: str | None = None,
+        inference_settings: InferenceSettings = inference_settings_default(),  # noqa: B008
+    ):
+        from fairchem.core.components.benchmark.systems import get_size_bucket_pool
+
+        self.checkpoint = checkpoint
+        self.device = device
+        self.sizes = tuple(int(s) for s in sizes)
+        self.batches = tuple(int(b) for b in batches)
+        self.variants_per_size = int(variants_per_size)
+        self.size_jitter = float(size_jitter)
+        self.task = task
+        self.reps = int(reps)
+        self.warmup = int(warmup)
+        self.seed = int(seed)
+        self.use_grouped_gemm = bool(use_grouped_gemm)
+        self.check_accuracy = bool(check_accuracy)
+        # Candidate model overrides (e.g. {"backbone": {"moe_layer_type": "nvmath"}}).
+        # Normalized to plain Python so the run report stays JSON-serializable.
+        if OmegaConf.is_config(overrides):
+            overrides = OmegaConf.to_container(overrides, resolve=True)
+        self.overrides = overrides
+        self.reference_report = reference_report
+        self.inference_settings = inference_settings
+        self.pool = get_size_bucket_pool(
+            sizes=self.sizes,
+            variants_per_size=self.variants_per_size,
+            jitter=self.size_jitter,
+            task=self.task,
+            seed=self.seed,
+        )
+
+    def _flat_systems(self) -> list[BenchmarkSystem]:
+        return [s for size in self.sizes for s in self.pool[size]]
+
+    def _baselines(self, cache_dir: str) -> dict[str, InferenceResult]:
+        systems = self._flat_systems()
+        cache_path = os.path.join(cache_dir, GRID_BASELINE_CACHE_FILE)
+        cache_key = _grid_baseline_cache_key(
+            self.checkpoint,
+            systems,
+            self.device,
+            self.seed,
+            self.sizes,
+            self.variants_per_size,
+            self.size_jitter,
+            self.task,
+        )
+        cached = _load_baseline_cache(cache_path, cache_key)
+        if cached is not None:
+            logger.warning(
+                "Using cached grid baseline results from %s. "
+                "Delete this file to force recomputation.",
+                cache_path,
+            )
+            return cached
+        logger.info("Running per-system fp64 baselines for %d systems...", len(systems))
+        baselines: dict[str, InferenceResult] = {}
+        for system in systems:
+            baselines[system.name] = run_inference(
+                checkpoint=self.checkpoint,
+                system=system,
+                inference_settings=BASELINE_SETTINGS,
+                device=self.device,
+                seed=self.seed,
+            )
+        _save_baseline_cache(cache_path, cache_key, baselines)
+        return baselines
+
+    def _build_predict_unit(self) -> MLIPPredictUnit:
+        checkpoint = self.checkpoint
+        if not os.path.exists(checkpoint):
+            from fairchem.core.calculate.pretrained_mlip import (
+                pretrained_checkpoint_path_from_name,
+            )
+
+            checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
+        # Select grouped vs looped GEMM through the backbone config (not a module
+        # global): the MOLEDGL backends read moe_use_grouped_gemm at construction.
+        overrides = dict(self.overrides) if self.overrides else {}
+        backbone = dict(overrides.get("backbone", {}))
+        backbone["moe_use_grouped_gemm"] = self.use_grouped_gemm
+        overrides["backbone"] = backbone
+        return MLIPPredictUnit(
+            checkpoint,
+            self.device,
+            overrides=overrides,
+            inference_settings=self.inference_settings,
+        )
+
+    def run(self) -> dict:
+        from fairchem.core.datasets.atomic_data import (
+            AtomicData,
+            atomicdata_list_to_batch,
+        )
+
+        output_dir = self.job_config.metadata.results_dir
+        os.makedirs(output_dir, exist_ok=True)
+        cache_dir = self.job_config.run_dir
+        os.makedirs(cache_dir, exist_ok=True)
+
+        baselines = self._baselines(cache_dir) if self.check_accuracy else {}
+
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed)
+
+        # grouped/looped is selected via backbone overrides in _build_predict_unit.
+        predict_unit = self._build_predict_unit()
+        atomic_pool = {
+            size: [
+                AtomicData.from_ase(s.atoms, task_name=s.task_name)
+                for s in self.pool[size]
+            ]
+            for size in self.sizes
+        }
+
+        cells: dict[tuple[int, int], GridCellTiming] = {}
+        per_system_errors: dict[str, dict[str, Any]] = {}
+        try:
+            for size in self.sizes:
+                for batch in self.batches:
+                    logger.info("  size=%d batch=%d", size, batch)
+                    cells[(size, batch)] = _time_grid_cell(
+                        predict_unit,
+                        atomic_pool[size],
+                        size=size,
+                        batch=batch,
+                        reps=self.reps,
+                        warmup=self.warmup,
+                        seed=self.seed,
+                        device=self.device,
+                    )
+            if self.check_accuracy:
+                for size in self.sizes:
+                    natoms = [int(d.natoms.item()) for d in atomic_pool[size]]
+                    try:
+                        batch_data = atomicdata_list_to_batch(atomic_pool[size])
+                        preds = predict_unit.predict(batch_data)
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                        split = _split_batched_predictions(preds, natoms)
+                        for slot, system in enumerate(self.pool[size]):
+                            cand = _to_inference_result(split[slot])
+                            per_system_errors[system.name] = compare_results(
+                                baselines[system.name], cand
+                            )
+                    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+                        if _is_oom(e):
+                            for system in self.pool[size]:
+                                per_system_errors[system.name] = {"error": "OOM"}
+                        else:
+                            raise
+        finally:
+            del predict_unit
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        logger.info(
+            "Grid results:\n%s\n\n%s",
+            format_grid(
+                cells,
+                self.sizes,
+                self.batches,
+                "median_ms",
+                ".2f",
+                "MEDIAN forward time (ms)",
+            ),
+            format_grid(
+                cells, self.sizes, self.batches, "atoms_per_s", ".0f", "atoms/s"
+            ),
+        )
+
+        report = {
+            "checkpoint": self.checkpoint,
+            "overrides": self.overrides,
+            "use_grouped_gemm": self.use_grouped_gemm,
+            "inference_settings": str(self.inference_settings),
+            "sizes": list(self.sizes),
+            "batches": list(self.batches),
+            "task": self.task,
+            "reps": self.reps,
+            "cells": [asdict(c) for c in cells.values()],
+            "accuracy": per_system_errors,
+        }
+        report_path = os.path.join(output_dir, GRID_REPORT_FILE)
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+        logger.info("Grid report saved to %s", report_path)
+
+        if self.reference_report is not None:
+            self._print_speedup(cells)
+
+        return report
+
+    def _print_speedup(self, cells: dict[tuple[int, int], GridCellTiming]) -> None:
+        try:
+            with open(self.reference_report) as f:
+                ref = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(
+                "Could not read reference_report %s: %s", self.reference_report, e
+            )
+            return
+        if ref.get("checkpoint") != self.checkpoint:
+            logger.warning(
+                "reference_report checkpoint %s != %s; speedup may be meaningless",
+                ref.get("checkpoint"),
+                self.checkpoint,
+            )
+        ref_ms = {
+            (c["size"], c["batch"]): c["median_ms"]
+            for c in ref.get("cells", [])
+            if not c.get("oom")
+        }
+        label = "size\\batch"
+        header = f"{label:>12}" + "".join(f"{b:>12}" for b in self.batches)
+        lines = [
+            "SPEEDUP = reference_median / this_median  (>1.0 => this run FASTER)",
+            header,
+            "-" * len(header),
+        ]
+        for s in self.sizes:
+            row = f"{s:>12}"
+            for b in self.batches:
+                cell = cells.get((s, b))
+                rm = ref_ms.get((s, b))
+                if cell is None or cell.oom or rm is None or cell.median_ms <= 0:
+                    row += f"{'-':>12}"
+                else:
+                    row += f"{rm / cell.median_ms:>12.2f}"
+            lines.append(row)
+        logger.info("\n%s", "\n".join(lines))
 
     def save_state(self, _):
         return

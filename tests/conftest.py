@@ -270,8 +270,8 @@ def pytest_runtest_setup(item):
         pytest.skip("CUDA not available, skipping GPU test")
     if "compile_gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping compile_gpu test")
-    if "dgl" in item.keywords:
-        # check dgl is installed
+    if item.get_closest_marker("fairchem_cpp") is not None:
+        # the compiled fairchem_cpp segment_mm backend
         fairchem_cpp_found = False
         with suppress(ModuleNotFoundError):
             import fairchem_cpp
@@ -282,9 +282,15 @@ def pytest_runtest_setup(item):
             fairchem_cpp_found = True
         if not fairchem_cpp_found:
             pytest.skip(
-                "fairchem_cpp not found, skipping DGL tests! please install "
-                "fairchem if you want to run these"
+                "fairchem_cpp not found, skipping fairchem_cpp tests! please "
+                "install it if you want to run these"
             )
+    if item.get_closest_marker("nvmath") is not None:
+        # the nvmath/cuBLAS segment_mm backend (CUDA-only)
+        from fairchem.core.common import segmentmm
+
+        if not (segmentmm._HAS_NVMATH and torch.cuda.is_available()):
+            pytest.skip("nvmath-python + CUDA required, skipping nvmath tests")
 
 
 def pytest_collection_modifyitems(config, items):

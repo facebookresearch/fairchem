@@ -291,7 +291,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
 #     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_uma_dataset)
 
 
-@pytest.mark.dgl()
+@pytest.mark.fairchem_cpp()
 @pytest.mark.parametrize(
     "bf16, tol",
     [
@@ -307,7 +307,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_cpu(
     )
 
 
-@pytest.mark.dgl()
+@pytest.mark.fairchem_cpp()
 def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
     bf16, tol, device, dataset_root_dir
 ):
@@ -334,7 +334,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
         launch_main(pytorch_sys_args)
 
         dgl_sys_args = sys_args.copy()
-        dgl_sys_args.append("moe_layer_type=dgl")
+        dgl_sys_args.append("moe_layer_type=fairchem_cpp")
         dgl_sys_args.append(f"optimizer.save_path={run2_path}")
         launch_main(dgl_sys_args)
 
@@ -575,7 +575,7 @@ def test_train_and_resume_max_steps(
 #     train_and_resume_mole_on_dgl("CUDA",fake_uma_dataset)
 
 
-@pytest.mark.dgl()
+@pytest.mark.fairchem_cpp()
 def test_train_and_resume_mole_on_dgl_cpu(fake_uma_dataset, torch_deterministic):
     train_and_resume_mole_on_dgl("CPU", fake_uma_dataset)
 
@@ -614,7 +614,7 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
     sys_args = [
         "--config",
         checkpoint_state_yaml,
-        "runner.train_eval_unit.model.backbone.moe_layer_type=dgl",
+        "runner.train_eval_unit.model.backbone.moe_layer_type=fairchem_cpp",
     ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)

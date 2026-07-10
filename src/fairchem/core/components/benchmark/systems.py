@@ -112,6 +112,52 @@ def get_default_benchmark_systems(seed: int = 42) -> list[BenchmarkSystem]:
     ]
 
 
+def get_size_bucket_pool(
+    sizes: tuple[int, ...],
+    variants_per_size: int = 4,
+    jitter: float = 0.1,
+    task: str = "omat",
+    seed: int = 42,
+) -> dict[int, list[BenchmarkSystem]]:
+    """
+    Build homogeneous size buckets of fcc systems for grid benchmarking.
+
+    For each target size, generate ``variants_per_size`` fcc crystals whose atom
+    counts fall within ``+/- jitter`` of the target. Batches drawn from a single
+    bucket are size-homogeneous (tight distribution), which isolates the batch
+    size axis from the system size axis.
+
+    Args:
+        sizes: Target atom counts, one bucket per entry.
+        variants_per_size: Number of distinct systems generated per bucket.
+        jitter: Fractional half-width of the size window around each target.
+        task: UMA task name assigned to every generated system.
+        seed: Base RNG seed; bucket-specific offsets keep buckets independent.
+
+    Returns:
+        Mapping of target size to a list of ``BenchmarkSystem``.
+    """
+    pool: dict[int, list[BenchmarkSystem]] = {}
+    for size in sizes:
+        rng = np.random.default_rng(seed + int(size))
+        lo = max(2, int(size * (1 - jitter)))
+        hi = max(lo + 1, int(size * (1 + jitter)))
+        systems: list[BenchmarkSystem] = []
+        for v in range(variants_per_size):
+            natoms = int(rng.integers(lo, hi + 1))
+            systems.append(
+                make_benchmark_system(
+                    name=f"fcc_s{size}_v{v}_n{natoms}",
+                    task_name=task,
+                    natoms=natoms,
+                    structure_type="fcc",
+                    seed=int(rng.integers(0, 2**31)),
+                )
+            )
+        pool[int(size)] = systems
+    return pool
+
+
 @dataclass
 class SystemPool:
     """

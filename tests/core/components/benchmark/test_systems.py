@@ -15,9 +15,35 @@ from ase.constraints import FixAtoms
 from fairchem.core.components.benchmark.systems import (
     BenchmarkSystem,
     get_default_benchmark_systems,
+    get_size_bucket_pool,
     make_benchmark_system,
     make_variable_size_batch,
 )
+
+
+def test_get_size_bucket_pool():
+    sizes = (20, 80)
+    variants = 3
+    jitter = 0.1
+    pool = get_size_bucket_pool(
+        sizes=sizes, variants_per_size=variants, jitter=jitter, task="omat"
+    )
+    assert set(pool.keys()) == set(sizes)
+    for size in sizes:
+        systems = pool[size]
+        assert len(systems) == variants
+        lo = int(size * (1 - jitter))
+        hi = int(size * (1 + jitter))
+        for s in systems:
+            assert isinstance(s, BenchmarkSystem)
+            assert s.task_name == "omat"
+            assert lo <= len(s.atoms) <= hi + 1
+    # deterministic given the same seed
+    pool2 = get_size_bucket_pool(
+        sizes=sizes, variants_per_size=variants, jitter=jitter, task="omat"
+    )
+    for size in sizes:
+        assert [len(s.atoms) for s in pool[size]] == [len(s.atoms) for s in pool2[size]]
 
 
 def test_make_benchmark_system_fcc():

@@ -25,14 +25,63 @@ import pytest
 
 from fairchem.core.components.benchmark.perf_check import (
     BASELINE_SETTINGS,
+    GridCellTiming,
     InferenceResult,
     PerfCheckRunner,
+    _grid_baseline_cache_key,
     compare_results,
+    format_grid,
     format_report_table,
     run_inference,
 )
 from fairchem.core.components.benchmark.systems import make_benchmark_system
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+
+def _grid_cell(size, batch, median_ms, oom=False):
+    return GridCellTiming(
+        size=size,
+        batch=batch,
+        reps=0 if oom else 5,
+        median_ms=median_ms,
+        mean_ms=median_ms,
+        std_ms=0.0,
+        min_ms=median_ms,
+        max_ms=median_ms,
+        atoms_per_s=1000.0,
+        mean_atoms_per_batch=float(size * batch),
+        oom=oom,
+    )
+
+
+def test_format_grid():
+    sizes = (10, 20)
+    batches = (4, 8)
+    cells = {
+        (10, 4): _grid_cell(10, 4, 1.0),
+        (10, 8): _grid_cell(10, 8, 2.0),
+        (20, 4): _grid_cell(20, 4, 3.0),
+        (20, 8): _grid_cell(20, 8, 0.0, oom=True),
+    }
+    table = format_grid(cells, sizes, batches, "median_ms", ".2f", "MEDIAN (ms)")
+    assert "MEDIAN (ms)" in table
+    assert "1.00" in table
+    assert "3.00" in table
+    assert "OOM" in table  # oom cell rendered as OOM
+    # title + header + separator + one row per size
+    assert len(table.splitlines()) == 3 + len(sizes)
+
+
+def test_grid_baseline_cache_key_sensitivity():
+    systems = [
+        make_benchmark_system(name="fcc_a", natoms=20, task_name="omat"),
+        make_benchmark_system(name="fcc_b", natoms=40, task_name="omat"),
+    ]
+    args = ("uma-s-1p2", systems, "cuda", 42, (20, 40), 4, 0.1, "omat")
+    key = _grid_baseline_cache_key(*args)
+    assert key == _grid_baseline_cache_key(*args)  # deterministic
+    other = ("uma-s-1p2", systems, "cuda", 42, (20, 40), 4, 0.1, "omol")
+    assert key != _grid_baseline_cache_key(*other)  # sensitive to task
 
 
 def test_compare_results_and_format_table():

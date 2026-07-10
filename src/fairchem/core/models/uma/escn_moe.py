@@ -25,6 +25,8 @@ from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_map
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEGlobals,
+    is_moledgl_backend,
+    normalize_mole_layer_type,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
     MOLEInterface,
@@ -64,6 +66,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_layer_type: str = "pytorch",
         moe_single: bool = False,
         moe_type: str = "so2",
+        moe_use_grouped_gemm: bool = True,
         model_version: float = 1.0,
         **kwargs,
     ):
@@ -71,7 +74,23 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
         self.model_version = model_version
+        # Canonical layer type ("pytorch" | "fairchem_cpp" | "nvmath"); rejects
+        # the legacy "dgl" string.
+        self.moe_layer_type = normalize_mole_layer_type(moe_layer_type)
         if num_experts > 0:
+            # MOLEDGL backends (fairchem_cpp/nvmath) feed the full per-system
+            # ``mole_sizes`` to ``segment_mm`` in one shot; they do not implement
+            # the chunked ``ac_start_idx`` slicing that activation checkpointing
+            # requires. The two are mutually exclusive by design, so fail fast
+            # with a clear message instead of the cryptic out-of-bounds error.
+            if is_moledgl_backend(self.moe_layer_type) and kwargs.get(
+                "activation_checkpointing", False
+            ):
+                raise ValueError(
+                    f"moe_layer_type={self.moe_layer_type!r} (cuBLAS/C++ MOLEDGL) is "
+                    "mutually exclusive with activation_checkpointing; set "
+                    "activation_checkpointing=False for these backends."
+                )
             convert_model_to_MOLE_model(
                 model=self,
                 num_experts=num_experts,
@@ -81,14 +100,26 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 layers_mole=layers_moe,
                 use_composition_embedding=use_composition_embedding,
                 composition_dropout=composition_dropout,
-                mole_layer_type=moe_layer_type,
+                mole_layer_type=self.moe_layer_type,
                 mole_single=moe_single,
                 mole_type=moe_type,
+                mole_use_grouped_gemm=moe_use_grouped_gemm,
             )
 
     def merge_MOLE_model(self, data):
         if self.num_experts == 0:
             return self
+        # Merging collapses the experts into a plain Linear, which never calls
+        # segment_mm; the MOLEDGL (fairchem_cpp/nvmath) layers also have no
+        # ``merged_linear_layer``. Those backends and merge_mole are therefore
+        # mutually exclusive -- fail fast rather than crash inside the pass.
+        if is_moledgl_backend(getattr(self, "moe_layer_type", "pytorch")):
+            raise ValueError(
+                f"merge_mole is mutually exclusive with moe_layer_type="
+                f"{getattr(self, 'moe_layer_type', 'pytorch')!r} (cuBLAS/C++ MOLEDGL): "
+                "the merged path uses plain Linear and never calls segment_mm. Use "
+                "merge_mole=False with these backends, or moe_layer_type='pytorch'."
+            )
         csd_mixed_emb = self.csd_embedding(
             charge=data["charge"],
             spin=data["spin"],
