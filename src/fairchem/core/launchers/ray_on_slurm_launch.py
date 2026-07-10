@@ -95,7 +95,7 @@ class SPMDWorker:
                 master_address=self.master_address,
                 master_port=self.master_port,
                 device=self.device,
-                gp_size=self.gp_config,
+                gp_config=self.gp_config,
             )
             self.runner: Runner = hydra.utils.instantiate(self.runner_config)
             self.runner.job_config = self.job_config
