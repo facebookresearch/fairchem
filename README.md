@@ -232,3 +232,7 @@ dyn.run(steps=1000)
 
 ### LICENSE
 `fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area.
+
+---
+
+*[Mukller](https://github.com/Mukller)*
