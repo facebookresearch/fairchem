@@ -81,7 +81,6 @@ def _raise_unidentified_uma(checkpoint_location: str | None) -> None:
     raise RuntimeError(
         f"UMA checkpoint at {path_str!r} has no model_id. If this is a deprecated "
         f"UMA 1.0 checkpoint, install fairchem-core<={_LAST_UMA_1P0_FAIRCHEM_VERSION}; "
-        f"otherwise set a model_id on the model config (e.g. model_id: UMA-1.2.1)."
     )
 
 
