@@ -192,6 +192,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"{[t.name for t in untrained_tasks]}"
             )
             self.model.module.add_tasks(untrained_tasks)
+            if self.inference_settings.predict_untrained_hessian:
+                # add_tasks enables Hessian regression with the model default.
+                # Honor the explicit inference memory/speed choice afterwards.
+                self.model.module.backbone.regress_config.hessian_vmap = (
+                    self.inference_settings.hessian_vmap
+                )
 
         self._setup_device(device)
 

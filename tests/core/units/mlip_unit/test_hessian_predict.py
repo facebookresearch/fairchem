@@ -118,6 +118,7 @@ def test_hessian(vmap, pretrained_checkpoint):
             predict_untrained_hessian={"omol"}, hessian_vmap=vmap
         ),
     )
+    assert predict_unit.model.module.backbone.regress_config.hessian_vmap is vmap
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
