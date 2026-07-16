@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import os
 
+import numpy as np
 import pytest
 import torch
+import torch.distributed as dist
+import torch.nn as nn
+from ase import Atoms
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
@@ -29,6 +33,10 @@ from fairchem.core.common.test_utils import (
     PGConfig,
     init_pg_and_rank_and_launch_test,
     spawn_multi_process,
+)
+from fairchem.core.models.uma.outputs import (
+    compute_forces_and_stress,
+    reduce_node_to_system,
 )
 
 pytestmark = pytest.mark.serial
@@ -632,6 +640,182 @@ def test_a2a_spatial_partition():
             f"Rank {result['rank']}: spatial partitioning produced "
             f"different global results than index partitioning"
         )
+
+
+# =========================================================================
+# Energy / forces / stress GP correctness tests
+# =========================================================================
+
+
+def _make_water_box(
+    num_molecules: int = 10,
+    box_length: float = 12.0,
+    seed: int = 42,
+) -> Atoms:
+    """
+    Create a periodic box of water molecules.
+    """
+    rng = np.random.RandomState(seed)
+    positions, symbols = [], []
+    for _ in range(num_molecules):
+        center = rng.uniform(0, box_length, size=3)
+        h1 = center + np.array([0.96, 0.0, 0.0])
+        h2 = center + np.array([-0.24, 0.93, 0.0])
+        theta = rng.uniform(0, 2 * np.pi)
+        phi = rng.uniform(0, np.pi)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        cos_p, sin_p = np.cos(phi), np.sin(phi)
+        rot = np.array(
+            [
+                [cos_t * cos_p, -sin_t, cos_t * sin_p],
+                [sin_t * cos_p, cos_t, sin_t * sin_p],
+                [-sin_p, 0, cos_p],
+            ]
+        )
+        for p in [center, h1, h2]:
+            positions.append(center + rot @ (p - center))
+            symbols.append("O" if len(symbols) % 3 == 0 else "H")
+    return Atoms(
+        symbols=symbols,
+        positions=np.array(positions),
+        cell=[box_length] * 3,
+        pbc=True,
+    )
+
+
+class _ToyEnergyModel(nn.Module):
+    """
+    Minimal model: per-atom MLP energy from positions -> stress via autograd.
+
+    Isolates the outputs.py stress computation from the full backbone,
+    making the test focused on the GP reduction bug.
+    """
+
+    def __init__(self, hidden: int = 32):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(3, hidden),
+            nn.SiLU(),
+            nn.Linear(hidden, hidden),
+            nn.SiLU(),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, pos, cell, batch, num_systems):
+        # Route pos through cell so dE/dcell exists for stress computation.
+        # Mimics real backbone where cell enters via edge shifts.
+        cell_inv = torch.linalg.inv(cell[batch])
+        pos_frac = torch.einsum("bi,bij->bj", pos, cell_inv)
+        pos_used = torch.einsum("bi,bij->bj", pos_frac, cell[batch])
+
+        # Partition nodes across GP ranks, mimicking the real backbone's
+        # graph partitioning where each rank only processes a subset of nodes.
+        if gp_utils.initialized():
+            node_partition = torch.tensor_split(
+                torch.arange(len(pos), device=pos.device),
+                gp_utils.get_gp_world_size(),
+            )[gp_utils.get_gp_rank()]
+            pos_local = pos_used[node_partition]
+            batch_local = batch[node_partition]
+        else:
+            pos_local = pos_used
+            batch_local = batch
+
+        node_energy = self.mlp(pos_local).squeeze(-1)
+        energy, energy_part = reduce_node_to_system(
+            node_energy, batch_local, num_systems
+        )
+        forces, stress = compute_forces_and_stress(
+            energy_part,
+            pos,
+            cell,
+            batch,
+            training=self.training,
+        )
+        return energy, forces, stress
+
+
+def energy_forces_stress_gp_worker(world_size, natoms, seed=42):
+    """
+    Worker run on each gloo rank.
+
+    Returns energy, forces, stress from a toy model.
+    """
+    rank = dist.get_rank()
+
+    torch.manual_seed(seed)
+    model = _ToyEnergyModel(hidden=32)
+    model.eval()
+
+    atoms = _make_water_box(num_molecules=max(natoms // 3, 1), seed=seed)
+    natoms_actual = len(atoms)
+
+    pos = torch.tensor(atoms.get_positions(), dtype=torch.float32, requires_grad=True)
+    cell = torch.tensor(atoms.get_cell().array, dtype=torch.float32).unsqueeze(0)
+    cell.requires_grad_(True)
+    batch = torch.zeros(natoms_actual, dtype=torch.long)
+
+    energy, forces, stress = model(pos, cell, batch, num_systems=1)
+
+    return {
+        "energy": energy.detach(),
+        "forces": forces.detach(),
+        "stress": stress.detach(),
+        "rank": rank,
+    }
+
+
+@pytest.mark.parametrize("world_size", [2, 4, 8])
+def test_energy_forces_stress_gp(world_size):
+    """
+    Verify energy, forces, and stress match between single-process
+    reference and N-process graph-parallel execution.
+
+    Catches the double-reduction bug where pos_virial was computed
+    from already all-reduced gradients, then re-reduced inside
+    reduce_node_to_system.
+    """
+    natoms = 30
+
+    # 1-process reference (no GP)
+    ref_config = PGConfig(backend="gloo", world_size=1, gp_group_size=1, use_gp=False)
+    ref_results = spawn_multi_process(
+        ref_config,
+        energy_forces_stress_gp_worker,
+        init_pg_and_rank_and_launch_test,
+        1,
+        natoms,
+    )
+    ref = ref_results[0]
+
+    # N-process with GP
+    gp_config = PGConfig(
+        backend="gloo",
+        world_size=world_size,
+        gp_group_size=world_size,
+        use_gp=True,
+    )
+    gp_results = spawn_multi_process(
+        gp_config,
+        energy_forces_stress_gp_worker,
+        init_pg_and_rank_and_launch_test,
+        world_size,
+        natoms,
+    )
+    gp = gp_results[0]
+
+    assert torch.allclose(ref["energy"], gp["energy"], atol=1e-5), (
+        f"Energy mismatch: max_diff="
+        f"{(ref['energy'] - gp['energy']).abs().max().item():.6e}"
+    )
+    assert torch.allclose(ref["forces"], gp["forces"], atol=1e-4), (
+        f"Forces mismatch: max_diff="
+        f"{(ref['forces'] - gp['forces']).abs().max().item():.6e}"
+    )
+    assert torch.allclose(ref["stress"], gp["stress"], atol=1e-5), (
+        f"Stress mismatch: max_diff="
+        f"{(ref['stress'] - gp['stress']).abs().max().item():.6e}"
+    )
 
 
 # =========================================================================

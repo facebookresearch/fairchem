@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import contextlib
+import time
 from pathlib import Path
 from typing import Any
 
@@ -83,11 +84,17 @@ def get_free_energy_config(config: dict[str, Any]) -> dict[str, Any]:
         "t_max": fe_config.get("t_max", 500),
         "t_min": fe_config.get("t_min", 0),
         "structures_per_job": fe_config.get("structures_per_job", 10),
-        "match_only": fe_config.get("match_only", True),
+        "match_only": fe_config.get("match_only", False),
         "energy_cutoff": fe_config.get("energy_cutoff", None),
         "max_structures": fe_config.get("max_structures", None),
         "compute_dos": fe_config.get("compute_dos", False),
+        # Default to filtered_structures/ so the stage does not depend on the
+        # optional evaluate stage. If a user opts into ``match_only=True``,
+        # ``filter_structure_indices`` raises a clear error when the input
+        # parquets lack a ``match`` column (i.e. the eval stage never ran on
+        # them).
         "input_directory": fe_config.get("input_directory", "filtered_structures"),
+        "slurm": fe_config.get("slurm", {}),
     }
 
 
@@ -127,6 +134,8 @@ def compute_free_energy_single(
     Returns:
         Dictionary with free energy results, or empty dict on failure.
         Always includes 'source_file' and 'row_index' keys for reassembly.
+        When the calculation is attempted, 'free_energy_total_time' records
+        the wall-clock seconds spent in the vibrational thermo calculation.
     """
     logger = get_central_logger()
 
@@ -146,6 +155,7 @@ def compute_free_energy_single(
 
     calc = create_calculator(fe_config)
     atoms.calc = calc
+    start_time = time.perf_counter()
     try:
         thermo = calculate_vibrational_thermo(
             atoms,
@@ -162,6 +172,8 @@ def compute_free_energy_single(
         logger.exception(
             f"Free energy calculation failed for index {row_index} in {input_file}"
         )
+    finally:
+        result["free_energy_total_time"] = time.perf_counter() - start_time
 
     return result
 
@@ -179,6 +191,11 @@ def compute_free_energy_batch(
     persisted to ``temp_dir`` immediately after it is computed so that
     partial progress survives job-level failures and can be picked up on
     workflow restart.
+
+    For each structure where the calculation is attempted, the wall-clock
+    time (in seconds) spent in :func:`calculate_vibrational_thermo` is
+    recorded under the ``free_energy_total_time`` key, which is carried
+    through to the final per-source parquet files as a column.
 
     Args:
         work_items: List of (input_file_path, row_index) tuples
@@ -210,6 +227,7 @@ def compute_free_energy_batch(
             )
         else:
             atoms.calc = calc
+            start_time = time.perf_counter()
             try:
                 thermo = calculate_vibrational_thermo(
                     atoms,
@@ -227,6 +245,8 @@ def compute_free_energy_batch(
                     f"Free energy calculation failed for index {row_index} "
                     f"in {input_file}"
                 )
+            finally:
+                result["free_energy_total_time"] = time.perf_counter() - start_time
 
         _save_row_result(temp_dir, input_file, row_index, result)
         results.append(result)
@@ -389,6 +409,15 @@ def filter_structure_indices(
     match_only = fe_config.get("match_only", True)
     energy_cutoff = fe_config.get("energy_cutoff")
     max_structures = fe_config.get("max_structures")
+
+    if match_only and "match" not in structures_df.columns:
+        raise KeyError(
+            "free_energy.match_only=true but the input parquet has no 'match' "
+            "column. The 'match' column is written only by the ``evaluate`` "
+            "stage. Either set free_energy.input_directory to a source that "
+            "has been through evaluate (e.g. 'matched_structures') or set "
+            "free_energy.match_only=false to run on all structures."
+        )
 
     if not match_only and energy_cutoff is None and max_structures is None:
         return list(range(len(structures_df)))

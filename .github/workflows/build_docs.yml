@@ -30,7 +30,7 @@ jobs:
 
     # Check out the code
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         # The path to the sha of the commit we want to build will depend
         # on the trigger type. If a workflow_run trigger, then we want
@@ -42,6 +42,12 @@ jobs:
             github.event.pull_request.head.sha ||
             github.sha
           }}
+        # Required since actions/checkout began refusing fork PR code in
+        # workflow_run jobs. Safe here: fork PRs from all external
+        # contributors require maintainer approval before this trusted,
+        # secret-holding run can execute (repo Actions setting).
+        # See https://gh.io/securely-using-pull_request_target
+        allow-unsafe-pr-checkout: true
         # Optional: get full history if needed
         fetch-depth: 0
 

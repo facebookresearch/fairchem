@@ -124,15 +124,17 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Load checkpoint first to get model type
+        # Load checkpoint first to get model type; UMA compat fixups run downstream in load_inference_model.
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
         )
 
-        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
-        self.inference_settings = maybe_update_settings_backend(
-            self.inference_settings, checkpoint.model_config
-        )
+        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
+        # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
+        if torch.device(device).type == "cuda":
+            self.inference_settings = maybe_update_settings_backend(
+                self.inference_settings, checkpoint.model_config
+            )
 
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
