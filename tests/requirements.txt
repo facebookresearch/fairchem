@@ -2,7 +2,7 @@
 ase==3.29.0
 ase-db-backends==0.11.0
 e3nn==0.6.0
-huggingface-hub==1.21.0
+huggingface-hub==1.23.0
 setuptools<83.0.0
 torch==2.8.0
 torchtnt==0.2.4
@@ -21,7 +21,7 @@ ray[serve]==2.56.0
 # Pin to 6.x until Ray ships a fix.
 protobuf<7
 ipykernel==7.3.0
-jupyter_book==2.1.5
+jupyter_book==2.1.6
 pytest-xdist==3.8.0
 # Provides --suppress-no-test-exit-code so the CI workflow can stop
 # treating pytest exit 5 ("no tests collected") as a failure without
