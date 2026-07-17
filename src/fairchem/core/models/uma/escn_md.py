@@ -857,6 +857,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["edge_chunk_size"] = settings.edge_chunk_size
         if settings.external_graph_gen is not None:
             overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.hessian_vmap is not None:
+            overrides["hessian_vmap"] = settings.hessian_vmap
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
         if settings.use_quaternion_wigner is not None:

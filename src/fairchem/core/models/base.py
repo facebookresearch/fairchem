@@ -300,7 +300,10 @@ class HydraInterfaceMixin:
 
         elif task.property == "hessian":
             regress_config.hessian = True
-            regress_config.hessian_vmap = True
+            # Do not touch regress_config.hessian_vmap here: it is a strategy
+            # choice (fast vmap vs memory-efficient loop), not an enable flag,
+            # and it is already configured from InferenceSettings.hessian_vmap
+            # via the backbone's build_inference_settings().
             # Hessian requires forces with create_graph=True
             if not regress_config.direct_forces:
                 regress_config.forces = True

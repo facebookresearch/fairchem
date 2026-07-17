@@ -9,6 +9,7 @@ Tests for the model inference interface methods.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -204,6 +205,44 @@ class TestBackboneInterface:
         assert "always_use_pbc" in result
         assert result["always_use_pbc"] is False
         assert result.get("activation_checkpointing") is True
+
+
+class TestHessianVmapInferenceSetting:
+    """InferenceSettings.hessian_vmap must reach the backbone regress_config."""
+
+    @pytest.mark.parametrize("hessian_vmap", [True, False])
+    def test_uma_build_inference_settings_forwards_hessian_vmap(self, hessian_vmap):
+        """eSCNMDBackbone.build_inference_settings forwards hessian_vmap."""
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+
+        settings = InferenceSettings(hessian_vmap=hessian_vmap)
+        result = eSCNMDBackbone.build_inference_settings(settings)
+        assert result["hessian_vmap"] is hessian_vmap
+
+    def test_configure_gradient_for_hessian_task_preserves_vmap(self):
+        """Adding a hessian task enables the Hessian without resetting vmap.
+
+        hessian_vmap is a strategy choice (fast vmap vs memory-efficient loop),
+        not an enable flag, so configuring the task must leave it untouched.
+        """
+        backbone = MockBackbone()
+        backbone.regress_config = SimpleNamespace(
+            hessian=False,
+            hessian_vmap=False,
+            direct_forces=False,
+            forces=False,
+        )
+        model = HydraModelV2(backbone=backbone, heads={"energy": MockHead(backbone)})
+
+        task = MagicMock()
+        task.property = "hessian"
+        model._configure_gradient_for_task(task)
+
+        assert backbone.regress_config.hessian is True
+        # the Hessian is built from autograd forces, so forces get enabled too
+        assert backbone.regress_config.forces is True
+        # the user's choice must survive
+        assert backbone.regress_config.hessian_vmap is False
 
 
 class TestSO2ConversionInPrepareForInference:
