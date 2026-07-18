@@ -199,18 +199,24 @@ def compute_forces_and_stress(
         create_graph=training,
     )
 
-    if gp_utils.initialized():
-        grads = (
-            gp_utils.reduce_from_model_parallel_region(grads[0]),
-            gp_utils.reduce_from_model_parallel_region(grads[1]),
-        )
-
     num_systems = cell.shape[0]
-    forces = torch.neg(grads[0])
+
+    # Compute pos_virial from LOCAL (unreduced) gradients so that
+    # reduce_node_to_system performs the single correct GP all-reduce.
+    # Using already-reduced gradients here would cause double-reduction
+    # since reduce_node_to_system also calls reduce_from_model_parallel_region.
     pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
     pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
 
-    cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
+    # Now all-reduce gradients for forces and cell_virial
+    if gp_utils.initialized():
+        grad_pos = gp_utils.reduce_from_model_parallel_region(grads[0])
+        grad_cell = gp_utils.reduce_from_model_parallel_region(grads[1])
+    else:
+        grad_pos, grad_cell = grads[0], grads[1]
+
+    forces = torch.neg(grad_pos)
+    cell_virial = cell.mT @ grad_cell  # [B, 3, 3]
 
     virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
     volume = torch.det(cell).abs().unsqueeze(-1)

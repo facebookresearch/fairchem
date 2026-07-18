@@ -19,15 +19,24 @@ import socket
 import subprocess
 import tempfile
 import time
-from typing import Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 import uuid
 from contextlib import closing, suppress
 from pathlib import Path
 
 import psutil
 from fairchem.core.common.distutils import os_environ_get_or_throw
+from fairchem.core.launchers.cluster.ray_prometheus_metrics import (
+    MetricsServers,
+    _metrics_env_updates,
+    _prepare_metrics,
+    _start_metrics_servers,
+)
 import submitit
 from submitit.helpers import Checkpointable, DelayedSubmission
+
+if TYPE_CHECKING:
+    from fairchem.core.launchers.api import RayMetricsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +103,10 @@ RAY_DEFAULT_DASHBOARD_PORT = 8265
 # Default directory for per-cluster rendezvous / head.json files.
 DEFAULT_HEAD_FILE_DIR = Path.home() / ".fairray"
 
+# Name of the human/machine readable file written to the log directory with the
+# Ray head and dashboard connection details.
+RAY_CLUSTER_INFO_FILENAME = "ray_cluster_info.json"
+
 
 def scancel(job_ids: list[str]):
     """
@@ -126,10 +139,50 @@ class HeadInfo:
     """
 
     hostname: Optional[str] = None
+    head_nodename: Optional[str] = (
+        None  # SLURM node name (or gethostname) of the head machine
+    )
     port: Optional[int] = None  # Ray GCS port
     client_port: Optional[int] = None  # Ray Client server port (if enabled)
+    dashboard_port: Optional[int] = None  # Ray dashboard port
+    prometheus_port: Optional[int] = None  # Prometheus server port (if metrics enabled)
+    grafana_port: Optional[int] = None  # Grafana server port (if metrics enabled)
     temp_dir: Optional[str] = None
     namespace_serve_fairchem: Optional[str] = None
+
+    @property
+    def ray_address(self) -> Optional[str]:
+        """The Ray head address (``hostname:gcs_port``) or None if unknown."""
+        if self.hostname and self.port:
+            return f"{self.hostname}:{self.port}"
+        return None
+
+    @property
+    def dashboard_url(self) -> Optional[str]:
+        """The Ray dashboard URL or None if unknown."""
+        if self.hostname and self.dashboard_port:
+            return f"http://{self.hostname}:{self.dashboard_port}"
+        return None
+
+    @property
+    def prometheus_url(self) -> Optional[str]:
+        """
+        The Prometheus URL (via the SSH-tunnel-friendly node name) or None if
+        metrics are not running.
+        """
+        if self.head_nodename and self.prometheus_port:
+            return f"http://{self.head_nodename}:{self.prometheus_port}"
+        return None
+
+    @property
+    def grafana_url(self) -> Optional[str]:
+        """
+        The Grafana URL (via the SSH-tunnel-friendly node name) or None if
+        metrics are not running.
+        """
+        if self.head_nodename and self.grafana_port:
+            return f"http://{self.head_nodename}:{self.grafana_port}"
+        return None
 
 
 class RayClusterState:
@@ -142,12 +195,15 @@ class RayClusterState:
     Args:
         rdv_dir (Path): The directory where the rendezvous information will be stored. Defaults to ~/.fairray.
         cluster_id (str): A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
+        log_dir (Path): Job log directory where a human-facing copy of the Ray/dashboard
+            connection details is written. If None, only the rendezvous ``head.json`` is written.
     """
 
     def __init__(
         self,
         rdv_dir: Optional[Path] = None,
         cluster_id: Optional[str] = None,
+        log_dir: Optional[Path] = None,
     ):
         self.rendezvous_rootdir = (
             rdv_dir if rdv_dir is not None else DEFAULT_HEAD_FILE_DIR
@@ -155,6 +211,7 @@ class RayClusterState:
         self._cluster_id = (
             uuid.uuid4().hex if cluster_id is None else cluster_id
         )  # maybe use something more readable
+        self.log_dir = log_dir
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -177,6 +234,16 @@ class RayClusterState:
         """Returns the path to the JSON file containing head node information."""
         return self.rendezvous_dir / "head.json"
 
+    @property
+    def cluster_info_file(self) -> Optional[Path]:
+        """
+        Path to the human-facing Ray/dashboard connection info file in the job
+        log directory, or None if no log directory is configured.
+        """
+        if self.log_dir is None:
+            return None
+        return Path(self.log_dir) / RAY_CLUSTER_INFO_FILENAME
+
     def is_head_ready(self) -> bool:
         """Checks if the head node information is available and ready."""
         return self._head_json.exists()
@@ -197,13 +264,43 @@ class RayClusterState:
 
     def save_head_info(self, head_info: HeadInfo):
         """
-        Saves the head node information to a JSON file.
+        Saves the head node information to the rendezvous ``head.json`` and, if a
+        job log directory is configured, also writes a human-facing copy with the
+        Ray/dashboard connection details there.
+
+        Both files are (re)written on every head start, including preemption
+        resumes, so they always reflect the currently running cluster.
 
         Args:
             head_info (HeadInfo): The head node information to save.
         """
         with self._head_json.open("w") as f:
             json.dump(dataclasses.asdict(head_info), f)
+
+        info_file = self.cluster_info_file
+        if info_file is not None:
+            info_file.parent.mkdir(parents=True, exist_ok=True)
+            with info_file.open("w") as f:
+                json.dump(
+                    {
+                        "cluster_id": self.cluster_id,
+                        "hostname": head_info.hostname,
+                        "head_nodename": head_info.head_nodename,
+                        "ray_gcs_port": head_info.port,
+                        "ray_address": head_info.ray_address,
+                        "ray_client_port": head_info.client_port,
+                        "dashboard_host": head_info.hostname,
+                        "dashboard_port": head_info.dashboard_port,
+                        "dashboard_url": head_info.dashboard_url,
+                        "prometheus_port": head_info.prometheus_port,
+                        "prometheus_url": head_info.prometheus_url,
+                        "grafana_port": head_info.grafana_port,
+                        "grafana_url": head_info.grafana_url,
+                    },
+                    f,
+                    indent=2,
+                )
+            logger.info(f"Wrote Ray cluster info to {info_file}")
 
     def reset_state(self):
         """Resets the head node information by removing the stored JSON file, useful for preemption resumes"""
@@ -294,6 +391,7 @@ def _ray_head_script(
     dashboard_port: Optional[int] = None,
     enable_client_server: bool = False,
     temp_dir_template: Optional[str] = None,
+    metrics_config: Optional[RayMetricsConfig] = None,
     **kwargs,
 ):
     """Start the head node of the Ray cluster on slurm.
@@ -302,19 +400,37 @@ def _ray_head_script(
         cluster_state: State object for cluster coordination
         worker_wait_timeout_seconds: Timeout for workers to connect
         payload: Optional function to run after head starts
-        dashboard_port: Port for Ray dashboard (auto-assigned if None)
+        dashboard_port: Port for Ray dashboard. If provided, this exact port is
+            used so you can reliably connect to the dashboard. If None, a free
+            port is auto-assigned.
         enable_client_server: If True, start Ray Client server for remote connections
         temp_dir_template: Template path for Ray temp files. Supports environment variable
             expansion (e.g., "/scratch/$SLURM_JOB_ID"). Defaults to system temp directory.
+        metrics_config: Optional RayMetricsConfig. If enabled, start Prometheus +
+            Grafana on the head so the dashboard Metrics tab works. Best-effort:
+            failures here never fail the job.
         **kwargs: Additional arguments passed to payload
     """
-    hostname = socket.gethostname()
+    # SLURM node name of the head machine (useful for SSH tunneling to the
+    # dashboard); falls back to the local hostname when not running under SLURM.
+    head_nodename = os.environ.get("SLURMD_NODENAME") or socket.gethostname()
     head_env = os.environ.copy()
     num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
     num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
     port = find_free_port()
-    dashboard_port = find_free_port()
+    # Respect an explicitly requested dashboard port so users can reliably
+    # connect to the dashboard; otherwise auto-assign a free one.
+    if dashboard_port is None:
+        dashboard_port = find_free_port()
+    else:
+        requested_dashboard_port = dashboard_port
+        dashboard_port = find_free_port(preferred=requested_dashboard_port)
+        if dashboard_port != requested_dashboard_port:
+            logger.warning(
+                f"Requested dashboard port {requested_dashboard_port} is "
+                f"unavailable; using {dashboard_port} instead."
+            )
 
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
@@ -326,6 +442,29 @@ def _ray_head_script(
         temp_dir_template = os.path.expandvars(temp_dir_template)
     temp_dir = f"{temp_dir_template}/ray_head"
     Path(temp_dir).mkdir(parents=True, exist_ok=True)
+
+    # Optionally set up Prometheus + Grafana for the dashboard Metrics tab. Ports
+    # and binaries must be resolved BEFORE ``ray start`` so the dashboard picks up
+    # the RAY_* env vars; the servers themselves start after Ray generates their
+    # configs. Entirely best-effort: never let a metrics issue fail the job.
+    metrics_servers = MetricsServers()
+    metrics_plan = None
+    if metrics_config is not None and metrics_config.enabled:
+        try:
+            metrics_plan = _prepare_metrics(
+                metrics_config,
+                f"{temp_dir}/metrics_bin",
+                prometheus_port=metrics_config.prometheus_port or find_free_port(),
+                grafana_port=metrics_config.grafana_port or find_free_port(),
+            )
+            head_env.update(
+                _metrics_env_updates(head_nodename, metrics_plan, metrics_config)
+            )
+        except Exception as ex:
+            logger.warning(
+                f"Metrics setup (pre-start) failed; continuing without metrics: {ex}"
+            )
+            metrics_plan = None
     try:
         ray_cmd = [
             "ray",
@@ -375,19 +514,58 @@ def _ray_head_script(
 
         head_env["RAY_ADDRESS"] = address
         logger.info(f"host {address}")
-        print(f"Head started, ip: {address} ({cluster_state.cluster_id})")
-        # Dashboard port can be read from ray status if needed, but for now just note it's auto-assigned
-        print(f"Ray dashboard running (auto-assigned port)")
+        logger.info(f"Head started, ip: {address} ({cluster_state.cluster_id})")
+        logger.info(
+            f"Ray dashboard running at http://{head_hostname}:{dashboard_port} "
+            f"(bound to 0.0.0.0:{dashboard_port})"
+        )
 
         info = HeadInfo(
             hostname=head_hostname,
+            head_nodename=head_nodename,
             port=port,
             client_port=client_port,
+            dashboard_port=dashboard_port,
+            prometheus_port=(
+                metrics_plan.prometheus_port
+                if metrics_plan is not None and metrics_plan.run_prometheus
+                else None
+            ),
+            grafana_port=(
+                metrics_plan.grafana_port
+                if metrics_plan is not None and metrics_plan.run_grafana
+                else None
+            ),
             temp_dir=temp_dir,
             namespace_serve_fairchem=cluster_state.cluster_id,
         )
         cluster_state.save_head_info(info)
         os.environ.update(head_env)
+
+        # Start the metrics servers now that Ray has generated their configs.
+        if metrics_plan is not None:
+            try:
+                metrics_servers = _start_metrics_servers(
+                    metrics_plan,
+                    session_dir=str(Path(temp_dir) / "session_latest"),
+                    data_dir=f"{temp_dir}/metrics_data",
+                    metrics_config=metrics_config,
+                )
+                if metrics_servers.prometheus_port:
+                    logger.info(
+                        f"Prometheus running at "
+                        f"http://{head_nodename}:{metrics_servers.prometheus_port}"
+                    )
+                if metrics_servers.grafana_port:
+                    logger.info(
+                        f"Grafana running at "
+                        f"http://{head_nodename}:{metrics_servers.grafana_port}"
+                    )
+            except Exception as ex:
+                logger.warning(
+                    f"Failed to start metrics servers; continuing without them: {ex}"
+                )
+
         if payload is not None:
             payload(**kwargs)
         else:
@@ -395,7 +573,8 @@ def _ray_head_script(
                 # practically, we should wait from driver signal to die here
                 time.sleep(60)
     finally:
-        # Clean up temp directory
+        # Stop the metrics servers, then clean up the temp directory.
+        metrics_servers.terminate()
         shutil.rmtree(Path(temp_dir), ignore_errors=True)
 
 
@@ -466,7 +645,7 @@ def worker_script(
             check=False,
         )
     except Exception as ex:
-        print(f"Worker failed to start: {ex}")
+        logger.error(f"Worker failed to start: {ex}")
         raise ex
     finally:
         # Clean up worker temp directory
@@ -511,7 +690,7 @@ class RayCluster:
         temp_dir_template: Optional[str] = None,
         cancel_on_exit: bool = False,
     ):
-        self.state = RayClusterState(rdv_dir, cluster_id)
+        self.state = RayClusterState(rdv_dir, cluster_id, log_dir=log_dir)
         logger.info(f"cluster {self.state.cluster_id}")
         self.output_dir = log_dir
         self.log_dir = Path(log_dir) / self.state.cluster_id

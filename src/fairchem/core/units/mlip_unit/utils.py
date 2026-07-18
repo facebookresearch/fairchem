@@ -17,6 +17,7 @@ from omegaconf import DictConfig
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
+from fairchem.core.models.uma.compat import apply_uma_compat_fixups
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
@@ -50,6 +51,8 @@ def load_inference_model(
         checkpoint = torch.load(
             checkpoint_location, map_location="cpu", weights_only=False
         )
+
+    apply_uma_compat_fixups(checkpoint, checkpoint_location=checkpoint_location)
 
     if overrides is not None:
         checkpoint.model_config = update_configs(checkpoint.model_config, overrides)

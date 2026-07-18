@@ -69,9 +69,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -86,7 +92,7 @@ jobs:
           python-version:  ${{ matrix.python_version }}
 
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -141,7 +147,7 @@ jobs:
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           fail_ci_if_error: false
           files: ./coverage.xml
@@ -180,9 +186,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -196,7 +205,7 @@ jobs:
           python-version: ${{ matrix.python_version }}
 
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -287,9 +296,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -366,9 +381,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -435,7 +453,7 @@ jobs:
         python_version: ['3.13']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
@@ -443,9 +461,15 @@ jobs:
           create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 

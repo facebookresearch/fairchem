@@ -126,6 +126,13 @@ def pytest_configure(config):
         "any model (parametrized via models_to_test or substituted by "
         "--sweep-model).",
     )
+    config.addinivalue_line(
+        "markers",
+        "no_sweep: test asserts behavior/values specific to its declared "
+        "@pretrained model(s) (exact reference energies, model-size-specific "
+        "logic, or white-box access to the backbone/head internals), so it is "
+        "not meaningful under --sweep-model substitution and is deselected there.",
+    )
 
     _validate_model_flags(config)
 
@@ -344,6 +351,11 @@ def pytest_collection_modifyitems(config, items):
         uma_set = set(uma_models()) if sweep_is_path else None
         keep, deselect = [], []
         for item in items:
+            # no_sweep tests assert model-specific behavior/values; substituting
+            # a different checkpoint into them is not meaningful.
+            if item.get_closest_marker("no_sweep") is not None:
+                deselect.append(item)
+                continue
             marker = item.get_closest_marker("pretrained")
             if marker is None:
                 deselect.append(item)
