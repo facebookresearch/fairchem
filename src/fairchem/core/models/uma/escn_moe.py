@@ -71,6 +71,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
         self.model_version = model_version
+        # UMA generation id (set by HydraModel); drives comp_break_extensivity below.
+        self.model_id = None
         if num_experts > 0:
             convert_model_to_MOLE_model(
                 model=self,
@@ -138,6 +140,9 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 composition_by_atom = self.composition_embedding(
                     effective_atomic_numbers_full
                 )
+                # UMA 1.2 bug: including the zero-initialized self value in the
+                # mean breaks composition extensivity. Only that generation does it.
+                comp_break_extensivity = self.model_id == "UMA-S-1.2"
                 composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
@@ -146,7 +151,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
-                    include_self=np.isclose(self.model_version, 1.0).item(),
+                    include_self=comp_break_extensivity,
                 )
                 embeddings.append(composition.unsqueeze(0))
             embeddings.append(csd_mixed_emb[None])
