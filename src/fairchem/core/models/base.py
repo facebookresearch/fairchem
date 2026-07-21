@@ -224,6 +224,30 @@ class HydraInterfaceMixin:
         """
         self.backbone.validate_atoms_data(atoms, task_name)
 
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        """
+        Return parameter names that should be exempt from weight decay.
+
+        Architecture-specific rules live on backbones and heads. Hydra models
+        expose those rules using the top-level parameter names.
+        """
+        no_weight_decay_names: set[str] = set()
+
+        if hasattr(self.backbone, "no_weight_decay"):
+            no_weight_decay_names.update(
+                f"backbone.{name}" for name in self.backbone.no_weight_decay()
+            )
+
+        for head_name, head in self.output_heads.items():
+            if hasattr(head, "no_weight_decay"):
+                no_weight_decay_names.update(
+                    f"output_heads.{head_name}.{name}"
+                    for name in head.no_weight_decay()
+                )
+
+        return no_weight_decay_names
+
     def setup_tasks(self, tasks_config: list) -> None:
         """
         Setup tasks from checkpoint config.

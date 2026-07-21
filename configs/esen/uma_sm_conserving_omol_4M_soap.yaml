@@ -1,0 +1,11 @@
+defaults:
+  - uma_sm_conserving_omol_4M
+  - optimizer: soap_freq1
+  - _self_
+
+job:
+  run_name: uma_sm_omol_4M_0experts_conserving_soap_freq1
+
+runner:
+  train_eval_unit:
+    optimizer_fn: ${optimizer}

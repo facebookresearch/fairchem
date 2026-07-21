@@ -10,6 +10,7 @@ dynamic = ["version", "readme"]
 requires-python = ">=3.11, <3.14"
 dependencies = [
     "torch~=2.8.0",
+    "pytorch-optimizer==3.10.1",
     "ray[serve]>=2.53.0",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",

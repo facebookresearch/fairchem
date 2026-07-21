@@ -449,6 +449,13 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.merged_on_dataset = None
         self.non_merged_dataset_names: list[str] = []
 
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        if not hasattr(self.head, "no_weight_decay"):
+            return set()
+
+        return {f"head.{name}" for name in self.head.no_weight_decay()}
+
     @staticmethod
     def _build_expert_mapping(
         dataset_names: list[str] | None,
@@ -599,6 +606,13 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
+
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        if not hasattr(self.head, "no_weight_decay"):
+            return set()
+
+        return {f"head.{name}" for name in self.head.no_weight_decay()}
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]

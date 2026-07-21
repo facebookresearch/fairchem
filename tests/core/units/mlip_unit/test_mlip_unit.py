@@ -13,13 +13,18 @@ import pickle
 import shutil
 import tempfile
 from collections import namedtuple
+from functools import partial
 from typing import TYPE_CHECKING
 
 import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
-from fairchem.core.units.mlip_unit.mlip_unit import UNIT_RESUME_CONFIG
+from fairchem.core.models.base import HydraModelV2
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_RESUME_CONFIG,
+    _get_optimizer_wd,
+)
 from tests.core.testing_utils import launch_main
 
 if TYPE_CHECKING:
@@ -106,6 +111,101 @@ class EvalEndCallbackASELMDB(Callback):
         assert unit.running_metrics["omol_energy"]["omol.train"][
             "mae"
         ].metric == pytest.approx(self.omol_energy_mae, rel=1e-4)
+
+
+class NoWeightDecayBackbone(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = torch.nn.Linear(2, 2)
+
+    def forward(self, data):
+        return data
+
+    def no_weight_decay(self) -> set[str]:
+        return {"linear.bias"}
+
+
+class WeightDecayBackbone(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = torch.nn.Linear(2, 2)
+
+    def forward(self, data):
+        return data
+
+
+class NoWeightDecayHead(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear = torch.nn.Linear(2, 1)
+
+    @property
+    def use_amp(self):
+        return False
+
+    def forward(self, data, emb):
+        return {"energy": self.linear(emb)}
+
+    def no_weight_decay(self) -> set[str]:
+        return {"linear.bias"}
+
+
+class NoWeightDecayHeadWrapper(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.head = NoWeightDecayHead()
+
+    @property
+    def use_amp(self):
+        return False
+
+    def forward(self, data, emb):
+        return self.head(data, emb)
+
+    def no_weight_decay(self) -> set[str]:
+        return {f"head.{name}" for name in self.head.no_weight_decay()}
+
+
+def test_optimizer_wd_uses_single_group_without_no_weight_decay_names():
+    model = HydraModelV2(
+        backbone=WeightDecayBackbone(),
+        heads={"energy": torch.nn.Identity()},
+    )
+
+    assert model.no_weight_decay() == set()
+
+    optimizer = _get_optimizer_wd(
+        partial(torch.optim.AdamW, lr=0.1, weight_decay=0.2),
+        model,
+    )
+
+    assert len(optimizer.param_groups) == 1
+    assert optimizer.param_groups[0]["weight_decay"] == 0.2
+
+
+def test_optimizer_wd_uses_hydra_model_no_weight_decay():
+    backbone = NoWeightDecayBackbone()
+    head = NoWeightDecayHeadWrapper()
+    model = HydraModelV2(backbone=backbone, heads={"energy": head})
+
+    assert model.no_weight_decay() == {
+        "backbone.linear.bias",
+        "output_heads.energy.head.linear.bias",
+    }
+
+    optimizer = _get_optimizer_wd(
+        partial(torch.optim.AdamW, lr=0.1, weight_decay=0.2),
+        model,
+    )
+
+    assert [group["weight_decay"] for group in optimizer.param_groups] == [0, 0.2]
+    no_decay_param_ids = {id(param) for param in optimizer.param_groups[0]["params"]}
+    decay_param_ids = {id(param) for param in optimizer.param_groups[1]["params"]}
+
+    assert id(model.backbone.linear.bias) in no_decay_param_ids
+    assert id(model.output_heads["energy"].head.linear.bias) in no_decay_param_ids
+    assert id(model.backbone.linear.weight) in decay_param_ids
+    assert id(model.output_heads["energy"].head.linear.weight) in decay_param_ids
 
 
 def pickle_data_loader(pickle_path: str, steps: int):
