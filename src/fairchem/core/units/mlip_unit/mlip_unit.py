@@ -438,7 +438,10 @@ def _get_optimizer_wd(
     # TODO: use a protocol here instead of guessing that the attr exists
     if weight_decay > 0 and hasattr(model, "no_weight_decay"):
         model_params_no_wd = model.no_weight_decay()
+    else:
+        model_params_no_wd = set()
 
+    if model_params_no_wd:
         params_decay, params_no_decay, name_no_decay = [], [], []
         for name, param in model.named_parameters():
             if not param.requires_grad:
