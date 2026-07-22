@@ -78,14 +78,16 @@ reported as a `RuntimeError` naming the buffer. Same for name-set differences
 silent skipping would let the EMA slowly diverge from the live model in ways
 that are very hard to detect downstream. Prefer to fail loudly.
 """
+
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import torch
-from torch import Tensor
-from torch.nn import Module
 from torch.optim import swa_utils
+
+if TYPE_CHECKING:
+    from torch import Tensor
+    from torch.nn import Module
 
 
 class NameMatchedAveragedModel(swa_utils.AveragedModel):
@@ -136,12 +138,16 @@ class NameMatchedAveragedModel(swa_utils.AveragedModel):
                 ) in grouped.items():
                     if self.multi_avg_fn:
                         self.multi_avg_fn(
-                            self_params, model_params, self.n_averaged.to(device),
+                            self_params,
+                            model_params,
+                            self.n_averaged.to(device),
                         )
                     else:
                         multi_avg_fn = swa_utils.get_swa_multi_avg_fn()
                         multi_avg_fn(
-                            self_params, model_params, self.n_averaged.to(device),
+                            self_params,
+                            model_params,
+                            self.n_averaged.to(device),
                         )
             else:
                 for p_avg, p_mod in zip(self_param_detached, model_param_detached):
