@@ -27,14 +27,28 @@ setups:
 Symptomatic failure: `RuntimeError: The size of tensor a (N) must match the
 size of tensor b (M)` at the positional buffer-copy line of `update_parameters`.
 
+There is also a second, subtler failure mode driven by
+`named_buffers()` defaulting to `remove_duplicate=True`: shared buffer
+tensors (e.g. one project-owned mask referenced by many parametrizations)
+are yielded once, under their FIRST-seen name. When those references are
+re-pointed post-`deepcopy`, the "first name" that survives dedup can
+differ between the live and EMA copies — even though the underlying
+tensors would sync fine. A name-matched implementation that used dedup
+would then either crash on the spurious "buffer name sets differ" or,
+worse, silently drop the sync for shared buffers, letting the EMA copy
+hold stale references while the live model evolves.
+
 Fix
 ---
 `AveragedModel.__init__` uses `self.module = copy.deepcopy(model)`, which
 guarantees that live and EMA share identical `named_parameters()` /
-`named_buffers()` name sets AT CONSTRUCTION TIME. Matching by name at every
-`update_parameters` call is robust to any of the reorderings above: buffers
-and parameters are looked up by name in dictionaries and only same-name
-entries are synced.
+`named_buffers()` name trees AT CONSTRUCTION TIME. Matching by name at
+every `update_parameters` call is robust to any of the reorderings above.
+
+To also cover shared buffers correctly, buffers are iterated with
+`remove_duplicate=False`, so every registered path is walked and shared
+tensors get synced under all their names. Redundant writes to the same
+underlying tensor are cheap and correct.
 
 In the healthy case where positional and name-matched iteration would produce
 identical results, `NameMatchedAveragedModel` is bit-exact with the vanilla
@@ -94,7 +108,8 @@ class NameMatchedAveragedModel(swa_utils.AveragedModel):
         if only_ema or only_live:
             raise RuntimeError(
                 "NameMatchedAveragedModel: parameter name sets differ between "
-                f"live and EMA. only_ema={only_ema[:5]}..., only_live={only_live[:5]}...",
+                f"live and EMA. only_ema ({len(only_ema)}): {only_ema}. "
+                f"only_live ({len(only_live)}): {only_live}."
             )
         common_params = sorted(ema_pd)
 
@@ -135,17 +150,26 @@ class NameMatchedAveragedModel(swa_utils.AveragedModel):
                         self.avg_fn(p_avg.detach(), p_mod, n_averaged),
                     )
 
-        # ---- Buffers: match by name ---------------------------------------
+        # ---- Buffers: match by name, INCLUDING shared duplicates ----------
         if not self.use_buffers:
-            ema_bd = dict(self.module.named_buffers())
-            live_bd = dict(model.named_buffers())
+            # remove_duplicate=False so a buffer tensor shared by multiple
+            # parametrizations appears under EVERY name it's registered as.
+            # Otherwise dedup can pick different "first names" for shared
+            # tensors on live vs EMA when buffer references are re-pointed
+            # post-deepcopy (e.g. a sparsifier that consolidates per-parametrization
+            # mask buffers to a single project-owned tensor), producing
+            # spurious name-set mismatches AND, in a silent-skip variant,
+            # missing the sync entirely.
+            ema_bd = dict(self.module.named_buffers(remove_duplicate=False))
+            live_bd = dict(model.named_buffers(remove_duplicate=False))
             only_ema_b = sorted(set(ema_bd) - set(live_bd))
             only_live_b = sorted(set(live_bd) - set(ema_bd))
             if only_ema_b or only_live_b:
+                # Full list to help debug — silent truncation obscures the real diff.
                 raise RuntimeError(
                     "NameMatchedAveragedModel: buffer name sets differ between "
-                    f"live and EMA. only_ema={only_ema_b[:5]}..., "
-                    f"only_live={only_live_b[:5]}...",
+                    f"live and EMA. only_ema ({len(only_ema_b)}): {only_ema_b}. "
+                    f"only_live ({len(only_live_b)}): {only_live_b}."
                 )
             for name in sorted(ema_bd):
                 b_swa = ema_bd[name]
