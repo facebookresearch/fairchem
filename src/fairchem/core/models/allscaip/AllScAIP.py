@@ -118,9 +118,6 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
         # init weights
         self.init_weights()
 
-        # enable torch.set_float32_matmul_precision('high')
-        torch.set_float32_matmul_precision("high")
-
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 

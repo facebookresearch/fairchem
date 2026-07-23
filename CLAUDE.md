@@ -242,6 +242,13 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `lmdb` - Dataset storage format
 - `ray[serve]>=2.53.0` - Distributed computing
 
+## Numerical Precision
+
+- Model constructors must not mutate process-wide PyTorch precision settings
+  such as `torch.set_float32_matmul_precision`. Precision is caller-owned;
+  inference applies TF32 temporarily through `InferenceSettings.tf32` and
+  restores the prior settings afterward.
+
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
 This includes:

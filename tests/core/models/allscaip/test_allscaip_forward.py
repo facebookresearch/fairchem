@@ -1,5 +1,8 @@
 """
-Modified from tests/core/models/uma/test_compile.py
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
@@ -121,6 +124,17 @@ def get_allscaip_full(
     model = HydraModelV2(backbone, heads).to(device)
     model.eval()
     return model
+
+
+@pytest.mark.parametrize("precision", ["highest", "high"])
+def test_backbone_preserves_float32_matmul_precision(precision):
+    original_precision = torch.get_float32_matmul_precision()
+    try:
+        torch.set_float32_matmul_precision(precision)
+        get_allscaip_backbone(cutoff=6.0, use_compile=False, device="cpu")
+        assert torch.get_float32_matmul_precision() == precision
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
 
 
 @pytest.mark.gpu()
