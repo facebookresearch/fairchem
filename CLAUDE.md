@@ -258,6 +258,9 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Core test collection imports benchmark and calculation modules through the
   shared conftest. Validation environments need the `extras` dependencies,
   including `pandas`, `pyarrow`, and `pymatgen`, even for focused test subsets.
+- Some GPU assertions are stochastic or tolerance-sensitive, and the complete
+  GPU matrix is expensive. Reproduce failures with the exact test node (and
+  repeat it when appropriate) before rerunning a full GPU shard.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
