@@ -8,10 +8,55 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
+import pytest
 import torch
 
 from fairchem.core.common import distutils, gp_utils
+from fairchem.core.units.mlip_unit.utils import (
+    float32_matmul_precision_context,
+    get_model_float32_matmul_precision,
+)
+
+
+@pytest.mark.parametrize("initial_precision", ["highest", "high"])
+def test_float32_matmul_precision_context_restores_caller(initial_precision):
+    original_precision = torch.get_float32_matmul_precision()
+    try:
+        torch.set_float32_matmul_precision(initial_precision)
+        with float32_matmul_precision_context("high"):
+            assert torch.get_float32_matmul_precision() == "high"
+        assert torch.get_float32_matmul_precision() == initial_precision
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+
+
+def test_float32_matmul_precision_context_restores_after_error():
+    original_precision = torch.get_float32_matmul_precision()
+    try:
+        torch.set_float32_matmul_precision("highest")
+        with (
+            pytest.raises(RuntimeError, match="failure"),
+            float32_matmul_precision_context("high"),
+        ):
+            raise RuntimeError("failure")
+        assert torch.get_float32_matmul_precision() == "highest"
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+
+
+def test_get_model_float32_matmul_precision_through_wrappers():
+    model = SimpleNamespace(
+        module=SimpleNamespace(
+            module=SimpleNamespace(
+                backbone=SimpleNamespace(float32_matmul_precision="high")
+            )
+        )
+    )
+
+    assert get_model_float32_matmul_precision(model) == "high"
+    assert get_model_float32_matmul_precision(None) is None
 
 
 class GradSaveOptimizer(torch.optim.AdamW):

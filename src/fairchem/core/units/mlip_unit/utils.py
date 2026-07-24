@@ -96,6 +96,49 @@ def load_tasks(checkpoint_location: str) -> list[Task]:
     ]
 
 
+def get_model_float32_matmul_precision(model: torch.nn.Module | None) -> str | None:
+    """
+    Get a model's float32 matmul policy through common module wrappers.
+
+    Args:
+        model: A model, potentially wrapped by DDP, FSDP, or AveragedModel.
+
+    Returns:
+        The backbone's configured precision, or None if it has no policy.
+    """
+    visited = set()
+    while model is not None and id(model) not in visited:
+        visited.add(id(model))
+        backbone = getattr(model, "backbone", None)
+        if backbone is not None:
+            return getattr(backbone, "float32_matmul_precision", None)
+        model = getattr(model, "module", None)
+    return None
+
+
+@contextmanager
+def float32_matmul_precision_context(precision: str | None):
+    """
+    Temporarily apply and restore the process float32 matmul precision.
+
+    Args:
+        precision: A value accepted by torch.set_float32_matmul_precision, or
+            None to leave the current setting unchanged.
+    """
+    if precision is None:
+        yield
+        return
+
+    original_precision = torch.get_float32_matmul_precision()
+    try:
+        if precision != original_precision:
+            torch.set_float32_matmul_precision(precision)
+        yield
+    finally:
+        if precision != original_precision:
+            torch.set_float32_matmul_precision(original_precision)
+
+
 @contextmanager
 def tf32_context_manager():
     # Store the original settings

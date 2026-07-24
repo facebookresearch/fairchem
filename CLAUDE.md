@@ -248,6 +248,9 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   such as `torch.set_float32_matmul_precision`. Precision is caller-owned;
   inference applies TF32 temporarily through `InferenceSettings.tf32` and
   restores the prior settings afterward.
+- Model configs may record a float32 matmul policy, but constructors must not
+  apply it. Execution callers scope and restore the policy outside compiled
+  `forward` methods because precision getters cannot be traced by fullgraph.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

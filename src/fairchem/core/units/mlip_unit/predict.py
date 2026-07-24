@@ -46,7 +46,9 @@ from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
 from fairchem.core.units.mlip_unit.utils import (
+    float32_matmul_precision_context,
     get_backbone_class_from_checkpoint,
+    get_model_float32_matmul_precision,
     load_inference_model,
     tf32_context_manager,
 )
@@ -160,6 +162,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             self.model.module.setup_tasks(checkpoint.tasks_config)
         finally:
             torch.set_default_dtype(prev_dtype)
+
+        self.float32_matmul_precision = get_model_float32_matmul_precision(self.model)
 
         # Get backbone's default untrained tasks (if supported and enabled)
         default_backbone_tasks = []
@@ -483,11 +487,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if self.model.module.backbone.regress_config.direct_forces
             else nullcontext()
         )
-        tf32_context = (
-            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
+        matmul_context = (
+            tf32_context_manager()
+            if self.inference_settings.tf32
+            else float32_matmul_precision_context(self.float32_matmul_precision)
         )
 
-        with inference_context, tf32_context:
+        with inference_context, matmul_context:
             output = self.model(data)
             return self._process_outputs(data, output, undo_refs)
 

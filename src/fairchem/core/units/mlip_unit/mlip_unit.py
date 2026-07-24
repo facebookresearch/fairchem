@@ -57,7 +57,11 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
-from fairchem.core.units.mlip_unit.utils import load_inference_model
+from fairchem.core.units.mlip_unit.utils import (
+    float32_matmul_precision_context,
+    get_model_float32_matmul_precision,
+    load_inference_model,
+)
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -528,6 +532,7 @@ class MLIPTrainEvalUnit(
         self.finetune_model_full_config = getattr(
             model, "finetune_model_full_config", None
         )
+        self.float32_matmul_precision = get_model_float32_matmul_precision(model)
 
         # call optimizer function between wrapping in DDP
         # this is required for models that have a no_weight_decay function
@@ -696,19 +701,20 @@ class MLIPTrainEvalUnit(
                 + self.train_progress.num_steps_completed_in_epoch
                 / float(len(state.train_state.dataloader))
             )
-            with torch.autocast(
-                device_type=device,
-                enabled=self.autocast_enabled,
-                dtype=self.autocast_dtype,
-            ):
-                with record_function("forward"):
-                    pred = self.model.forward(batch_on_device)
-                with record_function("compute_loss"):
-                    loss_dict = compute_loss(self.tasks, pred, batch_on_device)
-            scalar_loss = sum(loss_dict.values())
-            self.optimizer.zero_grad()
-            with record_function("backward"):
-                scalar_loss.backward()
+            with float32_matmul_precision_context(self.float32_matmul_precision):
+                with torch.autocast(
+                    device_type=device,
+                    enabled=self.autocast_enabled,
+                    dtype=self.autocast_dtype,
+                ):
+                    with record_function("forward"):
+                        pred = self.model.forward(batch_on_device)
+                    with record_function("compute_loss"):
+                        loss_dict = compute_loss(self.tasks, pred, batch_on_device)
+                scalar_loss = sum(loss_dict.values())
+                self.optimizer.zero_grad()
+                with record_function("backward"):
+                    scalar_loss.backward()
 
             if self.debug_checksums_save_path:
                 gp_size = 0
@@ -913,6 +919,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         super().__init__()
         self.job_config = job_config
         self.model = model
+        self.float32_matmul_precision = get_model_float32_matmul_precision(model)
         self.tasks = filter_inference_only_tasks(tasks)
 
         for task in self.tasks:
@@ -944,6 +951,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
 
     def setup_train_eval_unit(self, model: torch.nn.Module) -> None:
         self.model = model
+        self.float32_matmul_precision = get_model_float32_matmul_precision(model)
         self.logger = None
 
     def on_eval_epoch_start(self, state: State) -> None:
@@ -987,10 +995,13 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             )
             self.last_report = time.time()
 
-        with torch.autocast(
-            device_type=get_device_for_local_rank(),
-            enabled=self.autocast_enabled,
-            dtype=self.autocast_dtype,
+        with (
+            float32_matmul_precision_context(self.float32_matmul_precision),
+            torch.autocast(
+                device_type=get_device_for_local_rank(),
+                enabled=self.autocast_enabled,
+                dtype=self.autocast_dtype,
+            ),
         ):
             t0 = time.time()
             preds = self.model(data)

@@ -134,7 +134,8 @@ def test_backbone_preserves_float32_matmul_precision(precision):
     original_precision = torch.get_float32_matmul_precision()
     try:
         torch.set_float32_matmul_precision(precision)
-        get_escaip_backbone(cutoff=6.0, use_compile=False, device="cpu")
+        backbone = get_escaip_backbone(cutoff=6.0, use_compile=False, device="cpu")
+        assert backbone.float32_matmul_precision == "high"
         assert torch.get_float32_matmul_precision() == precision
     finally:
         torch.set_float32_matmul_precision(original_precision)

@@ -1,4 +1,5 @@
 model: fairchem.core.models.escaip.EScAIP.EScAIPBackbone
+float32_matmul_precision: high
 
 # Global Configs
 num_layers: 10
