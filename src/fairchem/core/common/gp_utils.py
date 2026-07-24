@@ -16,6 +16,8 @@ import torch
 from torch import distributed as dist
 from torch.distributed.nn.functional import all_reduce, reduce_scatter
 
+from fairchem.core.common.utils import StrEnum
+
 """
 Functions to support graph parallel training.
 This is based on the Megatron-LM implementation:
@@ -28,11 +30,21 @@ _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
 
 
+class GPMode(StrEnum):
+    ALLGATHER = "allgather"
+    ALL_TO_ALL = "all_to_all"
+
+
+class GPPartition(StrEnum):
+    INDEX_SPLIT = "index_split"
+    SPATIAL = "spatial"
+
+
 @dataclass
 class GraphParallelConfig:
     group_size: int = 1
-    mode: str = "allgather"
-    partition: str = "index_split"
+    mode: GPMode = GPMode.ALLGATHER
+    partition: GPPartition = GPPartition.INDEX_SPLIT
 
 
 _GP_CONFIG: GraphParallelConfig | None = None
