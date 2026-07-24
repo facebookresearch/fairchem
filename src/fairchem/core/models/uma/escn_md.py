@@ -718,18 +718,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"][1]
                 ]
 
-        if graph_dict["edge_index"].shape[1] == 0:
-            add_n_empty_edges(graph_dict, 1, self.cutoff)
-            if "scatter_target" in data_dict:
-                data_dict["scatter_target"] = torch.cat(
-                    [
-                        data_dict["scatter_target"].new_zeros(1),
-                        data_dict["scatter_target"],
-                    ]
-                )
-
         if "scatter_target" not in data_dict:
             data_dict["scatter_target"] = graph_dict["edge_index"][1]
+
+        if graph_dict["edge_index"].shape[1] == 0:
+            add_n_empty_edges(graph_dict, 1, self.cutoff)
+            data_dict["scatter_target"] = torch.cat(
+                [
+                    data_dict["scatter_target"].new_zeros(1),
+                    data_dict["scatter_target"],
+                ]
+            )
 
         return graph_dict
 
