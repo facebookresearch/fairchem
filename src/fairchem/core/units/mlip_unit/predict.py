@@ -438,9 +438,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
-        # Regular model prediction path
-        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
-        data_device = data.to(self.device).clone()
+        # Graph parallelism and MOLE replace fields on the input container, while
+        # conservative inference mutates the autograd state of positions and cell.
+        # Isolate those mutations without cloning every tensor in the batch.
+        data_device = data.to(self.device).shallow_copy()
+        data_device.pos = data_device.pos.clone()
+        if self.model.module.backbone.regress_config.stress:
+            data_device.cell = data_device.cell.clone()
 
         dtype = self.inference_settings.base_precision_dtype
         if not self._warned_upcast:

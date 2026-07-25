@@ -761,6 +761,14 @@ class AtomicData:
 
         return cloned
 
+    def shallow_copy(self) -> AtomicData:
+        r"""
+        Copy the container while sharing its tensor storage.
+        """
+        copied = copy.copy(self)
+        copied.__keys__ = self.__keys__.copy()
+        return copied
+
     def __repr__(self):
         cls = str(self.__class__.__name__)
         has_dict = any(isinstance(item, dict) for _, item in self)

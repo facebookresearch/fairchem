@@ -43,6 +43,19 @@ def test_masses_property_uses_atomic_numbers(dtype):
     torch.testing.assert_close(data.masses, expected)
 
 
+def test_shallow_copy_shares_tensors_but_not_container_state():
+    data = AtomicData.from_ase(molecule("H2O"))
+
+    copied = data.shallow_copy()
+    copied["temporary"] = copied.pos
+
+    assert copied is not data
+    assert copied.pos is data.pos
+    assert copied.keys() is not data.keys()
+    assert "temporary" in copied
+    assert "temporary" not in data
+
+
 @pytest.mark.gpu()
 def test_to_ase_single_cuda(ase_atoms):
     atomic_data = AtomicData.from_ase(ase_atoms).cuda()
