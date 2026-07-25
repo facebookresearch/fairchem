@@ -635,6 +635,8 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         if num_workers > 1:
             if gp_config is None:
                 gp_config = GraphParallelConfig(group_size=num_workers)
+            elif gp_config.group_size == 1:
+                gp_config.group_size = num_workers
             elif gp_config.group_size != num_workers:
                 raise ValueError(
                     f"gp_config.group_size ({gp_config.group_size}) must equal "
