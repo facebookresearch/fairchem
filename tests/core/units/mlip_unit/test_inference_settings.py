@@ -10,7 +10,10 @@ from __future__ import annotations
 import pytest
 import torch
 
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    guess_inference_settings,
+)
 
 # --- __post_init__ ---
 
@@ -82,3 +85,29 @@ def test_to_omegaconf_roundtrip():
     assert restored.tf32 is True
     assert restored.compile_mode == "reduce-overhead"
     assert restored.compile_dynamic is False
+
+
+@pytest.mark.parametrize(
+    ("name", "tf32", "checkpointing", "merge_mole", "compile_mode", "dynamic"),
+    [
+        ("default", False, True, False, None, True),
+        ("turbo", True, False, True, None, True),
+        ("turbo-fixed", True, False, True, "reduce-overhead", False),
+    ],
+)
+def test_named_inference_mode_policy(
+    name,
+    tf32,
+    checkpointing,
+    merge_mole,
+    compile_mode,
+    dynamic,
+):
+    settings = guess_inference_settings(name)
+
+    assert settings.tf32 is tf32
+    assert settings.activation_checkpointing is checkpointing
+    assert settings.merge_mole is merge_mole
+    assert settings.compile is (name != "default")
+    assert settings.compile_mode == compile_mode
+    assert settings.compile_dynamic is dynamic

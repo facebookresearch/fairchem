@@ -58,13 +58,46 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
-## Default mode
+## Choosing an inference mode
 
-UMA is designed for both general-purpose usage (single or batched systems) and single-system long rollout (MD simulations, relaxations, etc.). For general-purpose use, we suggest using the [default settings](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L92). This is a good trade-off between accuracy, speed, and memory consumption and should suffice for most applications. In this setting, on a single 80GB H100 GPU, we expect a user should be able to compute on systems as large as 50k-100k neighbors (depending on their atomic density). Batching is also supported in this mode.
+Choose a mode based on how many predictions you will make, whether the chemical
+composition stays constant, and whether the tensor shapes stay constant. Model
+parameters are automatically frozen after inference preparation in every mode;
+positions and cells remain differentiable for conservative forces, stress, and
+Hessians.
 
-## Turbo mode
+| Mode | Recommended workload | Shape assumptions | Main trade-off |
+| ---- | -------------------- | ----------------- | -------------- |
+| `default` | One-off calculations, a small number of calls, heterogeneous systems, or batching | No assumptions | Avoids compile startup and uses activation checkpointing for broad compatibility |
+| `turbo` | MD, relaxation, or another long rollout of one fixed-composition system | Atom count and composition are fixed; edge counts may change | Pays a dynamic compile cost, then accelerates repeated calls |
+| `turbo-fixed` | Many calls with stable or explicitly padded atom, edge, and batch shapes | Tensor shapes must repeat | Uses shape specialization and CUDA graphs for the best steady-state speed, but a new shape can trigger an expensive compile |
 
-For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxations, we provide a special mode called **turbo**, which optimizes for speed but restricts the user to using a single system where the atomic composition is held constant. Turbo mode is approximately 1.5-2x faster than default mode, depending on the situation. However, batching is not supported in this mode. It can be easily activated as shown below.
+`traineval` also exists for matching training and evaluation behavior. It is not
+intended as a performance mode.
+
+### One-off or heterogeneous inference
+
+Use `default` for a single calculation, a small number of calculations, or
+batched systems with different compositions. It is the API default, so the
+argument can be omitted.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="default"
+)
+```
+
+The default mode avoids `torch.compile` startup, keeps TF32 disabled, does not
+merge composition-specific experts, and enables activation checkpointing to
+limit memory usage.
+
+### MD and relaxation
+
+Use `turbo` for a long trajectory of one system. This mode enables TF32, merges
+MOLE experts, disables activation checkpointing, and uses dynamic compilation.
+Dynamic compilation is important for ordinary MD because changes in the neighbor
+list can change the edge tensor shape even when the atoms and composition are
+unchanged.
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
@@ -72,35 +105,71 @@ predictor = pretrained_mlip.get_predict_unit(
 )
 ```
 
+MOLE merging requires atomic numbers, total charge, and spin to remain constant.
+Batching different systems is therefore not supported in this mode.
+
+### Repeated fixed-shape inference
+
+Use `turbo-fixed` only when atom, edge, and batch tensor shapes are stable or
+explicitly padded into stable buckets. It selects
+`torch.compile(mode="reduce-overhead", dynamic=False)` and CUDA graphs.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="turbo-fixed"
+)
+```
+
+This mode is not automatically selected for MD. A fixed atom count does not imply
+a fixed edge count: atoms crossing the neighbor cutoff can produce a new shape.
+Each new shape may require tens of seconds of compilation and another CUDA graph.
+Use `turbo` unless graph padding or the application guarantees shape reuse.
+
+### Other common workloads
+
+- For high-throughput screening of different compositions, start with `default`
+  and batch compatible systems. Advanced users can enable dynamic compilation
+  while keeping `merge_mole=False` if enough calls will amortize compilation.
+- For very large or memory-constrained systems, keep
+  `activation_checkpointing=True`. This can be combined with other custom
+  settings at a throughput cost.
+- For Hessians or strict numerical comparisons, keep `tf32=False`. Conservative
+  forces remain energy gradients in every mode.
+
 ## Custom modes for advanced users
 
-The advanced user might quickly see that **default** mode and **turbo** mode are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
+The named modes are instances of the
+[inference settings API](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py).
+Use a custom `InferenceSettings` object when a workload does not match a named
+mode.
 
-| Setting Flag  | Description |
-| ----- | ----- |
-| tf32 | enables torch [tf32](https://docs.pytorch.org/docs/stable/notes/cuda.html) format for matrix multiplication. This will speed up inference at a slight trade-off for precision. In our tests, it makes minimal difference to most applications. It is able to preserve equivariance, energy conservation for long rollouts. However, if you are computing higher order derivatives such as Hessians or other calculations that requires strict numerical precision, we recommend turning this off |
-| activation_checkpointing | this uses a custom chunked activation checkpointing algorithm and allows significant savings in memory for a small inference speed penalty. If you are predicting on systems >1000 atoms, we recommend keeping this on. However, if you want the absolute fastest inference possible for small systems, you can turn this off |
-| merge_mole | This is useful in long rollout applications where the system composition stays constant. By pre-merge the MoLE weights, we can save both memory and compute. |
-| compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
-| external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
-| internal_graph_gen_version | currently we support v2[default], an internal implementation that is better suited for parallelism and v3 the neighborlist from Nvidia Alchemi library which is faster for single gpu operations. |
-| edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
-| use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
-| base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
-| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "None", when set to "None", the predictor will automatically determine the best backend. For example, "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
+| Setting | Description |
+| ------- | ----------- |
+| `tf32` | Enables TF32 for eligible CUDA matrix multiplications. Tensor storage and accumulation remain FP32, but matrix inputs use reduced mantissa precision. This improves H100 throughput and can slightly change energies, forces, stress, and Hessians. |
+| `activation_checkpointing` | Recomputes chunks during force backpropagation to reduce activation memory. Enable it for large systems or memory pressure; disable it for maximum speed when memory permits. |
+| `merge_mole` | Pre-merges MOLE expert weights. It reduces parameter memory and compute but requires one fixed composition, charge, and spin. |
+| `compile` | Enables `torch.compile`. The first prediction can take tens of seconds, so use it only when repeated calls amortize that cost. |
+| `compile_mode` | Passed to `torch.compile`. `None` uses the PyTorch default. `"reduce-overhead"` enables CUDA-graph-oriented optimizations and is used by `turbo-fixed`. |
+| `compile_dynamic` | When `True`, one graph can accept a range of tensor shapes and is suitable for ordinary MD. When `False`, PyTorch specializes to exact shapes; novel shapes can trigger recompilation. |
+| `external_graph_gen` | Accepts externally generated edges. Leave disabled unless integrating another graph generator or developing graph code. |
+| `internal_graph_gen_version` | Selects the internal neighbor-list implementation. Version 2 is the default and supports graph parallelism; version 3 uses NVIDIA Alchemi for supported single-GPU workloads. |
+| `edge_chunk_size` | Experimental edge padding bucket size. It can reduce dynamic recompilation by limiting the number of distinct edge shapes. |
+| `use_quaternion_wigner` | Uses quaternion Wigner-D computation when `True`; `False` selects the Euler-angle implementation. |
+| `base_precision_dtype` | Sets model, input, and activation storage precision. FP32 is the default; FP64 is available for higher-precision workloads. |
+| `execution_mode` | Selects a model backend. `None` automatically chooses a compatible backend; advanced users can request modes such as `umas_fast_gpu`. |
 
-For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
+For example, this custom mode keeps dynamic compilation and activation
+checkpointing for a repeated, memory-constrained simulation:
 
 ```{code-cell} python3
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 settings = InferenceSettings(
     tf32=True,
-    activation_checkpointing=False,
+    activation_checkpointing=True,
     merge_mole=True,
     compile=True,
-    external_graph_gen=False,
-    internal_graph_gen_version=2,
+    compile_dynamic=True,
 )
 
 predictor = pretrained_mlip.get_predict_unit(
