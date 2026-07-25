@@ -15,31 +15,35 @@ import torch
 
 from fairchem.core.common import distutils, gp_utils
 from fairchem.core.units.mlip_unit.utils import (
-    float32_matmul_precision_context,
     get_model_float32_matmul_precision,
     tf32_context_manager,
 )
 
 
-@pytest.mark.parametrize("initial_precision", ["highest", "high"])
-def test_float32_matmul_precision_context_restores_caller(initial_precision):
+@pytest.mark.parametrize(
+    ("initial_precision", "configured_precision"),
+    [("highest", "high"), ("high", "highest")],
+)
+def test_tf32_context_manager_restores_matmul_precision(
+    initial_precision, configured_precision
+):
     original_precision = torch.get_float32_matmul_precision()
     try:
         torch.set_float32_matmul_precision(initial_precision)
-        with float32_matmul_precision_context("high"):
-            assert torch.get_float32_matmul_precision() == "high"
+        with tf32_context_manager(configured_precision, enable_cudnn_tf32=False):
+            assert torch.get_float32_matmul_precision() == configured_precision
         assert torch.get_float32_matmul_precision() == initial_precision
     finally:
         torch.set_float32_matmul_precision(original_precision)
 
 
-def test_float32_matmul_precision_context_restores_after_error():
+def test_tf32_context_manager_restores_after_error():
     original_precision = torch.get_float32_matmul_precision()
     try:
         torch.set_float32_matmul_precision("highest")
         with (
             pytest.raises(RuntimeError, match="failure"),
-            float32_matmul_precision_context("high"),
+            tf32_context_manager("high", enable_cudnn_tf32=False),
         ):
             raise RuntimeError("failure")
         assert torch.get_float32_matmul_precision() == "highest"

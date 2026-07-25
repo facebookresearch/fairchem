@@ -46,7 +46,6 @@ from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
 from fairchem.core.units.mlip_unit.utils import (
-    float32_matmul_precision_context,
     get_backbone_class_from_checkpoint,
     get_model_float32_matmul_precision,
     load_inference_model,
@@ -487,10 +486,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if self.model.module.backbone.regress_config.direct_forces
             else nullcontext()
         )
-        matmul_context = (
-            tf32_context_manager()
-            if self.inference_settings.tf32
-            else float32_matmul_precision_context(self.float32_matmul_precision)
+        float32_matmul_precision = (
+            "high" if self.inference_settings.tf32 else self.float32_matmul_precision
+        )
+        matmul_context = tf32_context_manager(
+            float32_matmul_precision,
+            enable_cudnn_tf32=self.inference_settings.tf32,
         )
 
         with inference_context, matmul_context:

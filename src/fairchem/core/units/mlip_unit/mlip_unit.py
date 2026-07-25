@@ -58,9 +58,9 @@ from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
 from fairchem.core.units.mlip_unit.utils import (
-    float32_matmul_precision_context,
     get_model_float32_matmul_precision,
     load_inference_model,
+    tf32_context_manager,
 )
 
 if TYPE_CHECKING:
@@ -701,7 +701,9 @@ class MLIPTrainEvalUnit(
                 + self.train_progress.num_steps_completed_in_epoch
                 / float(len(state.train_state.dataloader))
             )
-            with float32_matmul_precision_context(self.float32_matmul_precision):
+            with tf32_context_manager(
+                self.float32_matmul_precision, enable_cudnn_tf32=False
+            ):
                 with torch.autocast(
                     device_type=device,
                     enabled=self.autocast_enabled,
@@ -996,7 +998,9 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             self.last_report = time.time()
 
         with (
-            float32_matmul_precision_context(self.float32_matmul_precision),
+            tf32_context_manager(
+                self.float32_matmul_precision, enable_cudnn_tf32=False
+            ),
             torch.autocast(
                 device_type=get_device_for_local_rank(),
                 enabled=self.autocast_enabled,
