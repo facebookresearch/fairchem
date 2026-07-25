@@ -570,6 +570,32 @@ def test_train_and_resume_max_steps(
     shutil.rmtree(temp_dir)
 
 
+def test_train_and_resume_max_steps_zero(fake_uma_dataset, torch_deterministic):
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "zero-resume"
+    checkpoint_step = 4
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
+        "datasets=aselmdb",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        f"+job.run_dir={temp_dir}",
+        f"+job.timestamp_id={timestamp_id}",
+        "max_epochs=null",
+        "max_steps=7",
+        "+expected_loss=null",
+        f"runner.callbacks.1.checkpoint_every_n_steps={checkpoint_step}",
+        "+runner.train_eval_unit.use_zero_redundancy_optimizer=true",
+    ]
+    launch_main(sys_args)
+
+    checkpoint_dir = os.path.join(
+        temp_dir, timestamp_id, "checkpoints", f"step_{checkpoint_step}"
+    )
+    launch_main(["--config", os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)])
+    shutil.rmtree(temp_dir)
+
+
 # @pytest.mark.gpu()
 # def test_train_and_resume_mole_on_dgl_gpu(fake_uma_dataset):
 #     train_and_resume_mole_on_dgl("CUDA",fake_uma_dataset)

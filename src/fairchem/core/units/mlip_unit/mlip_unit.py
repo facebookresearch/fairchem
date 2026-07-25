@@ -58,6 +58,10 @@ from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
 from fairchem.core.units.mlip_unit.utils import load_inference_model
+from fairchem.core.units.mlip_unit.zero_redundancy import (
+    ShardedZeroOptimizerState,
+    build_zero_redundancy_optimizer,
+)
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -429,7 +433,9 @@ def _get_consine_lr_scheduler(
 
 
 def _get_optimizer_wd(
-    optimizer_fn: callable, model: torch.nn.Module
+    optimizer_fn: callable,
+    model: torch.nn.Module,
+    use_zero_redundancy: bool = False,
 ) -> torch.optim.Optimizer:
     weight_decay = optimizer_fn.keywords.get("weight_decay", 0)
     # split the params into the params with and without WD
@@ -454,14 +460,21 @@ def _get_optimizer_wd(
             logging.info("Parameters without weight decay:")
             logging.info(name_no_decay)
 
-        optimizer = optimizer_fn(
-            params=[
-                {"params": params_no_decay, "weight_decay": 0},
-                {"params": params_decay, "weight_decay": weight_decay},
-            ]
+        param_groups = [
+            {"params": params_no_decay, "weight_decay": 0},
+            {"params": params_decay, "weight_decay": weight_decay},
+        ]
+        optimizer = (
+            build_zero_redundancy_optimizer(optimizer_fn, param_groups)
+            if use_zero_redundancy
+            else optimizer_fn(params=param_groups)
         )
     else:
-        optimizer = optimizer_fn(params=model.parameters())
+        optimizer = (
+            build_zero_redundancy_optimizer(optimizer_fn, model.parameters())
+            if use_zero_redundancy
+            else optimizer_fn(params=model.parameters())
+        )
     return optimizer
 
 
@@ -511,6 +524,7 @@ class MLIPTrainEvalUnit(
         ddp_broadcast_buffers: bool = False,
         ddp_gradient_as_bucket_view: bool = True,
         ddp_static_graph: bool = True,
+        use_zero_redundancy_optimizer: bool = False,
     ):
         super().__init__()
         self.job_config = job_config
@@ -534,7 +548,14 @@ class MLIPTrainEvalUnit(
 
         # call optimizer function between wrapping in DDP
         # this is required for models that have a no_weight_decay function
-        self.optimizer = _get_optimizer_wd(optimizer_fn, model)
+        if use_zero_redundancy_optimizer and train_strategy != TrainStrategy.DDP:
+            raise ValueError("ZeRO is supported only with DDP training")
+        self.optimizer = _get_optimizer_wd(
+            optimizer_fn,
+            model,
+            use_zero_redundancy=use_zero_redundancy_optimizer,
+        )
+        self.use_zero_redundancy_optimizer = use_zero_redundancy_optimizer
 
         self.logger = (
             WandBSingletonLogger.get_instance()
@@ -822,10 +843,16 @@ class MLIPTrainEvalUnit(
     def state_dict(
         self,
     ) -> dict[str, Any]:
-        # this line automatically manages FSDP FQN's, as well as sets the default state dict type to FSDP.SHARDED_STATE_DICT
-        model_state_dict, optimizer_state_dict = get_state_dict(
-            self.model, self.optimizer
-        )
+        if self.use_zero_redundancy_optimizer:
+            model_state_dict = get_model_state_dict(self.model)
+            optimizer_state_dict = ShardedZeroOptimizerState(
+                self.model, self.optimizer
+            ).state_dict()
+        else:
+            # This automatically manages FSDP FQNs and sharded state dicts.
+            model_state_dict, optimizer_state_dict = get_state_dict(
+                self.model, self.optimizer
+            )
         ema_state_dict = (
             get_model_state_dict(self.ema_model) if self.ema_model else None
         )
@@ -839,13 +866,18 @@ class MLIPTrainEvalUnit(
         return state
 
     def load_state_dict(self, state_dict: dict[str, Any]):
-        # sets our state dicts on the model and optimizer, now that we've loaded
-        set_state_dict(
-            self.model,
-            self.optimizer,
-            model_state_dict=state_dict["model"],
-            optim_state_dict=state_dict["optim"],
-        )
+        if self.use_zero_redundancy_optimizer:
+            set_model_state_dict(self.model, model_state_dict=state_dict["model"])
+            ShardedZeroOptimizerState(self.model, self.optimizer).load_state_dict(
+                state_dict["optim"]
+            )
+        else:
+            set_state_dict(
+                self.model,
+                self.optimizer,
+                model_state_dict=state_dict["model"],
+                optim_state_dict=state_dict["optim"],
+            )
         self.train_progress.load_state_dict(state_dict["progress"])
         self.scheduler.load_state_dict(state_dict["scheduler"])
         if self.ema_model is not None:
@@ -906,6 +938,10 @@ class MLIPTrainEvalUnit(
         self.lazy_state_location = checkpoint_location
 
     def _execute_load_state(self, checkpoint_location: str | None) -> None:
+        if self.use_zero_redundancy_optimizer:
+            ShardedZeroOptimizerState(
+                self.model, self.optimizer
+            ).initialize_local_state()
         state = {"unit_state": self.state_dict()}
         dcp.load(state_dict=state, checkpoint_id=checkpoint_location)
         self.load_state_dict(state["unit_state"])
