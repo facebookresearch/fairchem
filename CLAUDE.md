@@ -251,6 +251,8 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Model configs may record a float32 matmul policy, but constructors must not
   apply it. Execution callers scope and restore the policy outside compiled
   `forward` methods because precision getters cannot be traced by fullgraph.
+- Keep full TF32 handling composed from the generic matmul precision context;
+  the TF32 wrapper should own only additional backend state such as cuDNN.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

@@ -141,21 +141,13 @@ def float32_matmul_precision_context(precision: str | None):
 
 @contextmanager
 def tf32_context_manager():
-    # Store the original settings
-    original_allow_tf32_matmul = torch.backends.cuda.matmul.allow_tf32
     original_allow_tf32_cudnn = torch.backends.cudnn.allow_tf32
-    original_float32_matmul_precision = torch.get_float32_matmul_precision()
     try:
-        # Set the desired settings
-        torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
-        yield
+        with float32_matmul_precision_context("high"):
+            yield
     finally:
-        # Revert to the original settings
-        torch.backends.cuda.matmul.allow_tf32 = original_allow_tf32_matmul
         torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
-        torch.set_float32_matmul_precision(original_float32_matmul_precision)
 
 
 def update_configs(original_config, new_config):

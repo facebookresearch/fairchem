@@ -17,6 +17,7 @@ from fairchem.core.common import distutils, gp_utils
 from fairchem.core.units.mlip_unit.utils import (
     float32_matmul_precision_context,
     get_model_float32_matmul_precision,
+    tf32_context_manager,
 )
 
 
@@ -57,6 +58,24 @@ def test_get_model_float32_matmul_precision_through_wrappers():
 
     assert get_model_float32_matmul_precision(model) == "high"
     assert get_model_float32_matmul_precision(None) is None
+
+
+@pytest.mark.parametrize("initial_precision", ["highest", "high"])
+@pytest.mark.parametrize("initial_cudnn_tf32", [False, True])
+def test_tf32_context_manager_restores_caller(initial_precision, initial_cudnn_tf32):
+    original_precision = torch.get_float32_matmul_precision()
+    original_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+    try:
+        torch.set_float32_matmul_precision(initial_precision)
+        torch.backends.cudnn.allow_tf32 = initial_cudnn_tf32
+        with tf32_context_manager():
+            assert torch.get_float32_matmul_precision() == "high"
+            assert torch.backends.cudnn.allow_tf32
+        assert torch.get_float32_matmul_precision() == initial_precision
+        assert torch.backends.cudnn.allow_tf32 is initial_cudnn_tf32
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+        torch.backends.cudnn.allow_tf32 = original_cudnn_tf32
 
 
 class GradSaveOptimizer(torch.optim.AdamW):
