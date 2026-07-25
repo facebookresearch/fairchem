@@ -458,8 +458,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         Args:
             model_id: Key in the format ``"checkpoint_name_or_path:settings"``
                 where ``settings`` is one of the recognized inference setting
-                names (for example, ``"default"``, ``"turbo"``, or
-                ``"turbo-fixed"``) or an empty string for the default settings.
+                names (e.g. ``"default"``, ``"turbo"``) or an empty string for
+                the default settings.
 
         Returns:
             The loaded ``MLIPPredictUnit`` for this model_id.

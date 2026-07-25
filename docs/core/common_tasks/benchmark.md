@@ -161,8 +161,6 @@ fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
 | `runner.timed_iters` | `50` | Number of timed iterations for throughput measurement |
 | `runner.inference_settings.tf32` | `False` | Enable TF32 tensor cores |
 | `runner.inference_settings.compile` | `False` | Enable `torch.compile` |
-| `runner.inference_settings.compile_mode` | `None` | Optional `torch.compile` mode, such as `reduce-overhead` |
-| `runner.inference_settings.compile_dynamic` | `True` | Allow compiled graphs to accept changing tensor shapes |
 | `runner.inference_settings.activation_checkpointing` | `True` | Enable activation checkpointing |
 | `runner.inference_settings.merge_mole` | `False` | Merge MOLE experts |
 | `runner.inference_settings.execution_mode` | `general` | Inference execution mode |

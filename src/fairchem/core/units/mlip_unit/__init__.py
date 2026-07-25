@@ -36,11 +36,9 @@ def load_predict_unit(
 
     Args:
         path: Path to the checkpoint file
-        inference_settings: Named inference mode: "default" for one-off or
-            heterogeneous calculations, "turbo" for repeated fixed-composition
-            calculations with dynamic shapes, or "turbo-fixed" for repeated
-            stable shapes. Advanced use cases can pass an InferenceSettings
-            object. See the inference mode guide for trade-offs.
+        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
+            (optimized for speed but requires fixed atomic composition). Advanced use cases can
+            use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.

@@ -139,8 +139,6 @@ class InferenceSettings:
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
-    # Keep these settings and the named modes synchronized with the guide:
-    # https://fair-chem.github.io/core/common_tasks/ase_calculator.html
     # Optional torch.compile mode. None preserves the PyTorch default.
     compile_mode: str | None = None
 
@@ -230,20 +228,14 @@ class InferenceSettings:
         return config
 
 
-# Keep these named modes synchronized with the inference mode guide:
-# https://fair-chem.github.io/core/common_tasks/ase_calculator.html
-
-
-# This is the most general setting that works for most systems and models.
-# It avoids compile startup cost and is not optimized for repeated inference.
+# this is most general setting that works for most systems and models,
+# not optimized for speed
 def inference_settings_default():
     return InferenceSettings(
         tf32=False,
         activation_checkpointing=True,
         merge_mole=False,
         compile=False,
-        compile_mode=None,
-        compile_dynamic=True,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -259,29 +251,6 @@ def inference_settings_turbo():
         activation_checkpointing=False,
         merge_mole=True,
         compile=True,
-        compile_mode=None,
-        compile_dynamic=True,
-        external_graph_gen=False,
-        internal_graph_gen_version=2,
-    )
-
-
-def inference_settings_turbo_fixed():
-    """
-    Optimize repeated inference with stable or padded tensor shapes.
-
-    Unlike turbo mode, this mode specializes compiled graphs to exact tensor
-    shapes and uses CUDA graphs. A new atom, edge, or batch shape can trigger an
-    expensive recompilation, so ordinary MD should use turbo unless its graph
-    shapes are stabilized.
-    """
-    return InferenceSettings(
-        tf32=True,
-        activation_checkpointing=False,
-        merge_mole=True,
-        compile=True,
-        compile_mode="reduce-overhead",
-        compile_dynamic=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -301,7 +270,6 @@ def inference_settings_traineval():
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
     "turbo": inference_settings_turbo(),
-    "turbo-fixed": inference_settings_turbo_fixed(),
     "traineval": inference_settings_traineval(),
 }
 
