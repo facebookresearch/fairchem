@@ -474,7 +474,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             # The model's scalars are fixed at inference, so this skips dynamo's
             # TensorifyScalarRestartAnalysis retrace during compile.
             torch._dynamo.config.specialize_float = True
-            self.model = torch.compile(self.model, dynamic=True)
+            self.model = torch.compile(
+                self.model,
+                dynamic=self.inference_settings.compile_dynamic,
+                mode=self.inference_settings.compile_mode,
+            )
 
         self.lazy_model_intialized = True
 
@@ -482,6 +486,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         Execute model inference.
         """
+        if (
+            self.inference_settings.compile
+            and self.inference_settings.compile_mode == "reduce-overhead"
+            and str(self.device).startswith("cuda")
+        ):
+            torch.compiler.cudagraph_mark_step_begin()
         inference_context = (
             torch.no_grad()
             if self.model.module.backbone.regress_config.direct_forces

@@ -69,9 +69,16 @@ def test_to_omegaconf_roundtrip():
     """Hydra can reinstantiate InferenceSettings from to_omegaconf() output."""
     import hydra
 
-    original = InferenceSettings(base_precision_dtype=torch.float64, tf32=True)
+    original = InferenceSettings(
+        base_precision_dtype=torch.float64,
+        tf32=True,
+        compile_mode="reduce-overhead",
+        compile_dynamic=False,
+    )
     config = original.to_omegaconf()
     restored = hydra.utils.instantiate(config)
     assert isinstance(restored, InferenceSettings)
     assert restored.base_precision_dtype is torch.float64
     assert restored.tf32 is True
+    assert restored.compile_mode == "reduce-overhead"
+    assert restored.compile_dynamic is False

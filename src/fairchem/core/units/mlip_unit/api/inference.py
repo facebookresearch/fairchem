@@ -139,6 +139,13 @@ class InferenceSettings:
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
+    # Optional torch.compile mode. None preserves the PyTorch default.
+    compile_mode: str | None = None
+
+    # Whether torch.compile should use dynamic shapes. Disable only for
+    # fixed-shape workloads such as repeated inference on one structure.
+    compile_dynamic: bool = True
+
     # Deprecated
     # Flag to enable or disable the use of CUDA Graphs for compute
     # This flag is no longer used and will be removed in future versions
