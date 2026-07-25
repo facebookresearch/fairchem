@@ -1691,6 +1691,10 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Get predictions
     preds = predictor.predict(batch)
 
+    assert all(
+        not parameter.requires_grad for parameter in predictor.model.parameters()
+    )
+
     # Verify energy, forces, and hessian are present
     assert "energy" in preds, "Energy prediction missing"
     assert "forces" in preds, "Forces prediction missing"

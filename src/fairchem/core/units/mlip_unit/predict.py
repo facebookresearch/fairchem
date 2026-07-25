@@ -460,6 +460,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
+        self.model.requires_grad_(False)
 
         self.model.to(self.inference_settings.base_precision_dtype)
 
