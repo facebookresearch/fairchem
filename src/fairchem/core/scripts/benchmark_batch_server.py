@@ -26,7 +26,7 @@ to JSON and plotted (throughput, speedup, latency vs. concurrency).
 Usage:
     python -m fairchem.core.scripts.benchmark_batch_server \\
         --model uma-s-1p1 --task omat \\
-        --natoms 64 512 --num-requests 1 2 4 8 16 32 64 \\
+        --natoms 16 64 256 --num-requests 4 8 16 32 64 128 256 \\
         --output-dir ./autobatch_benchmark_results
 """
 
@@ -393,20 +393,35 @@ def generate_plots(
     model = aggregated["model"]
     backend = aggregated["concurrency_backend"]
 
-    # (ylabel, filename suffix, extractor) for the three concurrency plots.
-    def _throughput(res):
-        return [c["batched"]["qps"] for c in res["concurrency"]]
+    # (ylabel, filename suffix, title, extractor) for the concurrency plots.
+    def _batched_metric(key):
+        return lambda res: [c["batched"][key] for c in res["concurrency"]]
 
     def _speedup(res):
         return [c["speedup"] for c in res["concurrency"]]
 
-    def _latency(res):
-        return [c["batched"]["mean_latency_s"] for c in res["concurrency"]]
-
     plots = [
-        ("QPS (systems/second)", "throughput", "Throughput", _throughput),
+        ("QPS (systems/second)", "throughput", "Throughput", _batched_metric("qps")),
         ("Speedup over serial (x)", "speedup", "Speedup", _speedup),
-        ("Mean latency (s)", "latency", "Mean request latency", _latency),
+        ("Wall time (s)", "wall_time", "Wall time", _batched_metric("wall_time_s")),
+        (
+            "Mean latency (s)",
+            "latency_mean",
+            "Mean request latency",
+            _batched_metric("mean_latency_s"),
+        ),
+        (
+            "Median latency (s)",
+            "latency_median",
+            "Median request latency",
+            _batched_metric("median_latency_s"),
+        ),
+        (
+            "p95 latency (s)",
+            "latency_p95",
+            "p95 request latency",
+            _batched_metric("p95_latency_s"),
+        ),
     ]
 
     for ylabel, suffix, title, extractor in plots:
@@ -445,22 +460,29 @@ def print_summary_table(aggregated: dict[str, Any]) -> None:
     print("=" * 80)
     for res in aggregated["results"]:
         ab = res["autobatch"]
+        s = res["serial"]
         print(
             f"\n{res['natoms_actual']} atoms  "
-            f"(serial baseline: {res['serial']['qps']:.2f} QPS; "
+            f"(serial baseline: {s['qps']:.2f} QPS, "
+            f"mean={s['mean_latency_s']:.4f}s, median={s['median_latency_s']:.4f}s, "
+            f"p95={s['p95_latency_s']:.4f}s; "
             f"autobatch max_batch_size={ab['max_batch_size']}, "
             f"timeout={ab['batch_wait_timeout_s']:.4f}s)"
         )
         print(
-            f"  {'requests':>9}  {'QPS':>10}  {'speedup':>8}  "
-            f"{'mean(s)':>9}  {'p95(s)':>9}"
+            f"  {'requests':>9}  {'QPS':>10}  {'speedup':>8}  {'wall(s)':>9}  "
+            f"{'mean(s)':>9}  {'median(s)':>10}  {'p95(s)':>9}"
         )
-        print(f"  {'-' * 9}  {'-' * 10}  {'-' * 8}  {'-' * 9}  {'-' * 9}")
+        print(
+            f"  {'-' * 9}  {'-' * 10}  {'-' * 8}  {'-' * 9}  "
+            f"{'-' * 9}  {'-' * 10}  {'-' * 9}"
+        )
         for c in res["concurrency"]:
             b = c["batched"]
             print(
                 f"  {c['num_requests']:>9}  {b['qps']:>10.2f}  "
-                f"{c['speedup']:>7.2f}x  {b['mean_latency_s']:>9.4f}  "
+                f"{c['speedup']:>7.2f}x  {b['wall_time_s']:>9.4f}  "
+                f"{b['mean_latency_s']:>9.4f}  {b['median_latency_s']:>10.4f}  "
                 f"{b['p95_latency_s']:>9.4f}"
             )
     print("=" * 80)
@@ -489,15 +511,27 @@ def main() -> int:
         "--natoms",
         type=int,
         nargs="+",
-        default=[64, 512],
-        help="Per-system atom counts to benchmark (default: 64 512).",
+        default=[16, 64, 256],
+        help=(
+            "Per-system atom counts to benchmark (default: 16 64 256). Smaller "
+            "systems under-utilize the GPU per forward pass, so batching them "
+            "yields the largest speedups; larger systems saturate the GPU and "
+            "show diminishing returns."
+        ),
     )
     parser.add_argument(
         "--num-requests",
         type=int,
         nargs="+",
-        default=[1, 2, 4, 8, 16, 32, 64],
-        help="Concurrency levels to sweep (default: 1 2 4 8 16 32 64).",
+        default=[4, 8, 16, 32, 64, 128, 256],
+        help=(
+            "Concurrency levels to sweep (default: 4 8 16 32 64 128 256). "
+            "Speedup rises with concurrency until batches fill the GPU, so the "
+            "sweep must reach high concurrency to observe the plateau. Below ~4 "
+            "requests a batch can't fill and batching is a net loss, so the "
+            "sweep starts there. Values must stay below the server's "
+            "max_ongoing_requests (300)."
+        ),
     )
     parser.add_argument(
         "--serial-samples",
@@ -533,8 +567,14 @@ def main() -> int:
     parser.add_argument(
         "--max-batch-size-cap",
         type=int,
-        default=4096,
-        help="Autobatch maximum batch size cap in atoms (default: 4096).",
+        default=2048,
+        help=(
+            "Autobatch maximum batch size cap in atoms (default: 2048). The "
+            "probe repeats the representative system up to this many atoms, so "
+            "with small systems a large cap explodes the probe into thousands "
+            "of tiny graphs (very slow). 2048 keeps probing bounded while still "
+            "fitting enough small systems per batch to reveal real speedups."
+        ),
     )
     parser.add_argument(
         "--output-dir",
