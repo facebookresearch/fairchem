@@ -21,6 +21,7 @@ from typing import Any
 import torch
 from torchtnt.framework.callback import Callback
 
+from fairchem.core.common import distutils
 from fairchem.core.components.runner import Runner
 
 logger = logging.getLogger(__name__)
@@ -52,40 +53,102 @@ class BenchmarkTrainCallback(Callback):
     TorchTNT callback that captures per-step training metrics for benchmarking.
     """
 
-    def __init__(self, benchmark_results_path: str):
+    def __init__(
+        self,
+        benchmark_results_path: str,
+        rank_suffix: bool = False,
+        synchronize_cuda: bool = False,
+        capture_step_metrics: bool = True,
+    ):
         self.benchmark_results_path = benchmark_results_path
+        self.rank_suffix = rank_suffix
+        self.synchronize_cuda = synchronize_cuda
+        self.capture_step_metrics = capture_step_metrics
         self.losses: list[float] = []
         self.grad_norms: list[float | None] = []
         self.step_times: list[float] = []
         self.peak_memory_mb: float = 0.0
+        self.peak_reserved_memory_mb: float = 0.0
+        self.validation_history: list[dict[str, float | int]] = []
         self._step_start_time: float | None = None
+        self._train_start_time: float | None = None
+
+    def _synchronize(self) -> None:
+        if self.synchronize_cuda and torch.cuda.is_available():
+            torch.cuda.synchronize()
 
     def on_train_start(self, state, unit) -> None:
+        self._train_start_time = time.perf_counter()
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
 
     def on_train_step_start(self, state, unit) -> None:
+        self._synchronize()
         self._step_start_time = time.perf_counter()
 
     def on_train_step_end(self, state, unit) -> None:
+        self._synchronize()
         if self._step_start_time is not None:
             self.step_times.append(time.perf_counter() - self._step_start_time)
-        if unit.last_loss is not None:
-            self.losses.append(unit.last_loss)
-        self.grad_norms.append(
-            unit.last_grad_norm if hasattr(unit, "last_grad_norm") else None
-        )
+        if self.capture_step_metrics and unit.last_loss is not None:
+            self.losses.append(float(unit.last_loss))
+        if self.capture_step_metrics:
+            self.grad_norms.append(
+                float(unit.last_grad_norm)
+                if getattr(unit, "last_grad_norm", None) is not None
+                else None
+            )
         if torch.cuda.is_available():
             self.peak_memory_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+            self.peak_reserved_memory_mb = torch.cuda.max_memory_reserved() / (
+                1024 * 1024
+            )
+
+    def on_eval_epoch_end(self, state, unit) -> None:
+        if not distutils.is_master():
+            return
+        val_loss = unit.eval_unit.total_loss_metrics.metric
+        elapsed_seconds = (
+            time.perf_counter() - self._train_start_time
+            if self._train_start_time is not None
+            else 0.0
+        )
+        self.validation_history.append(
+            {
+                "step": unit.train_progress.num_steps_completed,
+                "elapsed_seconds": elapsed_seconds,
+                "val_loss": float(val_loss),
+            }
+        )
 
     def on_train_end(self, state, unit) -> None:
+        total_train_seconds = (
+            time.perf_counter() - self._train_start_time
+            if self._train_start_time is not None
+            else None
+        )
         results = {
+            "rank": distutils.get_rank(),
+            "world_size": distutils.get_world_size(),
             "losses": self.losses,
             "grad_norms": self.grad_norms,
             "step_times": self.step_times,
             "peak_memory_mb": self.peak_memory_mb,
+            "peak_reserved_memory_mb": self.peak_reserved_memory_mb,
+            "total_train_seconds": total_train_seconds,
+            "validation_history": self.validation_history,
         }
-        with open(self.benchmark_results_path, "wb") as f:
+        results_path = self.benchmark_results_path
+        if self.rank_suffix:
+            stem, suffix = os.path.splitext(results_path)
+            results_path = f"{stem}.rank{distutils.get_rank()}{suffix}"
+        os.makedirs(os.path.dirname(results_path) or ".", exist_ok=True)
+        # Preemption/requeue guard: if this slot performed zero training steps
+        # (e.g. resumed from a checkpoint at max_epochs and immediately exited),
+        # do NOT overwrite an existing benchmark artifact from a prior slot.
+        if not self.step_times and os.path.exists(results_path):
+            return
+        with open(results_path, "wb") as f:
             pickle.dump(results, f)
 
 
