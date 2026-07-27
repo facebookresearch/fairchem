@@ -96,66 +96,26 @@ def load_tasks(checkpoint_location: str) -> list[Task]:
     ]
 
 
-def get_model_float32_matmul_precision(model: torch.nn.Module | None) -> str | None:
-    """
-    Get a model's float32 matmul policy through common module wrappers.
-
-    Args:
-        model: A model, potentially wrapped by DDP, FSDP, or AveragedModel.
-
-    Returns:
-        The backbone's configured precision, or None if it has no policy.
-    """
-    visited = set()
-    while model is not None and id(model) not in visited:
-        visited.add(id(model))
-        backbone = getattr(model, "backbone", None)
-        if backbone is not None:
-            return getattr(backbone, "float32_matmul_precision", None)
-        model = getattr(model, "module", None)
-    return None
-
-
 @contextmanager
-def tf32_context_manager(
-    float32_matmul_precision: str | None = "high",
-    *,
-    enable_cudnn_tf32: bool = True,
-):
+def tf32_context_manager(tf32: bool):
     """
-    Temporarily apply and restore TF32-related precision settings.
+    Temporarily configure and restore TF32-related precision settings.
 
     Args:
-        float32_matmul_precision: A value accepted by
-            torch.set_float32_matmul_precision, or None to leave the current
-            matmul policy unchanged.
-        enable_cudnn_tf32: Whether to enable TF32 for cuDNN operations.
+        tf32: Whether to enable TF32 for float32 matmul and cuDNN operations.
     """
-    original_precision = (
-        torch.get_float32_matmul_precision()
-        if float32_matmul_precision is not None
-        else None
-    )
-    original_allow_tf32_cudnn = (
-        torch.backends.cudnn.allow_tf32 if enable_cudnn_tf32 else None
-    )
+    original_precision = torch.get_float32_matmul_precision()
+    original_allow_tf32_cudnn = torch.backends.cudnn.allow_tf32
+    configured_precision = "high" if tf32 else "highest"
     try:
-        if enable_cudnn_tf32:
-            torch.backends.cudnn.allow_tf32 = True
-        if (
-            float32_matmul_precision is not None
-            and float32_matmul_precision != original_precision
-        ):
-            torch.set_float32_matmul_precision(float32_matmul_precision)
+        torch.backends.cudnn.allow_tf32 = tf32
+        if configured_precision != original_precision:
+            torch.set_float32_matmul_precision(configured_precision)
         yield
     finally:
-        if (
-            original_precision is not None
-            and float32_matmul_precision != original_precision
-        ):
+        if configured_precision != original_precision:
             torch.set_float32_matmul_precision(original_precision)
-        if original_allow_tf32_cudnn is not None:
-            torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
+        torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
 
 
 def update_configs(original_config, new_config):

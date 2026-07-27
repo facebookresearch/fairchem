@@ -127,12 +127,12 @@ def get_allscaip_full(
 
 
 @pytest.mark.parametrize("precision", ["highest", "high"])
-def test_backbone_preserves_float32_matmul_precision(precision):
+def test_backbone_does_not_own_or_mutate_float32_matmul_precision(precision):
     original_precision = torch.get_float32_matmul_precision()
     try:
         torch.set_float32_matmul_precision(precision)
         backbone = get_allscaip_backbone(cutoff=6.0, use_compile=False, device="cpu")
-        assert backbone.float32_matmul_precision == "high"
+        assert not hasattr(backbone, "float32_matmul_precision")
         assert torch.get_float32_matmul_precision() == precision
     finally:
         torch.set_float32_matmul_precision(original_precision)

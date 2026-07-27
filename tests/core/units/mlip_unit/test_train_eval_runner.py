@@ -49,6 +49,7 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
         [
             "expected_loss=null",
             "checkpoint_every=null",
+            "runner.train_eval_unit.tf32=true",
             f"datasets.data_root_dir={fake_uma_dataset}",
         ],
     )
@@ -58,7 +59,21 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
 
     runner = hydra.utils.instantiate(cfg.runner)
     runner.job_config = cfg.job
-    runner.run()
+    assert runner.train_eval_unit.tf32
+    assert runner.train_eval_unit.eval_unit.tf32
+
+    original_precision = torch.get_float32_matmul_precision()
+    original_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+    try:
+        torch.set_float32_matmul_precision("highest")
+        torch.backends.cudnn.allow_tf32 = False
+        runner.run()
+        assert torch.get_float32_matmul_precision() == "highest"
+        assert not torch.backends.cuda.matmul.allow_tf32
+        assert not torch.backends.cudnn.allow_tf32
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+        torch.backends.cudnn.allow_tf32 = original_cudnn_tf32
 
     ch_path = cfg.job.metadata.checkpoint_dir
     # if we save state the state, the state object should be identical
@@ -81,7 +96,21 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     new_runner = hydra.utils.instantiate(new_cfg.runner)
     new_runner.job_config = new_cfg.job
     new_runner.config = new_cfg
-    new_runner.run()
+    assert not new_runner.train_eval_unit.tf32
+    assert not new_runner.train_eval_unit.eval_unit.tf32
+
+    original_precision = torch.get_float32_matmul_precision()
+    original_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+    try:
+        torch.set_float32_matmul_precision("high")
+        torch.backends.cudnn.allow_tf32 = True
+        new_runner.run()
+        assert torch.get_float32_matmul_precision() == "high"
+        assert torch.backends.cuda.matmul.allow_tf32
+        assert torch.backends.cudnn.allow_tf32
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+        torch.backends.cudnn.allow_tf32 = original_cudnn_tf32
     new_state = new_runner.train_eval_unit.state_dict()
     # the states should be different here because we started with a different seed
     assert not check_model_state_equal(new_state["model"], old_state["model"])

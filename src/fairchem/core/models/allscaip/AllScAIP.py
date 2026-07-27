@@ -70,8 +70,6 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
     ):
         super().__init__()
 
-        self.float32_matmul_precision = kwargs.get("float32_matmul_precision", "high")
-
         # load configs
         cfg = init_configs(AllScAIPConfigs, kwargs)
         self.global_cfg = cfg.global_cfg
