@@ -31,6 +31,12 @@ def _dummy_call(x):
     return x
 
 
+def test_graph_parallel_size_one_is_disabled():
+    gp_utils.setup_graph_parallel_groups(1, "gloo")
+
+    assert not gp_utils.initialized()
+
+
 @pytest.mark.parametrize(
     "world_size, input, expected_output",
     [(1, 5, [5]), (3, 0, [0, 0, 0])],

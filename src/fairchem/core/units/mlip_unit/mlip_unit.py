@@ -568,6 +568,8 @@ class MLIPTrainEvalUnit(
         self.ema_model = None
         self.train_strategy = train_strategy
         if train_strategy == TrainStrategy.DDP:
+            # UMA's graph and buffers are stable, so DDP need not inspect or
+            # broadcast them on every step.
             self.model = prepare_module(
                 model,
                 device=torch.device(get_device_for_local_rank()),
@@ -767,9 +769,11 @@ class MLIPTrainEvalUnit(
             num_atoms_local = data.natoms.sum().item()
             num_samples_local = data.natoms.numel()
             should_report = self.logger is not None or step % self.print_every == 0
+            # Keep metrics on-device until a logger or console report needs them.
             self.last_loss = scalar_loss.detach()
 
             if should_report:
+                # Read all reported device scalars with one host synchronization.
                 report_tensors = [self.last_loss]
                 if self.last_grad_norm is not None:
                     report_tensors.append(self.last_grad_norm)
@@ -778,28 +782,28 @@ class MLIPTrainEvalUnit(
                 if self.last_grad_norm is not None:
                     self.last_grad_norm = report_values[1]
 
-            log_dict = {
-                "train/loss": self.last_loss,
-                "train/lr": self.scheduler.get_lr()[0],
-                "train/step": step,
-                "train/epoch": epoch,
-                "train/samples_per_second(approx)": num_samples_local
-                * self.dp_world_size
-                / float(time_delta),
-                "train/atoms_per_second(approx)": num_atoms_local
-                * self.dp_world_size
-                / float(time_delta),
-                "train/num_atoms_on_rank": num_atoms_local,
-                "train/num_samples_on_rank": num_samples_local,
-            }
-
-            if self.logger:
+                log_dict = {
+                    "train/loss": self.last_loss,
+                    "train/lr": self.scheduler.get_lr()[0],
+                    "train/step": step,
+                    "train/epoch": epoch,
+                    "train/samples_per_second(approx)": num_samples_local
+                    * self.dp_world_size
+                    / float(time_delta),
+                    "train/atoms_per_second(approx)": num_atoms_local
+                    * self.dp_world_size
+                    / float(time_delta),
+                    "train/num_atoms_on_rank": num_atoms_local,
+                    "train/num_samples_on_rank": num_samples_local,
+                }
                 if self.last_grad_norm is not None:
                     log_dict["train/grad_norm"] = self.last_grad_norm
-                self.logger.log(log_dict, step=step, commit=True)
 
-            if step % self.print_every == 0:
-                logging.info(log_dict)
+                if self.logger:
+                    self.logger.log(log_dict, step=step, commit=True)
+
+                if step % self.print_every == 0:
+                    logging.info(log_dict)
 
             self.scheduler.step()
         except Exception:

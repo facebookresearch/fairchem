@@ -761,11 +761,13 @@ class AtomicData:
 
         return cloned
 
-    def shallow_copy(self) -> AtomicData:
-        r"""
+    def __copy__(self) -> AtomicData:
+        """
         Copy the container while sharing its tensor storage.
         """
-        copied = copy.copy(self)
+        copied = self.__class__.__new__(self.__class__)
+        copied.__dict__.update(self.__dict__)
+        # Attribute assignment mutates this set, so copies must not share it.
         copied.__keys__ = self.__keys__.copy()
         return copied
 

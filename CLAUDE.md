@@ -242,6 +242,12 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `lmdb` - Dataset storage format
 - `ray[serve]>=2.53.0` - Distributed computing
 
+## Testing Gotchas
+
+- Some UMA 1.1 tests in `tests/core/units/mlip_unit/test_predict.py` download
+  Hugging Face checkpoints without a `pretrained` marker. Offline runs must
+  provide the cached checkpoint or exclude those tests with `-k "not 1p1"`.
+
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
 This includes:

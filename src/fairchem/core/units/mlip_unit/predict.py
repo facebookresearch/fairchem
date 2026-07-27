@@ -438,10 +438,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
-        # Graph parallelism and MOLE replace fields on the input container, while
-        # conservative inference mutates the autograd state of positions and cell.
-        # Isolate those mutations without cloning every tensor in the batch.
-        data_device = data.to(self.device).shallow_copy()
+        # Graph parallelism and MOLE replace fields, while conservative inference
+        # enables input gradients in place. Isolate only that mutable state.
+        data_device = copy.copy(data.to(self.device))
         data_device.pos = data_device.pos.clone()
         if self.model.module.backbone.regress_config.stress:
             data_device.cell = data_device.cell.clone()
@@ -464,6 +463,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
+        # Inference differentiates with respect to positions and cells, not weights.
         self.model.requires_grad_(False)
 
         self.model.to(self.inference_settings.base_precision_dtype)
@@ -479,11 +479,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             # The model's scalars are fixed at inference, so this skips dynamo's
             # TensorifyScalarRestartAnalysis retrace during compile.
             torch._dynamo.config.specialize_float = True
-            self.model = torch.compile(
-                self.model,
-                dynamic=self.inference_settings.compile_dynamic,
-                mode=self.inference_settings.compile_mode,
-            )
+            self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
 
@@ -491,12 +487,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         Execute model inference.
         """
-        if (
-            self.inference_settings.compile
-            and self.inference_settings.compile_mode == "reduce-overhead"
-            and str(self.device).startswith("cuda")
-        ):
-            torch.compiler.cudagraph_mark_step_begin()
         inference_context = (
             torch.no_grad()
             if self.model.module.backbone.regress_config.direct_forces
