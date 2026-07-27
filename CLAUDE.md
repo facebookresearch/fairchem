@@ -247,6 +247,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Some UMA 1.1 tests in `tests/core/units/mlip_unit/test_predict.py` download
   Hugging Face checkpoints without a `pretrained` marker. Offline runs must
   provide the cached checkpoint or exclude those tests with `-k "not 1p1"`.
+- Freeze parameters only after inference-specific module replacement. Custom
+  autograd paths must save everything needed for input gradients independently
+  of parameter gradients, and a prepared predictor must not be reused for
+  training. Frozen/unfrozen energy, force, stress, and Hessian parity is covered
+  on PyTorch 2.8 and 2.13.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

@@ -1716,6 +1716,78 @@ def _test_untrained_hessian(checkpoint_path, device):
 
 
 @pytest.mark.gpu()
+def test_frozen_parameters_preserve_input_derivatives_gpu(
+    conserving_mole_checkpoint, monkeypatch
+):
+    _test_frozen_parameters_preserve_input_derivatives(
+        conserving_mole_checkpoint[0], "cuda", monkeypatch
+    )
+
+
+def test_frozen_parameters_preserve_input_derivatives_cpu(
+    conserving_mole_checkpoint, monkeypatch
+):
+    _test_frozen_parameters_preserve_input_derivatives(
+        conserving_mole_checkpoint[0], "cpu", monkeypatch
+    )
+
+
+def _test_frozen_parameters_preserve_input_derivatives(
+    checkpoint_path, device, monkeypatch
+):
+    settings = InferenceSettings(
+        predict_untrained_forces={"omol"},
+        predict_untrained_stress={"omol"},
+        predict_untrained_hessian={"omol"},
+        activation_checkpointing=device == "cpu",
+        merge_mole=device == "cuda",
+        execution_mode="umas_fast_gpu" if device == "cuda" else None,
+    )
+
+    seed_everywhere(42)
+    frozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device=device, inference_settings=settings
+    )
+    seed_everywhere(42)
+    unfrozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device=device, inference_settings=settings
+    )
+    monkeypatch.setattr(
+        unfrozen_predictor.model,
+        "requires_grad_",
+        lambda requires_grad=True: unfrozen_predictor.model,
+    )
+
+    def make_batch():
+        atoms = molecule("H2O")
+        atoms.info.update({"charge": 0, "spin": 1})
+        data = AtomicData.from_ase(
+            atoms,
+            task_name="omol",
+            r_data_keys=["spin", "charge"],
+            molecule_cell_size=120,
+        )
+        return atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    frozen = frozen_predictor.predict(make_batch())
+    seed_everywhere(42)
+    unfrozen = unfrozen_predictor.predict(make_batch())
+
+    assert all(
+        not parameter.requires_grad for parameter in frozen_predictor.model.parameters()
+    )
+    assert any(
+        parameter.requires_grad for parameter in unfrozen_predictor.model.parameters()
+    )
+    assert frozen.keys() == unfrozen.keys()
+    for name in frozen:
+        torch.testing.assert_close(
+            frozen[name], unfrozen[name], rtol=1e-5, atol=1e-6, msg=name
+        )
+
+
+@pytest.mark.gpu()
 def test_hessian_activation_checkpointing(conserving_mole_checkpoint):
     """
     Test that hessian is identical with and without activation checkpointing on GPU.
