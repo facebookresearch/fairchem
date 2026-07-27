@@ -942,7 +942,8 @@ class AutobatchConfig:
         backoff_factor: Factor to reduce batch size by after OOM (e.g., 0.8 = 80%).
         timeout_floor_s: Minimum batch wait timeout in seconds.
         timeout_ceil_s: Maximum batch wait timeout in seconds.
-        timeout_latency_multiplier: Multiplier applied to median latency to compute timeout.
+        timeout_latency_multiplier: Multiplier applied to the median single-request
+            latency to compute the batch wait timeout.
         warmup_steps: Number of warmup inference steps before probing.
     """
 
@@ -964,7 +965,8 @@ class AutobatchResult:
     Attributes:
         max_batch_size: Optimal maximum batch size in atoms.
         batch_wait_timeout_s: Optimal batch wait timeout in seconds.
-        median_latency_s: Median inference latency observed during probing.
+        median_latency_s: Median single-request inference latency observed during
+            probing (the basis for ``batch_wait_timeout_s``).
         probe_timestamp: Unix timestamp when probing was performed.
     """
 
@@ -1014,7 +1016,7 @@ def probe_optimal_batch_size(
 
     This function performs a binary search-like probing to find the maximum
     batch size that doesn't cause OOM errors, then derives an appropriate
-    batch wait timeout from observed latencies.
+    batch wait timeout from the measured single-request latency.
 
     Args:
         predict_unit: The MLIPPredictUnit to probe with.
@@ -1062,18 +1064,38 @@ def probe_optimal_batch_size(
             logging.warning(f"Warmup step failed: {e}")
     torch.cuda.empty_cache()
 
-    # Binary search for optimal batch size
+    # Measure single-request latency (the probe data as-is, unexpanded). The
+    # batch_wait_timeout must track how long a *single* request takes so that
+    # requests arriving close together get batched without a lone request
+    # waiting an eternity. Deriving it from the large probed batches instead
+    # (which can be seconds) would saturate ``timeout_ceil_s`` and make every
+    # sub-batch-filling request wait that long -- crippling low-concurrency
+    # throughput.
+    single_request_latencies: list[float] = []
+    for step in range(config.probe_steps):
+        try:
+            torch.cuda.synchronize()
+            start = time.perf_counter()
+            predict_unit.predict(warmup_batch, undo_element_references=False)
+            torch.cuda.synchronize()
+            elapsed = time.perf_counter() - start
+            single_request_latencies.append(elapsed)
+            logging.debug(f"  Single-request step {step + 1}: {elapsed:.4f}s")
+        except Exception as e:
+            logging.warning(f"  Single-request latency probe failed: {e}")
+    torch.cuda.empty_cache()
+
+    # Binary search for optimal batch size. Only success/OOM matters here;
+    # the timeout is derived separately from the single-request latency above.
     low = config.min_batch_size
     high = config.max_batch_size_cap
     best_batch_size = low
-    latencies: list[float] = []
 
     logging.info(f"Probing batch sizes in range [{low}, {high}]...")
 
     while low <= high:
         mid = (low + high) // 2
         success = True
-        step_latencies = []
 
         logging.debug(f"Testing batch size: {mid} atoms")
 
@@ -1088,7 +1110,6 @@ def probe_optimal_batch_size(
                 torch.cuda.synchronize()
                 elapsed = time.perf_counter() - start
 
-                step_latencies.append(elapsed)
                 logging.debug(f"  Step {step + 1}: {elapsed:.4f}s")
 
             except torch.OutOfMemoryError:
@@ -1103,7 +1124,6 @@ def probe_optimal_batch_size(
 
         if success:
             best_batch_size = mid
-            latencies.extend(step_latencies)
             low = mid + 1
             logging.debug(f"  Success at {mid}, trying larger...")
         else:
@@ -1114,9 +1134,12 @@ def probe_optimal_batch_size(
     final_batch_size = int(best_batch_size * config.backoff_factor)
     final_batch_size = max(final_batch_size, config.min_batch_size)
 
-    # Compute timeout from latencies
-    if latencies:
-        sorted_latencies = sorted(latencies)
+    # Compute timeout from the single-request latency, not the large probed
+    # batches. The timeout is how long the server lingers to accumulate a
+    # batch; keying it to one request's latency keeps a lone request from
+    # stalling while still letting near-simultaneous requests coalesce.
+    if single_request_latencies:
+        sorted_latencies = sorted(single_request_latencies)
         median_latency = sorted_latencies[len(sorted_latencies) // 2]
         timeout = median_latency * config.timeout_latency_multiplier
         timeout = max(config.timeout_floor_s, min(timeout, config.timeout_ceil_s))
