@@ -279,6 +279,13 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   batched Triton kernels, including every custom backward operator reached by
   the derivative graph.
 
+## Dependency Compatibility
+
+- `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
+  not depend on enumeration order, seeded random coordinates, or atom counts
+  unless those values are part of the public contract; prefer composition,
+  Miller index, shift, placement, and cell invariants that survive upgrades.
+
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
 This includes:

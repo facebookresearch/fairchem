@@ -24,7 +24,7 @@ def load_data(request):
     slab_sample_1 = Slab.from_bulk_get_random_slab(bulk_sample_1)
     adsorbate_sample_1 = Adsorbate(adsorbate_id_from_db=10)
 
-    bulk_sample_2 = Bulk(bulk_id_from_db=100)
+    bulk_sample_2 = Bulk(bulk_id_from_db=0)
     slab_sample_2 = Slab.from_bulk_get_random_slab(bulk_sample_2)
     adsorbate_sample_2 = Adsorbate(adsorbate_id_from_db=2)
 
@@ -65,4 +65,4 @@ class TestVasp:
         _, flags1 = _clean_up_inputs(atoms1, VASP_FLAGS)
         _, flags2 = _clean_up_inputs(atoms2, VASP_FLAGS)
 
-        assert flags1 != flags2
+        assert flags1["kpts"] != flags2["kpts"]
