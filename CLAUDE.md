@@ -258,6 +258,8 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   `+runner.train_eval_unit.tf32=true`.
 - Keep one configurable TF32 context manager for scoped matmul precision and
   cuDNN state instead of introducing overlapping context managers.
+- Name instances of that manager `tf32_context`; it controls both matmul
+  precision and cuDNN TF32, so `matmul_context` is too narrow.
 - Training FLOPs profiling invokes the model from `on_train_start`; scoped
   execution settings must cover profiling as well as train/eval step methods.
 
