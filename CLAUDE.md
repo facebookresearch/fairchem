@@ -265,12 +265,13 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 ## Hessian Backend Gotchas
 
 - PyTorch's generic `vmap` fallback cannot batch the mutable, output-argument
-  Triton operators used by `umas_fast_gpu`. Set `hessian_vmap=False` for that
-  backend until its backward operators have explicit batching rules. This only
-  changes Hessian construction: energy, force, and stress inference are
-  unaffected. The fallback computes one vector-Jacobian product per Cartesian
-  force component, so it can be slower for large systems while using less
-  memory.
+  Triton operators used by `umas_fast_gpu`. Backend validation rejects requested
+  Hessians with `hessian_vmap=True`; set it to `False` until the backward
+  operators have explicit batching rules. Automatic backend selection falls
+  back to normal mode for this combination. This only changes Hessian
+  construction: energy, force, and stress inference are unaffected. The
+  fallback computes one vector-Jacobian product per Cartesian force component,
+  so it can be slower for large systems while using less memory.
 - Explicit `torch.library.register_vmap` rules are possible for mutable custom
   operators. A rule that loops over the mapped dimension would make the
   operator compatible but retain most kernel-launch overhead. Recovering the
