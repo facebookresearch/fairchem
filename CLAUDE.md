@@ -257,6 +257,13 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Training FLOPs profiling invokes the model from `on_train_start`; scoped
   execution settings must cover profiling as well as train/eval step methods.
 
+## Dependency Compatibility
+
+- `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
+  not depend on enumeration order, seeded random coordinates, or atom counts
+  unless those values are part of the public contract; prefer composition,
+  Miller index, shift, placement, and cell invariants that survive upgrades.
+
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
 This includes:
