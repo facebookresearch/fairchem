@@ -470,6 +470,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "Model is being compiled this might take a while for the first time"
             )
             torch._dynamo.config.recompile_limit = 32
+            # Bake float literals in as constants rather than symbolic floats.
+            # The model's scalars are fixed at inference, so this skips dynamo's
+            # TensorifyScalarRestartAnalysis retrace during compile.
+            torch._dynamo.config.specialize_float = True
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
