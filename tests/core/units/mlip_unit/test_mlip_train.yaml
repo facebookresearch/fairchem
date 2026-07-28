@@ -31,7 +31,6 @@ runner:
   eval_dataloader: ${datasets.val_dataloader}
   train_eval_unit:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
-    tf32: False
     job_config: ${job}
     tasks: ${tasks}
     model:

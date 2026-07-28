@@ -252,6 +252,10 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   `InferenceSettings.tf32`, never to a model config or model attribute.
   Execution callers scope and restore the policy outside compiled `forward`
   methods because precision getters cannot be traced by fullgraph.
+- Training and evaluation units default TF32 to disabled. Configs should set
+  `tf32` only when overriding that default. Hydra CLI overrides for configs
+  that omit the key must use the add syntax, such as
+  `+runner.train_eval_unit.tf32=true`.
 - Keep one configurable TF32 context manager for scoped matmul precision and
   cuDNN state instead of introducing overlapping context managers.
 - Training FLOPs profiling invokes the model from `on_train_start`; scoped

@@ -49,7 +49,7 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
         [
             "expected_loss=null",
             "checkpoint_every=null",
-            "runner.train_eval_unit.tf32=true",
+            "+runner.train_eval_unit.tf32=true",
             f"datasets.data_root_dir={fake_uma_dataset}",
         ],
     )
