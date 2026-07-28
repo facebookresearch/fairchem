@@ -244,14 +244,21 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Testing Gotchas
 
-- Some UMA 1.1 tests in `tests/core/units/mlip_unit/test_predict.py` download
-  Hugging Face checkpoints without a `pretrained` marker. Offline runs must
-  provide the cached checkpoint or exclude those tests with `-k "not 1p1"`.
+- Tests that download registered checkpoints must declare their models with a
+  `pretrained` marker. This lets base CI deselect them with `--exclude-models`
+  and routes them to the matching model-sweep job.
 - Freeze parameters only after inference-specific module replacement. Custom
   autograd paths must save everything needed for input gradients independently
   of parameter gradients, and a prepared predictor must not be reused for
   training. Frozen/unfrozen energy, force, stress, and Hessian parity is covered
   on PyTorch 2.8 and 2.13.
+- `umas_fast_gpu` custom backward operators do not implement `vmap` batching.
+  Compute Hessians through the per-component loop (`hessian_vmap=False`) when
+  exercising that backend, and ensure inference settings forward that option
+  into the backbone configuration.
+- Set `CI=true` when reproducing CPU CI shards locally. Some multi-GPU graph
+  parallel tests rely on that environment variable for skipping instead of the
+  `gpu` marker, so the CI marker expression alone will still collect them.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

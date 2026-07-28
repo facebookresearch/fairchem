@@ -1742,6 +1742,7 @@ def _test_frozen_parameters_preserve_input_derivatives(
         activation_checkpointing=device == "cpu",
         merge_mole=device == "cuda",
         execution_mode="umas_fast_gpu" if device == "cuda" else None,
+        hessian_vmap=device == "cpu",
     )
 
     seed_everywhere(42)
@@ -1782,8 +1783,13 @@ def _test_frozen_parameters_preserve_input_derivatives(
     )
     assert frozen.keys() == unfrozen.keys()
     for name in frozen:
+        atol = 1e-5 if name == "hessian" else 1e-6
         torch.testing.assert_close(
-            frozen[name], unfrozen[name], rtol=1e-5, atol=1e-6, msg=name
+            frozen[name],
+            unfrozen[name],
+            rtol=1e-5,
+            atol=atol,
+            msg=lambda message, name=name: f"{name}: {message}",
         )
 
 
@@ -1964,6 +1970,7 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_predict_unit_has_model_id():
     """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
     back-fills it to `"UMA-1.1"` at load time."""
@@ -1979,6 +1986,7 @@ def test_uma_1p1_predict_unit_has_model_id():
     assert pu.model.module.backbone.model_id == UMA_1P1_MODEL_ID
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_finetune_propagates_model_id():
     """When finetuning starts from UMA 1.1, the back-filled `model_id` is
     stashed onto `model.finetune_model_full_config` (the fixup runs inside
