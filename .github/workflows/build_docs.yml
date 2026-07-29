@@ -56,7 +56,7 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - uses: actions/setup-node@v6
+    - uses: actions/setup-node@v7
       with:
         node-version: 18.x
 
