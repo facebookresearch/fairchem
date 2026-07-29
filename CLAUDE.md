@@ -242,6 +242,27 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `lmdb` - Dataset storage format
 - `ray[serve]>=2.53.0` - Distributed computing
 
+## Numerical Precision
+
+- Model constructors must not mutate process-wide PyTorch precision settings
+  such as `torch.set_float32_matmul_precision`. Precision is caller-owned;
+  inference applies TF32 temporarily through `InferenceSettings.tf32` and
+  restores the prior settings afterward.
+- TF32 policy belongs to the training/evaluation unit config or
+  `InferenceSettings.tf32`, never to a model config or model attribute.
+  Execution callers scope and restore the policy outside compiled `forward`
+  methods because precision getters cannot be traced by fullgraph.
+- Training and evaluation units default TF32 to disabled. Configs should set
+  `tf32` only when overriding that default. Hydra CLI overrides for configs
+  that omit the key must use the add syntax, such as
+  `+runner.train_eval_unit.tf32=true`.
+- Keep one configurable TF32 context manager for scoped matmul precision and
+  cuDNN state instead of introducing overlapping context managers.
+- Use the `tf32_context_manager` name for that policy; it controls both matmul
+  precision and cuDNN TF32, so `matmul_context` is too narrow.
+- Training FLOPs profiling invokes the model from `on_train_start`; scoped
+  execution settings must cover profiling as well as train/eval step methods.
+
 ## Cluster Validation Gotchas
 
 - H100 compute nodes do not have PyPI egress. Provision Python environments on
