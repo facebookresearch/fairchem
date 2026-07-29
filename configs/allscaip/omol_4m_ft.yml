@@ -111,6 +111,7 @@ runner:
   eval_dataloader: ${eval_dataloader}
   train_eval_unit:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    tf32: True
     job_config: ${job}
     tasks: ${tasks}
     model:
