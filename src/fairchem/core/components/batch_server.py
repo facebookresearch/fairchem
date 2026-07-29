@@ -90,39 +90,10 @@ class BatchConfig:
     max_batch_size: int = DEFAULT_MAX_BATCH_SIZE
     batch_wait_timeout_s: float = DEFAULT_BATCH_WAIT_TIMEOUT_S
     split_oom_batch: bool = False
-    # None defers to Ray Serve's ``@serve.batch`` default.
-    max_concurrent_batches: int | None = None
 
     def to_init_kwargs(self) -> dict[str, Any]:
         """Return ``{name: value}`` for fields that were explicitly set (non-None)."""
         return {k: v for k, v in asdict(self).items() if v is not None}
-
-
-def _build_serve_batch_kwargs(
-    max_batch_size: int,
-    batch_wait_timeout_s: float,
-    max_concurrent_batches: int | None,
-) -> dict[str, Any]:
-    """
-    Build the kwargs forwarded to ``@serve.batch`` when wrapping a
-    deployment's predict method.
-
-    ``max_concurrent_batches`` is a decoration-time-only arg in Ray Serve
-    (no runtime setter exists), so it must be baked into the decorator
-    at deployment construction time. ``max_batch_size`` and
-    ``batch_wait_timeout_s`` are passed here too so the initial values
-    are correct from the first request.
-    """
-    batch_kwargs: dict[str, Any] = {
-        "batch_size_fn": lambda batch: sum(
-            sample.natoms.sum() for sample in batch
-        ).item(),
-        "max_batch_size": max_batch_size,
-        "batch_wait_timeout_s": batch_wait_timeout_s,
-    }
-    if max_concurrent_batches is not None:
-        batch_kwargs["max_concurrent_batches"] = max_concurrent_batches
-    return batch_kwargs
 
 
 class BatchPredictServerMixin:
@@ -316,7 +287,6 @@ class BatchPredictServer(BatchPredictServerMixin):
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = False,
-        max_concurrent_batches: int | None = None,
     ):
         """
         Initialize with a Ray object reference to a PredictUnit.
@@ -332,26 +302,19 @@ class BatchPredictServer(BatchPredictServerMixin):
                 with very different sized systems (e.g., mixed molecules and bulk
                 materials), but may impact performance for homogeneous workloads.
                 Defaults to False.
-            max_concurrent_batches: Max concurrent batches for the @serve.batch
-                decorator. If None, uses Ray Serve's default.
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.split_oom_batch = split_oom_batch
-        # One-time decoration at deployment construction. ``max_concurrent_batches``
-        # has no runtime setter on ``@serve.batch``, so it must be baked in here;
-        # the runtime-mutable settings (max_batch_size, batch_wait_timeout_s) are
-        # still adjustable via ``self.predict.set_*`` on the decorated method.
-        self.predict = serve.batch(
-            **_build_serve_batch_kwargs(
-                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
-            )
-        )(self._predict_impl)
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
 
         logging.info(
             "BatchPredictServer initialized with predict_unit from object store"
         )
 
-    async def _predict_impl(
+    @serve.batch(
+        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
+    )
+    async def predict(
         self, data_list: list[AtomicData], undo_element_references: bool = True
     ) -> list[dict]:
         return self._run_batched_inference(
@@ -392,7 +355,6 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = False,
-        max_concurrent_batches: int | None = None,
     ):
         """
         Initialize the multiplexed predict server.
@@ -405,22 +367,18 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
                 with very different sized systems (e.g., mixed molecules and bulk
                 materials), but may impact performance for homogeneous workloads.
                 Defaults to False.
-            max_concurrent_batches: Max concurrent batches for the @serve.batch
-                decorator. If None, uses Ray Serve's default.
         """
         self.split_oom_batch = split_oom_batch
-        # Same one-time decoration as BatchPredictServer; see comment there.
-        self.predict = serve.batch(
-            **_build_serve_batch_kwargs(
-                max_batch_size, batch_wait_timeout_s, max_concurrent_batches
-            )
-        )(self._predict_impl)
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
         logging.info("MultiplexedBatchPredictServer initialized")
 
     async def is_multiplexed(self) -> bool:
         return True
 
-    async def _predict_impl(
+    @serve.batch(
+        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
+    )
+    async def predict(
         self,
         data_list: list[AtomicData],
         model_id_list: list[str],
@@ -684,8 +642,7 @@ def setup_batch_predict_server(
         batch_config: :class:`BatchConfig` (or equivalent dict) of kwargs
             forwarded into ``BatchPredictServer.__init__`` via
             ``.bind(**batch_config)``. Accepts ``max_batch_size``,
-            ``batch_wait_timeout_s``, ``split_oom_batch``,
-            ``max_concurrent_batches``.
+            ``batch_wait_timeout_s``, and ``split_oom_batch``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
 
