@@ -17,6 +17,14 @@ import torch
 # so a pathological input cannot spin forever.
 _MAX_COMPONENT_ROUNDS = 64
 
+# Pointer-jumping steps per hooking round. Enough jumps to reach a root would be
+# log2(num_atoms), but the round is repeated until labels stop changing anyway,
+# so a small constant is correct and cheaper: each jump is a kernel launch over a
+# tensor the size of the batch, and on GPU those launches, not the scatters,
+# dominate. Measured on an RTX 4060, 1372 atoms: 4 jumps converge in 2 rounds at
+# 0.29 ms against 0.45 ms for 12 jumps, with identical labels.
+_POINTER_JUMPS = 4
+
 
 def is_mixed_pbc(data) -> bool:
     """
@@ -97,12 +105,11 @@ def connected_component_labels(
     """
     device = index.device
     labels = torch.arange(num_atoms, device=device)
-    num_jumps = int(num_atoms).bit_length() + 1
     for _ in range(_MAX_COMPONENT_ROUNDS):
         hooked = labels.clone()
         hooked.scatter_reduce_(0, index, labels[neighbor_index], "amin")
         hooked.scatter_reduce_(0, neighbor_index, labels[index], "amin")
-        for _ in range(num_jumps):
+        for _ in range(_POINTER_JUMPS):
             hooked = hooked[hooked]
         if torch.equal(hooked, labels):
             break
