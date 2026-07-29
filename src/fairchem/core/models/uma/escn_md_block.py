@@ -187,23 +187,75 @@ class Edgewise(torch.nn.Module):
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         with record_function("SO2Conv"):
-            x_message = self.backend.node_to_edge_wigner_permute(
-                x_full, edge_index, wigner
-            )
-            x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
-            x_message = self.act(x_0_gating, x_message)
-            x_message = self.so2_conv_2(x_message)
-            new_embedding = self.backend.permute_wigner_inv_edge_to_node(
-                x_message,
-                wigner_inv_envelope,
-                edge_index,
-                x_original_shape,
-                node_offset,
-            )
+            if getattr(self.backend, "supports_fused_edgewise", False):
+                # Fused GPU path (umas_fast_gpu): the producer op emits conv1's
+                # scaled + GEMM-packed buffers directly (no x_message), and the
+                # conv2 GEMM outputs feed the fused inv op (no M-major x_message).
+                # x_edge here is the per-layer radial embedding (already
+                # rad_func-applied by the fast backend).
+                new_embedding = self._forward_chunk_fused(
+                    x_full,
+                    x_original_shape,
+                    x_edge,
+                    edge_index,
+                    wigner,
+                    wigner_inv_envelope,
+                    node_offset,
+                )
+            else:
+                x_message = self.backend.node_to_edge_wigner_permute(
+                    x_full, edge_index, wigner
+                )
+                x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
+                x_message = self.act(x_0_gating, x_message)
+                x_message = self.so2_conv_2(x_message)
+                new_embedding = self.backend.permute_wigner_inv_edge_to_node(
+                    x_message,
+                    wigner_inv_envelope,
+                    edge_index,
+                    x_original_shape,
+                    node_offset,
+                )
 
         # reset ac start index
         set_mole_ac_start_index(self, 0)
         return new_embedding
+
+    def _forward_chunk_fused(
+        self,
+        x_full,
+        x_original_shape,
+        x_edge,
+        edge_index,
+        wigner,
+        wigner_inv_envelope,
+        node_offset: int = 0,
+    ):
+        # Fused edgewise path for the umas_fast_gpu backend. Mirrors the
+        # non-fused path but keeps the [E,9,2C]/[E,9,C] M-major intermediates
+        # out of DRAM via the producer (conv1) and consumer (conv2 inv) fusions,
+        # the fusions only touch wigner/pack/unpack/rotate.
+        sphere_channels = x_full.shape[2]
+
+        m0_buf, m1_buf, m2_buf = self.backend.fused_node_to_edge_conv1_pack(
+            x_full, edge_index, wigner, x_edge, sphere_channels
+        )
+        x_message, x_0_gating = self.so2_conv_1.gemms_from_packed(
+            m0_buf, m1_buf, m2_buf, edge_index.shape[1]
+        )
+        x_message = self.act(x_0_gating, x_message)
+
+        g0, g1, g2 = self.so2_conv_2.gemms_to_buffers(x_message)
+        return self.backend.fused_conv2_inv_edge_to_node(
+            g0,
+            g1,
+            g2,
+            wigner_inv_envelope,
+            edge_index,
+            x_original_shape,
+            node_offset,
+            sphere_channels,
+        )
 
 
 class SpectralAtomwise(torch.nn.Module):

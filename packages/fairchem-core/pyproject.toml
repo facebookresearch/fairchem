@@ -9,7 +9,7 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.11, <3.14"
 dependencies = [
-    "torch~=2.8.0",
+    "torch~=2.13.0",
     "ray[serve]>=2.53.0",
     # ray[serve]<=2.56 uses the removed FieldDescriptor.label API; protobuf>=7
     # drops it, breaking serve.run. Cap below 7 (lower bound satisfies tensorboard).
@@ -28,7 +28,7 @@ dependencies = [
     "requests",
     "orjson",
     "tqdm",
-    "submitit",
+    "submitit>=1.5.4",
     "hydra-core",
     "torchtnt",
     "pyyaml",
