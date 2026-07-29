@@ -300,6 +300,49 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   batched Triton kernels, including every custom backward operator reached by
   the derivative graph.
 
+## Neighbour Truncation Gotchas
+
+- `get_max_neighbors_mask` selects the nearest `max_neighbors` per atom and has
+  no global connectivity guarantee. Where two dense regions touch through one
+  bridging contact, both endpoints can rank that contact outside their own
+  budget and drop it, so a physically connected structure arrives at the model
+  as two disconnected components. Nothing downstream detects this. Measured on
+  two fcc grains at a 3.2 A gap with cutoff 6 A: the graph splits at every
+  budget from 8 to 30, including the shipped `max_neighbors: 30`. Pass
+  `preserve_connectivity=True` through `generate_graph` to re-add the shortest
+  dropped edges.
+- All three radius-graph implementations (v1, v2, nvidia) call
+  `get_max_neighbors_mask`, so they share this behaviour identically. Fix it in
+  the shared mask, not per implementation.
+- Uniformly random dense periodic boxes never fracture (0/400 trials at every
+  budget). The defect needs bridge topology - adsorbates, grain boundaries,
+  cluster contacts - so random stress tests will not find it.
+- ESCAIP's `biknn_radius_graph` builds a *mutual*-kNN mask
+  (`env = amax(src_rank/k, dst_rank/k, dist/cutoff)`, keep `env < 1`), which
+  requires an edge to be in the top-k of *both* endpoints. It therefore
+  fractures strictly more often than the UMA path (20/32 vs 15/32 on the same
+  structures). Relaxing it to union-kNN (`minimum` instead of `maximum` on the
+  rank pair) only halves that (13/32); it is not a fix. `build_radius_graph` is
+  `@torch.jit.script` and discards the pre-mask candidate list, so reusing
+  `reconnect_mask` there needs a return-signature change, not a one-liner.
+- Component labelling and Boruvka both vectorize with `scatter_reduce_` plus
+  pointer jumping - no Python loop over edges, so they run on GPU. Skip the
+  second labelling pass when the retained graph already has one component per
+  system: no edge ever joins two systems, so that is the floor and it proves
+  equality with the untruncated graph. Without that fast path the flag costs
+  ~2-3.5x `get_max_neighbors_mask`; with it, end-to-end `radius_graph_pbc` is
+  unchanged within noise (0.93-1.00x).
+- Under exact geometric degeneracy the minimum spanning forest is not unique
+  (two symmetric fcc grains gave 112 bitwise-equal candidate bridges). Any rule
+  that picks one is atom-order dependent. Keep the whole degenerate shell, the
+  same way the non-strict neighbour budget already does; do not claim a minimal
+  forest.
+- `enforce_max_strictly=False` (the default) is atom-order invariant (0/54
+  permutation trials changed the edge set). `enforce_max_strictly=True` is not
+  (38/54 changed). The docstring's warning about unit-cell-dependent formation
+  energies applies to the strict path only, so connectivity work must not be
+  advertised as fixing it.
+
 ## Dependency Compatibility
 
 - `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must

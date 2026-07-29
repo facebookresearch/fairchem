@@ -13,6 +13,10 @@ import math
 import numpy as np
 import torch
 
+# Both component passes converge in O(log num_atoms) rounds. The cap only exists
+# so a pathological input cannot spin forever.
+_MAX_COMPONENT_ROUNDS = 64
+
 
 def is_mixed_pbc(data) -> bool:
     """
@@ -71,6 +75,183 @@ def compute_neighbors(data, edge_index):
     return sum_partitions(num_neighbors, image_indptr)
 
 
+def connected_component_labels(
+    index: torch.Tensor, neighbor_index: torch.Tensor, num_atoms: int
+) -> torch.Tensor:
+    """
+    Label the connected components of an undirected edge list.
+
+    Hooking plus pointer jumping (Shiloach-Vishkin): every atom repeatedly
+    adopts the smallest label among itself and its neighbors, then the label
+    pointers are flattened to component roots. Labels only ever decrease, so the
+    label of a component is the smallest atom index it contains and the result
+    does not depend on the order edges appear in.
+
+    Args:
+        index: Atom index at one end of each edge.
+        neighbor_index: Atom index at the other end of each edge.
+        num_atoms: Number of atoms the indices refer to.
+
+    Returns:
+        A tensor of length ``num_atoms`` holding the component label per atom.
+    """
+    device = index.device
+    labels = torch.arange(num_atoms, device=device)
+    num_jumps = int(num_atoms).bit_length() + 1
+    for _ in range(_MAX_COMPONENT_ROUNDS):
+        hooked = labels.clone()
+        hooked.scatter_reduce_(0, index, labels[neighbor_index], "amin")
+        hooked.scatter_reduce_(0, neighbor_index, labels[index], "amin")
+        for _ in range(num_jumps):
+            hooked = hooked[hooked]
+        if torch.equal(hooked, labels):
+            break
+        labels = hooked
+    return labels
+
+
+def _min_bridge_mask(
+    component_a: torch.Tensor,
+    component_b: torch.Tensor,
+    atom_distance: torch.Tensor,
+    num_atoms: int,
+    degeneracy_tolerance: float,
+) -> torch.Tensor:
+    """
+    Select the lightest edges that merge the components they connect.
+
+    Boruvka with vectorized scatter reductions. Each round every component that
+    still has an outgoing edge claims its shortest one together with every
+    outgoing edge within `degeneracy_tolerance` of it, then the merged
+    components are contracted. Because selection reads only distances, the
+    result is independent of atom ordering, and keeping the whole degenerate
+    shell avoids the arbitrary choice between degenerate edges that strict
+    truncation has to make.
+
+    Args:
+        component_a: Component label at one end of each candidate edge.
+        component_b: Component label at the other end of each candidate edge.
+        atom_distance: Squared interatomic distance per candidate edge.
+        num_atoms: Upper bound on the component labels.
+        degeneracy_tolerance: Tolerance on the squared distance, applied the
+            same way as in the neighbor budget.
+
+    Returns:
+        Boolean mask over the candidate edges.
+    """
+    device = atom_distance.device
+    component = torch.arange(num_atoms, device=device)
+    picked = torch.zeros_like(atom_distance, dtype=torch.bool)
+    num_jumps = int(num_atoms).bit_length() + 1
+    unreachable = torch.finfo(atom_distance.dtype).max
+
+    for _ in range(_MAX_COMPONENT_ROUNDS):
+        label_a = component[component_a]
+        label_b = component[component_b]
+        crossing = label_a != label_b
+        if not bool(crossing.any()):
+            break
+        shortest = torch.full(
+            (num_atoms,), unreachable, dtype=atom_distance.dtype, device=device
+        )
+        shortest.scatter_reduce_(0, label_a[crossing], atom_distance[crossing], "amin")
+        shortest.scatter_reduce_(0, label_b[crossing], atom_distance[crossing], "amin")
+        threshold = (
+            torch.minimum(shortest[label_a], shortest[label_b]) + degeneracy_tolerance
+        )
+        selected = crossing & torch.le(atom_distance, threshold)
+        if not bool(selected.any()):
+            break
+        picked |= selected
+        # Hook each merging component onto the smaller label. Pointing only from
+        # larger to smaller labels cannot create a cycle.
+        parent = torch.arange(num_atoms, device=device)
+        parent.scatter_reduce_(
+            0,
+            torch.maximum(label_a[selected], label_b[selected]),
+            torch.minimum(label_a[selected], label_b[selected]),
+            "amin",
+        )
+        for _ in range(num_jumps):
+            parent = parent[parent]
+        component = parent[component]
+
+    return picked
+
+
+def reconnect_mask(
+    index: torch.Tensor,
+    neighbor_index: torch.Tensor,
+    atom_distance: torch.Tensor,
+    mask_num_neighbors: torch.Tensor,
+    num_atoms: int,
+    degeneracy_tolerance: float = 0.01,
+    num_systems: int = 1,
+) -> torch.Tensor:
+    """
+    Find edges the neighbor budget dropped that connectivity cannot spare.
+
+    Per-atom nearest-k truncation carries no global connectivity guarantee: when
+    both endpoints of a bridging contact rank it outside their own budget, the
+    edge is dropped by local agreement and the message-passing graph splits into
+    components that the untruncated radius graph joins. This returns the
+    shortest edges that undo such splits, so the retained graph has the same
+    number of connected components as the radius graph it came from.
+
+    Args:
+        index: Atom index at one end of each edge of the untruncated graph.
+        neighbor_index: Atom index at the other end of each edge.
+        atom_distance: Squared interatomic distance per edge.
+        mask_num_neighbors: Mask of the edges the neighbor budget retained.
+        num_atoms: Number of atoms the indices refer to.
+        degeneracy_tolerance: Tolerance on the squared distance, applied the
+            same way as in the neighbor budget.
+        num_systems: Number of systems in the batch. Used only to skip the work
+            entirely when the retained graph is already one component per
+            system, which is the common case.
+
+    Returns:
+        Boolean mask over edges, disjoint from `mask_num_neighbors`, whose union
+        with it has the connectivity of the untruncated graph. All false when
+        truncation did not disconnect anything, which is the common case.
+    """
+    no_edges = torch.zeros_like(mask_num_neighbors)
+    if index.numel() == 0:
+        return no_edges
+
+    labels_kept = connected_component_labels(
+        index[mask_num_neighbors], neighbor_index[mask_num_neighbors], num_atoms
+    )
+    num_kept = int(labels_kept.unique().numel())
+
+    # No edge ever joins two systems, so the untruncated graph has at least one
+    # component per system. Dropping edges can only ever add components. If the
+    # retained graph is already at that floor it matches the untruncated graph
+    # and the second pass is unnecessary.
+    if num_kept <= num_systems:
+        return no_edges
+
+    if num_kept == int(
+        connected_component_labels(index, neighbor_index, num_atoms).unique().numel()
+    ):
+        return no_edges
+
+    # Only edges bridging two different retained components can help. Both
+    # directed copies of a bridge have the same distance, so both are selected
+    # together and the bridge carries messages in both directions.
+    crossing = labels_kept[index] != labels_kept[neighbor_index]
+    picked = _min_bridge_mask(
+        labels_kept[index[crossing]],
+        labels_kept[neighbor_index[crossing]],
+        atom_distance[crossing],
+        num_atoms,
+        degeneracy_tolerance,
+    )
+    extra = no_edges.clone()
+    extra[crossing.nonzero(as_tuple=True)[0][picked]] = True
+    return extra & ~mask_num_neighbors
+
+
 def get_max_neighbors_mask(
     natoms,
     index,
@@ -78,6 +259,8 @@ def get_max_neighbors_mask(
     max_num_neighbors_threshold,
     degeneracy_tolerance: float = 0.01,
     enforce_max_strictly: bool = False,
+    neighbor_index: torch.Tensor | None = None,
+    preserve_connectivity: bool = False,
 ):
     """
     Give a mask that filters out edges so that each atom has at most
@@ -92,6 +275,32 @@ def get_max_neighbors_mask(
     A degeneracy tolerance can help prevent sudden changes in edge
     existence from small changes in atom position, for example,
     rounding errors, slab relaxation, temperature, etc.
+
+    Selecting the nearest neighbors per atom also carries no global
+    connectivity guarantee. Where two dense regions touch through a single
+    bridging contact, both endpoints can rank that contact outside their own
+    budget and drop it, splitting the message-passing graph for a structure
+    that is physically connected. Pass `neighbor_index` and set
+    `preserve_connectivity` to re-add the shortest dropped edges needed to keep
+    the connectivity of the untruncated radius graph.
+
+    Args:
+        natoms: Number of atoms per system in the batch.
+        index: Atom index receiving each edge, sorted ascending.
+        atom_distance: Squared interatomic distance per edge.
+        max_num_neighbors_threshold: Per-atom neighbor budget. Not positive
+            disables truncation.
+        degeneracy_tolerance: Tolerance on the squared distance used to keep
+            degenerate shells together.
+        enforce_max_strictly: Truncate exactly at the budget instead of keeping
+            degenerate edges beyond it.
+        neighbor_index: Atom index at the other end of each edge. Required for
+            `preserve_connectivity`.
+        preserve_connectivity: Re-add the shortest dropped edges so truncation
+            cannot increase the number of connected components.
+
+    Returns:
+        A boolean mask over edges and the retained neighbor count per system.
     """
 
     device = natoms.device
@@ -186,6 +395,23 @@ def get_max_neighbors_mask(
     # Create a mask to remove all pairs not in index_sort
     mask_num_neighbors = torch.zeros(len(index), device=device, dtype=bool)
     mask_num_neighbors.index_fill_(0, index_sort, True)
+
+    if preserve_connectivity and neighbor_index is not None:
+        extra = reconnect_mask(
+            index,
+            neighbor_index,
+            atom_distance,
+            mask_num_neighbors,
+            int(num_atoms),
+            degeneracy_tolerance,
+            num_systems=natoms.shape[0],
+        )
+        if bool(extra.any()):
+            mask_num_neighbors = mask_num_neighbors | extra
+            num_neighbors_image = sum_partitions(
+                get_counts(index[mask_num_neighbors], num_atoms), image_indptr
+            )
+
     return mask_num_neighbors, num_neighbors_image
 
 
@@ -196,6 +422,7 @@ def radius_graph_pbc(
     max_num_neighbors_threshold,
     enforce_max_neighbors_strictly: bool = False,
     pbc: torch.Tensor | None = None,
+    preserve_connectivity: bool = False,
 ):
     pbc = canonical_pbc(data, pbc)
 
@@ -336,6 +563,8 @@ def radius_graph_pbc(
         atom_distance=atom_distance_sqr,
         max_num_neighbors_threshold=max_num_neighbors_threshold,
         enforce_max_strictly=enforce_max_neighbors_strictly,
+        neighbor_index=index2,
+        preserve_connectivity=preserve_connectivity,
     )
 
     if not torch.all(mask_num_neighbors):
@@ -416,6 +645,7 @@ def radius_graph_pbc_v2(
     max_num_neighbors_threshold,
     enforce_max_neighbors_strictly: bool = False,
     pbc: torch.Tensor | None = None,
+    preserve_connectivity: bool = False,
 ):
     pbc = canonical_pbc(data, pbc)
 
@@ -787,12 +1017,18 @@ def radius_graph_pbc_v2(
     else:
         target_idx_for_num_neighbors = target_idx
 
+    # Connectivity needs both endpoints in one index space. With a node
+    # partition only the target index is remapped, so leave the pair out there.
+    neighbor_index = None if hasattr(data, "node_partition") else source_idx
+
     mask_num_neighbors, num_neighbors_image = get_max_neighbors_mask(
         natoms=data.natoms,
         index=target_idx_for_num_neighbors,
         atom_distance=atom_distance_sqr,
         max_num_neighbors_threshold=max_num_neighbors_threshold,
         enforce_max_strictly=enforce_max_neighbors_strictly,
+        neighbor_index=neighbor_index,
+        preserve_connectivity=preserve_connectivity,
     )
 
     if not torch.all(mask_num_neighbors):

@@ -47,6 +47,7 @@ def get_neighbors_nvidia(
     batch: torch.Tensor | None = None,
     natoms: torch.Tensor | None = None,
     return_distances_sq: bool = False,
+    preserve_connectivity: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """
     Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
@@ -65,6 +66,8 @@ def get_neighbors_nvidia(
         natoms: Optional tensor (B,) with number of atoms per structure. If not provided,
             inferred as single structure with all atoms.
         return_distances_sq: If True, compute and return pairwise distances squared; if False, return None for distances
+        preserve_connectivity: If True, re-add the shortest edges the neighbor
+            budget dropped that the graph cannot stay connected without
 
     Returns:
         c_index: Center atom indices (tensor, int32) - global indices if batched
@@ -194,6 +197,8 @@ def get_neighbors_nvidia(
             atom_distance=distances_sq,
             max_num_neighbors_threshold=max_neigh,
             enforce_max_strictly=enforce_max_neighbors_strictly,
+            neighbor_index=n_index,
+            preserve_connectivity=preserve_connectivity,
         )
 
         c_index = c_index[mask_num_neighbors]
@@ -212,6 +217,7 @@ def radius_graph_pbc_nvidia(
     max_num_neighbors_threshold: int,
     enforce_max_neighbors_strictly: bool = False,
     pbc: torch.Tensor | None = None,
+    preserve_connectivity: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """NVIDIA-accelerated radius graph generation with PBC support.
 
@@ -225,6 +231,8 @@ def radius_graph_pbc_nvidia(
         enforce_max_neighbors_strictly: If True, strictly limit to max neighbors;
             if False, include additional neighbors within degeneracy tolerance
         pbc: Periodic boundary conditions tensor (optional, uses data.pbc if not provided)
+        preserve_connectivity: If True, re-add the shortest edges the neighbor
+            budget dropped that the graph cannot stay connected without
 
     Returns:
         edge_index: (2, num_edges) tensor with [source, target] indices
@@ -261,6 +269,7 @@ def radius_graph_pbc_nvidia(
         max_neigh=max_num_neighbors_threshold,
         method="cell_list",
         enforce_max_neighbors_strictly=enforce_max_neighbors_strictly,
+        preserve_connectivity=preserve_connectivity,
         batch=batch,
         natoms=natoms,
     )
