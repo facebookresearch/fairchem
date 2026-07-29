@@ -36,7 +36,7 @@ from torch.distributed.fsdp import (
 from torch.distributed.fsdp.wrap import ModuleWrapPolicy
 from torch.profiler import record_function
 from torchtnt.framework import EvalUnit, State, TrainUnit
-from torchtnt.utils.prepare_module import DDPStrategy, prepare_module
+from torchtnt.utils.prepare_module import prepare_module
 
 from fairchem.core.common import distutils, gp_utils
 from fairchem.core.common.distutils import (
@@ -508,9 +508,6 @@ class MLIPTrainEvalUnit(
         debug_checksums_save_path: str | None = None,
         profile_flops: bool = False,
         save_inference_ckpt: bool = True,
-        ddp_broadcast_buffers: bool = False,
-        ddp_gradient_as_bucket_view: bool = True,
-        ddp_static_graph: bool = True,
     ):
         super().__init__()
         self.job_config = job_config
@@ -568,16 +565,8 @@ class MLIPTrainEvalUnit(
         self.ema_model = None
         self.train_strategy = train_strategy
         if train_strategy == TrainStrategy.DDP:
-            # UMA's graph and buffers are stable, so DDP need not inspect or
-            # broadcast them on every step.
             self.model = prepare_module(
-                model,
-                device=torch.device(get_device_for_local_rank()),
-                strategy=DDPStrategy(
-                    broadcast_buffers=ddp_broadcast_buffers,
-                    gradient_as_bucket_view=ddp_gradient_as_bucket_view,
-                    static_graph=ddp_static_graph,
-                ),
+                model, device=torch.device(get_device_for_local_rank()), strategy="ddp"
             )
             if self.ema_decay is not None:
                 self.ema_model = torch.optim.swa_utils.AveragedModel(
@@ -757,7 +746,9 @@ class MLIPTrainEvalUnit(
                         max_norm=self.clip_grad_norm,
                     )
 
-                self.last_grad_norm = grad_norm.detach()
+                if self.logger:
+                    self.logger.log({"train/grad_norm": grad_norm}, step=step)
+                self.last_grad_norm = float(grad_norm)
             self.optimizer.step()
             if self.ema_model is not None:
                 self.ema_model.update_parameters(self.model)
@@ -768,44 +759,31 @@ class MLIPTrainEvalUnit(
             self.previous_wall_time = time.time()
             num_atoms_local = data.natoms.sum().item()
             num_samples_local = data.natoms.numel()
-            should_report = self.logger is not None or step % self.print_every == 0
-            # Keep metrics on-device until a logger or console report needs them.
-            self.last_loss = scalar_loss.detach()
+            log_dict = {
+                "train/loss": scalar_loss.item(),
+                "train/lr": self.scheduler.get_lr()[0],
+                "train/step": step,
+                "train/epoch": epoch,
+                "train/samples_per_second(approx)": num_samples_local
+                * self.dp_world_size
+                / float(time_delta),
+                "train/atoms_per_second(approx)": num_atoms_local
+                * self.dp_world_size
+                / float(time_delta),
+                "train/num_atoms_on_rank": num_atoms_local,
+                "train/num_samples_on_rank": num_samples_local,
+            }
 
-            if should_report:
-                # Read all reported device scalars with one host synchronization.
-                report_tensors = [self.last_loss]
-                if self.last_grad_norm is not None:
-                    report_tensors.append(self.last_grad_norm)
-                report_values = torch.stack(report_tensors).tolist()
-                self.last_loss = report_values[0]
-                if self.last_grad_norm is not None:
-                    self.last_grad_norm = report_values[1]
+            if self.logger:
+                self.logger.log(log_dict, step=step, commit=True)
 
-                log_dict = {
-                    "train/loss": self.last_loss,
-                    "train/lr": self.scheduler.get_lr()[0],
-                    "train/step": step,
-                    "train/epoch": epoch,
-                    "train/samples_per_second(approx)": num_samples_local
-                    * self.dp_world_size
-                    / float(time_delta),
-                    "train/atoms_per_second(approx)": num_atoms_local
-                    * self.dp_world_size
-                    / float(time_delta),
-                    "train/num_atoms_on_rank": num_atoms_local,
-                    "train/num_samples_on_rank": num_samples_local,
-                }
-                if self.last_grad_norm is not None:
-                    log_dict["train/grad_norm"] = self.last_grad_norm
-
-                if self.logger:
-                    self.logger.log(log_dict, step=step, commit=True)
-
-                if step % self.print_every == 0:
-                    logging.info(log_dict)
+            if step % self.print_every == 0:
+                logging.info(log_dict)
 
             self.scheduler.step()
+
+            # TODO: compute metrics
+            self.last_loss = scalar_loss.item()
         except Exception:
             logging.error(
                 f"Exception during training! On step {self.train_progress.num_steps_completed}"
