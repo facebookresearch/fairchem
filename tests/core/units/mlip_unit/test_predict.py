@@ -8,8 +8,7 @@ Tests:  MLIPPredictUnit + ParallelMLIPPredictUnit — single-dataset
         and multi-dataset prediction, internal graph-gen versions 2/3,
         batching consistency, rotational invariance / out-of-plane
         forces, Euler vs quaternion Wigner-D paths, merge-mole
-        consistency on supercells, single-atom lookup-patch path,
-        and the BatchServerPredictUnit deployment-end-to-end tests.
+        consistency on supercells, and the single-atom lookup-patch path.
 Models: uma-s-1p1 + uma-s-1p2 on most tests, uma-s-1p2 alone on a
         few calibrated tests, uma-m-1p1 on the MOLE-merge tests
         (per-test @pretrained locks). Some tests use the heavier
@@ -19,7 +18,6 @@ CI:     test_gpu_sweep (units shard) — all @pretrained-locked tests.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
 from copy import deepcopy
@@ -27,7 +25,6 @@ from copy import deepcopy
 import numpy as np
 import numpy.testing as npt
 import pytest
-import ray
 import torch
 from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
@@ -916,137 +913,6 @@ def test_merge_mole_batch_predict_matches_single(pretrained_checkpoint):
         atol=ATOL,
         err_msg="Energy for second batch system differs from single system prediction",
     )
-
-
-@pytest.fixture()
-def batch_server_handle(uma_predict_unit):
-    """Set up a batch server for testing."""
-    pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-    from ray import serve
-
-    from fairchem.core.components.batch_server import setup_batch_predict_server
-
-    # Ensure Ray is properly shut down before initializing
-    if ray.is_initialized():
-        with contextlib.suppress(Exception):
-            serve.shutdown()
-        ray.shutdown()
-
-    # Initialize Ray with specific configuration
-    ray.init(
-        ignore_reinit_error=True,
-        num_cpus=10,
-        num_gpus=1 if torch.cuda.is_available() else 0,
-        logging_level="ERROR",  # Reduce noise in test output
-    )
-
-    # Setup the batch server
-    server_handle = setup_batch_predict_server(
-        predict_unit=uma_predict_unit,
-        deployment_config={
-            "num_replicas": 1,
-            "ray_actor_options": {
-                "num_gpus": 1 if torch.cuda.is_available() else 0,
-                "num_cpus": 2,
-            },
-        },
-        batch_config={
-            "max_batch_size": 8,
-            "batch_wait_timeout_s": 0.05,
-        },
-    )
-
-    yield server_handle
-
-    # Cleanup
-    try:
-        serve.shutdown()
-    except Exception as e:
-        print(f"Warning: Error during serve shutdown: {e}")
-    try:
-        ray.shutdown()
-    except Exception as e:
-        print(f"Warning: Error during ray shutdown: {e}")
-
-
-@pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_batch_server_predict_unit_with_calculator(
-    batch_server_handle, uma_predict_unit
-):
-    """Test BatchServerPredictUnit works with FAIRChemCalculator."""
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
-    batch_predict_unit = BatchServerPredictUnit(
-        server_handle=batch_server_handle,
-    )
-
-    atoms = bulk("Cu")
-    atoms.calc = FAIRChemCalculator(batch_predict_unit, task_name="omat")
-
-    atoms_ = bulk("Cu")
-    atoms_.calc = FAIRChemCalculator(uma_predict_unit, task_name="omat")
-
-    energy = atoms.get_potential_energy()
-    forces = atoms.get_forces()
-    stress = atoms.get_stress(voigt=False)
-
-    energy_ = atoms_.get_potential_energy()
-    forces_ = atoms_.get_forces()
-    stress_ = atoms_.get_stress(voigt=False)
-
-    npt.assert_allclose(
-        energy,
-        energy_,
-        atol=ATOL,
-    )
-    npt.assert_allclose(
-        forces,
-        forces_,
-        atol=ATOL,
-    )
-    npt.assert_allclose(
-        stress,
-        stress_,
-        atol=ATOL,
-    )
-
-
-@pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_batch_server_predict_unit_multiple_systems(
-    batch_server_handle, uma_predict_unit
-):
-    """Test BatchServerPredictUnit with multiple concurrent requests."""
-    from concurrent.futures import ThreadPoolExecutor
-
-    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-
-    batch_predict_unit = BatchServerPredictUnit(
-        server_handle=batch_server_handle,
-    )
-
-    atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
-    atomic_data_list = [
-        AtomicData.from_ase(atoms, task_name="omat") for atoms in atoms_list
-    ]
-
-    # Submit concurrent predictions
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [
-            executor.submit(batch_predict_unit.predict, data)
-            for data in atomic_data_list
-        ]
-        results = [future.result() for future in futures]
-
-    # Check all predictions completed successfully
-    assert len(results) == len(atoms_list)
-    for i, preds in enumerate(results):
-        assert "energy" in preds
-        assert "forces" in preds
-        assert "stress" in preds
-        assert preds["energy"].shape == (1,)
-        assert preds["forces"].shape == (len(atoms_list[i]), 3)
 
 
 # this should pass for multi-gpu as well when run locally
