@@ -25,7 +25,7 @@ dependencies = [
     "requests",
     "orjson",
     "tqdm",
-    "submitit",
+    "submitit>=1.5.4",
     "hydra-core",
     "torchtnt",
     "pyyaml",
