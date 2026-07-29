@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -117,9 +124,6 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
 
         # init weights
         self.init_weights()
-
-        # enable torch.set_float32_matmul_precision('high')
-        torch.set_float32_matmul_precision("high")
 
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore

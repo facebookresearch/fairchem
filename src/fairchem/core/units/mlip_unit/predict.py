@@ -487,11 +487,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if self.model.module.backbone.regress_config.direct_forces
             else nullcontext()
         )
-        tf32_context = (
-            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
-        )
-
-        with inference_context, tf32_context:
+        with inference_context, tf32_context_manager(self.inference_settings.tf32):
             output = self.model(data)
             return self._process_outputs(data, output, undo_refs)
 
