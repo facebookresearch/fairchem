@@ -263,6 +263,27 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Training FLOPs profiling invokes the model from `on_train_start`; scoped
   execution settings must cover profiling as well as train/eval step methods.
 
+## Running the Test Suite on Windows
+
+- `pip install -e packages/fairchem-core` fails on Windows: `hatch-fancy-pypi-readme`
+  resolves `src\fairchem\core\README.md` and `LICENSE.md` relative to the package
+  directory and cannot find them. Skip packaging entirely - `fairchem` is a
+  namespace package, so `PYTHONPATH=src pytest ... -c packages/fairchem-core/pyproject.toml`
+  imports it directly.
+- `clusterscope` imports POSIX-only `fcntl`, which blocks the shared
+  `tests/core/conftest.py` on Windows. A no-op `fcntl.py` shim in site-packages
+  (`flock`/`lockf`/`fcntl`/`ioctl` returning None or 0) unblocks collection.
+  Keep it outside the repo.
+- `nvalchemiops` is not on PyPI, pypi.nvidia.com or pypi.ngc.nvidia.com, and no
+  public Docker image carries it. The `radius_pbc_version=3` tests therefore
+  *fail* rather than skip locally - 29 of them in `tests/core/graph`. They fail
+  identically on `main`, so diff the failure sets between branches with
+  `--junitxml` instead of reading the pass count; the repo's terminal plugin
+  suppresses pytest's final tally line, so the tally is not in stdout.
+- The project pyproject sets `-x`, so a single pre-existing environment failure
+  hides the rest of the suite. Pass `--maxfail=500` when auditing for
+  regressions.
+
 ## Cluster Validation Gotchas
 
 - H100 compute nodes do not have PyPI egress. Provision Python environments on
@@ -319,19 +340,50 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   cluster contacts - so random stress tests will not find it.
 - ESCAIP's `biknn_radius_graph` builds a *mutual*-kNN mask
   (`env = amax(src_rank/k, dst_rank/k, dist/cutoff)`, keep `env < 1`), which
-  requires an edge to be in the top-k of *both* endpoints. It therefore
-  fractures strictly more often than the UMA path (20/32 vs 15/32 on the same
-  structures). Relaxing it to union-kNN (`minimum` instead of `maximum` on the
-  rank pair) only halves that (13/32); it is not a fix. `build_radius_graph` is
-  `@torch.jit.script` and discards the pre-mask candidate list, so reusing
-  `reconnect_mask` there needs a return-signature change, not a one-liner.
+  requires an edge to be in the top-k of *both* endpoints. On one identical
+  case set of 15 structures x 4 budgets it therefore splits 25/60 against the
+  shared mask's 15/60. Relaxing it to union-kNN (`minimum` instead of `maximum`
+  on the rank pair) only reaches 17/60; it is not a fix. Always quote these
+  against the same case set - an earlier probe reported 20 for ESCAIP because
+  `knn_pad_size` truncated the candidate list before the count, on a different
+  set of structures. `build_radius_graph` is `@torch.jit.script` and discards
+  the pre-mask candidate list, so reusing `reconnect_mask` there needs a
+  return-signature change, not a one-liner.
 - Component labelling and Boruvka both vectorize with `scatter_reduce_` plus
   pointer jumping - no Python loop over edges, so they run on GPU. Skip the
   second labelling pass when the retained graph already has one component per
   system: no edge ever joins two systems, so that is the floor and it proves
   equality with the untruncated graph. Without that fast path the flag costs
-  ~2-3.5x `get_max_neighbors_mask`; with it, end-to-end `radius_graph_pbc` is
-  unchanged within noise (0.93-1.00x).
+  ~2-3.5x `get_max_neighbors_mask`.
+- Cost of `preserve_connectivity`, measured on an RTX 4060 with CUDA events
+  over 5036 graph builds: 0.99x on a batch with nothing bridged, 1.216x on a
+  16-system / 2160-atom batch with 4 bridged. CPU float64 v1 is 0.93-1.00x
+  because v1 is dominated by its N^2 build; do not quote the CPU number alone,
+  it flatters the change.
+- Pointer jumping does not need `log2(num_atoms)` steps per hooking round. The
+  round repeats until labels stop changing, so a small constant is correct, and
+  each jump is a kernel launch over a batch-sized tensor. At 1372 atoms, 2 syncs
+  cost 0.068 ms and 4 scatters over 57624 edges cost 0.132 ms, while 24 jump
+  gathers dominated the rest; 4 jumps per round give identical labels and take
+  the labeller from 0.45 ms to 0.29 ms.
+
+## Neighbour Truncation: Speedups That Do Not Work
+
+Four attempts to make `get_max_neighbors_mask` pay for added work, all measured
+on an RTX 4060, all rejected. Do not re-try these without a new argument.
+
+- Skipping the dense `[num_atoms, global_max_degree]` padding: occupancy is
+  61-100% even for heterogeneous batches, so the ceiling is ~1.6x on one
+  sub-step.
+- `torch.topk(k+1)` instead of the full `torch.sort`: 1.33-1.45x on some shapes
+  but 0.69-0.81x on others. CUDA's topk is not reliably faster than its sort.
+- Replacing `torch.le(distance_sort.T, cutoff)` with a contiguous `[N, D]`
+  compare: bitwise identical, 1.00x on most shapes.
+- Building and sorting only the rows whose degree exceeds the budget: bitwise
+  identical output but **0.69-0.78x**. The sort is only ~5% of the mask's
+  runtime, so removing sort work cannot pay for the compaction and index
+  lift-back needed to remove it. This is the load-bearing measurement - it
+  kills the whole family of "sort less" ideas.
 - Under exact geometric degeneracy the minimum spanning forest is not unique
   (two symmetric fcc grains gave 112 bitwise-equal candidate bridges). Any rule
   that picks one is atom-order dependent. Keep the whole degenerate shell, the
