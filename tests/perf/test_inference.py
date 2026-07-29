@@ -140,7 +140,7 @@ def test_pretrained_models(test_case, performance_report) -> None:
 
     # Setup the predictor
     predictor = get_predict_unit_for_test(
-        model_name=test_case.model,
+        name_or_path=test_case.model,
         device=test_case.device,
     )
 
