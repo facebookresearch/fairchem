@@ -23,6 +23,7 @@ import contextlib
 import logging
 import os
 from copy import deepcopy
+from types import SimpleNamespace
 
 import numpy as np
 import numpy.testing as npt
@@ -73,6 +74,50 @@ _REPRESENTATIVE_ELEMENTS = [
     (79, 0, 2),  # Au: charge=0, spin=2
 ]
 SINGLE_ATOM_ENERGY_ATOL = 0.05  # eV, for model-predicted single atom energies
+
+
+@pytest.mark.parametrize("tf32", [False, True])
+def test_predict_uses_inference_tf32_and_restores_caller(tf32):
+    expected_precision = "high" if tf32 else "highest"
+
+    class PrecisionCheckingModel:
+        module = SimpleNamespace(
+            backbone=SimpleNamespace(
+                regress_config=SimpleNamespace(direct_forces=True),
+            )
+        )
+
+        def __call__(self, data):
+            assert torch.get_float32_matmul_precision() == expected_precision
+            assert torch.backends.cuda.matmul.allow_tf32 is tf32
+            assert torch.backends.cudnn.allow_tf32 is tf32
+            return {"configured_tf32": tf32}
+
+    predict_unit = MLIPPredictUnit.__new__(MLIPPredictUnit)
+    predict_unit.inference_settings = InferenceSettings(tf32=tf32)
+    predict_unit.model = PrecisionCheckingModel()
+
+    def passthrough_outputs(data, output, undo_refs):
+        return output
+
+    predict_unit._process_outputs = passthrough_outputs
+
+    original_precision = torch.get_float32_matmul_precision()
+    original_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+    initial_precision = "high" if not tf32 else "highest"
+    try:
+        torch.set_float32_matmul_precision(initial_precision)
+        torch.backends.cudnn.allow_tf32 = not tf32
+
+        output = predict_unit._run_inference(data=None, undo_refs=False)
+
+        assert output == {"configured_tf32": tf32}
+        assert torch.get_float32_matmul_precision() == initial_precision
+        assert torch.backends.cuda.matmul.allow_tf32 is not tf32
+        assert torch.backends.cudnn.allow_tf32 is not tf32
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+        torch.backends.cudnn.allow_tf32 = original_cudnn_tf32
 
 
 @pytest.fixture(scope="module")

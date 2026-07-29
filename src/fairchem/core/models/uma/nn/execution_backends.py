@@ -350,6 +350,11 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
+        if settings.predict_untrained_hessian and settings.hessian_vmap:
+            raise ValueError(
+                "umas_fast_gpu does not support hessian_vmap=True; "
+                "set hessian_vmap=False"
+            )
 
     @staticmethod
     def prepare_wigner(
