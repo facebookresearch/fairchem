@@ -1691,9 +1691,7 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Get predictions
     preds = predictor.predict(batch)
 
-    assert all(
-        not parameter.requires_grad for parameter in predictor.model.parameters()
-    )
+    assert any(parameter.requires_grad for parameter in predictor.model.parameters())
 
     # Verify energy, forces, and hessian are present
     assert "energy" in preds, "Energy prediction missing"
@@ -1716,42 +1714,32 @@ def _test_untrained_hessian(checkpoint_path, device):
 
 
 @pytest.mark.gpu()
-def test_frozen_parameters_preserve_input_derivatives_gpu(
+def test_fast_gpu_frozen_parameters_preserve_input_derivatives(
     conserving_mole_checkpoint, monkeypatch
 ):
     _test_frozen_parameters_preserve_input_derivatives(
-        conserving_mole_checkpoint[0], "cuda", monkeypatch
+        conserving_mole_checkpoint[0], monkeypatch
     )
 
 
-def test_frozen_parameters_preserve_input_derivatives_cpu(
-    conserving_mole_checkpoint, monkeypatch
-):
-    _test_frozen_parameters_preserve_input_derivatives(
-        conserving_mole_checkpoint[0], "cpu", monkeypatch
-    )
-
-
-def _test_frozen_parameters_preserve_input_derivatives(
-    checkpoint_path, device, monkeypatch
-):
+def _test_frozen_parameters_preserve_input_derivatives(checkpoint_path, monkeypatch):
     settings = InferenceSettings(
         predict_untrained_forces={"omol"},
         predict_untrained_stress={"omol"},
         predict_untrained_hessian={"omol"},
-        activation_checkpointing=device == "cpu",
-        merge_mole=device == "cuda",
-        execution_mode="umas_fast_gpu" if device == "cuda" else None,
-        hessian_vmap=device == "cpu",
+        activation_checkpointing=False,
+        merge_mole=True,
+        execution_mode="umas_fast_gpu",
+        hessian_vmap=False,
     )
 
     seed_everywhere(42)
     frozen_predictor = MLIPPredictUnit(
-        checkpoint_path, device=device, inference_settings=settings
+        checkpoint_path, device="cuda", inference_settings=settings
     )
     seed_everywhere(42)
     unfrozen_predictor = MLIPPredictUnit(
-        checkpoint_path, device=device, inference_settings=settings
+        checkpoint_path, device="cuda", inference_settings=settings
     )
     monkeypatch.setattr(
         unfrozen_predictor.model,

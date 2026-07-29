@@ -65,11 +65,6 @@ def divide_and_check_no_remainder(a: int, b: int) -> int:
 def setup_graph_parallel_groups(
     graph_parallel_group_size: int, distributed_backend: str
 ) -> None:
-    # A singleton group cannot partition work; keep the ordinary execution path.
-    if graph_parallel_group_size == 1:
-        logging.info("Graph parallel group size is 1; leaving it disabled")
-        return
-
     assert torch.distributed.is_initialized()
     world_size = torch.distributed.get_world_size()
     assert (

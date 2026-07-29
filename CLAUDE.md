@@ -247,11 +247,12 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Tests that download registered checkpoints must declare their models with a
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
-- Freeze parameters only after inference-specific module replacement. Custom
-  autograd paths must save everything needed for input gradients independently
-  of parameter gradients, and a prepared predictor must not be reused for
-  training. Frozen/unfrozen energy, force, stress, and Hessian parity is covered
-  on PyTorch 2.8 and 2.13.
+- Only freeze inference parameters for the `umas_fast_gpu` backend, after its
+  module replacement. On the H100 perf check, freezing the general backend cut
+  1000-atom QPS by about 50% with activation checkpointing either enabled or
+  disabled. The fast backend retained its throughput while saving 11-13% peak
+  memory. Its custom backward must preserve input derivatives independently of
+  parameter gradients.
 - `umas_fast_gpu` custom backward operators do not implement `vmap` batching.
   Compute Hessians through the per-component loop (`hessian_vmap=False`) when
   exercising that backend, and ensure inference settings forward that option
@@ -259,6 +260,13 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Set `CI=true` when reproducing CPU CI shards locally. Some multi-GPU graph
   parallel tests rely on that environment variable for skipping instead of the
   `gpu` marker, so the CI marker expression alone will still collect them.
+- `graph_parallel_group_size=None` disables graph-parallel setup. A value of
+  `1` intentionally initializes singleton graph- and data-parallel groups and
+  is used to exercise those paths in tests; do not treat it as disabled.
+- Keep the full `AtomicData.clone()` boundary in prediction unless benchmarks
+  justify changing it and every model-side mutation has been audited. Graph
+  parallelism, MOLE preparation, and conservative gradients can replace or
+  mutate input fields, so a selective shallow copy is brittle.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

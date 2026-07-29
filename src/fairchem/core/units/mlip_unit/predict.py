@@ -38,6 +38,7 @@ from fairchem.core.common.distutils import (
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
+    ExecutionMode,
     maybe_update_settings_backend,
 )
 from fairchem.core.units.mlip_unit import InferenceSettings
@@ -438,12 +439,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
-        # Graph parallelism and MOLE replace fields, while conservative inference
-        # enables input gradients in place. Isolate only that mutable state.
-        data_device = copy.copy(data.to(self.device))
-        data_device.pos = data_device.pos.clone()
-        if self.model.module.backbone.regress_config.stress:
-            data_device.cell = data_device.cell.clone()
+        # Regular model prediction path
+        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
+        data_device = data.to(self.device).clone()
 
         dtype = self.inference_settings.base_precision_dtype
         if not self._warned_upcast:
@@ -463,8 +461,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
-        # Inference differentiates with respect to positions and cells, not weights.
-        self.model.requires_grad_(False)
+        if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
+            # The fast backward only differentiates positions and cells.
+            self.model.requires_grad_(False)
 
         self.model.to(self.inference_settings.base_precision_dtype)
 

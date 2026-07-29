@@ -31,10 +31,20 @@ def _dummy_call(x):
     return x
 
 
-def test_graph_parallel_size_one_is_disabled():
-    gp_utils.setup_graph_parallel_groups(1, "gloo")
+def _group_state():
+    return (
+        gp_utils.initialized(),
+        gp_utils.get_gp_world_size(),
+        gp_utils.get_dp_world_size(),
+    )
 
-    assert not gp_utils.initialized()
+
+def test_graph_parallel_size_one_initializes_groups():
+    config = PGConfig(backend="gloo", world_size=1, gp_group_size=1, use_gp=True)
+
+    output = spawn_multi_process(config, _group_state, init_pg_and_rank_and_launch_test)
+
+    assert output == [(True, 1, 1)]
 
 
 @pytest.mark.parametrize(

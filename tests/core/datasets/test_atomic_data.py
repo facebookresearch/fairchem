@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import copy
 import logging
 
 import ase
@@ -42,19 +41,6 @@ def test_masses_property_uses_atomic_numbers(dtype):
         atomic_masses[data.atomic_numbers], dtype=dtype, device=data.pos.device
     )
     torch.testing.assert_close(data.masses, expected)
-
-
-def test_copy_shares_tensors_but_not_container_state():
-    data = AtomicData.from_ase(molecule("H2O"))
-
-    copied = copy.copy(data)
-    copied["temporary"] = copied.pos
-
-    assert copied is not data
-    assert copied.pos is data.pos
-    assert copied.keys() is not data.keys()
-    assert "temporary" in copied
-    assert "temporary" not in data
 
 
 @pytest.mark.gpu()
