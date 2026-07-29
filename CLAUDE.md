@@ -235,7 +235,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Key Dependencies
 
-- `torch~=2.8.0`, `e3nn>=0.5` - PyTorch + equivariant neural networks
+- `torch~=2.13.0`, `e3nn>=0.5` - PyTorch + equivariant neural networks
 - `ase>=3.26.0` - Atomic Simulation Environment
 - `torchtnt` - PyTorch training framework (TrainUnit/EvalUnit)
 - `hydra-core` + `omegaconf` - Configuration management
@@ -267,6 +267,50 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   justify changing it and every model-side mutation has been audited. Graph
   parallelism, MOLE preparation, and conservative gradients can replace or
   mutate input fields, so a selective shallow copy is brittle.
+
+## Cluster Validation Gotchas
+
+- H100 compute nodes do not have PyPI egress. Provision Python environments on
+  the submission host before launching validation jobs.
+- Imports from home-backed virtual environments are extremely slow on H100
+  nodes. Copy complete environments and large checkpoints to node-local scratch
+  before running tests or benchmarks.
+- Pretrained checkpoints are cached under `~/.cache/fairchem`. Set
+  `HF_HUB_OFFLINE=1` in compute jobs to prevent blocked Hugging Face metadata
+  requests when the required files are already cached.
+- Separate Hugging Face downloads can populate different snapshots while
+  `refs/main` points only to the latest one. Ensure the active snapshot contains
+  every checkpoint needed by offline tests.
+- Core test collection imports benchmark and calculation modules through the
+  shared conftest. Validation environments need the `extras` dependencies,
+  including `pandas`, `pyarrow`, and `pymatgen`, even for focused test subsets.
+- Some GPU assertions are stochastic or tolerance-sensitive, and the complete
+  GPU matrix is expensive. Reproduce failures with the exact test node (and
+  repeat it when appropriate) before rerunning a full GPU shard.
+
+## Hessian Backend Gotchas
+
+- PyTorch's generic `vmap` fallback cannot batch the mutable, output-argument
+  Triton operators used by `umas_fast_gpu`. Backend validation rejects requested
+  Hessians with `hessian_vmap=True`; set it to `False` until the backward
+  operators have explicit batching rules. Automatic backend selection falls
+  back to normal mode for this combination. This only changes Hessian
+  construction: energy, force, and stress inference are unaffected. The
+  fallback computes one vector-Jacobian product per Cartesian force component,
+  so it can be slower for large systems while using less memory.
+- Explicit `torch.library.register_vmap` rules are possible for mutable custom
+  operators. A rule that loops over the mapped dimension would make the
+  operator compatible but retain most kernel-launch overhead. Recovering the
+  performance value of vectorized Hessians requires rules backed by genuinely
+  batched Triton kernels, including every custom backward operator reached by
+  the derivative graph.
+
+## Dependency Compatibility
+
+- `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
+  not depend on enumeration order, seeded random coordinates, or atom counts
+  unless those values are part of the public contract; prefer composition,
+  Miller index, shift, placement, and cell invariants that survive upgrades.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 
