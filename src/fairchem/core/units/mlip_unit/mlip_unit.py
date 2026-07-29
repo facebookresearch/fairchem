@@ -57,7 +57,10 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
-from fairchem.core.units.mlip_unit.utils import load_inference_model
+from fairchem.core.units.mlip_unit.utils import (
+    load_inference_model,
+    tf32_context_manager,
+)
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -508,6 +511,7 @@ class MLIPTrainEvalUnit(
         debug_checksums_save_path: str | None = None,
         profile_flops: bool = False,
         save_inference_ckpt: bool = True,
+        tf32: bool = False,
     ):
         super().__init__()
         self.job_config = job_config
@@ -515,6 +519,7 @@ class MLIPTrainEvalUnit(
         self.tasks = filter_inference_only_tasks(tasks)
         self.profile_flops = profile_flops
         self.save_inference_ckpt = save_inference_ckpt
+        self.tf32 = tf32
 
         for task in self.tasks:
             if task.element_references is not None:
@@ -528,7 +533,6 @@ class MLIPTrainEvalUnit(
         self.finetune_model_full_config = getattr(
             model, "finetune_model_full_config", None
         )
-
         # call optimizer function between wrapping in DDP
         # this is required for models that have a no_weight_decay function
         self.optimizer = _get_optimizer_wd(optimizer_fn, model)
@@ -620,7 +624,9 @@ class MLIPTrainEvalUnit(
             raise ValueError(f"Unknown Training Strategy {train_strategy}")
 
         # setup eval unit, make it share the same model as this unit and turn off the logger
-        self.eval_unit = MLIPEvalUnit(job_config=job_config, model=None, tasks=tasks)
+        self.eval_unit = MLIPEvalUnit(
+            job_config=job_config, model=None, tasks=tasks, tf32=tf32
+        )
         eval_model = self.ema_model if self.ema_model is not None else self.model
         self.eval_unit.setup_train_eval_unit(eval_model)
 
@@ -643,7 +649,8 @@ class MLIPTrainEvalUnit(
             data = next(iter(state.train_state.dataloader)).to(
                 get_device_for_local_rank()
             )
-            flops = get_flops_profile(self.model, data, verbose=True)
+            with tf32_context_manager(self.tf32):
+                flops = get_flops_profile(self.model, data, verbose=True)
             num_atoms_local = data.natoms.sum().item()
             flops_per_atom_param = flops / self.num_params / num_atoms_local
             if self.logger:
@@ -696,19 +703,20 @@ class MLIPTrainEvalUnit(
                 + self.train_progress.num_steps_completed_in_epoch
                 / float(len(state.train_state.dataloader))
             )
-            with torch.autocast(
-                device_type=device,
-                enabled=self.autocast_enabled,
-                dtype=self.autocast_dtype,
-            ):
-                with record_function("forward"):
-                    pred = self.model.forward(batch_on_device)
-                with record_function("compute_loss"):
-                    loss_dict = compute_loss(self.tasks, pred, batch_on_device)
-            scalar_loss = sum(loss_dict.values())
-            self.optimizer.zero_grad()
-            with record_function("backward"):
-                scalar_loss.backward()
+            with tf32_context_manager(self.tf32):
+                with torch.autocast(
+                    device_type=device,
+                    enabled=self.autocast_enabled,
+                    dtype=self.autocast_dtype,
+                ):
+                    with record_function("forward"):
+                        pred = self.model.forward(batch_on_device)
+                    with record_function("compute_loss"):
+                        loss_dict = compute_loss(self.tasks, pred, batch_on_device)
+                scalar_loss = sum(loss_dict.values())
+                self.optimizer.zero_grad()
+                with record_function("backward"):
+                    scalar_loss.backward()
 
             if self.debug_checksums_save_path:
                 gp_size = 0
@@ -901,6 +909,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         model: torch.nn.Module,
         tasks: Sequence[Task],
         bf16: bool = False,
+        tf32: bool = False,
     ):
         """Evaluate your MLIPs and so forth.
 
@@ -909,10 +918,12 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             model: model to evaluate
             evaluations: a list of evaluation objects
             bf16: whether to use autocast with bf16
+            tf32: whether to use TF32 during evaluation
         """
         super().__init__()
         self.job_config = job_config
         self.model = model
+        self.tf32 = tf32
         self.tasks = filter_inference_only_tasks(tasks)
 
         for task in self.tasks:
@@ -987,10 +998,13 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             )
             self.last_report = time.time()
 
-        with torch.autocast(
-            device_type=get_device_for_local_rank(),
-            enabled=self.autocast_enabled,
-            dtype=self.autocast_dtype,
+        with (
+            tf32_context_manager(self.tf32),
+            torch.autocast(
+                device_type=get_device_for_local_rank(),
+                enabled=self.autocast_enabled,
+                dtype=self.autocast_dtype,
+            ),
         ):
             t0 = time.time()
             preds = self.model(data)

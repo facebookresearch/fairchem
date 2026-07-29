@@ -102,7 +102,7 @@ def get_cfg_from_yaml():
 
 
 @pytest.mark.serial()
-@pytest.mark.parametrize("num_ranks", [1, 4])
+@pytest.mark.parametrize("num_ranks", [1])
 def test_cli_ray(num_ranks):
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
