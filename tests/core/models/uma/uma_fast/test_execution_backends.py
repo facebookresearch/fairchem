@@ -106,6 +106,30 @@ def test_umas_fast_gpu_validation_requires_merge_mole():
         UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
 
 
+@pytest.mark.gpu()
+def test_umas_fast_gpu_validation_rejects_hessian_vmap():
+    """
+    Verify that umas_fast_gpu rejects vectorized Hessian computation.
+    """
+    settings = _mock_settings()
+    settings.predict_untrained_hessian = {"omol"}
+
+    with pytest.raises(ValueError, match="set hessian_vmap=False"):
+        UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_validation_accepts_hessian_loop():
+    """
+    Verify that umas_fast_gpu accepts sequential Hessian computation.
+    """
+    settings = _mock_settings()
+    settings.predict_untrained_hessian = {"omol"}
+    settings.hessian_vmap = False
+
+    UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
 # =============================================================================
 # Tests: E2E Force Correctness
 # =============================================================================

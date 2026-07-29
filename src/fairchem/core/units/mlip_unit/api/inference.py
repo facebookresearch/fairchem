@@ -184,7 +184,9 @@ class InferenceSettings:
     predict_untrained_forces: set[str] = field(default_factory=set)
     predict_untrained_stress: set[str] = field(default_factory=set)
     predict_untrained_hessian: set[str] = field(default_factory=set)
-    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+    # Disable for backends whose custom backward operators lack vmap rules.
+    # The loop uses less memory but performs one backward pass per force component.
+    hessian_vmap: bool = True
 
     # When True, allow backbones to add their default untrained tasks
     # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
