@@ -1157,7 +1157,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 forces,
                 data["pos"],
                 vmap=self.regress_config.hessian_vmap,
-                training=create_graph,
+                training=self.training,
             )
             outputs[hessian_key] = (
                 {"hessian": hessian} if self.wrap_property else hessian
