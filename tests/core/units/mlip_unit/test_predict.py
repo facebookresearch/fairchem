@@ -765,7 +765,7 @@ def test_merge_mole_with_supercell(supercell_matrix, uma_merge_mole_predict_unit
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_merge_mole_composition_check(pretrained_checkpoint):
+def test_merge_mole_composition_change_falls_back(pretrained_checkpoint, caplog):
     atoms_cu = bulk("Cu", "fcc", a=3.6)
 
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
@@ -780,11 +780,11 @@ def test_merge_mole_composition_check(pretrained_checkpoint):
     atoms_al = bulk("Al", "fcc", a=4.05)
     atoms_al.calc = calc
 
-    with pytest.raises(
-        AssertionError,
-        match="Compositions differ from merged model",
-    ):
+    with caplog.at_level("WARNING"):
         _ = atoms_al.get_potential_energy()
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert predict_unit.inference_settings.merge_mole is False
+    assert predict_unit.inference_settings.compile is False
 
 
 @pytest.mark.gpu()
@@ -895,8 +895,8 @@ def test_merge_mole_consistent_batch(pretrained_checkpoint):
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_merge_mole_inconsistent_batch(pretrained_checkpoint):
-    """Test that merge_mole raises AssertionError when batch contains systems with different compositions."""
+def test_merge_mole_inconsistent_batch_falls_back(pretrained_checkpoint, caplog):
+    """A mixed-composition first batch permanently disables the fast path."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
         pretrained_checkpoint, device="cuda", inference_settings=settings
@@ -908,8 +908,13 @@ def test_merge_mole_inconsistent_batch(pretrained_checkpoint):
     ]
     batch = atomicdata_list_to_batch(atomic_data_list)
 
-    with pytest.raises(AssertionError, match="same reduced composition"):
-        predict_unit.predict(batch)
+    with caplog.at_level("WARNING"):
+        preds = predict_unit.predict(batch)
+
+    assert torch.isfinite(preds["energy"]).all()
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert predict_unit.inference_settings.merge_mole is False
+    assert predict_unit.inference_settings.compile is False
 
 
 @pytest.mark.gpu()

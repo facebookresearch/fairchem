@@ -32,6 +32,10 @@ DEFAULT_SPIN = 0
 ALLOWED_DTYPES = [torch.float32, torch.float64]
 
 
+class MergeMoleConsistencyError(AssertionError):
+    """Raised when input data is incompatible with an already merged MOLE model."""
+
+
 def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
     """
     UMA-specific validation: handle charge/spin for OMOL task.
@@ -130,10 +134,9 @@ class InferenceSettings:
     activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
-    # inference. If this is used, the input composition, total charge
-    # and spin MUST remain constant throughout the simulation this will
-    # slightly increase speed and reduce memory footprint used by the
-    # parameters significantly
+    # inference. This slightly increases speed and significantly reduces
+    # parameter memory. If composition, task, total charge, or spin changes,
+    # MLIPPredictUnit falls back to an unmerged model.
     merge_mole: bool = False
 
     # Flag to enable or disable the compilation of the inference model.
@@ -223,23 +226,23 @@ class InferenceSettings:
         return config
 
 
-# this is most general setting that works for most systems and models,
-# not optimized for speed
+# Default to the fast path while retaining full FP32 precision. If the input
+# changes in a way that is incompatible with the merged MOLE model, the
+# predictor automatically falls back to an unmerged and uncompiled model.
 def inference_settings_default():
     return InferenceSettings(
         tf32=False,
         activation_checkpointing=True,
-        merge_mole=False,
-        compile=False,
+        merge_mole=True,
+        compile=True,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
 
 
-# this setting is designed for running long simulations or optimizations
-# where the system composition (atoms, charge, spin) stays constant over
-# the course the simulation. For smaller systems
-# activation_checkpointing can be turned off for some extra speed gain
+# Turbo uses the same fast path as the default settings, with TF32 enabled for
+# additional speed on supported hardware. It remains opt-in because it trades
+# a small amount of precision for speed.
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,

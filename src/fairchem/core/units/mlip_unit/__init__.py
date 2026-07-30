@@ -36,9 +36,10 @@ def load_predict_unit(
 
     Args:
         path: Path to the checkpoint file
-        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
-            (optimized for speed but requires fixed atomic composition). Advanced use cases can
-            use a custom InferenceSettings object.
+        inference_settings: Settings for inference. Both "default" and "turbo" use the
+            merge_mole + compile fast path, with automatic fallback if its fixed-input
+            contract is broken. "turbo" additionally enables TF32. More advanced use cases
+            can use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.

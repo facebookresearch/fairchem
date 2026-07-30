@@ -10,7 +10,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    inference_settings_default,
+    inference_settings_turbo,
+)
 
 # --- __post_init__ ---
 
@@ -18,6 +22,20 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 def test_default_dtype_is_float32():
     settings = InferenceSettings()
     assert settings.base_precision_dtype is torch.float32
+
+
+def test_named_modes_use_fast_path_and_only_turbo_enables_tf32():
+    default = inference_settings_default()
+    turbo = inference_settings_turbo()
+
+    assert default.merge_mole is True
+    assert default.compile is True
+    assert default.tf32 is False
+    assert turbo.merge_mole is True
+    assert turbo.compile is True
+    assert turbo.tf32 is True
+    assert default.activation_checkpointing is True
+    assert turbo.activation_checkpointing is False
 
 
 @pytest.mark.parametrize(
