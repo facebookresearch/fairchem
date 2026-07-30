@@ -101,14 +101,26 @@ class GradRegressConfig:
     hessian_vmap: bool = True
 
 
-def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
-    graph_dict["edge_index"] = torch.cat(
-        (
-            graph_dict["edge_index"].new_zeros(2, edges_to_add),
-            graph_dict["edge_index"],
-        ),
-        dim=1,
-    )
+def add_n_empty_edges(
+    graph_dict: dict,
+    edges_to_add: int,
+    cutoff: float,
+    fake_atom_idx: int = 0,
+):
+    """
+    Prepend ``edges_to_add`` fake self-loop edges on ``fake_atom_idx`` to
+    graph_dict. Used to keep downstream ops (SO2Conv, gemms, wigner
+    permutes) from tripping on 0-edge inputs when a system has no
+    neighbors within cutoff.
+
+    Under graph parallelism (esp. A2A), each rank must supply a
+    fake_atom_idx that is LOCAL to that rank (from its ``node_partition``)
+    so build_gp_context includes the fake edge in ``edge_index_local``.
+    Using global atom 0 uniformly across ranks breaks A2A because the
+    edge is filtered out on ranks that don't own atom 0.
+    """
+    fake_edge = graph_dict["edge_index"].new_full((2, edges_to_add), fake_atom_idx)
+    graph_dict["edge_index"] = torch.cat((fake_edge, graph_dict["edge_index"]), dim=1)
 
     self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
     graph_dict["edge_distance_vec"] = torch.cat(
@@ -683,6 +695,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance_vec": edge_distance_vec,
             }
 
+        # Dummy-edge fixup for isolated systems (no neighbors within cutoff).
+        # Downstream ops (SO2Conv, gemms) don't tolerate 0-edge inputs, so
+        # inject a single fake self-loop.
+        #
+        # Under GP, we must pad BEFORE build_gp_context so gp_ctx.edge_index_local
+        # picks up the fake edge, AND use a LOCAL atom on this rank as the
+        # self-loop target so the edge is included in this rank's local view
+        # (build_gp_context filters edges whose target isn't in node_partition).
+        if graph_dict["edge_index"].shape[1] == 0:
+            fake_atom_idx = (
+                int(node_partition[0].item()) if node_partition is not None else 0
+            )
+            add_n_empty_edges(graph_dict, 1, self.cutoff, fake_atom_idx=fake_atom_idx)
+
         if gp_utils.initialized():
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
                 node_partition
@@ -718,17 +744,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"][1]
                 ]
 
+        # No-GP fallback: when graph parallelism is not initialized the GP
+        # branches above are skipped and no scatter_target was set. In that
+        # case there is no partition remap to do, so the scatter target
+        # into the node-embedding output is just the raw edge target
+        # (edge_index[1]). This keeps downstream code (SO2Conv scatter,
+        # edge-degree scatter, ForceHead reindex) uniform across GP and
+        # non-GP paths.
         if "scatter_target" not in data_dict:
             data_dict["scatter_target"] = graph_dict["edge_index"][1]
-
-        if graph_dict["edge_index"].shape[1] == 0:
-            add_n_empty_edges(graph_dict, 1, self.cutoff)
-            data_dict["scatter_target"] = torch.cat(
-                [
-                    data_dict["scatter_target"].new_zeros(1),
-                    data_dict["scatter_target"],
-                ]
-            )
 
         return graph_dict
 
