@@ -367,6 +367,59 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   gathers dominated the rest; 4 jumps per round give identical labels and take
   the labeller from 0.45 ms to 0.29 ms.
 
+## Neighbour Truncation: Speedups That Do Work
+
+Four provable work reductions in `reconnect_mask`, all with bitwise-identical
+output (130/130 configurations across 13 structures x 5 budgets x CPU and CUDA,
+72 of them on the non-trivial repair path). Measure these with **dispatched-op
+and sync counts, not wall clock**: on the RTX 4060 laptop the same code A/B'd
+between 1.29x and 3.35x depending only on GPU clock state, because the mechanism
+is launch and sync count rather than arithmetic. Op counts are exact and
+machine-independent.
+
+- **The second component-labelling pass was pure redundancy.** Contracting the
+  retained components is a quotient map, so the untruncated graph has fewer
+  components than the retained graph *exactly* when some edge crosses two of
+  them. `crossing.any()` — already computed inside Boruvka's first round —
+  decides it. Deleted a full labelling pass over all edges and all atoms.
+- **Boruvka's round count does not need a convergence test.** Every component
+  with an outgoing edge merges with at least one other, so each round at least
+  halves the count. Rounds past convergence select nothing and are exact no-ops.
+  A fixed count removes two device-to-host syncs per round (`crossing.any()` and
+  `selected.any()`), which on a 20-node quotient graph were the entire cost:
+  1.386 ms for 20 nodes and 256 edges.
+  `selected.any()` is also implied by `crossing.any()` — the globally shortest
+  crossing edge has both endpoints' minimum equal to its own length, so it always
+  clears the threshold.
+- **The round bound is the deepest system, not the batch.** Merging happens
+  inside a piece of the graph and never across pieces, and no edge joins two
+  systems, so a batch's quotient graph is a disjoint union. On 4 bridged + 12
+  plain systems: 20 components total but 2 in the deepest system, so 1 round
+  instead of 5. Skip the per-system count when `num_systems == 1` — there the two
+  bounds are equal and computing it is pure overhead.
+- **`unique(return_inverse=True)` does three jobs in one op**: counts the
+  components, and its inverse *is* the contraction to `[0, num_kept)`. Because
+  `unique` returns sorted values the renumbering is strictly increasing, and
+  selection reads labels only through `amin` and `!=`, so no decision changes.
+  Counting fixed points of the labelling (`labels == arange`) also gives the
+  count, but costs 3 ops against 1 and made the common fast path *slower*
+  (25 -> 28 ops) — a regression wall-clock could not resolve and op counts caught
+  immediately.
+- Per-system component counts cost `num_systems` work, not `num_atoms`: component
+  names are the smallest atom index in each component and come back sorted, so
+  `searchsorted` over the system boundaries beats `repeat_interleave` +
+  `index_add_` over atoms.
+- Net: 111 -> 80 ops and 10 -> 5 syncs on a bridged batch, 108 -> 71 ops on a
+  single bridged pair, and exactly 25 -> 25 ops / 3 -> 3 syncs on the fast path.
+  End-to-end the `preserve_connectivity` tax on `generate_graph` v2 falls from
+  1.157-1.182x to 1.117-1.153x; v1 from 1.502-1.701x to 1.390-1.583x. The
+  end-to-end effect is small because `reconnect_mask` is a slice of the build.
+- The 1.216x tax recorded earlier for this flag did not reproduce on the
+  documented harness (1.16-1.18x for v2, 1.50-1.70x for v1 on the same 16-system
+  / 2160-atom shape). Treat that number as unscoped until re-measured; state
+  which of `generate_graph`, `radius_graph_pbc` or `get_max_neighbors_mask` is
+  the denominator, because they differ by more than the effect being measured.
+
 ## Neighbour Truncation: Speedups That Do Not Work
 
 Four attempts to make `get_max_neighbors_mask` pay for added work, all measured
