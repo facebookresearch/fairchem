@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import logging
 import math
 import os
@@ -636,7 +637,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             if gp_config is None:
                 gp_config = GraphParallelConfig(group_size=num_workers)
             elif gp_config.group_size == 1:
-                gp_config.group_size = num_workers
+                # Don't mutate the caller's config — create a copy with the
+                # updated group_size.
+                gp_config = dataclasses.replace(gp_config, group_size=num_workers)
             elif gp_config.group_size != num_workers:
                 raise ValueError(
                     f"gp_config.group_size ({gp_config.group_size}) must equal "
