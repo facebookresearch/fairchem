@@ -120,6 +120,13 @@ def setup_graph_parallel_groups(
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
 
+    # Ensure a GP config exists so downstream code can read
+    # `get_gp_config().mode` without a None check. Callers that want
+    # non-default settings (A2A, spatial partition) should call
+    # `set_gp_config` explicitly after this.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=graph_parallel_group_size))
+
 
 def setup_gp(config) -> None:
     gp_size = config["gp_gpus"]
@@ -151,6 +158,13 @@ def setup_gp(config) -> None:
         group = dist.new_group(groups[i, :].tolist(), backend=backend)
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
+
+    # Every entry point that sets up GP groups must also set a GP config so
+    # downstream code (e.g. escn_md.py) can read `get_gp_config().mode`
+    # without a None check. setup_graph_parallel_groups()'s callers set the
+    # config alongside; do the same here for parity.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=gp_size))
 
 
 def cleanup_gp() -> None:
