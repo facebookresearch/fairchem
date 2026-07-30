@@ -300,7 +300,6 @@ class HydraInterfaceMixin:
 
         elif task.property == "hessian":
             regress_config.hessian = True
-            regress_config.hessian_vmap = True
             # Hessian requires forces with create_graph=True
             if not regress_config.direct_forces:
                 regress_config.forces = True

@@ -60,6 +60,10 @@ class ExecutionBackend:
         - prepare_model_for_inference: Apply backend-specific model transforms
     """
 
+    # Whether this backend exposes the fused edgewise SO2 path (producer conv1
+    # pack + consumer conv2 inv fusion).
+    supports_fused_edgewise: bool = False
+
     @staticmethod
     def validate(
         lmax: int,
@@ -335,6 +339,9 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     Smaller values work but with reduced efficiency.
     """
 
+    # Expose the fused edgewise path: producer conv1 pack + consumer conv2 inv.
+    supports_fused_edgewise: bool = True
+
     @staticmethod
     def validate(
         lmax: int,
@@ -348,6 +355,11 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
+        if settings.predict_untrained_hessian and settings.hessian_vmap:
+            raise ValueError(
+                "umas_fast_gpu does not support hessian_vmap=True; "
+                "set hessian_vmap=False"
+            )
 
     @staticmethod
     def prepare_wigner(
@@ -416,6 +428,83 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             scatter_target,
             x_edge_embedding / rescale_factor,
         )
+
+    @staticmethod
+    def fused_node_to_edge_conv1_pack(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+        radial: torch.Tensor,
+        sphere_channels: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Producer-side fusion: emit conv1's scaled + GEMM-packed buffers directly.
+
+        Fuses the node_to_edge gather, block-diagonal Wigner rotation, L->M
+        permute, and conv1 per-m radial scale/pack into one op. The [E,9,2C]
+        x_message intermediate never materializes.
+
+        Args:
+            x_full: Node features [N, 9, C] (L-major).
+            edge_index: Edge indices [2, E].
+            wigner: Wigner rotation matrices [E, 9, 9].
+            radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
+            sphere_channels: Number of channels C.
+
+        Returns:
+            (m0, m1, m2) GEMM-ready packed buffers for conv1.
+        """
+        from fairchem.core.models.uma.triton import wigner_conv1_fused_op
+
+        return wigner_conv1_fused_op(
+            x_full, edge_index, wigner, radial, sphere_channels
+        )
+
+    @staticmethod
+    def fused_conv2_inv_edge_to_node(
+        g0: torch.Tensor,
+        g1: torch.Tensor,
+        g2: torch.Tensor,
+        wigner_inv_envelope: torch.Tensor,
+        scatter_target: torch.Tensor,
+        num_nodes: int,
+        sphere_channels: int,
+    ) -> torch.Tensor:
+        """
+        Consumer-side fusion: unpack conv2 GEMM buffers + inv-rotate + scatter.
+
+        Fuses the M->L unpack and inverse-Wigner rotation of the three conv2
+        block-GEMM outputs (g0,g1,g2) into one op emitting x_rotated [E,9,C];
+        the [E,9,C] M-major intermediate never materializes. The scatter
+        (index_add) stays outside the fused op (visible to torch.compile).
+
+        Args:
+            g0: conv2 fc_m0 output [E, 3C].
+            g1: conv2 m=1 block-GEMM output [E, 4C].
+            g2: conv2 m=2 block-GEMM output [E, 2C].
+            wigner_inv_envelope: Inverse Wigner (envelope pre-fused) [E, 9, 9].
+            scatter_target: Pre-computed local target indices [E] for
+                scattering into the node output tensor. In the non-GP case
+                this is ``edge_index[1]``; under GP it is the caller's
+                local-partition remap (see Edgewise.forward).
+            num_nodes: Total number of nodes (output size).
+            sphere_channels: Number of channels C.
+
+        Returns:
+            Node embeddings [N, 9, C] accumulated from edge messages.
+        """
+        from fairchem.core.models.uma.triton import wigner_inv_conv2_fused_op
+
+        x_rotated = wigner_inv_conv2_fused_op(
+            g0, g1, g2, wigner_inv_envelope, sphere_channels
+        )
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, scatter_target, x_rotated)
+        return new_embedding
 
 
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {

@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.models.uma.triton.constants import BLOCK_C, M_TO_L_GATHER_IDX
+from fairchem.core.models.uma.triton.constants import BLOCK_C
 from fairchem.core.models.uma.triton.kernels import (
     node_to_edge_wigner_permute_kernel,
     permute_wigner_inv_edge_to_node_kernel,
+    wigner_conv1_fused_fwd_kernel,
+    wigner_inv_conv2_fused_fwd_kernel,
 )
 
 
@@ -149,3 +151,102 @@ def permute_wigner_inv_edge_to_node_launcher(
         GRID_E_STRIDE=E,
     )
     return out, x_l
+
+
+def wigner_conv1_fused_fwd_launcher(
+    x: torch.Tensor,
+    edge_index: torch.Tensor,
+    wigner: torch.Tensor,
+    radial: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Test-only launcher: producer-side fused wigner->conv1 forward.
+
+    Gather + block-diagonal Wigner + L→M permute + per-m radial scale + pack
+    into three GEMM-ready buffers. Uses num_edges as GRID_E_STRIDE (not the
+    production constant 2048). For testing kernel correctness only.
+
+    Args:
+        x: Node features [N, 9, C] in L-major order.
+        edge_index: Edge indices [2, E].
+        wigner: Wigner matrices [E, 9, 9] (block-diagonal structure).
+        radial: conv1 radial embedding [E, 6*2C].
+
+    Returns:
+        m0 [E, 3*2C], m1 [E, 4*2C], m2 [E, 2*2C].
+    """
+    assert x.ndim == 3, "x must be 3D [N, 9, C]"
+    assert x.shape[1] == 9, "x must have 9 coefficients (lmax=2)"
+    assert wigner.shape[1:] == (9, 9), "wigner must be [E, 9, 9]"
+
+    num_edges = edge_index.shape[1]
+    C = x.shape[2]
+    C2 = 2 * C
+    wigner_flat = wigner.reshape(num_edges, -1).contiguous()
+
+    m0 = torch.empty((num_edges, 3 * C2), dtype=x.dtype, device=x.device)
+    m1 = torch.empty((num_edges, 4 * C2), dtype=x.dtype, device=x.device)
+    m2 = torch.empty((num_edges, 2 * C2), dtype=x.dtype, device=x.device)
+
+    # Use num_edges as GRID_E_STRIDE so each program handles exactly one edge
+    wigner_conv1_fused_fwd_kernel[(num_edges,)](
+        x.contiguous(),
+        edge_index,
+        wigner_flat,
+        radial.contiguous(),
+        m0,
+        m1,
+        m2,
+        num_edges,
+        C,
+        x.stride(0),
+        x.stride(1),
+        x.stride(2),
+        edge_index.stride(0),
+        BLOCK_C=C,
+        GRID_E_STRIDE=num_edges,
+    )
+    return m0, m1, m2
+
+
+def wigner_inv_conv2_fused_fwd_launcher(
+    g0: torch.Tensor,
+    g1: torch.Tensor,
+    g2: torch.Tensor,
+    wigner: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Test-only launcher: consumer-side fused conv2 GEMM buffers -> inv-Wigner.
+
+    Reads the three conv2 GEMM buffers directly (absorbing the M→L unpack) and
+    applies the block-diagonal inverse-Wigner rotation. Uses num_edges as
+    GRID_E_STRIDE. For testing kernel correctness only.
+
+    Args:
+        g0: conv2 fc_m0 output [E, 3C].
+        g1: conv2 m=1 block-GEMM output [E, 4C].
+        g2: conv2 m=2 block-GEMM output [E, 2C].
+        wigner: inverse Wigner matrices [E, 9, 9].
+
+    Returns:
+        x_rotated [E, 9, C] in L-major order.
+    """
+    assert wigner.shape[1:] == (9, 9), "wigner must be [E, 9, 9]"
+    E = g0.shape[0]
+    C = g0.shape[1] // 3
+    wigner_flat = wigner.reshape(E, -1).contiguous()
+
+    out = torch.empty((E, 9, C), dtype=g0.dtype, device=g0.device)
+
+    wigner_inv_conv2_fused_fwd_kernel[(E, 1)](
+        g0.contiguous(),
+        g1.contiguous(),
+        g2.contiguous(),
+        wigner_flat,
+        out,
+        E,
+        C,
+        BLOCK_C=C,
+        GRID_E_STRIDE=E,
+    )
+    return out

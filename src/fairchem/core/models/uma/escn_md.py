@@ -929,6 +929,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
         if settings.use_quaternion_wigner is not None:
             overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
+        if settings.hessian_vmap is not None:
+            overrides["hessian_vmap"] = settings.hessian_vmap
         if settings.execution_mode is not None:
             overrides["execution_mode"] = settings.execution_mode
 
