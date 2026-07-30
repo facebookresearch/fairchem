@@ -22,9 +22,10 @@ import pytest
 import torch
 from ase import Atoms, build
 
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import (
+    _min_bridge_mask,
     connected_component_labels,
     get_max_neighbors_mask,
     reconnect_mask,
@@ -49,6 +50,27 @@ def two_grain_contact(gap: float, repeat: int = 2) -> Atoms:
     both.set_cell([2 * width + gap + 14.0, grain.cell[1, 1], grain.cell[2, 2]])
     both.pbc = [False, True, True]
     return both
+
+
+def grain_chain(gap: float, blocks: int, repeat: int = 2) -> Atoms:
+    """
+    `blocks` dense fcc blocks in a row along x, each bridged to the next.
+
+    Truncation splits this into `blocks` components inside a single system, which
+    is what makes the per-system merge-round bound observable.
+    """
+    grain = build.bulk("Cu", "fcc", a=3.61, cubic=True).repeat((repeat,) * 3)
+    width = grain.cell[0, 0]
+    out = grain.copy()
+    for k in range(1, blocks):
+        nxt = grain.copy()
+        nxt.positions[:, 0] += k * (width + gap)
+        out = out + nxt
+    out.set_cell(
+        [blocks * width + (blocks - 1) * gap + 14.0, grain.cell[1, 1], grain.cell[2, 2]]
+    )
+    out.pbc = [False, True, True]
+    return out
 
 
 def component_count(edge_index: torch.Tensor, num_atoms: int) -> int:
@@ -279,6 +301,146 @@ class TestReservedEdgeProperties:
                 )
             )
         assert len(signatures) == 1
+
+
+class TestWorkBoundsDoNotChangeTheAnswer:
+    """
+    `reconnect_mask` bounds its own work from the structure of the batch instead
+    of testing for convergence, because each test costs a device-to-host
+    synchronization. These assert the bounds are the reasons they claim to be:
+    if any of them were merely a heuristic, one of these would fail.
+    """
+
+    def _candidates(self, atoms: Atoms, max_neighbors: int = 30):
+        """The quotient-graph edge list `_min_bridge_mask` is handed."""
+        data, source, target, distance_sq = full_edge_list(atoms)
+        num_atoms = int(data.natoms.sum())
+        kept, _ = get_max_neighbors_mask(
+            natoms=data.natoms,
+            index=target,
+            atom_distance=distance_sq,
+            max_num_neighbors_threshold=max_neighbors,
+        )
+        labels = connected_component_labels(target[kept], source[kept], num_atoms)
+        roots, component = labels.unique(return_inverse=True)
+        crossing = component[target] != component[source]
+        return (
+            component[target[crossing]],
+            component[source[crossing]],
+            distance_sq[crossing],
+            roots.numel(),
+        )
+
+    @pytest.mark.parametrize("blocks", [2, 3, 4, 5])
+    def test_extra_merge_rounds_select_nothing_further(self, blocks):
+        """
+        The fixed round count replaces a convergence test, so rounds past
+        convergence must be exact no-ops. Running well past the bound may not
+        add an edge.
+        """
+        a, b, distance, num_components = self._candidates(grain_chain(3.2, blocks))
+        assert num_components >= blocks
+        at_bound = _min_bridge_mask(
+            a, b, distance, num_components, 0.01, num_components
+        )
+        far_past = _min_bridge_mask(
+            a, b, distance, num_components, 0.01, 4 * num_components
+        )
+        assert torch.equal(at_bound, far_past)
+
+    @pytest.mark.parametrize("blocks", [2, 3, 4])
+    def test_relabelling_components_upward_changes_nothing(self, blocks):
+        """
+        Contracting to [0, num_kept) is only sound because selection reads
+        component labels through `amin` and `!=` alone. Any strictly increasing
+        relabelling must therefore give the identical mask.
+        """
+        a, b, distance, num_components = self._candidates(grain_chain(3.2, blocks))
+        # strictly increasing, and sparse enough to change every label
+        spread = torch.arange(num_components) * 7 + 3
+        assert torch.equal(
+            _min_bridge_mask(a, b, distance, num_components, 0.01, num_components),
+            _min_bridge_mask(
+                spread[a],
+                spread[b],
+                distance,
+                int(spread[-1]) + 1,
+                0.01,
+                num_components,
+            ),
+        )
+
+    def test_deepest_system_bounds_the_rounds_not_the_batch(self):
+        """
+        Components never span systems, so the batch-wide count is a looser bound
+        than the deepest system's. Both must give the same edges, and the batch
+        that makes them differ is a deep system beside shallow ones.
+        """
+        items = [grain_chain(3.2, 4), grain_chain(3.2, 2)] + [
+            build.bulk("Cu", "fcc", a=3.61, cubic=True).repeat((2, 2, 2))
+        ] * 4
+        for atoms in items:
+            atoms.pbc = [False, True, True]
+        data = atomicdata_list_to_batch([AtomicData.from_ase(a) for a in items])
+        graph = generate_graph(
+            data,
+            cutoff=CUTOFF,
+            max_neighbors=0,
+            enforce_max_neighbors_strictly=False,
+            radius_pbc_version=1,
+            pbc=None,
+        )
+        source, target = graph["edge_index"][0], graph["edge_index"][1]
+        distance_sq = graph["edge_distance"] ** 2
+        num_atoms = int(data.natoms.sum())
+        kept, _ = get_max_neighbors_mask(
+            natoms=data.natoms,
+            index=target,
+            atom_distance=distance_sq,
+            max_num_neighbors_threshold=30,
+        )
+        labels = connected_component_labels(target[kept], source[kept], num_atoms)
+        roots, component = labels.unique(return_inverse=True)
+        num_kept = roots.numel()
+        deepest = int(
+            torch.diff(
+                torch.searchsorted(roots, torch.cumsum(data.natoms, dim=0)),
+                prepend=torch.zeros(1, dtype=torch.long),
+            ).max()
+        )
+        assert deepest < num_kept, "batch does not exercise the per-system bound"
+
+        crossing = component[target] != component[source]
+        args = (
+            component[target[crossing]],
+            component[source[crossing]],
+            distance_sq[crossing],
+            num_kept,
+            0.01,
+        )
+        assert torch.equal(
+            _min_bridge_mask(*args, deepest), _min_bridge_mask(*args, num_kept)
+        )
+
+    def test_batched_and_single_system_calls_agree(self):
+        """
+        `natoms` only bounds work, so passing it must not change the result
+        relative to treating the input as one undivided system.
+        """
+        atoms = grain_chain(3.2, 3)
+        data, source, target, distance_sq = full_edge_list(atoms)
+        num_atoms = int(data.natoms.sum())
+        kept, _ = get_max_neighbors_mask(
+            natoms=data.natoms,
+            index=target,
+            atom_distance=distance_sq,
+            max_num_neighbors_threshold=30,
+        )
+        common = (target, source, distance_sq, kept, num_atoms, 0.01)
+        assert torch.equal(
+            reconnect_mask(*common, natoms=data.natoms),
+            reconnect_mask(*common, natoms=None),
+        )
 
 
 class TestNeighborCountsStayConsistent:
