@@ -601,7 +601,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
-                pbc = torch.ones(data_dict["natoms"].shape[0], 3, dtype=torch.bool)
+                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
             else:
                 assert (
                     "pbc" in data_dict
