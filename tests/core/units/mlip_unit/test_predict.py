@@ -42,7 +42,11 @@ from fairchem.core.models.uma.compat import UMA_1P1_MODEL_ID
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 from fairchem.core.units.mlip_unit.mlip_unit import initialize_finetuning_model
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import (
+    ParallelMLIPPredictUnit,
+    _mark_dynamic_input_dimensions,
+    _prepare_inference_gradients,
+)
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
@@ -64,6 +68,51 @@ def _resolve_checkpoint_path(name_or_path: str) -> str:
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
+
+
+@pytest.mark.parametrize(
+    ("forces", "stress", "pos_grad", "cell_grad"),
+    [
+        (False, False, False, False),
+        (True, False, True, False),
+        (True, True, True, True),
+    ],
+)
+def test_prepare_inference_gradients(forces, stress, pos_grad, cell_grad):
+    backbone = SimpleNamespace(
+        regress_config=SimpleNamespace(
+            direct_forces=False, forces=forces, stress=stress
+        )
+    )
+    data = {
+        "pos": torch.randn(4, 3),
+        "cell": torch.randn(1, 3, 3),
+    }
+
+    _prepare_inference_gradients(backbone, data)
+
+    assert data["pos"].requires_grad is pos_grad
+    assert data["cell"].requires_grad is cell_grad
+    _prepare_inference_gradients(SimpleNamespace(), data)
+
+
+def test_mark_dynamic_input_dimensions_requires_fast_backend():
+    def make_data():
+        return {
+            "pos": torch.randn(4, 3),
+            "edge_index": torch.zeros(2, 8, dtype=torch.long),
+        }
+
+    data = make_data()
+    _mark_dynamic_input_dimensions(SimpleNamespace(), data)
+    assert not hasattr(data["pos"], "_dynamo_dynamic_indices")
+    assert not hasattr(data["edge_index"], "_dynamo_dynamic_indices")
+
+    backend = SimpleNamespace(supports_fused_edgewise=True)
+    data = make_data()
+    _mark_dynamic_input_dimensions(SimpleNamespace(backend=backend), data)
+    assert data["pos"]._dynamo_dynamic_indices == {0}
+    assert data["edge_index"]._dynamo_dynamic_indices == {1}
 
 
 _REPRESENTATIVE_ELEMENTS = [
