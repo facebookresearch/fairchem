@@ -207,9 +207,11 @@ class JobConfig:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-                self.graph_parallel = GraphParallelConfig(
-                    group_size=self.graph_parallel_group_size
-                )
+                  self.graph_parallel = dataclasses.replace(
+                      self.graph_parallel,
+                      group_size=self.graph_parallel_group_size
+                   )
+
         try:
             cluster = clusterscope.cluster()
         except RuntimeError:
