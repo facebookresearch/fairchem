@@ -64,9 +64,7 @@ def get_diamond_tg_data(neighbors: int, cutoff: float, size: int, device: str):
 def get_batched_tg_data(neighbors: int, cutoff: float, device: str):
     data = []
     for size in (1, 2):
-        atoms = build.bulk("Cu", "fcc", a=3.58, cubic=True).repeat(
-            (size, size, size)
-        )
+        atoms = build.bulk("Cu", "fcc", a=3.58, cubic=True).repeat((size, size, size))
         sample = AtomicData.from_ase(
             atoms, max_neigh=neighbors, radius=cutoff, r_edges=True
         )
@@ -135,7 +133,9 @@ def test_compile_batched_external_graph(compile_reset_state):
     data = get_batched_tg_data(neighbors=300, cutoff=6.0, device="cuda")
     expected = model._generate_graph(data)
     actual = torch.compile(model._generate_graph, fullgraph=True, dynamic=False)(data)
-    torch.testing.assert_close(actual["edge_distance_vec"], expected["edge_distance_vec"])
+    torch.testing.assert_close(
+        actual["edge_distance_vec"], expected["edge_distance_vec"]
+    )
     torch.testing.assert_close(actual["edge_distance"], expected["edge_distance"])
 
 
