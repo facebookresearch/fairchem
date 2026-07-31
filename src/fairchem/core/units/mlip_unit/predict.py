@@ -86,6 +86,36 @@ def collate_predictions(predict_fn):
     return collated_predict
 
 
+def _prepare_inference_gradients(backbone, data: AtomicData) -> None:
+    regress_config = getattr(backbone, "regress_config", None)
+    if regress_config is None or regress_config.direct_forces:
+        return
+    if regress_config.forces or regress_config.stress:
+        data["pos"].requires_grad_(True)
+    if regress_config.stress:
+        data["cell"].requires_grad_(True)
+
+
+def _mark_dynamic_input_dimensions(backbone, data: AtomicData) -> None:
+    if not getattr(
+        getattr(backbone, "backend", None), "supports_fused_edgewise", False
+    ):
+        return
+    dynamic_dims = {
+        "atomic_numbers": 0,
+        "batch": 0,
+        "cell_offsets": 0,
+        "edge_index": 1,
+        "fixed": 0,
+        "pos": 0,
+        "tags": 0,
+    }
+    for key, dim in dynamic_dims.items():
+        value = data.get(key, None)
+        if torch.is_tensor(value):
+            torch._dynamo.mark_dynamic(value, dim)
+
+
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
@@ -453,28 +483,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 data_device[key] = val.to(dtype)
 
         backbone = self.model.module.backbone
-        regress_config = backbone.regress_config
-        if not regress_config.direct_forces:
-            if regress_config.forces or regress_config.stress:
-                data_device.pos.requires_grad_(True)
-            if regress_config.stress:
-                data_device.cell.requires_grad_(True)
-        if self.inference_settings.compile and backbone.__class__.__module__.startswith(
-            "fairchem.core.models.uma"
-        ):
-            dynamic_dims = {
-                "atomic_numbers": 0,
-                "batch": 0,
-                "cell_offsets": 0,
-                "edge_index": 1,
-                "fixed": 0,
-                "pos": 0,
-                "tags": 0,
-            }
-            for key, dim in dynamic_dims.items():
-                value = data_device.get(key, None)
-                if torch.is_tensor(value):
-                    torch._dynamo.mark_dynamic(value, dim)
+        _prepare_inference_gradients(backbone, data_device)
+        if self.inference_settings.compile:
+            _mark_dynamic_input_dimensions(backbone, data_device)
         return self._run_inference(data_device, undo_element_references)
 
     def _lazy_init(self, data: AtomicData) -> None:

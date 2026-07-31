@@ -7,9 +7,33 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import pytest
 import torch
 
-from fairchem.core.models.uma.nn.embedding import DatasetEmbedding
+from fairchem.core.models.uma.nn.embedding import ChgSpinEmbedding, DatasetEmbedding
+
+
+@pytest.mark.gpu()
+@pytest.mark.compile_gpu()
+@pytest.mark.parametrize("embedding_type", ["pos_emb", "lin_emb"])
+def test_spin_embedding_fullgraph_preserves_input(embedding_type, compile_reset_state):
+    layer = ChgSpinEmbedding(
+        embedding_type=embedding_type,
+        embedding_target="spin",
+        embedding_size=8,
+        grad=False,
+    ).cuda()
+    spin = torch.tensor([0, 1, 2, 0], device="cuda")
+    original = spin.clone()
+
+    expected = layer(spin.clone())
+    actual = torch.compile(layer, fullgraph=True)(spin)
+
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(spin, original)
+    if embedding_type == "pos_emb":
+        zero_spin = actual[spin == 0]
+        torch.testing.assert_close(zero_spin, torch.zeros_like(zero_spin))
 
 
 class TestDatasetEmbedding:
