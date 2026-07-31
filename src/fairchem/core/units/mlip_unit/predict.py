@@ -96,6 +96,26 @@ def _prepare_inference_gradients(backbone, data: AtomicData) -> None:
         data["cell"].requires_grad_(True)
 
 
+def _mark_dynamic_input_dimensions(backbone, data: AtomicData) -> None:
+    if not getattr(
+        getattr(backbone, "backend", None), "supports_fused_edgewise", False
+    ):
+        return
+    dynamic_dims = {
+        "atomic_numbers": 0,
+        "batch": 0,
+        "cell_offsets": 0,
+        "edge_index": 1,
+        "fixed": 0,
+        "pos": 0,
+        "tags": 0,
+    }
+    for key, dim in dynamic_dims.items():
+        value = data.get(key, None)
+        if torch.is_tensor(value):
+            torch._dynamo.mark_dynamic(value, dim)
+
+
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
@@ -461,6 +481,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         backbone = self.model.module.backbone
         _prepare_inference_gradients(backbone, data_device)
+        if self.inference_settings.compile:
+            _mark_dynamic_input_dimensions(backbone, data_device)
 
         # Model handles any per-prediction checks (e.g., MOLE consistency)
         self.model.module.on_predict_check(data_device)
@@ -482,15 +504,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             logging.warning(
                 "Model is being compiled this might take a while for the first time"
             )
-            torch._dynamo.config.recompile_limit = 32
-            # Bake float literals in as constants rather than symbolic floats.
-            # The model's scalars are fixed at inference, so this skips dynamo's
-            # TensorifyScalarRestartAnalysis retrace during compile.
-            torch._dynamo.config.specialize_float = True
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
 
+    @torch._dynamo.config.patch(
+        recompile_limit=32,
+        specialize_float=True,
+    )
     def _run_inference(self, data: AtomicData, undo_refs: bool) -> dict:
         """
         Execute model inference.

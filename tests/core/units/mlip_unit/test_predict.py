@@ -44,6 +44,7 @@ from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 from fairchem.core.units.mlip_unit.mlip_unit import initialize_finetuning_model
 from fairchem.core.units.mlip_unit.predict import (
     ParallelMLIPPredictUnit,
+    _mark_dynamic_input_dimensions,
     _prepare_inference_gradients,
 )
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -93,6 +94,25 @@ def test_prepare_inference_gradients(forces, stress, pos_grad, cell_grad):
     assert data["pos"].requires_grad is pos_grad
     assert data["cell"].requires_grad is cell_grad
     _prepare_inference_gradients(SimpleNamespace(), data)
+
+
+def test_mark_dynamic_input_dimensions_requires_fast_backend():
+    def make_data():
+        return {
+            "pos": torch.randn(4, 3),
+            "edge_index": torch.zeros(2, 8, dtype=torch.long),
+        }
+
+    data = make_data()
+    _mark_dynamic_input_dimensions(SimpleNamespace(), data)
+    assert not hasattr(data["pos"], "_dynamo_dynamic_indices")
+    assert not hasattr(data["edge_index"], "_dynamo_dynamic_indices")
+
+    backend = SimpleNamespace(supports_fused_edgewise=True)
+    data = make_data()
+    _mark_dynamic_input_dimensions(SimpleNamespace(backend=backend), data)
+    assert data["pos"]._dynamo_dynamic_indices == {0}
+    assert data["edge_index"]._dynamo_dynamic_indices == {1}
 
 
 _REPRESENTATIVE_ELEMENTS = [
