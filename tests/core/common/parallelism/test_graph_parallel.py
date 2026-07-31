@@ -259,10 +259,8 @@ def _a2a_simple_layer(x, edge_index, rank_assignments, natoms):
     # Build GP context (send_indices computed inline)
     gp_ctx = build_gp_context(edge_index, rank_assignments, rank, world_size)
 
-    send_indices = gp_ctx.send_indices
-
     # All-to-all collect
-    x_received = all_to_all_collect(x, gp_ctx, send_indices)
+    x_received = all_to_all_collect(x, gp_ctx)
 
     # Combine local + received
     x_full = torch.cat([x, x_received], dim=0)
