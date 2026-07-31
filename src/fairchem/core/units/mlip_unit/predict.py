@@ -438,6 +438,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
+        # Validate composition metadata before moving inputs to the accelerator.
+        self.model.module.on_predict_check(data)
+
         # Regular model prediction path
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
@@ -472,10 +475,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 value = data_device.get(key, None)
                 if torch.is_tensor(value):
                     torch._dynamo.mark_dynamic(value, dim)
-
-        # Model handles any per-prediction checks (e.g., MOLE consistency)
-        self.model.module.on_predict_check(data_device)
-
         return self._run_inference(data_device, undo_element_references)
 
     def _lazy_init(self, data: AtomicData) -> None:
