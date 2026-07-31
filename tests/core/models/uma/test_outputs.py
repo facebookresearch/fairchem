@@ -256,6 +256,28 @@ class TestComputeEnergy:
         assert node_embedding.grad is not None
         assert torch.allclose(node_embedding.grad, torch.ones_like(node_embedding))
 
+    @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
+    def test_float64_compile(self, compile_reset_state):
+        energy_block = nn.Linear(8, 1).cuda()
+
+        def fn(node_embedding, batch):
+            return compute_energy(
+                {"node_embedding": node_embedding}, energy_block, batch, num_systems=4
+            )
+
+        node_embedding = torch.randn(
+            257, 9, 8, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        batch = torch.arange(257, device="cuda") % 4
+        expected = fn(node_embedding, batch)
+        actual = torch.compile(fn, fullgraph=True)(node_embedding, batch)
+
+        torch.testing.assert_close(actual, expected, rtol=1e-14, atol=1e-14)
+        expected_grad = torch.autograd.grad(expected[1].sum(), node_embedding)[0]
+        actual_grad = torch.autograd.grad(actual[1].sum(), node_embedding)[0]
+        torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-14, atol=1e-14)
+
     def test_reduce_mean(self):
         """Test that reduce='mean' divides energy by natoms per system."""
         emb, energy_block = _make_emb_and_block(
