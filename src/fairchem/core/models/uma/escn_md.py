@@ -601,7 +601,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
-                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
+                pbc = torch.ones(data_dict["natoms"].shape[0], 3, dtype=torch.bool)
             else:
                 assert (
                     "pbc" in data_dict
@@ -633,7 +633,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
-                    data_dict["nedges"], dim=0
+                    data_dict["nedges"],
+                    dim=0,
+                    output_size=data_dict["cell_offsets"].shape[0],
                 )
                 shifts = torch.einsum(
                     "ij,ijk->ik",
