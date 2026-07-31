@@ -76,11 +76,16 @@ def test_calculator_inference_with_max_atoms():
     assert backbone.global_cfg.use_padding is True
 
 
-def test_calculator_inference_max_atoms_required_with_compile():
+def test_calculator_inference_disables_compile_without_max_atoms(caplog):
     """
-    Test that compile=True without max_atoms raises an error.
+    Test that compile=True without max_atoms warns and disables compilation.
     """
-    with pytest.raises(ValueError, match="max_atoms must be set"):
-        AllScAIPBackbone.build_inference_settings(
-            InferenceSettings(compile=True, max_atoms=None)
-        )
+    settings = InferenceSettings(compile=True, max_atoms=None)
+
+    with caplog.at_level("WARNING"):
+        overrides = AllScAIPBackbone.build_inference_settings(settings)
+
+    assert "Disabling compilation and padding" in caplog.text
+    assert settings.compile is False
+    assert overrides["use_compile"] is False
+    assert overrides["use_padding"] is False

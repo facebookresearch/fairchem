@@ -352,6 +352,7 @@ def test_mole_merge_inference_falls_back(
         device=device,
         inference_settings=inference_mode,
     )
+    assert predictor.inference_settings.execution_mode == "umas_fast_gpu"
     _ = predictor.predict(batch.clone())
 
     sample = a2g(db.get_atoms(1), task_name="oc20")
@@ -363,6 +364,7 @@ def test_mole_merge_inference_falls_back(
     assert "fast path (merge_mole + compile) is only available" in caplog.text
     assert predictor.inference_settings.merge_mole is False
     assert predictor.inference_settings.compile is False
+    assert predictor.inference_settings.execution_mode == "general"
 
     sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(

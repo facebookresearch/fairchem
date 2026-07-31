@@ -39,6 +39,7 @@ from fairchem.core.common.distutils import (
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
+    ExecutionMode,
     maybe_update_settings_backend,
 )
 from fairchem.core.units.mlip_unit import InferenceSettings
@@ -434,6 +435,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # 1. change flags
         self.inference_settings.merge_mole = False
         self.inference_settings.compile = False
+        if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
+            self.inference_settings.execution_mode = ExecutionMode.GENERAL
         self.lazy_model_intialized = False
         # 2. clear old model and relative memory
         del self.model
