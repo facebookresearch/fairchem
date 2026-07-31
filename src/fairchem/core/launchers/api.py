@@ -11,7 +11,7 @@ import os
 import tempfile
 import uuid
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 import clusterscope
@@ -207,10 +207,10 @@ class JobConfig:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-                  self.graph_parallel = dataclasses.replace(
-                      self.graph_parallel,
-                      group_size=self.graph_parallel_group_size
-                   )
+                self.graph_parallel = replace(
+                    self.graph_parallel,
+                    group_size=self.graph_parallel_group_size,
+                )
 
         try:
             cluster = clusterscope.cluster()
