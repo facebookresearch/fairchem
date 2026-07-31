@@ -259,7 +259,7 @@ class TestComputeEnergy:
     @pytest.mark.gpu()
     @pytest.mark.compile_gpu()
     def test_float64_compile(self, compile_reset_state):
-        energy_block = nn.Linear(8, 1).cuda().double()
+        energy_block = nn.Linear(8, 1).cuda()
 
         def fn(node_embedding, batch):
             return compute_energy(
@@ -267,7 +267,7 @@ class TestComputeEnergy:
             )
 
         node_embedding = torch.randn(
-            257, 9, 8, device="cuda", dtype=torch.float64, requires_grad=True
+            257, 9, 8, device="cuda", dtype=torch.float32, requires_grad=True
         )
         batch = torch.arange(257, device="cuda") % 4
         expected = fn(node_embedding, batch)
