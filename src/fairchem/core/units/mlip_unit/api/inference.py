@@ -131,16 +131,16 @@ class InferenceSettings:
     # inference. This will dramatically decrease the memory footprint
     # especially for large number of atoms (i.e. 10k+) at a slight cost to
     # inference speed.
-    activation_checkpointing: bool = False
+    activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
     # inference. This slightly increases speed and significantly reduces
     # parameter memory. If composition, task, total charge, or spin changes,
     # MLIPPredictUnit falls back to an unmerged model.
-    merge_mole: bool = True
+    merge_mole: bool = False
 
     # Flag to enable or disable the compilation of the inference model.
-    compile: bool = True
+    compile: bool = False
 
     # Deprecated
     # Flag to enable or disable the use of CUDA Graphs for compute

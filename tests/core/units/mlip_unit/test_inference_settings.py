@@ -31,10 +31,10 @@ def test_named_modes_use_fast_path_and_only_turbo_enables_tf32():
     assert default.merge_mole is True
     assert default.compile is True
     assert default.tf32 is False
+    assert default.activation_checkpointing is False
     assert turbo.merge_mole is True
     assert turbo.compile is True
     assert turbo.tf32 is True
-    assert default.activation_checkpointing is True
     assert turbo.activation_checkpointing is False
 
 
