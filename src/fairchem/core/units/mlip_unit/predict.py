@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
-import dataclasses
 import logging
 import math
 import os
@@ -36,7 +35,6 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
@@ -57,6 +55,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ray.serve.handle import DeploymentHandle
 
+    from fairchem.core.common.gp_utils import GraphParallelConfig
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
@@ -633,18 +632,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     ):
         super().__init__()
 
-        if num_workers > 1:
-            if gp_config is None:
-                gp_config = GraphParallelConfig(group_size=num_workers)
-            elif gp_config.group_size == 1:
-                # Don't mutate the caller's config — create a copy with the
-                # updated group_size.
-                gp_config = dataclasses.replace(gp_config, group_size=num_workers)
-            elif gp_config.group_size != num_workers:
-                raise ValueError(
-                    f"gp_config.group_size ({gp_config.group_size}) must equal "
-                    f"num_workers ({num_workers})"
-                )
+        gp_config = gp_utils.resolve_gp_config_for_workers(gp_config, num_workers)
 
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,

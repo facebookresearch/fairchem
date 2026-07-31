@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
 import threading
 from dataclasses import dataclass
@@ -193,6 +194,41 @@ def set_gp_config(config: GraphParallelConfig) -> None:
 
 def get_gp_config() -> GraphParallelConfig | None:
     return _GP_CONFIG
+
+
+def resolve_gp_config_for_workers(
+    gp_config: GraphParallelConfig | None,
+    num_workers: int,
+) -> GraphParallelConfig | None:
+    """
+    Reconcile a user-provided GraphParallelConfig with the target number
+    of workers.
+
+    Behavior:
+      - ``num_workers <= 1``: no GP is used; return ``gp_config`` unchanged
+        (may be ``None``).
+      - ``num_workers > 1``:
+          * If ``gp_config`` is ``None``, build a default
+            ``GraphParallelConfig(group_size=num_workers)``.
+          * If the config's ``group_size`` is still the default (1),
+            return a copy with ``group_size=num_workers``. The caller's
+            config is NOT mutated.
+          * If ``group_size == num_workers`` already, return it unchanged.
+          * Otherwise raise ``ValueError`` — an explicit mismatch is a
+            configuration error.
+    """
+    if num_workers <= 1:
+        return gp_config
+    if gp_config is None:
+        return GraphParallelConfig(group_size=num_workers)
+    if gp_config.group_size == 1:
+        return dataclasses.replace(gp_config, group_size=num_workers)
+    if gp_config.group_size != num_workers:
+        raise ValueError(
+            f"gp_config.group_size ({gp_config.group_size}) must equal "
+            f"num_workers ({num_workers})"
+        )
+    return gp_config
 
 
 def get_dp_group():
