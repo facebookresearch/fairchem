@@ -217,18 +217,7 @@ def compute_forces_and_stress(
     cell_virial = cell.mT @ grad_cell  # [B, 3, 3]
 
     virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
-    volume = (
-        (
-            cell[:, 0, 0]
-            * (cell[:, 1, 1] * cell[:, 2, 2] - cell[:, 1, 2] * cell[:, 2, 1])
-            - cell[:, 0, 1]
-            * (cell[:, 1, 0] * cell[:, 2, 2] - cell[:, 1, 2] * cell[:, 2, 0])
-            + cell[:, 0, 2]
-            * (cell[:, 1, 0] * cell[:, 2, 1] - cell[:, 1, 1] * cell[:, 2, 0])
-        )
-        .abs()
-        .unsqueeze(-1)
-    )
+    volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
     stress = stress.view(-1, 9)
 
