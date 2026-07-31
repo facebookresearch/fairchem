@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import tempfile
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -201,8 +202,6 @@ class JobConfig:
                     "graph_parallel.group_size with different values. Use graph_parallel only."
                 )
             if self.graph_parallel.group_size <= 1:
-                import warnings
-
                 warnings.warn(
                     "graph_parallel_group_size is deprecated, use graph_parallel instead",
                     DeprecationWarning,
