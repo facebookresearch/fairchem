@@ -256,8 +256,8 @@ class TestComputeEnergy:
         assert node_embedding.grad is not None
         assert torch.allclose(node_embedding.grad, torch.ones_like(node_embedding))
 
-    @pytest.mark.gpu
-    @pytest.mark.compile_gpu
+    @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
     def test_float64_compile(self, compile_reset_state):
         energy_block = nn.Linear(8, 1).cuda().double()
 
