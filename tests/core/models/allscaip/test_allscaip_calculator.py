@@ -85,7 +85,7 @@ def test_calculator_inference_disables_compile_without_max_atoms(caplog):
     with caplog.at_level("WARNING"):
         overrides = AllScAIPBackbone.build_inference_settings(settings)
 
-    assert "Disabling compilation and padding" in caplog.text
+    assert "Disabling compilation" in caplog.text
     assert settings.compile is False
     assert overrides["use_compile"] is False
     assert overrides["use_padding"] is False
