@@ -20,7 +20,7 @@ from omdata.orca.calc import (
     Vertical,
     get_symm_break_block,
 )
-from quacc.recipes.orca.core import run_and_summarize, run_and_summarize_opt
+from quacc.recipes.orca._base import run_and_summarize, run_and_summarize_opt
 
 
 def single_point_calculation(

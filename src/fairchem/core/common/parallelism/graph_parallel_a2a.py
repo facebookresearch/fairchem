@@ -14,6 +14,11 @@ from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.parallelism.graph_partition import (
+    PartitionStrategy,
+    partition_atoms_index_split,
+    partition_atoms_spatial,
+)
 
 
 def _safe_all_to_all(
@@ -61,8 +66,6 @@ class GPContext:
     Graph parallel context holding communication metadata for all-to-all.
 
     Runtime-only struct: every field is needed for the forward/backward pass.
-    Construction intermediates (node_partition, rank_assignments, needed_atoms,
-    global_to_local, etc.) are computed in build_gp_context but not stored.
 
     Attributes:
         rank: Current GP rank.
@@ -79,6 +82,7 @@ class GPContext:
         total_recv: Total number of embeddings to receive (sum of recv_splits).
         local_edge_idx: Indices into edge_index_local where source is a local atom.
         remote_edge_idx: Indices into edge_index_local where source is a remote atom.
+        rank_assignments: Rank owner for each atom, shape (total_atoms,).
     """
 
     rank: int
@@ -93,6 +97,7 @@ class GPContext:
     total_recv: int
     local_edge_idx: torch.Tensor
     remote_edge_idx: torch.Tensor
+    rank_assignments: torch.Tensor
 
 
 def _sparse_index_exchange(
@@ -189,6 +194,41 @@ def _sparse_index_exchange(
     send_indices_global = recv_buf
 
     return send_counts, send_indices_global
+
+
+@torch.compiler.disable
+def compute_a2a_partition(
+    pos: torch.Tensor,
+    total_atoms: int,
+    device: torch.device,
+    world_size: int,
+    rank: int,
+    strategy: PartitionStrategy,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute rank assignments and local node partition for A2A graph parallel.
+
+    Args:
+        pos: Atom positions, shape (N, 3).
+        total_atoms: Total number of atoms.
+        device: Device for output tensors.
+        world_size: Number of GP ranks.
+        rank: Current GP rank.
+        strategy: Partitioning strategy (SPATIAL or INDEX_SPLIT).
+
+    Returns:
+        Tuple of (rank_assignments, node_partition) where rank_assignments
+        is shape (N,) mapping each atom to a rank, and node_partition is
+        the indices of atoms belonging to this rank.
+    """
+    with record_function("a2a_partition"):
+        if strategy == PartitionStrategy.SPATIAL:
+            rank_assignments = partition_atoms_spatial(pos, world_size)
+        else:
+            rank_assignments = partition_atoms_index_split(
+                total_atoms, world_size, device
+            )
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    return rank_assignments, node_partition
 
 
 @torch.compiler.disable
@@ -313,6 +353,7 @@ def build_gp_context(
         total_recv=total_recv,
         local_edge_idx=local_edge_idx,
         remote_edge_idx=remote_edge_idx,
+        rank_assignments=rank_assignments,
     )
 
 
@@ -524,7 +565,6 @@ class AllToAllCollect(torch.autograd.Function):
 def all_to_all_collect(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
-    send_indices: torch.Tensor,
 ) -> torch.Tensor:
     """
     High-level function to collect remote embeddings via all-to-all.
@@ -536,7 +576,6 @@ def all_to_all_collect(
     Args:
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
-        send_indices: Local indices of atoms to send.
 
     Returns:
         x_received: Remote atom embeddings,
@@ -544,7 +583,7 @@ def all_to_all_collect(
     """
     return AllToAllCollect.apply(
         x_local,
-        send_indices,
+        gp_ctx.send_indices,
         gp_ctx.send_counts,
         gp_ctx.recv_counts,
         gp_utils.get_gp_group(),

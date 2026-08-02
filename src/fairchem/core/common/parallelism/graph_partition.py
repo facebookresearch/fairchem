@@ -7,21 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from enum import Enum
-
 import torch
 
+from fairchem.core.common.gp_utils import GPPartition
 
-class PartitionStrategy(Enum):
-    """
-    Strategy for partitioning atoms across GP ranks.
-
-    INDEX_SPLIT: Simple contiguous index split (existing behavior).
-    SPATIAL: Spatial domain decomposition using fast k-means.
-    """
-
-    INDEX_SPLIT = "index_split"
-    SPATIAL = "spatial"
+PartitionStrategy = GPPartition
 
 
 def _expand_bits_10(v: torch.Tensor) -> torch.Tensor:
