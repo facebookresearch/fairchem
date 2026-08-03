@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ray.serve.handle import DeploymentHandle
 
+    from fairchem.core.common.gp_utils import GraphParallelConfig
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
@@ -546,10 +547,12 @@ class MLIPWorkerLocal:
         predictor_config: dict,
         master_port: int | None = None,
         master_address: str | None = None,
+        gp_config: GraphParallelConfig | None = None,
     ):
         self.worker_id = worker_id
         self.world_size = world_size
         self.predictor_config = predictor_config
+        self.gp_config = gp_config
         self.master_address = (
             ray.util.get_node_ip_address() if master_address is None else master_address
         )
@@ -579,7 +582,9 @@ class MLIPWorkerLocal:
             rank=self.worker_id,
             world_size=self.world_size,
         )
-        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+        if self.gp_config is not None:
+            gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+            gp_utils.set_gp_config(self.gp_config)
         self.predict_unit = hydra.utils.instantiate(self.predictor_config)
         self.device = get_device_for_local_rank()
         logging.info(
@@ -627,8 +632,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         num_workers: int = 1,
         num_workers_per_node: int = 8,
         log_level: int = logging.INFO,
+        gp_config: GraphParallelConfig | None = None,
     ):
         super().__init__()
+
+        gp_config = gp_utils.resolve_gp_config_for_workers(gp_config, num_workers)
+
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,
             device="cpu",
@@ -710,7 +719,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
-        ).remote(0, num_workers, predict_unit_config)
+        ).remote(0, num_workers, predict_unit_config, gp_config=gp_config)
 
         local_gpu_or_cpu = ray.get(rank0_worker.get_device_for_local_rank.remote())
         os.environ[CURRENT_DEVICE_TYPE_STR] = local_gpu_or_cpu
@@ -720,6 +729,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             worker_id=0,
             world_size=num_workers,
             predictor_config=predict_unit_config,
+            gp_config=gp_config,
         )
         master_addr, master_port = self.local_rank0.get_master_address_and_port()
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
@@ -752,6 +762,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                     predict_unit_config,
                     master_port,
                     master_addr,
+                    gp_config=gp_config,
                 )
                 self.workers.append(actor)
                 worker_id += 1

@@ -74,6 +74,7 @@ def get_predict_unit(
     cache_dir: str = CACHE_DIR,
     workers: int = 1,
     seed: int = 41,
+    gp_config=None,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -116,6 +117,7 @@ def get_predict_unit(
         form_elem_refs,
         workers,
         seed,
+        gp_config=gp_config,
     )
 
 
