@@ -315,6 +315,46 @@ def ligand_pocket(orca_results, mlip_results):
     return results
 
 
+def ncia_interaction_energy(orca_results, mlip_results, supersystem="dimer"):
+    """
+    Error metric for the NCIA two-body intermolecular interaction-energy task.
+
+    The reference (`orca_results`) is the NCIA benchmark interaction energy stored
+    as a scalar per system: {identifier: {"interaction_energy": eV}}. There are NO
+    per-fragment reference energies or forces, so this evaluator does not reuse the
+    ligand_pocket approach of subtracting reference components.
+
+    The MLIP interaction energy is reconstructed from the per-component single
+    points produced by the `interaction_energy` recipe:
+        E_int = E[supersystem] - sum(E[each monomer])
+    via `interaction_energy_and_forces`, then compared to the reference scalar.
+    Everything is native eV.
+
+    Args:
+        orca_results (dict): Reference labels, {identifier: {"interaction_energy": eV}}.
+        mlip_results (dict): MLIP per-component single points, keyed by identifier
+            with a `supersystem` component plus one entry per monomer.
+        supersystem (str): Name of the supersystem component (default "dimer").
+
+    Returns:
+        dict: {"interaction_energy_mae": eV, "n_systems": int}
+    """
+    mlip_interaction_energy, _ = interaction_energy_and_forces(
+        mlip_results, supersystem
+    )
+
+    interaction_energy_mae = 0.0
+    for identifier, reference in orca_results.items():
+        interaction_energy_mae += abs(
+            reference["interaction_energy"] - mlip_interaction_energy[identifier]
+        )
+
+    return {
+        "interaction_energy_mae": interaction_energy_mae / len(orca_results),
+        "n_systems": len(orca_results),
+    }
+
+
 def ligand_strain(orca_results, mlip_results):
     """
     Calculate error metrics for ligand strain evaluation task.
