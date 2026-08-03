@@ -37,10 +37,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
-from fairchem.core.models.uma.nn.execution_backends import (
-    ExecutionMode,
-    maybe_update_settings_backend,
-)
+from fairchem.core.models.uma.nn.execution_backends import maybe_update_settings_backend
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -462,9 +459,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
-        if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
-            # The fast backward only differentiates positions and cells.
-            self.model.requires_grad_(False)
+        # Inference differentiates outputs with respect to inputs, not weights.
+        self.model.requires_grad_(False)
 
         self.model.to(self.inference_settings.base_precision_dtype)
 

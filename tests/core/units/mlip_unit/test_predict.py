@@ -1796,7 +1796,9 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Get predictions
     preds = predictor.predict(batch)
 
-    assert any(parameter.requires_grad for parameter in predictor.model.parameters())
+    assert all(
+        not parameter.requires_grad for parameter in predictor.model.parameters()
+    )
 
     # Verify energy, forces, and hessian are present
     assert "energy" in preds, "Energy prediction missing"
@@ -1819,22 +1821,25 @@ def _test_untrained_hessian(checkpoint_path, device):
 
 
 @pytest.mark.gpu()
-def test_fast_gpu_frozen_parameters_preserve_input_derivatives(
-    conserving_mole_checkpoint, monkeypatch
+@pytest.mark.parametrize("execution_mode", ["general", "umas_fast_gpu"])
+def test_frozen_parameters_preserve_input_derivatives(
+    conserving_mole_checkpoint, monkeypatch, execution_mode
 ):
     _test_frozen_parameters_preserve_input_derivatives(
-        conserving_mole_checkpoint[0], monkeypatch
+        conserving_mole_checkpoint[0], monkeypatch, execution_mode
     )
 
 
-def _test_frozen_parameters_preserve_input_derivatives(checkpoint_path, monkeypatch):
+def _test_frozen_parameters_preserve_input_derivatives(
+    checkpoint_path, monkeypatch, execution_mode
+):
     settings = InferenceSettings(
         predict_untrained_forces={"omol"},
         predict_untrained_stress={"omol"},
         predict_untrained_hessian={"omol"},
         activation_checkpointing=False,
         merge_mole=True,
-        execution_mode="umas_fast_gpu",
+        execution_mode=execution_mode,
         hessian_vmap=False,
     )
 

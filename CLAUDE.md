@@ -247,12 +247,12 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Tests that download registered checkpoints must declare their models with a
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
-- Only freeze inference parameters for the `umas_fast_gpu` backend, after its
-  module replacement. On the H100 perf check, freezing the general backend cut
-  1000-atom QPS by about 50% with activation checkpointing either enabled or
-  disabled. The fast backend retained its throughput while saving 11-13% peak
-  memory. Its custom backward must preserve input derivatives independently of
-  parameter gradients.
+- Freeze inference parameters after inference-specific module replacement.
+  Main's folded-batch linear path removes the former general-backend regression:
+  on one H100, freezing improved compiled general inference by 15-17% and cut
+  peak allocated memory by 27-29% at 100-2,000 atoms. PyTorch 2.13 CPU checks
+  improved by 4% at 32 atoms and were neutral at 1,000 atoms. Custom backward
+  paths must preserve input derivatives independently of parameter gradients.
 - `umas_fast_gpu` custom backward operators do not implement `vmap` batching.
   Compute Hessians through the per-component loop (`hessian_vmap=False`) when
   exercising that backend, and ensure inference settings forward that option
