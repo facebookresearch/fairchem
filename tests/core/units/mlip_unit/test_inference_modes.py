@@ -425,6 +425,7 @@ def test_mole_merge_contract_change_permanently_disables_fast_path(
 
     assert output
     assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert "inference_settings='batch'" in caplog.text
     assert predictor.inference_settings.merge_mole is False
     assert predictor.inference_settings.compile is False
 

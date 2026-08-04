@@ -136,8 +136,9 @@ class FAIRChemCalculator(Calculator):
             task_name: Task name
             inference_settings: Settings for inference. Both "default" and "turbo" use the
                 merge_mole + compile fast path, with automatic fallback if its fixed-input
-                contract is broken. "turbo" additionally enables TF32. More advanced use
-                cases can use a custom InferenceSettings object.
+                contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
+                unmerged for heterogeneous inputs. More advanced use cases can use a custom
+                InferenceSettings object.
             overrides: Optional dictionary of settings to override default inference settings.
             device: Optional torch device to load the model onto.
             seed: Random seed for reproducibility.

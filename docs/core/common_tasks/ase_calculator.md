@@ -62,6 +62,16 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 UMA defaults to the `merge_mole + compile` fast mode with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
 
+## Batch mode
+
+Use batch mode for heterogeneous batches whose systems differ in composition, task, charge, or spin. It currently keeps MOLE unmerged and leaves compilation disabled. The named mode provides a stable entry point for future batch-specific optimizations, such as compilation without MOLE merging.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="batch"
+)
+```
+
 ## Turbo mode
 
 Turbo mode uses the same `merge_mole + compile` fast path as default mode and additionally enables TF32. TF32 can improve performance on compatible hardware at a small precision trade-off. Similar to default mode, any changes in composition, task, charge, and spin across different evaluations trigger a fallback to the unoptimized execution path.
@@ -74,7 +84,7 @@ predictor = pretrained_mlip.get_predict_unit(
 
 ## Custom modes for advanced users
 
-The advanced user might quickly see that **default** mode and **turbo** mode are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
+The advanced user might quickly see that **default**, **batch**, and **turbo** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
 
 | Setting Flag  | Description |
 | ----- | ----- |

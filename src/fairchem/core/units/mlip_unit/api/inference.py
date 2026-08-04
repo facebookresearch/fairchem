@@ -32,7 +32,7 @@ DEFAULT_SPIN = 0
 ALLOWED_DTYPES = [torch.float32, torch.float64]
 
 
-class MergeMoleConsistencyError(AssertionError):
+class MergeMoleConsistencyError(ValueError):
     """Raised when input data is incompatible with an already merged MOLE model."""
 
 
@@ -240,6 +240,21 @@ def inference_settings_default():
     )
 
 
+# Batch mode is the stable entry point for heterogeneous inputs. It currently
+# uses the general unmerged and uncompiled path; keeping it as a named mode lets
+# us optimize heterogeneous batches independently in future releases (for
+# example, by enabling compilation without merging MOLE).
+def inference_settings_batch():
+    return InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+
 # Turbo uses the same fast path as the default settings, with TF32 enabled for
 # additional speed on supported hardware. It remains opt-in because it trades
 # a small amount of precision for speed.
@@ -267,6 +282,7 @@ def inference_settings_traineval():
 
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
+    "batch": inference_settings_batch(),
     "turbo": inference_settings_turbo(),
     "traineval": inference_settings_traineval(),
 }

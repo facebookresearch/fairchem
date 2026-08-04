@@ -12,6 +12,8 @@ import torch
 
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
+    guess_inference_settings,
+    inference_settings_batch,
     inference_settings_default,
     inference_settings_turbo,
 )
@@ -24,18 +26,27 @@ def test_default_dtype_is_float32():
     assert settings.base_precision_dtype is torch.float32
 
 
-def test_named_modes_use_fast_path_and_only_turbo_enables_tf32():
+def test_named_modes_use_expected_paths_and_only_turbo_enables_tf32():
     default = inference_settings_default()
+    batch = inference_settings_batch()
     turbo = inference_settings_turbo()
 
     assert default.merge_mole is True
     assert default.compile is True
     assert default.tf32 is False
     assert default.activation_checkpointing is False
+    assert batch.merge_mole is False
+    assert batch.compile is False
+    assert batch.tf32 is False
+    assert batch.activation_checkpointing is True
     assert turbo.merge_mole is True
     assert turbo.compile is True
     assert turbo.tf32 is True
     assert turbo.activation_checkpointing is False
+
+
+def test_batch_is_a_named_inference_mode():
+    assert guess_inference_settings("batch") == inference_settings_batch()
 
 
 @pytest.mark.parametrize(

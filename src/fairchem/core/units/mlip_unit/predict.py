@@ -426,9 +426,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     ) -> None:
         logging.warning(
             "The UMA fast path (merge_mole + compile) is only available for "
-            "fixed composition, task, charge, and spin. Falling back to an "
-            "unmerged and uncompiled model for subsequent evaluations. "
-            f"Reason: {consistency_error}"
+            "fixed composition, task, charge, and spin. This is optimized for "
+            "MD applications. Falling back to a less optimized version for "
+            "subsequent evaluations. "
+            f"Reason: '{consistency_error}'.\n"
+            "Use inference_settings='batch' for heterogeneous batched evaluations."
         )
 
         # Fall back to unmerged and uncompiled model:
