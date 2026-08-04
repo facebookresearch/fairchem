@@ -71,6 +71,22 @@ def test_invalid_string_raises():
         InferenceSettings(base_precision_dtype="int8")
 
 
+def test_radial_first_linear_prefix_grad_validation():
+    with pytest.raises(ValueError, match="execution_mode='umas_fast_gpu'"):
+        InferenceSettings(radial_first_linear_prefix_grad=True)
+    with pytest.raises(ValueError, match="does not support Hessians"):
+        InferenceSettings(
+            execution_mode="umas_fast_gpu",
+            predict_untrained_hessian={"omat"},
+            radial_first_linear_prefix_grad=True,
+        )
+
+    settings = InferenceSettings(
+        execution_mode="umas_fast_gpu", radial_first_linear_prefix_grad=True
+    )
+    assert settings.radial_first_linear_prefix_grad
+
+
 # --- to_omegaconf ---
 
 
@@ -98,9 +114,15 @@ def test_to_omegaconf_roundtrip():
     """Hydra can reinstantiate InferenceSettings from to_omegaconf() output."""
     import hydra
 
-    original = InferenceSettings(base_precision_dtype=torch.float64, tf32=True)
+    original = InferenceSettings(
+        base_precision_dtype=torch.float64,
+        execution_mode="umas_fast_gpu",
+        radial_first_linear_prefix_grad=True,
+        tf32=True,
+    )
     config = original.to_omegaconf()
     restored = hydra.utils.instantiate(config)
     assert isinstance(restored, InferenceSettings)
     assert restored.base_precision_dtype is torch.float64
+    assert restored.radial_first_linear_prefix_grad is True
     assert restored.tf32 is True
