@@ -514,7 +514,6 @@ class MLIPTrainEvalUnit(
         tf32: bool = False,
         ddp_broadcast_buffers: bool = False,
         ddp_gradient_as_bucket_view: bool = True,
-        ddp_static_graph: bool = True,
     ):
         super().__init__()
         self.job_config = job_config
@@ -572,15 +571,12 @@ class MLIPTrainEvalUnit(
         self.ema_model = None
         self.train_strategy = train_strategy
         if train_strategy == TrainStrategy.DDP:
-            # UMA's graph and buffers are stable, so DDP need not inspect or
-            # broadcast them on every step.
             self.model = prepare_module(
                 model,
                 device=torch.device(get_device_for_local_rank()),
                 strategy=DDPStrategy(
                     broadcast_buffers=ddp_broadcast_buffers,
                     gradient_as_bucket_view=ddp_gradient_as_bucket_view,
-                    static_graph=ddp_static_graph,
                 ),
             )
             if self.ema_decay is not None:
