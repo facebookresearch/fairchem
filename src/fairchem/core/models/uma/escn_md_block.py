@@ -321,7 +321,8 @@ class SpectralAtomwise(torch.nn.Module):
         )
 
     def forward(self, x):
-        gating_scalars = self.scalar_mlp(x.narrow(1, 0, 1))
+        scalar_input = x.narrow(1, 0, 1).squeeze(1)
+        gating_scalars = self.scalar_mlp(scalar_input)
         x = self.so3_linear_1(x)
         x = self.act(gating_scalars, x)
         x = self.so3_linear_2(x)
