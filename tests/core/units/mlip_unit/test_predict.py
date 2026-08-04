@@ -1796,6 +1796,10 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Get predictions
     preds = predictor.predict(batch)
 
+    assert all(
+        not parameter.requires_grad for parameter in predictor.model.parameters()
+    )
+
     # Verify energy, forces, and hessian are present
     assert "energy" in preds, "Energy prediction missing"
     assert "forces" in preds, "Forces prediction missing"
@@ -1814,6 +1818,77 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Verify hessian is symmetric (squeeze batch dim for symmetry check)
     hessian = preds["hessian"].squeeze(0)
     assert torch.allclose(hessian, hessian.T, atol=1e-5), "Hessian is not symmetric"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("execution_mode", ["general", "umas_fast_gpu"])
+def test_frozen_parameters_preserve_input_derivatives(
+    conserving_mole_checkpoint, monkeypatch, execution_mode
+):
+    _test_frozen_parameters_preserve_input_derivatives(
+        conserving_mole_checkpoint[0], monkeypatch, execution_mode
+    )
+
+
+def _test_frozen_parameters_preserve_input_derivatives(
+    checkpoint_path, monkeypatch, execution_mode
+):
+    settings = InferenceSettings(
+        predict_untrained_forces={"omol"},
+        predict_untrained_stress={"omol"},
+        predict_untrained_hessian={"omol"},
+        activation_checkpointing=False,
+        merge_mole=True,
+        execution_mode=execution_mode,
+        hessian_vmap=False,
+    )
+
+    seed_everywhere(42)
+    frozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device="cuda", inference_settings=settings
+    )
+    seed_everywhere(42)
+    unfrozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device="cuda", inference_settings=settings
+    )
+    monkeypatch.setattr(
+        unfrozen_predictor.model,
+        "requires_grad_",
+        lambda requires_grad=True: unfrozen_predictor.model,
+    )
+
+    def make_batch():
+        atoms = molecule("H2O")
+        atoms.info.update({"charge": 0, "spin": 1})
+        data = AtomicData.from_ase(
+            atoms,
+            task_name="omol",
+            r_data_keys=["spin", "charge"],
+            molecule_cell_size=120,
+        )
+        return atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    frozen = frozen_predictor.predict(make_batch())
+    seed_everywhere(42)
+    unfrozen = unfrozen_predictor.predict(make_batch())
+
+    assert all(
+        not parameter.requires_grad for parameter in frozen_predictor.model.parameters()
+    )
+    assert any(
+        parameter.requires_grad for parameter in unfrozen_predictor.model.parameters()
+    )
+    assert frozen.keys() == unfrozen.keys()
+    for name in frozen:
+        atol = 1e-5 if name == "hessian" else 1e-6
+        torch.testing.assert_close(
+            frozen[name],
+            unfrozen[name],
+            rtol=1e-5,
+            atol=atol,
+            msg=lambda message, name=name: f"{name}: {message}",
+        )
 
 
 @pytest.mark.gpu()
@@ -1993,6 +2068,7 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_predict_unit_has_model_id():
     """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
     back-fills it to `"UMA-1.1"` at load time."""
@@ -2008,6 +2084,7 @@ def test_uma_1p1_predict_unit_has_model_id():
     assert pu.model.module.backbone.model_id == UMA_1P1_MODEL_ID
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_finetune_propagates_model_id():
     """When finetuning starts from UMA 1.1, the back-filled `model_id` is
     stashed onto `model.finetune_model_full_config` (the fixup runs inside
