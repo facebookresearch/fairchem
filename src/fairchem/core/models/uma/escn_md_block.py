@@ -299,6 +299,7 @@ class eSCNMD_Block(torch.nn.Module):
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
         backend: ExecutionBackend,
+        norm_stats_num_channels: int | None = None,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -307,7 +308,10 @@ class eSCNMD_Block(torch.nn.Module):
         self.mmax = mmax
 
         self.norm_1 = get_normalization_layer(
-            norm_type, lmax=self.lmax, num_channels=sphere_channels
+            norm_type,
+            lmax=self.lmax,
+            num_channels=sphere_channels,
+            stats_num_channels=norm_stats_num_channels,
         )
 
         self.edge_wise = Edgewise(
@@ -325,7 +329,10 @@ class eSCNMD_Block(torch.nn.Module):
         )
 
         self.norm_2 = get_normalization_layer(
-            norm_type, lmax=self.lmax, num_channels=sphere_channels
+            norm_type,
+            lmax=self.lmax,
+            num_channels=sphere_channels,
+            stats_num_channels=norm_stats_num_channels,
         )
 
         if ff_type == "spectral":

@@ -1,0 +1,25 @@
+defaults:
+  - test_mlip_train_conserving
+  - _self_
+
+# Add the shared-channel ChannelPruningCallback to the small fake-data conserving
+# model to smoke test the prune/heal integration in the training loop. Absolute
+# short schedule so prune + heal-freeze both fire within max_steps (warmup=1 ->
+# prune ramp -> heal-freeze from step 3). `optimizer` stays the base AdamW.
+channel_prune_mode: sphere
+channel_target_sparsity: 0.5
+
+runner:
+  callbacks:
+    - _target_: fairchem.core.components.callbacks.TrainCheckpointCallback
+      checkpoint_every_n_steps: ${checkpoint_every}
+      max_saved_checkpoints: 10
+    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+      expected_loss: ${expected_loss}
+      expected_max_steps: ${max_steps}
+      expected_max_epochs: ${max_epochs}
+    - _target_: fairchem.core.models.uma.channel_pruning.ChannelPruningCallback
+      mode: ${channel_prune_mode}
+      target_sparsity: ${channel_target_sparsity}
+      warmup_steps: 1
+      healing_start_step: 3

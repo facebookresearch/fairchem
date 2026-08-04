@@ -1,0 +1,20 @@
+# dm1 / fair_amaia_cw (CoreWeave H100) cluster settings for PAT runs.
+# OMol25 250430-release ase_db data staged under $CKPT_HOME/datasets/omol/...
+data_root_dir: ${oc.env:CKPT_HOME}/datasets
+run_dir: ${oc.env:CKPT_HOME}/uma_pat_runs
+account: fair_amaia_cw_explore
+qos: explore         # higher priority than 'lowest' (less preemption)
+partition: learn
+mode: SLURM
+device: CUDA
+ranks_per_node: 8    # H100 nodes: 8 GPUs
+# 0 workers: main-process data loading, CRASH-FREE. The single-GPU benchmark
+# suggested W=2 (~1.7x faster) but overnight data showed W=2 still hits the
+# numba+fork dataloader SIGABRT ~71% of the time (~every 2h/job) -- the 110-step
+# benchmark was too short to reveal it. W=0 avoids forked workers entirely, so
+# jobs run uninterrupted; net throughput on a busy/preempting cluster is better
+# without the constant crash+requeue thrash. Do NOT raise.
+dataloader_workers: 0
+debug: False
+mem_gb: 0
+cpus_per_task: 12    # 8 tasks/node x 12 = 96 <= 128 CPUs/node

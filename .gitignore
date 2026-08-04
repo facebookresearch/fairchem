@@ -87,6 +87,8 @@ celerybeat-schedule
 # dotenv
 .env
 
+.claude
+
 # virtualenv
 venv/
 ENV/
@@ -132,7 +134,6 @@ docs/core/fine-tuning/*.db
 docs/core/quacc*/*
 docs/legacy_tutorials/data/*.extxyz
 docs/**.json
-
 
 node_modules/*
 cache.*.json

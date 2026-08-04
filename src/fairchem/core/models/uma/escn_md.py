@@ -288,6 +288,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         num_layers: int = 2,
         hidden_channels: int = 128,
         norm_type: str = "rms_norm_sh",
+        # Override the over-channel stats divisor of the equivariant RMSNorm (see
+        # layer_norm.py). None = num_channels (standard). A channel-pruned/compacted
+        # sphere model sets this to the ORIGINAL sphere_channels so its norms match
+        # the pre-compaction statistics (Route A); a compaction-aware sphere run sets
+        # it to the TARGET kept width so training and compaction agree (Route B).
+        norm_stats_num_channels: int | None = None,
         act_type: str = "gate",
         ff_type: str = "grid",
         activation_checkpointing: bool = False,
@@ -472,6 +478,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.num_layers = num_layers
         self.hidden_channels = hidden_channels
         self.norm_type = norm_type
+        self.norm_stats_num_channels = norm_stats_num_channels
         self.act_type = act_type
         self.ff_type = ff_type
 
@@ -492,6 +499,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
                 backend=self.backend,
+                norm_stats_num_channels=self.norm_stats_num_channels,
             )
             self.blocks.append(block)
 
@@ -499,6 +507,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.norm_type,
             lmax=self.lmax,
             num_channels=self.sphere_channels,
+            stats_num_channels=self.norm_stats_num_channels,
         )
 
         coefficient_index = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(

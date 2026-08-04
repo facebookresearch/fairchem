@@ -1,0 +1,137 @@
+# Short re-heal (fine-tune) of a COMPACTED channel-pruned checkpoint, to close the
+# small compaction gap (esp. sphere energy) so train == deploy. Standard from-
+# checkpoint training: the compacted inference .pt is loaded via
+# initialize_finetuning_model (any reduced width), then fine-tuned a few hundred/
+# thousand steps at a small LR on the OMol train set, evaluating on val. No pruning
+# callback, no mid-run surgery -- an ordinary training job the pipeline handles.
+#
+#   fairchem -c configs/esen/uma_sm_conserving_omol_4M_reheal.yaml \
+#       reheal_ckpt=/checkpoint/.../sphere_s0.5_clean_inference.pt \
+#       job.scheduler.num_nodes=4
+defaults:
+  - cluster: fair_amaia_cw
+  - dataset: omol_4M
+  - tasks: uma_omol_conserving
+  - element_refs: uma_v1_hof_lin_refs.yaml
+  - _self_
+
+reheal_ckpt: ???        # compacted inference .pt to re-heal (set on CLI)
+reheal_steps: 2000      # short: enough to reabsorb the compaction residual
+reheal_lr: 1e-4         # gentle -- don't undo the trained solution
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 1
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: uma_sm_omol_4M_conserving_reheal
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    project: esen-chanprune-omol
+    entity: null
+    group: reheal
+
+# knobs referenced by dataset / tasks / dataloaders
+max_neighbors: 300
+cutoff_radius: 6
+max_atoms: 1400
+min_atoms: 0
+bf16: False
+cpu_graph: False
+normalizer_rmsd: 1.508
+energy_coef: 10
+force_coef: 5
+omol_forces_key: omol_forces
+exclude_keys: []
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol: ${dataset.omol_train}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol: ${dataset.omol_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      # load the compacted (reduced-width) model + weights from the checkpoint
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+      checkpoint_location: ${reheal_ckpt}
+      overrides:
+        pass_through_head_outputs: True
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: ${reheal_lr}
+      weight_decay: 1e-3
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 0.0
+      lr_min_factor: 0.1
+      epochs: null
+      steps: ${reheal_steps}
+    print_every: 50
+    clip_grad_norm: 100
+    bf16: ${bf16}
+  max_epochs: null
+  max_steps: ${reheal_steps}
+  evaluate_every_n_steps: 500
+  callbacks:
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 1000
+      max_saved_checkpoints: 3

@@ -1,0 +1,23 @@
+# Dense (unpruned) uma_sm conserving OMol baseline, trained from scratch on the
+# amaia CW cluster. This is the dense anchor of the accuracy-latency Pareto front
+# (C=H=128, OMol val E MAE 0.1476). Identical recipe (AdamW 8e-4, 20 epochs) to
+# the channel-pruning sweep (uma_sm_conserving_omol_4M_chanprune.yaml), for
+# apples-to-apples comparison.
+defaults:
+  - uma_sm_conserving_omol_4M
+  - override /cluster: fair_amaia_cw
+  - _self_
+
+job:
+  run_name: uma_sm_omol_4M_conserving_dense
+  logger:
+    project: esen-chanprune-omol
+    entity: null
+    group: dense-baseline
+  scheduler:
+    # base hardcodes qos: h100_ocp_high (ocp cluster); read the amaia cluster's
+    # qos/partition instead. Override job.scheduler.num_nodes=4 on the CLI.
+    num_nodes: 1
+    slurm:
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}

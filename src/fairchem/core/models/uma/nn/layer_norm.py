@@ -27,6 +27,7 @@ def get_normalization_layer(
     eps: float = 1e-5,
     affine: bool = True,
     normalization: str = "component",
+    stats_num_channels: int | None = None,
 ):
     assert norm_type in ["layer_norm", "layer_norm_sh", "rms_norm_sh"]
     if norm_type == "layer_norm":
@@ -34,7 +35,15 @@ def get_normalization_layer(
     elif norm_type == "layer_norm_sh":
         norm_class = EquivariantLayerNormArraySphericalHarmonics
     elif norm_type == "rms_norm_sh":
-        norm_class = EquivariantRMSNormArraySphericalHarmonicsV2
+        # only the RMS-norm variant supports the over-channel stats override
+        return EquivariantRMSNormArraySphericalHarmonicsV2(
+            lmax,
+            num_channels,
+            eps,
+            affine,
+            normalization,
+            stats_num_channels=stats_num_channels,
+        )
     else:
         raise ValueError
     return norm_class(lmax, num_channels, eps, affine, normalization)
@@ -320,11 +329,22 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
         normalization: str = "component",
         centering: bool = True,
         std_balance_degrees: bool = True,
+        stats_num_channels: int | None = None,
     ):
         super().__init__()
 
         self.lmax = lmax
         self.num_channels = num_channels
+        # Channel count used as the divisor for the over-channel reductions (the
+        # centering mean and the normalization mean). Defaults to num_channels
+        # (standard behavior). A channel-pruned/compacted model sets this to the
+        # ORIGINAL width so it reproduces the original statistics: the centering
+        # subtracts a mean over channels -- an additive shift that a multiplicative
+        # affine rescale cannot correct once channels are removed. See
+        # scripts/compact_channels.py (Route A) and ChannelPruningCallback (Route B).
+        self.stats_num_channels = (
+            int(stats_num_channels) if stats_num_channels is not None else num_channels
+        )
         self.eps = eps
         self.affine = affine
         self.centering = centering
@@ -378,7 +398,11 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
 
         if self.centering:
             feature_l0 = feature.narrow(1, 0, 1)
-            feature_l0_mean = feature_l0.mean(dim=2, keepdim=True)  # [N, 1, 1]
+            # mean over channels, but divided by stats_num_channels (= num_channels
+            # by default) so a compacted model matches the original width's shift.
+            feature_l0_mean = (
+                feature_l0.sum(dim=2, keepdim=True) / self.stats_num_channels
+            )  # [N, 1, 1]
             feature_l0 = feature_l0 - feature_l0_mean
             feature = torch.cat(
                 (feature_l0, feature.narrow(1, 1, feature.shape[1] - 1)), dim=1
@@ -397,7 +421,9 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
             else:
                 feature_norm = feature.pow(2).mean(dim=1, keepdim=True)  # [N, 1, C]
 
-        feature_norm = torch.mean(feature_norm, dim=2, keepdim=True)  # [N, 1, 1]
+        feature_norm = (
+            feature_norm.sum(dim=2, keepdim=True) / self.stats_num_channels
+        )  # [N, 1, 1]  (mean over channels, divisor = stats_num_channels)
         feature_norm = (feature_norm + self.eps).pow(-0.5)
 
         if self.affine:
