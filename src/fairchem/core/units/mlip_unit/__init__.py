@@ -31,6 +31,7 @@ def load_predict_unit(
     form_elem_refs: dict | None = None,
     workers: int = 1,
     seed: int = 41,
+    gp_config=None,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -69,6 +70,7 @@ def load_predict_unit(
             form_elem_refs=form_elem_refs,
             num_workers=workers,
             seed=seed,
+            gp_config=gp_config,
         )
     else:
         return MLIPPredictUnit(
