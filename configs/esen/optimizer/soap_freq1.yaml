@@ -1,0 +1,10 @@
+_target_: pytorch_optimizer.SOAP
+_partial_: true
+lr: 8e-4
+betas: [0.95, 0.95]
+shampoo_beta: 0.95
+weight_decay: 1e-4
+precondition_frequency: 1
+precondition_1d: false
+max_precondition_dim: 10000
+eps: 1.0e-8

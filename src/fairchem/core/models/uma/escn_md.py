@@ -79,6 +79,37 @@ ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 AUTO_EDGE_CHUNK_FRACTION = 0.05
 
 
+def _get_no_weight_decay_param_names(model: nn.Module) -> set[str]:
+    no_wd_list = []
+    named_parameters_list = [name for name, _ in model.named_parameters()]
+    for module_name, module in model.named_modules():
+        if isinstance(
+            module,
+            (
+                torch.nn.Linear,
+                SO3_Linear,
+                torch.nn.LayerNorm,
+                EquivariantLayerNormArray,
+                EquivariantLayerNormArraySphericalHarmonics,
+                EquivariantRMSNormArraySphericalHarmonics,
+                EquivariantRMSNormArraySphericalHarmonicsV2,
+            ),
+        ):
+            for parameter_name, _ in module.named_parameters(recurse=False):
+                if (
+                    isinstance(module, (torch.nn.Linear, SO3_Linear))
+                    and "weight" in parameter_name
+                ):
+                    continue
+                global_parameter_name = (
+                    f"{module_name}.{parameter_name}" if module_name else parameter_name
+                )
+                assert global_parameter_name in named_parameters_list
+                no_wd_list.append(global_parameter_name)
+
+    return set(no_wd_list)
+
+
 @dataclass
 class GradRegressConfig:
     """
@@ -825,32 +856,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @torch.jit.ignore
     def no_weight_decay(self) -> set:
-        no_wd_list = []
-        named_parameters_list = [name for name, _ in self.named_parameters()]
-        for module_name, module in self.named_modules():
-            if isinstance(
-                module,
-                (
-                    torch.nn.Linear,
-                    SO3_Linear,
-                    torch.nn.LayerNorm,
-                    EquivariantLayerNormArray,
-                    EquivariantLayerNormArraySphericalHarmonics,
-                    EquivariantRMSNormArraySphericalHarmonics,
-                    EquivariantRMSNormArraySphericalHarmonicsV2,
-                ),
-            ):
-                for parameter_name, _ in module.named_parameters():
-                    if (
-                        isinstance(module, (torch.nn.Linear, SO3_Linear))
-                        and "weight" in parameter_name
-                    ):
-                        continue
-                    global_parameter_name = module_name + "." + parameter_name
-                    assert global_parameter_name in named_parameters_list
-                    no_wd_list.append(global_parameter_name)
-
-        return set(no_wd_list)
+        return _get_no_weight_decay_param_names(self)
 
     @classmethod
     def build_inference_settings(cls, settings: InferenceSettings) -> dict:
@@ -1006,6 +1012,10 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         backbone.force_block = None
         self.regress_config = backbone.regress_config
 
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        return _get_no_weight_decay_param_names(self)
+
     @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
@@ -1111,6 +1121,10 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         self.reduce = reduce
         self.energy_block = nn.Linear(backbone.sphere_channels, 1, bias=True)
 
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        return _get_no_weight_decay_param_names(self)
+
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
@@ -1129,6 +1143,10 @@ class Linear_Force_Head(nn.Module, HeadInterface):
     def __init__(self, backbone: eSCNMDBackbone) -> None:
         super().__init__()
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
+
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        return _get_no_weight_decay_param_names(self)
 
     def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
         # SO3_Linear with lmax=1 requires both L=0 and L=1 as input
@@ -1209,6 +1227,10 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         )
 
         self.l2_linear = SO3_Linear(backbone.sphere_channels, 1, lmax=2)
+
+    @torch.jit.ignore
+    def no_weight_decay(self) -> set[str]:
+        return _get_no_weight_decay_param_names(self)
 
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
