@@ -35,7 +35,10 @@ def compute_normalizer_and_linear_reference(train_path, num_workers):
     dataset = AseDBDataset({"src": str(train_path)})
 
     sample_indices = random.sample(range(len(dataset)), min(100000, len(dataset)))
-    with mp.Pool(num_workers) as pool:
+    # Python 3.14 changed the POSIX default start method from ``fork`` to
+    # ``forkserver``. These workers rely on inheriting the dataset initialized
+    # above, so keep using ``fork`` explicitly.
+    with mp.get_context("fork").Pool(num_workers) as pool:
         outputs = list(
             tqdm(
                 pool.imap(extract_energy_and_forces, sample_indices),
