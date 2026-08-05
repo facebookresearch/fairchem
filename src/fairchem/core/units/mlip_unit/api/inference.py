@@ -139,6 +139,9 @@ class InferenceSettings:
     # MLIPPredictUnit falls back to an unmerged model.
     merge_mole: bool = False
 
+    # SO2 block indices whose unified radial fc2 uses FP16 operands.
+    fp16_radial_fc2_blocks: tuple[int, ...] = ()
+
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
@@ -207,6 +210,25 @@ class InferenceSettings:
             assert (
                 self.base_precision_dtype in ALLOWED_DTYPES
             ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype}"
+        self.fp16_radial_fc2_blocks = tuple(self.fp16_radial_fc2_blocks)
+        if len(set(self.fp16_radial_fc2_blocks)) != len(self.fp16_radial_fc2_blocks):
+            raise ValueError("fp16_radial_fc2_blocks must contain unique indices")
+        if any(
+            type(index) is not int or index < 0 for index in self.fp16_radial_fc2_blocks
+        ):
+            raise ValueError(
+                "fp16_radial_fc2_blocks must contain non-negative integers"
+            )
+        if self.fp16_radial_fc2_blocks and self.execution_mode != "umas_fast_gpu":
+            raise ValueError(
+                "fp16_radial_fc2_blocks requires execution_mode='umas_fast_gpu'"
+            )
+        if self.fp16_radial_fc2_blocks and self.predict_untrained_hessian:
+            raise ValueError("fp16_radial_fc2_blocks does not support Hessians")
+        if self.fp16_radial_fc2_blocks and self.base_precision_dtype != torch.float32:
+            raise ValueError(
+                "fp16_radial_fc2_blocks requires base_precision_dtype=torch.float32"
+            )
 
     def to_omegaconf(self) -> dict:
         """

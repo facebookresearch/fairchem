@@ -17,6 +17,7 @@ CI:     test_gpu_sweep (units shard).
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -60,6 +61,16 @@ def _mock_settings(
         activation_checkpointing=activation_checkpointing,
         external_graph_gen=False,
     )
+
+
+def test_fp16_radial_fc2_rejects_hessian_model():
+    model = torch.nn.Module()
+    model.regress_config = SimpleNamespace(hessian=True)
+    model._inference_settings = InferenceSettings(
+        execution_mode="umas_fast_gpu", fp16_radial_fc2_blocks=(0,)
+    )
+    with pytest.raises(ValueError, match="does not support Hessians"):
+        UMASFastGPUBackend.prepare_model_for_inference(model)
 
 
 @pytest.mark.gpu()
@@ -679,35 +690,47 @@ def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_s
     )
     baseline_out = baseline_predictor.predict(batch.clone())
 
-    # Test configurations: (execution_mode, compile)
+    # Test configurations: (execution_mode, compile, FP16 radial FC2 blocks)
     test_configs = [
-        ("general", True),
-        ("umas_fast_gpu", True),
+        ("general", True, ()),
+        ("umas_fast_gpu", True, ()),
+        ("umas_fast_gpu", True, (0, 1, 2, 3)),
     ]
 
-    for test_mode, test_compile in test_configs:
+    for test_mode, test_compile, fp16_radial_fc2_blocks in test_configs:
         test_settings = InferenceSettings(
             activation_checkpointing=False,
             merge_mole=True,
             external_graph_gen=False,
             execution_mode=test_mode,
             compile=test_compile,
+            fp16_radial_fc2_blocks=fp16_radial_fc2_blocks,
         )
         test_predictor = MLIPPredictUnit(
             checkpoint_pt, "cuda", inference_settings=test_settings
         )
         test_out = test_predictor.predict(batch.clone())
+        if fp16_radial_fc2_blocks:
+            radial = test_predictor.model.module.backbone._unified_radial_mlp
+            assert radial.fp16_fc2_blocks == fp16_radial_fc2_blocks
+            assert radial._fc2_weight_fp16.dtype is torch.float16
 
         # Force comparison
         assert torch.allclose(
-            baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
+            baseline_out["forces"],
+            test_out["forces"],
+            rtol=(0 if fp16_radial_fc2_blocks else 5e-4),
+            atol=(1e-3 if fp16_radial_fc2_blocks else 5e-5),
         ), (
             f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
         )
         # Energy comparison
         assert torch.allclose(
-            baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
+            baseline_out["energy"],
+            test_out["energy"],
+            rtol=(0 if fp16_radial_fc2_blocks else 5e-4),
+            atol=(3e-2 if fp16_radial_fc2_blocks else 5e-5),
         ), (
             f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"

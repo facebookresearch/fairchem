@@ -284,6 +284,12 @@ class UMASFastPytorchBackend(ExecutionBackend):
             raise ValueError(
                 "UMASFastPytorchBackend requires activation_checkpointing=False"
             )
+        if (
+            settings is not None
+            and settings.fp16_radial_fc2_blocks
+            and settings.predict_untrained_hessian
+        ):
+            raise ValueError("fp16_radial_fc2_blocks does not support Hessians")
 
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
@@ -301,6 +307,15 @@ class UMASFastPytorchBackend(ExecutionBackend):
             convert_so2_conv2,
         )
 
+        settings = getattr(model, "_inference_settings", None)
+        fp16_radial_fc2_blocks = tuple(getattr(settings, "fp16_radial_fc2_blocks", ()))
+        if fp16_radial_fc2_blocks and model.regress_config.hessian:
+            raise ValueError("fp16_radial_fc2_blocks does not support Hessians")
+        if fp16_radial_fc2_blocks and max(fp16_radial_fc2_blocks) >= len(model.blocks):
+            raise ValueError(
+                "fp16_radial_fc2_blocks contains an index outside model.blocks"
+            )
+
         for block in model.blocks:
             block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
@@ -308,6 +323,7 @@ class UMASFastPytorchBackend(ExecutionBackend):
         # Create unified radial MLP for batched computation
         rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
         model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+        model._unified_radial_mlp.configure_fp16_fc2(fp16_radial_fc2_blocks)
 
     @staticmethod
     def get_layer_radial_emb(
