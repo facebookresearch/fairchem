@@ -279,9 +279,7 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> list:
         timeout_min=scheduler_cfg.slurm.timeout_hr * 60,
         slurm_partition=scheduler_cfg.slurm.partition,
         gpus_per_node=(
-            0
-            if cfg.job.device_type == DeviceType.CPU
-            else scheduler_cfg.ranks_per_node
+            0 if cfg.job.device_type == DeviceType.CPU else scheduler_cfg.ranks_per_node
         ),
         cpus_per_task=scheduler_cfg.slurm.cpus_per_task,
         tasks_per_node=scheduler_cfg.ranks_per_node,
