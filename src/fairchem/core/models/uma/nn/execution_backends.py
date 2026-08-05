@@ -185,9 +185,8 @@ class ExecutionBackend:
     def permute_wigner_inv_edge_to_node(
         x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         num_nodes: int,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         """
         Rotate M->L and scatter edge messages to nodes.
@@ -197,9 +196,9 @@ class ExecutionBackend:
         Args:
             x_message: Edge message features [E, M, C]
             wigner_inv: Inverse Wigner matrices [E, L, M]
-            edge_index: Edge indices [2, E]
+            scatter_target: Pre-computed local target indices [E]
+                for scattering into node output tensor.
             num_nodes: Total number of nodes (output size)
-            node_offset: Offset for node indices (for chunking)
 
         Returns:
             Node embeddings [N, L, C] accumulated from edge messages
@@ -212,7 +211,7 @@ class ExecutionBackend:
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        new_embedding.index_add_(0, scatter_target, x_rotated)
         return new_embedding
 
     @staticmethod
@@ -220,11 +219,10 @@ class ExecutionBackend:
         x: torch.Tensor,
         radial_output: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         m_0_num_coefficients: int,
         sphere_channels: int,
         rescale_factor: float,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         """
         Edge degree embedding: rotate radial and scatter to nodes.
@@ -236,12 +234,12 @@ class ExecutionBackend:
             radial_output: RadialMLP output [E, m0 * C]
             wigner_inv: Wigner inverse with envelope pre-fused
                 [E, L, m0] or [E, L, L]
-            edge_index: Edge indices [2, E]
+            scatter_target: Pre-computed local target indices [E]
+                for scattering into node output tensor.
             m_0_num_coefficients: Number of m=0 coefficients
                 (3 for lmax=2)
             sphere_channels: Number of channels C
             rescale_factor: Aggregation rescale factor
-            node_offset: Node offset for graph parallelism
 
         Returns:
             Updated node features [N, L, C]
@@ -260,7 +258,7 @@ class ExecutionBackend:
         # Scatter to destination nodes with rescaling
         return x.index_add(
             0,
-            edge_index[1] - node_offset,
+            scatter_target,
             x_edge_embedding / rescale_factor,
         )
 
@@ -389,9 +387,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     def permute_wigner_inv_edge_to_node(
         x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         num_nodes: int,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         from fairchem.core.models.uma.triton import (
             UMASFastGPUPermuteWignerInvEdgeToNode,
@@ -405,7 +402,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        new_embedding.index_add_(0, scatter_target, x_rotated)
         return new_embedding
 
     @staticmethod
@@ -413,11 +410,10 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         x: torch.Tensor,
         radial_output: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         m_0_num_coefficients: int,
         sphere_channels: int,
         rescale_factor: float,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
 
@@ -429,7 +425,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
 
         return x.index_add(
             0,
-            edge_index[1] - node_offset,
+            scatter_target,
             x_edge_embedding / rescale_factor,
         )
 
@@ -470,9 +466,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         g1: torch.Tensor,
         g2: torch.Tensor,
         wigner_inv_envelope: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         num_nodes: int,
-        node_offset: int,
         sphere_channels: int,
     ) -> torch.Tensor:
         """
@@ -488,9 +483,11 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             g1: conv2 m=1 block-GEMM output [E, 4C].
             g2: conv2 m=2 block-GEMM output [E, 2C].
             wigner_inv_envelope: Inverse Wigner (envelope pre-fused) [E, 9, 9].
-            edge_index: Edge indices [2, E].
+            scatter_target: Pre-computed local target indices [E] for
+                scattering into the node output tensor. In the non-GP case
+                this is ``edge_index[1]``; under GP it is the caller's
+                local-partition remap (see Edgewise.forward).
             num_nodes: Total number of nodes (output size).
-            node_offset: Offset for node indices (for graph parallelism).
             sphere_channels: Number of channels C.
 
         Returns:
@@ -506,7 +503,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        new_embedding.index_add_(0, scatter_target, x_rotated)
         return new_embedding
 
 

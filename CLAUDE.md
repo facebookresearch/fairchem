@@ -242,6 +242,32 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `lmdb` - Dataset storage format
 - `ray[serve]>=2.53.0` - Distributed computing
 
+## Testing Gotchas
+
+- Tests that download registered checkpoints must declare their models with a
+  `pretrained` marker. This lets base CI deselect them with `--exclude-models`
+  and routes them to the matching model-sweep job.
+- Freeze inference parameters after inference-specific module replacement.
+  Main's folded-batch linear path removes the former general-backend regression:
+  on one H100, freezing improved compiled general inference by 15-17% and cut
+  peak allocated memory by 27-29% at 100-2,000 atoms. PyTorch 2.13 CPU checks
+  improved by 4% at 32 atoms and were neutral at 1,000 atoms. Custom backward
+  paths must preserve input derivatives independently of parameter gradients.
+- `umas_fast_gpu` custom backward operators do not implement `vmap` batching.
+  Compute Hessians through the per-component loop (`hessian_vmap=False`) when
+  exercising that backend, and ensure inference settings forward that option
+  into the backbone configuration.
+- Set `CI=true` when reproducing CPU CI shards locally. Some multi-GPU graph
+  parallel tests rely on that environment variable for skipping instead of the
+  `gpu` marker, so the CI marker expression alone will still collect them.
+- `graph_parallel_group_size=None` disables graph-parallel setup. A value of
+  `1` intentionally initializes singleton graph- and data-parallel groups and
+  is used to exercise those paths in tests; do not treat it as disabled.
+- Keep the full `AtomicData.clone()` boundary in prediction unless benchmarks
+  justify changing it and every model-side mutation has been audited. Graph
+  parallelism, MOLE preparation, and conservative gradients can replace or
+  mutate input fields, so a selective shallow copy is brittle.
+
 ## Numerical Precision
 
 - Model constructors must not mutate process-wide PyTorch precision settings
