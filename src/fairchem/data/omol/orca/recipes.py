@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 import psutil
-from omdata.orca.calc import (
+from fairchem.data.omol.orca.calc import (
     NBO_FLAGS,
     OPT_PARAMETERS,
     ORCA_BASIS,
