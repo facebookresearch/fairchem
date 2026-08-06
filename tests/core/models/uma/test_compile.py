@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import itertools
 import random
+from contextlib import nullcontext
 from functools import partial
 
 import numpy as np
@@ -61,6 +62,23 @@ def get_diamond_tg_data(neighbors: int, cutoff: float, size: int, device: str):
     return ase_to_graph(atoms, neighbors, cutoff).to(device)
 
 
+def get_batched_tg_data(
+    neighbors: int, cutoff: float, device: str, sizes: tuple[int, int] = (1, 2)
+):
+    data = []
+    for size in sizes:
+        atoms = build.bulk("Cu", "fcc", a=3.58, cubic=True).repeat((size, size, size))
+        sample = AtomicData.from_ase(
+            atoms, max_neigh=neighbors, radius=cutoff, r_edges=True
+        )
+        sample.natoms = torch.tensor(len(atoms))
+        sample.charge = torch.LongTensor([0])
+        sample.spin = torch.LongTensor([0])
+        sample.dataset = "omol"
+        data.append(sample)
+    return data_list_collater(data, otf_graph=True).to(device)
+
+
 def get_backbone_config(cutoff: float, otf_graph=False, autograd: bool = True):
     return {
         "max_num_elements": MAX_ELEMENTS,
@@ -109,6 +127,30 @@ def get_escn_md_full(
     model = HydraModelV2(backbone, heads).to(device)
     model.eval()
     return model
+
+
+@pytest.mark.gpu()
+@pytest.mark.compile_gpu()
+def test_compile_batched_external_graph(compile_reset_state):
+    model = get_escn_md_backbone(cutoff=6.0, otf_graph=False, device="cuda")
+    compiled = torch.compile(model._generate_graph, fullgraph=True, dynamic=True)
+
+    for index, sizes in enumerate(((1, 2), (2, 3))):
+        data = get_batched_tg_data(
+            neighbors=300, cutoff=6.0, device="cuda", sizes=sizes
+        )
+        expected = model._generate_graph(data.clone())
+        context = (
+            torch._dynamo.config.patch(error_on_recompile=True)
+            if index
+            else nullcontext()
+        )
+        with context:
+            actual = compiled(data)
+        torch.testing.assert_close(
+            actual["edge_distance_vec"], expected["edge_distance_vec"]
+        )
+        torch.testing.assert_close(actual["edge_distance"], expected["edge_distance"])
 
 
 # compile tests take a long time

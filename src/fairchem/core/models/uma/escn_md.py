@@ -672,7 +672,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
-                    data_dict["nedges"], dim=0
+                    data_dict["nedges"],
+                    dim=0,
+                    output_size=data_dict["cell_offsets"].shape[0],
                 )
                 shifts = torch.einsum(
                     "ij,ijk->ik",
