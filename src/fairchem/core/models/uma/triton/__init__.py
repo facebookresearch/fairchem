@@ -12,6 +12,7 @@ from __future__ import annotations
 # are used, as they call torch.ops.fairchem._kernel_* in forward/backward
 import fairchem.core.models.uma.triton.custom_ops  # noqa: F401
 
+from .fused_wigner import wigner_conv1_fused_op, wigner_inv_conv2_fused_op
 from .node_to_edge_wigner_permute import (
     NodeToEdgeWignerPermuteFunction as UMASFastGPUNodeToEdgeWignerPermute,
 )
@@ -22,4 +23,6 @@ from .permute_wigner_inv_edge_to_node import (
 __all__ = [
     "UMASFastGPUNodeToEdgeWignerPermute",
     "UMASFastGPUPermuteWignerInvEdgeToNode",
+    "wigner_conv1_fused_op",
+    "wigner_inv_conv2_fused_op",
 ]

@@ -47,6 +47,7 @@ runner:
     tasks: ${tasks}
     model:
       _target_: fairchem.core.models.base.HydraModel
+      model_id: UMA-S-1.2
       backbone: ${backbone}
       heads: ${heads}
       pass_through_head_outputs: True

@@ -9,7 +9,7 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.10, <3.14"
 dependencies = [
-    "torch~=2.8.0",
+    "torch~=2.13.0",
     "pytorch-optimizer==3.10.1",
     "ray[serve]>=2.53.0",
     "numpy>=1.26.4,<2",
@@ -26,7 +26,7 @@ dependencies = [
     "requests",
     "orjson",
     "tqdm",
-    "submitit",
+    "submitit>=1.5.4",
     "hydra-core",
     "torchtnt",
     "pyyaml",

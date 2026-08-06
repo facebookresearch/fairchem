@@ -324,7 +324,6 @@ class HydraInterfaceMixin:
 
         elif task.property == "hessian":
             regress_config.hessian = True
-            regress_config.hessian_vmap = True
             # Hessian requires forces with create_graph=True
             if not regress_config.direct_forces:
                 regress_config.forces = True
@@ -397,6 +396,9 @@ class HydraModel(nn.Module, HydraInterfaceMixin):
             raise RuntimeError(
                 "Backbone not specified and not found in the starting checkpoint"
             )
+
+        # Propagate the generation id so the backbone can apply version-specific behavior.
+        self.backbone.model_id = self.model_id
 
         if freeze_backbone:
             for param in self.backbone.parameters():
