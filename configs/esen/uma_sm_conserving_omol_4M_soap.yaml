@@ -1,11 +1,30 @@
 defaults:
   - uma_sm_conserving_omol_4M
   - optimizer: soap_freq1
+  - override cluster: fair_amaia_cw
   - _self_
+
+# SOAP (pytorch_optimizer.SOAP) reaches AdamW's val loss in ~5 epochs, so the
+# inherited 20-epoch cosine is re-fit to a 5-epoch budget. Warmup is lengthened
+# (0.15 epoch, start at 0.1x) because SOAP's preconditioner needs a few hundred
+# steps of statistics before the peak LR is safe; peak LR (8e-4) and the anneal
+# floor (1% of peak) are kept from the base.
+epochs: 5
 
 job:
   run_name: uma_sm_omol_4M_0experts_conserving_soap_freq1
+  logger:
+    entity: null
+    project: esen-chanprune-omol
 
 runner:
   train_eval_unit:
     optimizer_fn: ${optimizer}
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.1
+      warmup_epochs: 0.15
+      lr_min_factor: 0.01
+      epochs: ${epochs}
+      steps: ${steps}

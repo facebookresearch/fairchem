@@ -1,8 +1,8 @@
 # Dense (unpruned) uma_sm conserving OMol baseline, trained from scratch on the
 # amaia CW cluster. This is the dense anchor of the accuracy-latency Pareto front
-# (C=H=128, OMol val E MAE 0.1476). Identical recipe (AdamW 8e-4, 20 epochs) to
-# the channel-pruning sweep (uma_sm_conserving_omol_4M_chanprune.yaml), for
-# apples-to-apples comparison.
+# (C=H=128). Train it at the SAME optimizer/epochs as the pruning run you compare
+# against (the default PAT recipe is now SOAP/10ep,
+# uma_sm_conserving_omol_4M_chanprune_soap.yaml) so the comparison is apples-to-apples.
 defaults:
   - uma_sm_conserving_omol_4M
   - override /cluster: fair_amaia_cw

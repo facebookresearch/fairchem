@@ -69,6 +69,14 @@ def main():
         OmegaConf.update(
             reduced_cfg, "backbone.norm_stats_num_channels", int(ns), force_add=True
         )
+        # persist the ORIGINAL width so the reduced norms add back the dropped
+        # channels' centering energy exactly on reload (see layer_norm.py).
+        OmegaConf.update(
+            reduced_cfg,
+            "backbone.norm_stats_centering_channels",
+            int(full),
+            force_add=True,
+        )
     reduced_cfg = OmegaConf.to_container(
         reduced_cfg, resolve=True
     )  # save as plain dict

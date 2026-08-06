@@ -28,6 +28,7 @@ def get_normalization_layer(
     affine: bool = True,
     normalization: str = "component",
     stats_num_channels: int | None = None,
+    stats_centering_channels: int | None = None,
 ):
     assert norm_type in ["layer_norm", "layer_norm_sh", "rms_norm_sh"]
     if norm_type == "layer_norm":
@@ -43,6 +44,7 @@ def get_normalization_layer(
             affine,
             normalization,
             stats_num_channels=stats_num_channels,
+            stats_centering_channels=stats_centering_channels,
         )
     else:
         raise ValueError
@@ -330,6 +332,7 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
         centering: bool = True,
         std_balance_degrees: bool = True,
         stats_num_channels: int | None = None,
+        stats_centering_channels: int | None = None,
     ):
         super().__init__()
 
@@ -344,6 +347,19 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
         # scripts/compact_channels.py (Route A) and ChannelPruningCallback (Route B).
         self.stats_num_channels = (
             int(stats_num_channels) if stats_num_channels is not None else num_channels
+        )
+        # Physical channel width whose centering energy the normalization must
+        # account for. Defaults to num_channels (no correction). When a pruned model
+        # is COMPACTED to a smaller width, the dropped channels were zero at the norm
+        # input but centering turns each into (-mean); the full-width model then sums
+        # that (-mean)^2 into the normalization denominator. The compacted model has
+        # physically removed those channels, so it adds the missing
+        # (stats_centering_channels - num_channels) * factor * mean^2 back exactly
+        # (mean is reconstructable from the kept channels). See compact_channels.py.
+        self.stats_centering_channels = (
+            int(stats_centering_channels)
+            if stats_centering_channels is not None
+            else num_channels
         )
         self.eps = eps
         self.affine = affine
@@ -384,6 +400,18 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
         else:
             self.balance_degree_weight = None
 
+        # Per-(dropped-)channel weight of the l=0 centering energy in the
+        # normalization reduction, used only by the compaction correction below.
+        # Matches how a single channel that holds (-mean) at l=0 (and 0 elsewhere)
+        # contributes to feature_norm: balance_degree_weight[0] for the balanced
+        # component norm, 1/(lmax+1)^2 for the plain component mean, 1 for "norm".
+        if self.std_balance_degrees:
+            self.centering_leak_factor = float(balance_degree_weight[0, 0])
+        elif self.normalization == "component":
+            self.centering_leak_factor = 1.0 / ((self.lmax + 1) ** 2)
+        else:  # "norm": sum over the sphere basis, no averaging
+            self.centering_leak_factor = 1.0
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(lmax={self.lmax}, num_channels={self.num_channels}, eps={self.eps}, centering={self.centering}, std_balance_degrees={self.std_balance_degrees})"
 
@@ -396,6 +424,7 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
 
         feature = node_input
 
+        feature_l0_mean = None
         if self.centering:
             feature_l0 = feature.narrow(1, 0, 1)
             # mean over channels, but divided by stats_num_channels (= num_channels
@@ -421,9 +450,19 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
             else:
                 feature_norm = feature.pow(2).mean(dim=1, keepdim=True)  # [N, 1, C]
 
+        feature_norm = feature_norm.sum(dim=2, keepdim=True)  # [N, 1, 1]
+        # Compaction correction: a full-width model sums the (dropped) channels'
+        # post-centering (-mean)^2 into this reduction. A model compacted to a
+        # smaller width has physically removed those channels, so add their exact
+        # contribution back (mean is reconstructable from the surviving channels).
+        n_extra = self.stats_centering_channels - self.num_channels
+        if self.centering and n_extra > 0:
+            feature_norm = feature_norm + (
+                n_extra * self.centering_leak_factor * feature_l0_mean.pow(2)
+            )
         feature_norm = (
-            feature_norm.sum(dim=2, keepdim=True) / self.stats_num_channels
-        )  # [N, 1, 1]  (mean over channels, divisor = stats_num_channels)
+            feature_norm / self.stats_num_channels
+        )  # (mean over channels, divisor = stats_num_channels)
         feature_norm = (feature_norm + self.eps).pow(-0.5)
 
         if self.affine:

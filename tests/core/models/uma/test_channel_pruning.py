@@ -106,9 +106,10 @@ def _energy(out) -> torch.Tensor:
     return out["omol_energy"]["energy"]
 
 
-# sphere compaction is approximate (RMSNorm centering over the dropped channels,
-# absorbed by the heal phase in real training and by the norm-stats override).
-_TOL = {"sphere": 5e-2}
+# sphere compaction is output-EXACT: the reduced norms carry stats_centering_channels
+# = original width, so they add back the dropped channels' RMSNorm-centering energy
+# (see layer_norm.py). Residual is pure float32 arithmetic noise (~1e-6).
+_TOL = {"sphere": 1e-4}
 
 
 @pytest.mark.parametrize("mode", ["sphere"])
@@ -188,15 +189,13 @@ def test_compacted_equivariance(model_and_cfg, mode):
     assert float((_forces(rot) - _forces(base) @ r.T).abs().max()) < 1e-4
 
 
-def test_routeb_sphere_compaction_near_exact(seed_fixture):
+def test_routeb_sphere_compaction_exact(seed_fixture):
     """
-    Route B: with the RMSNorm over-channel stats set to the kept width
-    (norm_stats_num_channels), the compacted norm reproduces the pruned model's
-    centering + normalization, removing the dominant sphere-compaction error (the
-    RMSNorm-centering shift). The result is NEAR-EXACT -- far tighter than the naive
-    sphere tolerance (5e-2) -- and round-trips as a uniform sphere_channels=K model.
-    (A small residual ~1e-3 remains from the sphere-specific SO2/radial channel
-    slicing, absorbed by the heal phase.)
+    Route B: the RMSNorm over-channel stats divisor is set to the kept width
+    (norm_stats_num_channels) AND the reduced norms carry stats_centering_channels
+    = the original width, so the compacted model reproduces the pruned model's
+    centering + normalization EXACTLY. It round-trips as a uniform
+    sphere_channels=K model with only float32 arithmetic noise.
     """
     kept = 12  # sphere_channels 16 -> 12
     cfg = _routeb_cfg(kept)
@@ -213,9 +212,41 @@ def test_routeb_sphere_compaction_near_exact(seed_fixture):
     assert rep["kept"] == kept
     assert cm.backbone.sphere_channels == kept  # uniform-width, standard-loadable
     out = cm(_sample())
-    # near-exact: far tighter than the naive sphere APPROX tolerance (_TOL 5e-2)
-    assert float((_forces(out) - _forces(ref)).abs().max()) < 2e-3
-    assert float((_energy(out) - _energy(ref)).abs().max()) < 1e-2
+    assert float((_forces(out) - _forces(ref)).abs().max()) < 1e-4
+    assert float((_energy(out) - _energy(ref)).abs().max()) < 1e-4
+
+
+def test_centering_correction_is_what_makes_compaction_exact(seed_fixture):
+    """
+    The stats_centering_channels correction is load-bearing: WITHOUT it the
+    compacted model drifts (dropped channels' RMSNorm-centering energy is missing
+    from the normalization denominator); WITH it the compaction is exact. Prune a
+    scattered keep set, compact, and compare both norms head-to-head.
+    """
+    cfg = _model_cfg()
+    model = hydra.utils.instantiate(cfg)
+    model.eval()
+
+    imp = CP.channel_importance(model, "sphere")
+    drop = torch.argsort(imp)[:6]  # drop 6/16 -> scattered keep set of 10
+    CP.apply_channel_mask(model, "sphere", drop)
+    ref = model(_sample())
+
+    # correct: reduced norms know the original width -> add back dropped centering
+    cm, rep = compact_channels.compact(model, cfg, "sphere")
+    cm.eval()
+    assert rep["kept"] == 10
+    out = cm(_sample())
+    assert float((_forces(out) - _forces(ref)).abs().max()) < 1e-4
+    assert float((_energy(out) - _energy(ref)).abs().max()) < 1e-4
+
+    # ablate the correction: force stats_centering_channels == num_channels on every
+    # reduced norm -> the missing dropped-channel term reappears and outputs drift.
+    for m in cm.modules():
+        if hasattr(m, "stats_centering_channels"):
+            m.stats_centering_channels = m.num_channels
+    out_bad = cm(_sample())
+    assert float((_forces(out_bad) - _forces(ref)).abs().max()) > 1e-3
 
 
 def test_norm_stats_default_is_behavior_preserving(seed_fixture):

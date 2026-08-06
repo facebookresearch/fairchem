@@ -1,0 +1,108 @@
+# Standalone GPU eval of a (compacted or pruned) OMol conserving checkpoint on the
+# omol_4M val split, on the fair_amaia_cw (CoreWeave H100) cluster. Reproduces the
+# aggregate E/F MAE the training runs logged, so a compacted native checkpoint can
+# be compared apples-to-apples against its recorded pre-compaction numbers.
+#
+#   scripts/fairchem_dm1_online.sh -c configs/esen/eval_omol_4M.yaml \
+#       checkpoint_path=/path/to/inference_ckpt.pt job.run_name=eval_xxx
+#
+# tasks (with metrics + element_references) are read from the checkpoint itself.
+defaults:
+  - cluster: fair_amaia_cw
+  - _self_
+
+# path to the inference checkpoint to evaluate (override on the CLI)
+checkpoint_path: ???
+
+# match the training/eval graph + referencing knobs (see uma_sm_conserving_omol_4M)
+max_neighbors: 300
+cutoff_radius: 6
+max_atoms: 1400
+min_atoms: 0
+cpu_graph: False
+omol_forces_key: omol_forces
+val_sample_n: 20000
+snapshot_dir: omol/250430-release
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 1
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: eval_omol_4M
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: null
+    project: esen-chanprune-omol
+    group: compaction-eval
+
+exclude_keys: []
+
+tasks:
+  _target_: fairchem.core.units.mlip_unit.utils.load_tasks
+  checkpoint_location: ${checkpoint_path}
+
+# only the main val split (what the recorded aggregate corresponds to)
+eval_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol:
+      splits:
+        val:
+          sample_n: ${val_sample_n}
+          src: ${cluster.data_root_dir}/${snapshot_dir}/val
+      format: ase_db
+      a2g_args:
+        molecule_cell_size: 120.0
+        r_energy: True
+        r_forces: True
+        r_data_keys: ['spin', 'charge']
+        r_edges: ${cpu_graph}
+        radius: ${cutoff_radius}
+        max_neigh: ${max_neighbors}
+      key_mapping:
+        energy: omol_energy
+        forces: ${omol_forces_key}
+      transforms:
+        common_transform:
+          dataset_name: omol
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${eval_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+runner:
+  _target_: fairchem.core.components.evaluate.eval_runner.EvalRunner
+  dataloader: ${eval_dataloader}
+  eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.load_inference_model
+      checkpoint_location: ${checkpoint_path}
+      return_checkpoint: False
+      use_ema: True

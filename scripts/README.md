@@ -7,6 +7,12 @@ that runs dense and narrower (real latency + memory win, no sparse kernels).
 
 Full analysis and results: the accompanying `channel-pruning-inference-report.md` write-up.
 
+> **Status (2026-08-06): project closed out.** Recommended recipe:
+> **SOAP, 10 epochs** — `../configs/esen/uma_sm_conserving_omol_4M_chanprune_soap.yaml`.
+> The earlier AdamW pruning config was retired in favour of it: SOAP/10ep beats AdamW/20ep
+> across the whole Pareto front in both energy and forces at half the compute (see
+> **Best results** below).
+
 > Only the **sphere** width is supported. `hidden` / combined variants were evaluated and dropped
 > (strictly dominated); see the write-up.
 
@@ -23,48 +29,62 @@ Full analysis and results: the accompanying `channel-pruning-inference-report.md
 
 K must be even (charge/spin embedding requirement); the values above already are.
 
-## Reference accuracy (OMol val)
+## Best results (matched Pareto sweep, 2026-08-06)
 
-What to expect at the recommended budget. `val loss` is the combined weighted objective logged as
-`val/loss` (energy_coef·per-atom-E + force_coef·L2-force); `F cos-sim` is `omol_forces` cosine
-similarity.
+The recommended recipe — **SOAP, 10 epochs** — dominates the prior **AdamW, 20 epochs** recipe
+across the entire front: lower energy AND force error at every width, using **half the training
+steps** (~50k vs ~101k). `F cos-sim` is `omol_forces` cosine similarity; `val loss` is the combined
+weighted objective logged as `val/loss` (energy_coef·per-atom-E + force_coef·L2-force). All values
+are aggregate OMol val at end of training.
 
-All rows are trained at the same **30-epoch** budget (fair comparison). `ΔE` is vs dense@30ep.
+| width | speedup¹ | recipe | E MAE (eV) | F MAE (eV/Å) | F cos-sim | val loss |
+|---|---:|---|---:|---:|---:|---:|
+| dense · C=128 | 1.00× | **SOAP 10ep** | **0.1163** | **0.0110** | **0.9948** | **0.0956** |
+|               |       | AdamW 20ep    | 0.1476     | 0.0131     | 0.9935     | 0.1117     |
+| s0.25 · C=96  | 1.17× | **SOAP 10ep** | **0.1240** | **0.0116** | **0.9944** | **0.1008** |
+|               |       | AdamW 20ep    | 0.1558     | 0.0138     | 0.9929     | 0.1176     |
+| s0.50 · C=64  | 1.45× | **SOAP 10ep** | **0.1443** | **0.0130** | **0.9933** | **0.1113** |
+|               |       | AdamW 20ep    | 0.1705     | 0.0148     | 0.9922     | 0.1269     |
 
-| config | E MAE (eV) | F MAE (eV/Å) | F cos-sim | val loss | ΔE vs dense |
-|---|---:|---:|---:|---:|---:|
-| dense · C=128 | 0.1298 | 0.0120 | 0.9942 | 0.1065 | — |
-| s0.25 · C=96 | 0.1357 | 0.0126 | 0.9938 | 0.1103 | +4.5% |
-| s0.50 · C=64 | 0.1486 | 0.0136 | 0.9931 | 0.1184 | +14.5% |
-| s0.625 · C=48 | 0.1667 | 0.0147 | 0.9922 | 0.1287 | +28.4% |
+¹ dense-inference latency speedup vs C=128 @2049 atoms; depends only on the compacted width.
 
-Pruning has a **real, monotonic accuracy cost** at matched budget — it does not reach dense
-accuracy at equal compute; the payoff is memory + large-system latency (see the write-up). `C=96`
-is the mild-cut sweet spot (+4.5% E for −24% params / −17% mem / ~1.15×); `C=64` trades +14.5% E for
-−34% mem / up to 1.45×. `C=48` (+28%) is past the useful frontier — don't ship it. **Always train
-the dense baseline at the same `epochs=`**: +10 epochs improves every width ~12%, so a longer budget
-raises the whole curve without shrinking the pruning gap.
+Findings from the front:
+- **SOAP/10ep is the Pareto frontier** — strictly below AdamW/20ep in E, F, cos-sim and val loss at
+  every width, at ~½ the compute. SOAP/5ep (not shown) is *undertrained*, not a bad SOAP×pruning
+  interaction: 5 epochs starves the healing phase (schedule is in step-fractions), so its pruning
+  penalty is inflated (+42 meV at s0.5 vs +28 meV at 10ep). Do not judge SOAP at 5 epochs.
+- Pruning still has a **real, monotonic accuracy cost** at matched budget — it does not reach dense
+  accuracy at equal compute; the payoff is memory + large-system latency (see the write-up). `C=96`
+  is the mild-cut sweet spot (+7.7 meV E for −24% params / −17% mem / ~1.15×); `C=64` is the
+  compression frontier (+28 meV E for −34% mem / up to 1.45×). `C=48` does not recover even at 30 ep
+  — past the useful frontier, don't ship it.
+- **Always train the dense baseline at the same optimizer + `epochs=`** as the pruned run: a
+  longer/stronger budget lifts the whole curve without shrinking the pruning gap.
+
+> These are pre-compaction OMol val numbers; the RMSNorm centering-leak fix makes sphere compaction
+> output-exact, so the compacted checkpoints reproduce them.
 
 ## Pipeline
 
 ### 1. Train (prune + heal) — sphere at a chosen sparsity
 
 ```bash
-fairchem -c configs/esen/uma_sm_conserving_omol_4M_chanprune.yaml \
-    channel_target_sparsity=0.5 \
-    channel_norm_stats_num_channels=64 \   # = K; Route B → near-exact compaction
-    epochs=30 \                            # ~1.5× the dense budget (closes the prune gap)
+fairchem -c configs/esen/uma_sm_conserving_omol_4M_chanprune_soap.yaml \
+    channel_target_sparsity=0.5 \          # 0.25 -> C=96, 0.5 -> C=64
     job.scheduler.num_nodes=4
 ```
 
-- `channel_target_sparsity` — the only knob you normally change. Set `channel_norm_stats_num_channels`
-  to the matching **K** (see table) so the RMSNorm keeps its over-channel statistics at the kept
-  width during training (**Route B**) — the compacted model then matches near-exactly.
-- **`epochs=30`** matters: pruned models need ~1.5× the dense epoch budget to re-converge after the
-  channels are removed. At the default 20 ep the s0.5 gap is ~+15%; at 30 ep it is small.
+- `channel_target_sparsity` — the only knob you normally change.
+- **Optimizer + budget are baked into the config: SOAP, 10 epochs** (~50k steps at 4 nodes). This is
+  the frontier recipe (beats AdamW/20ep everywhere at half the compute — see Best results). The
+  budget is spent mostly on *healing*; do not drop below 10 epochs.
+- **Compaction is output-exact.** The RMSNorm centering-leak fix means standard training
+  (`channel_norm_stats_num_channels=null`, the default) compacts exactly — you no longer need the
+  old Route-B (`channel_norm_stats_num_channels=K`) trick, and step 3 (re-heal) is essentially never
+  required.
 - The `ChannelPruningCallback` runs the schedule automatically: dense warmup
   (`channel_warmup_frac=0.05`) → cubic prune ramp → **heal-freeze** from `channel_healing_start_frac`
-  (0.5; its exact value is noise). Uses a plain AdamW — no custom optimizer.
+  (0.5; its exact value is noise).
 - Not on the `fair_amaia_cw` cluster? Override `override /cluster: <yours>` (or run locally with
   `job.device_type=CPU` for a smoke test).
 
@@ -87,9 +107,10 @@ sliced weights, persists the norm-stats divisor, and round-trips through the sta
 `MLIPPredictUnit` / `FAIRChemCalculator` path. The result is a **standard reduced-width checkpoint**
 (deployable as-is). `compact_channels.py` holds the reusable compaction logic.
 
-### 3. (Optional) Re-heal — close the last compaction residual
+### 3. (Optional, rarely needed) Re-heal — close the last compaction residual
 
-Only needed if you did *not* train Route B, or want to squeeze the last ~1e-3 eV/Å:
+Compaction is now output-exact, so this is essentially never required. Kept only for old
+checkpoints trained before the RMSNorm fix, or to squeeze a last ~1e-3 eV/Å:
 
 ```bash
 fairchem -c configs/esen/uma_sm_conserving_omol_4M_reheal.yaml \
@@ -118,7 +139,7 @@ python scripts/bench_md_latency.py dense_inference.pt sphere_sXX_compact_inferen
 | file | role |
 |---|---|
 | `../src/fairchem/core/models/uma/channel_pruning.py` | `ChannelPruningCallback` + sphere spec / mask logic |
-| `../configs/esen/uma_sm_conserving_omol_4M_chanprune.yaml` | training config (prune + heal) |
+| `../configs/esen/uma_sm_conserving_omol_4M_chanprune_soap.yaml` | training config (prune + heal) — **SOAP, 10 ep, default recipe** |
 | `../configs/esen/uma_sm_conserving_omol_4M_reheal.yaml` | optional post-compaction re-heal |
 | `../configs/esen/uma_sm_conserving_omol_4M_dense.yaml` | dense baseline (train at matched `epochs=` for a fair comparison) |
 | `compact_channels.py` | compaction logic (importlib-loaded by the driver) |

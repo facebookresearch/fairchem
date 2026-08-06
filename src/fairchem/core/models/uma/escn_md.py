@@ -325,6 +325,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # the pre-compaction statistics (Route A); a compaction-aware sphere run sets
         # it to the TARGET kept width so training and compaction agree (Route B).
         norm_stats_num_channels: int | None = None,
+        # Physical sphere width whose centering energy the RMSNorm normalization must
+        # account for. None = num_channels (no correction). A model COMPACTED from a
+        # pruned checkpoint sets this to the ORIGINAL sphere_channels so the reduced
+        # norms add back the dropped channels' centering contribution exactly (see
+        # layer_norm.py and scripts/compact_channels.py).
+        norm_stats_centering_channels: int | None = None,
         act_type: str = "gate",
         ff_type: str = "grid",
         activation_checkpointing: bool = False,
@@ -510,6 +516,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.hidden_channels = hidden_channels
         self.norm_type = norm_type
         self.norm_stats_num_channels = norm_stats_num_channels
+        self.norm_stats_centering_channels = norm_stats_centering_channels
         self.act_type = act_type
         self.ff_type = ff_type
 
@@ -531,6 +538,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
                 backend=self.backend,
                 norm_stats_num_channels=self.norm_stats_num_channels,
+                norm_stats_centering_channels=self.norm_stats_centering_channels,
             )
             self.blocks.append(block)
 
@@ -539,6 +547,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             lmax=self.lmax,
             num_channels=self.sphere_channels,
             stats_num_channels=self.norm_stats_num_channels,
+            stats_centering_channels=self.norm_stats_centering_channels,
         )
 
         coefficient_index = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(

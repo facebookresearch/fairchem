@@ -37,7 +37,9 @@ def infer_keep_channels(model, mode: str, tol: float = 1e-12) -> torch.Tensor:
     return (imp > tol).nonzero(as_tuple=True)[0]
 
 
-def _reduced_model(model_cfg, keep: torch.Tensor, norm_stats=None):
+def _reduced_model(
+    model_cfg, keep: torch.Tensor, norm_stats=None, centering_stats=None
+):
     """Instantiate a fresh model with sphere_channels reduced to len(keep)."""
     import hydra
 
@@ -49,6 +51,16 @@ def _reduced_model(model_cfg, keep: torch.Tensor, norm_stats=None):
     if norm_stats is not None:
         OmegaConf.update(
             cfg, "backbone.norm_stats_num_channels", int(norm_stats), force_add=True
+        )
+    # the RMSNorm normalization must still account for the centering energy of the
+    # channels we physically removed -> tell the reduced norms the ORIGINAL width so
+    # they add that contribution back exactly (see layer_norm.py).
+    if centering_stats is not None:
+        OmegaConf.update(
+            cfg,
+            "backbone.norm_stats_centering_channels",
+            int(centering_stats),
+            force_add=True,
         )
     return hydra.utils.instantiate(cfg)
 
@@ -81,11 +93,20 @@ def compact(
     # This reproduces the norm centering + normalization EXACTLY, so no approximate
     # sqrt(C/K) affine rescale is needed. `norm_stats` None => old norm => fall back.
     norm_stats = None
+    centering_stats = None
     if mode in ("sphere", "sphere_channels"):
         bb = model.backbone if hasattr(model, "backbone") else model
         norm_stats = getattr(bb.norm, "stats_num_channels", None)
+        # original physical width -> the reduced norms add back the dropped
+        # channels' centering energy exactly (makes compaction output-preserving).
+        # Only meaningful for a norm that supports the over-channel stats override;
+        # an ancient norm without it falls back to the approximate sqrt(C/K) rescale.
+        if norm_stats is not None:
+            centering_stats = bb.sphere_channels
 
-    new = _reduced_model(model_cfg, keep, norm_stats=norm_stats)
+    new = _reduced_model(
+        model_cfg, keep, norm_stats=norm_stats, centering_stats=centering_stats
+    )
     dst = dict(new.named_parameters())
 
     # sphere: how the csd front-end (charge/spin/dataset embeddings + mix_csd) is
