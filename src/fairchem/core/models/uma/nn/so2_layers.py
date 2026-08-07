@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import Linear
 
+from .matmul import linear_with_folded_batch
 from .radial import RadialMLP
 
 if TYPE_CHECKING:
@@ -64,7 +65,10 @@ class SO2_m_Conv(torch.nn.Module):
         self.fc.weight.data.mul_(1 / math.sqrt(2))
 
     def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x_m = self.fc(x_m)
+        if type(self.fc) is Linear:
+            x_m = linear_with_folded_batch(x_m, self.fc.weight, self.fc.bias)
+        else:
+            x_m = self.fc(x_m)
         x_r_0, x_i_0, x_r_1, x_i_1 = x_m.reshape(
             x_m.shape[0], -1, self.out_channels_half
         ).split(1, dim=1)

@@ -137,13 +137,17 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
 
         if settings.compile:
             if settings.max_atoms is None:
-                raise ValueError(
-                    "max_atoms must be set in InferenceSettings when compile=True. "
-                    "AllScAIP requires padding to a fixed size for torch.compile."
+                logging.warning(
+                    "AllScAIP requires max_atoms to compile with fixed-size "
+                    "padding. Disabling compilation because max_atoms is None."
                 )
-            overrides["use_compile"] = True
-            overrides["use_padding"] = True
-            overrides["max_atoms"] = settings.max_atoms
+                settings.compile = False
+                overrides["use_compile"] = False
+                overrides["use_padding"] = False
+            else:
+                overrides["use_compile"] = True
+                overrides["use_padding"] = True
+                overrides["max_atoms"] = settings.max_atoms
         else:
             overrides["use_compile"] = False
             overrides["use_padding"] = False

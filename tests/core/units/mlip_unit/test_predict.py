@@ -36,6 +36,7 @@ from ase.data import chemical_symbols
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.common import distutils
+from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.uma.compat import UMA_1P1_MODEL_ID
@@ -258,7 +259,12 @@ def test_multiple_dataset_predict(internal_graph_gen_version, pretrained_checkpo
 
 
 def _test_parallel_predict_unit_impl(
-    workers, device, checkpointing, graph_gen_version, pretrained_checkpoint
+    workers,
+    device,
+    checkpointing,
+    graph_gen_version,
+    pretrained_checkpoint,
+    gp_mode=None,
 ):
     """Implementation of parallel predict unit test."""
     seed = 42
@@ -281,6 +287,7 @@ def _test_parallel_predict_unit_impl(
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
+        gp_config=gp_mode,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -310,47 +317,68 @@ def _test_parallel_predict_unit_impl(
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (2, False, 2),
-        (1, False, 3),
-        (1, True, 3),
-        (2, False, 3),
+        (1, False, 2, None),
+        (2, False, 2, None),
+        (1, False, 3, None),
+        (1, True, 3, None),
+        (2, False, 3, None),
+        (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        (
+            2,
+            False,
+            2,
+            GraphParallelConfig(mode="all_to_all", partition="index_split"),
+        ),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_parallel_predict_unit_cpu(
-    workers, checkpointing, graph_gen_version, pretrained_checkpoint
+    workers, checkpointing, graph_gen_version, gp_mode, pretrained_checkpoint
 ):
     _test_parallel_predict_unit_impl(
-        workers, "cpu", checkpointing, graph_gen_version, pretrained_checkpoint
+        workers, "cpu", checkpointing, graph_gen_version, pretrained_checkpoint, gp_mode
     )
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing, graph_gen_version",
+    "workers, checkpointing, graph_gen_version, gp_mode",
     [
-        (1, False, 2),
-        (1, True, 2),
-        (1, True, 3),
-        (1, False, 3),
-        # (2, False),
-        # (2, True),
+        (1, False, 2, None),
+        (1, True, 2, None),
+        (1, True, 3, None),
+        (1, False, 3, None),
+        (1, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        (
+            1,
+            False,
+            2,
+            GraphParallelConfig(mode="all_to_all", partition="index_split"),
+        ),
+        # For local 8-GPU runs: uncomment to test multi-worker GPU GP
+        # (2, False, 2, None),
+        # (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        # (2, False, 2, GraphParallelConfig(mode="all_to_all", partition="index_split")),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_parallel_predict_unit_gpu(
-    workers, checkpointing, graph_gen_version, pretrained_checkpoint
+    workers, checkpointing, graph_gen_version, gp_mode, pretrained_checkpoint
 ):
     _test_parallel_predict_unit_impl(
-        workers, "cuda", checkpointing, graph_gen_version, pretrained_checkpoint
+        workers,
+        "cuda",
+        checkpointing,
+        graph_gen_version,
+        pretrained_checkpoint,
+        gp_mode,
     )
 
 
 def _test_parallel_predict_unit_batch_impl(
-    workers, device, checkpointing, pretrained_checkpoint
+    workers, device, checkpointing, pretrained_checkpoint, gp_mode=None
 ):
     """Implementation of parallel predict unit batch test."""
     seed = 42
@@ -387,11 +415,13 @@ def _test_parallel_predict_unit_batch_impl(
     )
     atomic_data = atomicdata_list_to_batch([h2o_data, o_data])
     seed_everywhere(seed)
+
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
+        gp_config=gp_mode,
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
@@ -419,33 +449,43 @@ def _test_parallel_predict_unit_batch_impl(
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, gp_mode",
     [
-        (1, False),
-        (2, True),
+        (1, False, None),
+        (2, True, None),
+        # A2A + spatial with batch (exercises multi-system)
+        (
+            2,
+            False,
+            GraphParallelConfig(mode="all_to_all", partition="spatial"),
+        ),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_parallel_predict_unit_batch(workers, checkpointing, pretrained_checkpoint):
+def test_parallel_predict_unit_batch(
+    workers, checkpointing, gp_mode, pretrained_checkpoint
+):
     _test_parallel_predict_unit_batch_impl(
-        workers, "cpu", checkpointing, pretrained_checkpoint
+        workers, "cpu", checkpointing, pretrained_checkpoint, gp_mode
     )
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, gp_mode",
     [
-        (1, True),
-        (1, False),
-        # (2, True),
-        # (2, False),
+        (1, True, None),
+        (1, False, None),
+        # (2, True, None),
+        # (2, False, None),
     ],
 )
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_parallel_predict_unit_batch_gpu(workers, checkpointing, pretrained_checkpoint):
+def test_parallel_predict_unit_batch_gpu(
+    workers, checkpointing, gp_mode, pretrained_checkpoint
+):
     _test_parallel_predict_unit_batch_impl(
-        workers, "cuda", checkpointing, pretrained_checkpoint
+        workers, "cuda", checkpointing, pretrained_checkpoint, gp_mode
     )
 
 
@@ -765,7 +805,7 @@ def test_merge_mole_with_supercell(supercell_matrix, uma_merge_mole_predict_unit
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_merge_mole_composition_check(pretrained_checkpoint):
+def test_merge_mole_composition_change_falls_back(pretrained_checkpoint, caplog):
     atoms_cu = bulk("Cu", "fcc", a=3.6)
 
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
@@ -780,11 +820,11 @@ def test_merge_mole_composition_check(pretrained_checkpoint):
     atoms_al = bulk("Al", "fcc", a=4.05)
     atoms_al.calc = calc
 
-    with pytest.raises(
-        AssertionError,
-        match="Compositions differ from merged model",
-    ):
+    with caplog.at_level("WARNING"):
         _ = atoms_al.get_potential_energy()
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert predict_unit.inference_settings.merge_mole is False
+    assert predict_unit.inference_settings.compile is False
 
 
 @pytest.mark.gpu()
@@ -895,8 +935,8 @@ def test_merge_mole_consistent_batch(pretrained_checkpoint):
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-def test_merge_mole_inconsistent_batch(pretrained_checkpoint):
-    """Test that merge_mole raises AssertionError when batch contains systems with different compositions."""
+def test_merge_mole_inconsistent_batch_falls_back(pretrained_checkpoint, caplog):
+    """A mixed-composition first batch permanently disables the fast path."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
         pretrained_checkpoint, device="cuda", inference_settings=settings
@@ -908,8 +948,13 @@ def test_merge_mole_inconsistent_batch(pretrained_checkpoint):
     ]
     batch = atomicdata_list_to_batch(atomic_data_list)
 
-    with pytest.raises(AssertionError, match="same reduced composition"):
-        predict_unit.predict(batch)
+    with caplog.at_level("WARNING"):
+        preds = predict_unit.predict(batch)
+
+    assert torch.isfinite(preds["energy"]).all()
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert predict_unit.inference_settings.merge_mole is False
+    assert predict_unit.inference_settings.compile is False
 
 
 @pytest.mark.gpu()
@@ -1100,9 +1145,19 @@ def test_batch_server_predict_unit_multiple_systems(
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
+@pytest.mark.parametrize(
+    "gp_mode",
+    [
+        None,  # default allgather + index_split
+        # A2A + spatial — tests multi-step MD with spatial repartitioning
+        GraphParallelConfig(mode="all_to_all", partition="spatial"),
+        # A2A + index_split — tests A2A with contiguous partitioning
+        GraphParallelConfig(mode="all_to_all", partition="index_split"),
+    ],
+)
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_merge_mole_md_consistency(
-    workers, ensemble, device, pretrained_checkpoint, torch_deterministic_warn
+    workers, ensemble, device, gp_mode, pretrained_checkpoint, torch_deterministic_warn
 ):
     """Test merge_mole vs no-merge consistency over MD trajectory.
 
@@ -1114,7 +1169,14 @@ def test_merge_mole_md_consistency(
     Compares the relative drift of A-C against baseline A-B to ensure
     merge_mole doesn't introduce additional numerical drift beyond
     the inherent noise between identical runs.
+
+    When gp_mode is not None, passes backbone overrides to enable
+    A2A graph parallel with the specified partition strategy.
     """
+    # A2A GP modes require workers >= 2 to actually exercise multi-rank
+    if gp_mode is not None and workers < 2:
+        pytest.skip("A2A GP mode requires workers >= 2")
+
     from ase import units
     from ase.md.langevin import Langevin
     from ase.md.nptberendsen import NPTBerendsen
@@ -1195,6 +1257,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        gp_config=gp_mode,
     )
     calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
     results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
@@ -1206,6 +1269,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_no_merge,
         workers=workers,
+        gp_config=gp_mode,
     )
     calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
     results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
@@ -1218,6 +1282,7 @@ def test_merge_mole_md_consistency(
         device=device,
         inference_settings=settings_merge,
         workers=workers,
+        gp_config=gp_mode,
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
@@ -1736,6 +1801,10 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Get predictions
     preds = predictor.predict(batch)
 
+    assert all(
+        not parameter.requires_grad for parameter in predictor.model.parameters()
+    )
+
     # Verify energy, forces, and hessian are present
     assert "energy" in preds, "Energy prediction missing"
     assert "forces" in preds, "Forces prediction missing"
@@ -1754,6 +1823,77 @@ def _test_untrained_hessian(checkpoint_path, device):
     # Verify hessian is symmetric (squeeze batch dim for symmetry check)
     hessian = preds["hessian"].squeeze(0)
     assert torch.allclose(hessian, hessian.T, atol=1e-5), "Hessian is not symmetric"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("execution_mode", ["general", "umas_fast_gpu"])
+def test_frozen_parameters_preserve_input_derivatives(
+    conserving_mole_checkpoint, monkeypatch, execution_mode
+):
+    _test_frozen_parameters_preserve_input_derivatives(
+        conserving_mole_checkpoint[0], monkeypatch, execution_mode
+    )
+
+
+def _test_frozen_parameters_preserve_input_derivatives(
+    checkpoint_path, monkeypatch, execution_mode
+):
+    settings = InferenceSettings(
+        predict_untrained_forces={"omol"},
+        predict_untrained_stress={"omol"},
+        predict_untrained_hessian={"omol"},
+        activation_checkpointing=False,
+        merge_mole=True,
+        execution_mode=execution_mode,
+        hessian_vmap=False,
+    )
+
+    seed_everywhere(42)
+    frozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device="cuda", inference_settings=settings
+    )
+    seed_everywhere(42)
+    unfrozen_predictor = MLIPPredictUnit(
+        checkpoint_path, device="cuda", inference_settings=settings
+    )
+    monkeypatch.setattr(
+        unfrozen_predictor.model,
+        "requires_grad_",
+        lambda requires_grad=True: unfrozen_predictor.model,
+    )
+
+    def make_batch():
+        atoms = molecule("H2O")
+        atoms.info.update({"charge": 0, "spin": 1})
+        data = AtomicData.from_ase(
+            atoms,
+            task_name="omol",
+            r_data_keys=["spin", "charge"],
+            molecule_cell_size=120,
+        )
+        return atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    frozen = frozen_predictor.predict(make_batch())
+    seed_everywhere(42)
+    unfrozen = unfrozen_predictor.predict(make_batch())
+
+    assert all(
+        not parameter.requires_grad for parameter in frozen_predictor.model.parameters()
+    )
+    assert any(
+        parameter.requires_grad for parameter in unfrozen_predictor.model.parameters()
+    )
+    assert frozen.keys() == unfrozen.keys()
+    for name in frozen:
+        atol = 1e-5 if name == "hessian" else 1e-6
+        torch.testing.assert_close(
+            frozen[name],
+            unfrozen[name],
+            rtol=1e-5,
+            atol=atol,
+            msg=lambda message, name=name: f"{name}: {message}",
+        )
 
 
 @pytest.mark.gpu()
@@ -1933,6 +2073,7 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_predict_unit_has_model_id():
     """UMA 1.1 checkpoints have no `model_id` on disk; the compat fixup
     back-fills it to `"UMA-1.1"` at load time."""
@@ -1948,6 +2089,7 @@ def test_uma_1p1_predict_unit_has_model_id():
     assert pu.model.module.backbone.model_id == UMA_1P1_MODEL_ID
 
 
+@pytest.mark.pretrained("uma-s-1p1")
 def test_uma_1p1_finetune_propagates_model_id():
     """When finetuning starts from UMA 1.1, the back-filled `model_id` is
     stashed onto `model.finetune_model_full_config` (the fixup runs inside
