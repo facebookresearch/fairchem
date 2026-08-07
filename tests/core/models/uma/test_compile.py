@@ -153,6 +153,35 @@ def test_compile_batched_external_graph(compile_reset_state):
         torch.testing.assert_close(actual["edge_distance"], expected["edge_distance"])
 
 
+@pytest.mark.gpu
+@pytest.mark.compile_gpu
+def test_compile_single_system_external_graph(compile_reset_state):
+    model = get_escn_md_backbone(cutoff=6.0, otf_graph=False, device="cuda")
+    data = get_diamond_tg_data(neighbors=300, cutoff=6.0, size=1, device="cuda")
+    data.cell = torch.tensor(
+        [
+            [
+                [35.8, 0.12345, 0.06789],
+                [0.3333, 35.819, 0.0147],
+                [0.011, 0.027, 35.769],
+            ]
+        ],
+        device="cuda",
+    )
+    data.edge_index = torch.tensor([[0, 1], [1, 2]], device="cuda")
+    data.cell_offsets = torch.tensor(
+        [[-2, -1, 0], [1, 2, -2]], dtype=torch.float32, device="cuda"
+    )
+    data.nedges = torch.tensor([2], device="cuda")
+
+    expected = model._generate_graph(data)
+    actual = torch.compile(model._generate_graph, fullgraph=True, dynamic=False)(data)
+
+    torch.testing.assert_close(
+        actual["edge_distance_vec"], expected["edge_distance_vec"], rtol=0, atol=0
+    )
+
+
 # compile tests take a long time
 @pytest.mark.skip()
 @pytest.mark.gpu()
