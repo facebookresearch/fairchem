@@ -316,7 +316,9 @@ def test_checkpoints_work(conserving_mole_checkpoint, direct_mole_checkpoint):
 
 
 @pytest.mark.gpu()
-def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset):
+def test_mole_merge_inference_falls_back(
+    conserving_mole_checkpoint, fake_uma_dataset, caplog
+):
     conserving_inference_checkpoint_pt, conserving_train_state_yaml = (
         conserving_mole_checkpoint
     )
@@ -350,27 +352,86 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         device=device,
         inference_settings=inference_mode,
     )
+    assert predictor.inference_settings.execution_mode == "umas_fast_gpu"
     _ = predictor.predict(batch.clone())
 
     sample = a2g(db.get_atoms(1), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
-    with pytest.raises(AssertionError):
+    with caplog.at_level("WARNING"):
         _ = predictor.predict(batch.clone())
-
-    sample = a2g(db.get_atoms(0), task_name="not-oc20")
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
-    )
-    with pytest.raises(AssertionError):
-        _ = predictor.predict(batch.clone())
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert predictor.inference_settings.merge_mole is False
+    assert predictor.inference_settings.compile is False
+    assert predictor.inference_settings.execution_mode == "general"
 
     sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     _ = predictor.predict(batch.clone())
+
+
+@pytest.mark.parametrize("contract_change", ["composition", "task", "charge", "spin"])
+def test_mole_merge_contract_change_permanently_disables_fast_path(
+    contract_change,
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    caplog,
+    monkeypatch,
+):
+    checkpoint, _ = conserving_mole_checkpoint
+    settings = InferenceSettings(
+        merge_mole=True,
+        compile=True,
+        external_graph_gen=True,
+    )
+    # Exercise the compile flag and fallback state transition without paying the
+    # torch.compile startup cost in this behavioral test.
+    monkeypatch.setattr(torch, "compile", lambda model, **kwargs: model)
+
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
+    a2g = partial(
+        AtomicData.from_ase,
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=True,
+        r_data_keys=["spin", "charge"],
+    )
+    initial = data_list_collater([a2g(db.get_atoms(0), task_name="oc20")])
+    changed = initial.clone()
+
+    if contract_change == "composition":
+        changed = data_list_collater([a2g(db.get_atoms(1), task_name="oc20")])
+    elif contract_change == "task":
+        changed.dataset = ["omol"]
+    elif contract_change == "charge":
+        changed.charge += 1
+    else:
+        changed.spin += 1
+
+    predictor = MLIPPredictUnit(
+        checkpoint,
+        device="cpu",
+        inference_settings=settings,
+    )
+    predictor.predict(initial)
+
+    with caplog.at_level("WARNING"):
+        output = predictor.predict(changed)
+
+    assert output
+    assert "fast path (merge_mole + compile) is only available" in caplog.text
+    assert "inference_settings='batch'" in caplog.text
+    assert predictor.inference_settings.merge_mole is False
+    assert predictor.inference_settings.compile is False
+
+    caplog.clear()
+    predictor.predict(initial)
+    assert "fast path (merge_mole + compile) is only available" not in caplog.text
 
 
 def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
