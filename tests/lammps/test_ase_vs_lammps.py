@@ -39,7 +39,7 @@ def run_ase_langevin(pretrained_checkpoint):
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
-    MaxwellBoltzmannDistribution(atoms, initial_temperature_K * units.kB)
+    MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temperature_K)
     dyn = Langevin(
         atoms,
         timestep=1 * units.fs,
@@ -71,7 +71,7 @@ def run_ase_nve(pretrained_checkpoint):
     atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
     initial_temperature_K = 300.0
     np.random.seed(12345)
-    MaxwellBoltzmannDistribution(atoms, initial_temperature_K * units.kB)
+    MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temperature_K)
     dyn = VelocityVerlet(
         atoms, timestep=units.fs, trajectory="nve.traj", logfile="nve.log"
     )

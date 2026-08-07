@@ -156,6 +156,13 @@ def get_slurm_config(
             "mem_gb": 50,
             "time": 1000,
         },
+        "conformer_corrections": {
+            "job-name": "conformer_corrections",
+            "gpus_per_node": 1,
+            "cpus_per_task": 10,
+            "mem_gb": 50,
+            "time": 1000,
+        },
         "filter": {
             "job-name": "filter_and_deduplicate_structures",
             "cpus_per_task": 80,
@@ -236,14 +243,16 @@ def get_slurm_config(
                 ),
             }
 
-        elif module_name == "relax":
-            # Relax-specific parameter mapping
+        elif module_name in ("relax", "conformer_corrections"):
+            # Relax / conformer-corrections parameter mapping.
             #
             # `slurm_use_srun: False` makes submitit run python directly inside
             # the SLURM allocation instead of wrapping it in `srun python ...`.
             # A user yaml can still override via `slurm.use_srun: true`.
             base_params = {
-                "slurm_job_name": normalized_config.get("job_name", "relax"),
+                "slurm_job_name": normalized_config.get(
+                    "job_name", module_defaults[module_name]["job-name"]
+                ),
                 "timeout_min": normalized_config.get("time", 1000),
                 "gpus_per_node": normalized_config.get("gpus_per_node", 1),
                 "cpus_per_task": normalized_config.get("cpus_per_task", 10),
@@ -283,6 +292,15 @@ def get_slurm_config(
             "mem_gb": normalized_config.get("mem_gb", 400),
             "timeout_min": normalized_config.get("time", 1000),
         }
+
+        # Forward a GPU request when the module needs one (e.g. free_energy).
+        # gpus_per_node lives in standard_flags, so it would otherwise be
+        # dropped by the pass-through loop below and never reach submitit.
+        gpus_per_node = normalized_config.get(
+            "gpus_per_node", module_defaults[module_name].get("gpus_per_node")
+        )
+        if gpus_per_node is not None:
+            slurm_params["gpus_per_node"] = gpus_per_node
 
         # Handle additional SLURM flags (already normalized to snake_case)
         for key, value in normalized_config.items():
@@ -352,6 +370,34 @@ def get_relax_slurm_config(
         }
 
     return relax_slurm_config, executor_params
+
+
+def get_conformer_corrections_slurm_config(
+    cc_config: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Legacy wrapper for conformer-corrections SLURM configuration.
+
+    Returns:
+        tuple: (slurm_config_for_scripts, executor_params)
+    """
+    full_config = {"conformer_corrections": cc_config}
+
+    executor_params = get_slurm_config(
+        full_config, "conformer_corrections", "submitit_executor"
+    )
+
+    cc_slurm_config = cc_config.get("slurm", {})
+    if not cc_slurm_config:
+        cc_slurm_config = {
+            "job-name": "conformer_corrections",
+            "gpus_per_node": 1,
+            "cpus_per_task": 10,
+            "mem_gb": 50,
+            "time": 1000,
+        }
+
+    return cc_slurm_config, executor_params
 
 
 def get_process_slurm_config(config: dict[str, Any]) -> dict[str, Any]:

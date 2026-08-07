@@ -176,6 +176,26 @@ def torch_deterministic():
     torch.use_deterministic_algorithms(False)
 
 
+@pytest.fixture()
+def torch_deterministic_warn():
+    # warn_only=True: for drift/consistency tests that want reduced nondeterminism
+    # but tolerate ops without a deterministic CUDA kernel (e.g. UMA-MoE's
+    # index_reduce_ in set_MOLE_coefficients, which would otherwise raise).
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    yield True
+    # Tear down (prevents leaking the global flag into later tests)
+    torch.use_deterministic_algorithms(False)
+
+
+@pytest.fixture(autouse=True)
+def _restore_determinism():
+    # Safety net: restore the global deterministic-algorithms flag after every
+    # test so an inline toggle in one test cannot leak into subsequent tests.
+    prev = torch.are_deterministic_algorithms_enabled()
+    yield
+    torch.use_deterministic_algorithms(prev)
+
+
 @pytest.fixture(scope="session")
 def dummy_element_refs():
     # create some dummy elemental energies from ionic radii (ignore deuterium and tritium included in pmg)

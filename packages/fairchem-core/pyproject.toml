@@ -7,9 +7,9 @@ name = "fairchem-core"
 description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
 license = {text = "MIT License"}
 dynamic = ["version", "readme"]
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.15"
 dependencies = [
-    "torch~=2.8.0",
+    "torch~=2.13.0",
     "ray[serve]>=2.53.0",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",
@@ -25,7 +25,7 @@ dependencies = [
     "requests",
     "orjson",
     "tqdm",
-    "submitit",
+    "submitit>=1.5.4",
     "hydra-core",
     "torchtnt",
     "pyyaml",

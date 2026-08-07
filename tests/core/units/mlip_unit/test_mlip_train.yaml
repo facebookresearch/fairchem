@@ -35,6 +35,7 @@ runner:
     tasks: ${tasks}
     model:
       _target_: fairchem.core.models.base.HydraModel
+      model_id: UMA-S-1.2
       backbone: ${backbone}
       heads:
         oc20_energy:

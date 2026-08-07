@@ -8,12 +8,16 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
 import threading
+from dataclasses import dataclass
 
 import torch
 from torch import distributed as dist
 from torch.distributed.nn.functional import all_reduce, reduce_scatter
+
+from fairchem.core.common.utils import StrEnum
 
 """
 Functions to support graph parallel training.
@@ -25,6 +29,26 @@ https://github.com/facebookresearch/fairscale/blob/main/fairscale/nn/model_paral
 
 _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
+
+
+class GPMode(StrEnum):
+    ALLGATHER = "allgather"
+    ALL_TO_ALL = "all_to_all"
+
+
+class GPPartition(StrEnum):
+    INDEX_SPLIT = "index_split"
+    SPATIAL = "spatial"
+
+
+@dataclass
+class GraphParallelConfig:
+    group_size: int = 1
+    mode: GPMode = GPMode.ALLGATHER
+    partition: GPPartition = GPPartition.INDEX_SPLIT
+
+
+_GP_CONFIG: GraphParallelConfig | None = None
 
 _tls = threading.local()
 
@@ -97,6 +121,13 @@ def setup_graph_parallel_groups(
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
 
+    # Ensure a GP config exists so downstream code can read
+    # `get_gp_config().mode` without a None check. Callers that want
+    # non-default settings (A2A, spatial partition) should call
+    # `set_gp_config` explicitly after this.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=graph_parallel_group_size))
+
 
 def setup_gp(config) -> None:
     gp_size = config["gp_gpus"]
@@ -129,10 +160,18 @@ def setup_gp(config) -> None:
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
 
+    # Every entry point that sets up GP groups must also set a GP config so
+    # downstream code (e.g. escn_md.py) can read `get_gp_config().mode`
+    # without a None check. setup_graph_parallel_groups()'s callers set the
+    # config alongside; do the same here for parity.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=gp_size))
+
 
 def cleanup_gp() -> None:
     global _DATA_PARALLEL_GROUP
     global _GRAPH_PARALLEL_GROUP
+    global _GP_CONFIG
     assert _GRAPH_PARALLEL_GROUP is not None
     assert _DATA_PARALLEL_GROUP is not None
     with contextlib.suppress(ValueError):
@@ -141,10 +180,55 @@ def cleanup_gp() -> None:
         dist.destroy_process_group(_GRAPH_PARALLEL_GROUP)
     _DATA_PARALLEL_GROUP = None
     _GRAPH_PARALLEL_GROUP = None
+    _GP_CONFIG = None
 
 
 def initialized() -> bool:
     return _GRAPH_PARALLEL_GROUP is not None
+
+
+def set_gp_config(config: GraphParallelConfig) -> None:
+    global _GP_CONFIG
+    _GP_CONFIG = config
+
+
+def get_gp_config() -> GraphParallelConfig | None:
+    return _GP_CONFIG
+
+
+def resolve_gp_config_for_workers(
+    gp_config: GraphParallelConfig | None,
+    num_workers: int,
+) -> GraphParallelConfig | None:
+    """
+    Reconcile a user-provided GraphParallelConfig with the target number
+    of workers.
+
+    Behavior:
+      - ``num_workers <= 1``: no GP is used; return ``gp_config`` unchanged
+        (may be ``None``).
+      - ``num_workers > 1``:
+          * If ``gp_config`` is ``None``, build a default
+            ``GraphParallelConfig(group_size=num_workers)``.
+          * If the config's ``group_size`` is still the default (1),
+            return a copy with ``group_size=num_workers``. The caller's
+            config is NOT mutated.
+          * If ``group_size == num_workers`` already, return it unchanged.
+          * Otherwise raise ``ValueError`` — an explicit mismatch is a
+            configuration error.
+    """
+    if num_workers <= 1:
+        return gp_config
+    if gp_config is None:
+        return GraphParallelConfig(group_size=num_workers)
+    if gp_config.group_size == 1:
+        return dataclasses.replace(gp_config, group_size=num_workers)
+    if gp_config.group_size != num_workers:
+        raise ValueError(
+            f"gp_config.group_size ({gp_config.group_size}) must equal "
+            f"num_workers ({num_workers})"
+        )
+    return gp_config
 
 
 def get_dp_group():

@@ -32,7 +32,7 @@ jobs:
     # Without it, GitHub auto-expands EVERY field of the object-typed
     # `shard` matrix entry — including `shard.paths` — into a
     # >100-character truncated string like
-    # `test (3.13, core, tests/core/models tests/core/graph ...`.
+    # `test (3.14, core, tests/core/models tests/core/graph ...`.
     # That diverges from the short custom status emitted by
     # multi-trigger-setup, forcing branch protection to pick one event
     # type's names and break the others.
@@ -54,7 +54,7 @@ jobs:
       max-parallel: 10
       fail-fast: false
       matrix:
-        python_version: ['3.11', '3.13']
+        python_version: ['3.11', '3.14']
         # tests/perf is run by perf-test.yml on a separate cadence.
         # tests/applications and tests/lammps are run by integration-test.yml
         # and test_lammps_gpu respectively. Both shards below intentionally
@@ -69,9 +69,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -86,7 +92,7 @@ jobs:
           python-version:  ${{ matrix.python_version }}
 
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -106,7 +112,7 @@ jobs:
             -r tests/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
-        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
         run: |
           pip install packages/fairchem-core[torchsim]
 
@@ -139,16 +145,16 @@ jobs:
         run: |
           pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
-      - if: ${{ matrix.python_version == '3.13' }}
+      - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           fail_ci_if_error: false
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
-      - if: ${{ matrix.python_version == '3.13' }}
+      - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
@@ -174,15 +180,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ['3.13']
+        python_version: ['3.14']
         sweep_model: [uma-s-1p1, uma-s-1p2]
         shard: *cpu_shards
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -196,7 +205,7 @@ jobs:
           python-version: ${{ matrix.python_version }}
 
       - name: Cache pip
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -216,7 +225,7 @@ jobs:
             -r tests/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
-        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
         run: |
           pip install packages/fairchem-core[torchsim]
 
@@ -276,7 +285,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ['3.13']
+        python_version: ['3.14']
         # YAML anchor: shard list is reused by test_gpu_sweep below.
         # Do not reorder jobs (the alias must follow the anchor textually).
         shard: &gpu_shards
@@ -287,9 +296,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -312,7 +327,7 @@ jobs:
           -r tests/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
-        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
         run: |
           pip install packages/fairchem-core[torchsim]
 
@@ -360,15 +375,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ['3.13']
+        python_version: ['3.14']
         sweep_model: [uma-s-1p1, uma-s-1p2]
         shard: *gpu_shards
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # See the checkout step in the `test` job for why this is set
+          # and why it is safe (external-contributor approval gate).
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Setup
@@ -390,7 +408,7 @@ jobs:
           -r tests/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
-        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
         run: |
           pip install packages/fairchem-core[torchsim]
 
@@ -432,20 +450,26 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.13']
+        python_version: ['3.14']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: mamba-org/setup-micromamba@v3
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.13 # Specifies packages to install into the new environment
+          create-args: python=3.14 # Specifies packages to install into the new environment
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
+          # Required since actions/checkout began refusing fork PR code in
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
+          # See https://gh.io/securely-using-pull_request_target
+          allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
 
