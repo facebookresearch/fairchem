@@ -87,7 +87,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version:  ${{ matrix.python_version }}
 
@@ -200,7 +200,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -314,7 +314,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version:  ${{ matrix.python_version }}
 
@@ -395,7 +395,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python_version }}
 
@@ -479,7 +479,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version:  ${{ matrix.python_version }}
 
