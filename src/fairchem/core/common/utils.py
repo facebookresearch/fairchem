@@ -14,8 +14,11 @@ import importlib
 import logging
 import os
 import pathlib
+import platform
 import subprocess
 import sys
+import tarfile
+import urllib.request
 from functools import reduce, wraps
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -51,6 +54,29 @@ DEFAULT_ENV_VARS = {
 }
 
 
+def recursive_dict_merge(*dicts: dict) -> dict:
+    """Recursively merge dictionaries; later values override earlier ones.
+
+    Unlike ``dict.update`` (which is shallow), nested dict values are merged
+    key-by-key so callers can pass partial overrides without losing sibling
+    keys in inner dicts.
+    """
+    result: dict = {}
+    for d in dicts:
+        if d is None:
+            continue
+        for key, value in d.items():
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
+                result[key] = recursive_dict_merge(result[key], value)
+            else:
+                result[key] = value
+    return result
+
+
 # copied from https://stackoverflow.com/questions/33490870/parsing-yaml-in-python-detect-duplicated-keys
 # prevents loading YAMLS where keys have been overwritten
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -75,7 +101,13 @@ def conditional_grad(dec):
         @wraps(func)
         def cls_method(self, *args, **kwargs):
             f = func
-            if self.regress_forces and not getattr(self, "direct_forces", 0):
+            if hasattr(self, "regress_config"):
+                regress_forces = self.regress_config.forces
+                direct_forces = self.regress_config.direct_forces
+            else:
+                regress_forces = self.regress_forces
+                direct_forces = getattr(self, "direct_forces", 0)
+            if regress_forces and not direct_forces:
                 f = dec(func)
             return f(self, *args, **kwargs)
 
@@ -458,3 +490,64 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
         key=lambda x: x[1],
     )
+
+
+def os_arch_for_download() -> tuple[str, str]:
+    """Return (os_type, arch) strings as used in typical release download URLs."""
+    os_type = platform.system().lower()  # 'linux' / 'darwin'
+    machine = platform.machine().lower()
+    arch = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "aarch64": "arm64",
+        "arm64": "arm64",
+    }.get(machine, machine)
+    return os_type, arch
+
+
+def safe_extract_tar(tar: tarfile.TarFile, dest_dir: str) -> None:
+    """
+    Extract ``tar`` into ``dest_dir``, rejecting entries that would escape it.
+
+    Guards against path-traversal ("tar slip", CVE-2007-4559) attacks by refusing
+    any member whose name -- or link target -- is an absolute path or contains a
+    ``..`` component. (``tarfile``'s built-in ``filter="data"`` would do this too,
+    but it is only available on Python >= 3.12.)
+
+    Args:
+        tar: An open ``tarfile.TarFile`` to extract.
+        dest_dir: Destination directory to extract into.
+
+    Raises:
+        ValueError: If any archive entry would escape ``dest_dir``.
+    """
+    for member in tar.getmembers():
+        for name in (member.name, member.linkname):
+            if name and (os.path.isabs(name) or ".." in Path(name).parts):
+                raise ValueError(
+                    f"Illegal tar archive entry {member.name!r} (target {name!r})"
+                )
+    tar.extractall(dest_dir)
+
+
+def download_and_extract(url: str, dest_dir: str) -> Path:
+    """
+    Download a ``.tar.gz`` from ``url`` and safely extract it into ``dest_dir``.
+
+    Args:
+        url: URL of the ``.tar.gz`` archive to download.
+        dest_dir: Directory to download into and extract to.
+
+    Returns:
+        Path: The top-level extracted directory.
+    """
+    Path(dest_dir).mkdir(parents=True, exist_ok=True)
+    tar_path = Path(dest_dir) / "download.tar.gz"
+    logging.info(f"Downloading {url} ...")
+    urllib.request.urlretrieve(url, tar_path)
+    with tarfile.open(tar_path) as tar:
+        members = tar.getnames()
+        safe_extract_tar(tar, dest_dir)
+    tar_path.unlink(missing_ok=True)
+    top = members[0].split("/")[0]
+    return Path(dest_dir) / top

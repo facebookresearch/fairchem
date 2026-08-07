@@ -30,20 +30,26 @@ def load_predict_unit(
     atom_refs: dict | None = None,
     form_elem_refs: dict | None = None,
     workers: int = 1,
+    seed: int = 41,
+    gp_config=None,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
     Args:
         path: Path to the checkpoint file
-        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
-            (optimized for speed but requires fixed atomic composition). Advanced use cases can
-            use a custom InferenceSettings object.
+        inference_settings: Settings for inference. Both "default" and "turbo" use the
+            merge_mole + compile fast path, with automatic fallback if its fixed-input
+            contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
+            unmerged for heterogeneous inputs. More advanced use cases can use a custom
+            InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.
         form_elem_refs: Optional dictionary of element reference energies for formation energy calculations.
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
+        seed: Optional random seed for reproducibility. If provided, will set the random seed for
+            Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -65,6 +71,8 @@ def load_predict_unit(
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
             num_workers=workers,
+            seed=seed,
+            gp_config=gp_config,
         )
     else:
         return MLIPPredictUnit(
@@ -74,4 +82,5 @@ def load_predict_unit(
             overrides=overrides,
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
+            seed=seed,
         )

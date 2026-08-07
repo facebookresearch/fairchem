@@ -4,9 +4,9 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
-import pickle
 import re
 
 import numpy as np
@@ -14,6 +14,8 @@ import pandas as pd
 from fairchem.applications.ocx.core.voltage import get_she
 from fairchem.applications.ocx.core.wulff import get_normalized_facet_fracs
 from scipy.spatial.distance import euclidean
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 
 def add_xrf(row, xrf_mapping):
@@ -111,7 +113,7 @@ def load_and_preprocess_data(
     # load cod mapping
     if cod_to_ocp_lookup is not None:
         with open(cod_to_ocp_lookup, "rb") as f:
-            cod_ocp_lookup = pickle.load(f)
+            cod_ocp_lookup = safe_pickle_load(f)
     else:
         cod_ocp_lookup = None
 
@@ -414,11 +416,18 @@ def compute_comp_stats(df, adsorbates, bulk_id=None, comp=None):
     for ads in adsorbates:
         # Compute mean energies
         energies = entries[f"{ads}_min_sp_e"].dropna().values
+        _np_stat_fns = {
+            "min": np.min,
+            "mean": np.mean,
+            "median": np.median,
+            "max": np.max,
+            "std": np.std,
+        }
         for stat in ["min", "mean", "median", "max", "std"]:
             if len(energies) == 0:
                 mean_value = None
             else:
-                mean_value = eval(f"np.{stat}")(energies)
+                mean_value = _np_stat_fns[stat](energies)
             summary_stats[f"{ads}_{stat}_energy"] = mean_value
         # Compute Wulff energies
         wulff_df = entries.copy()
@@ -434,7 +443,7 @@ def compute_comp_stats(df, adsorbates, bulk_id=None, comp=None):
                 # when wulff information is not available, fall back to mean
                 summary_stats[f"{ads}_wulff_energy"] = mean_value
             else:
-                summary_stats[f"{ads}_wulff_energy"] = eval("np.average")(
+                summary_stats[f"{ads}_wulff_energy"] = np.average(
                     wulff_energies, weights=weights
                 )
         # Compute Boltzmann weighted energies

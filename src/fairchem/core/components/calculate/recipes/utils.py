@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ase.calculators.calculator import PropertyNotPresent
+from pymatgen.io.ase import AseAtomsAdaptor
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -94,3 +95,9 @@ def get_property_dict_from_atoms(
             )
             results[key] = normalize_property(results[property_name], atoms, norm_by)
     return results
+
+
+def scale_atoms(atoms, scale_factor):
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    struct.apply_strain(scale_factor - 1)
+    return AseAtomsAdaptor.get_atoms(struct)

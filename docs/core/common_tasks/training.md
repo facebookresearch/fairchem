@@ -2,6 +2,10 @@
 
 This repo is used to train large state-of-the-art graph neural networks from scratch on datasets like OC20, OMol25, or OMat24, among others.
 
+:::{danger} Security Warning
+**Never run YAML configuration files from untrusted sources.** FAIRChem uses [Hydra](https://hydra.cc/) to instantiate Python objects from YAML configs via the `_target_` key. A maliciously crafted config file can execute arbitrary code on your machine. Only use configs that you have written yourself or that come from trusted sources. This is analogous to the security risks of Python's `pickle` and `torch.load()`.
+:::
+
 :::{tip}
 We now provide a simple CLI to handle this using your own custom datasets, but we suggest fine-tuning one of the existing checkpoints first before trying a from-scratch training.
 :::

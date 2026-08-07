@@ -7,9 +7,9 @@ name = "fairchem-core"
 description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
 license = {text = "MIT License"}
 dynamic = ["version", "readme"]
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.15"
 dependencies = [
-    "torch~=2.8.0",
+    "torch~=2.13.0",
     "ray[serve]>=2.53.0",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",
@@ -19,13 +19,13 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.26.0",
     "ase-db-backends>=0.10.0",
-    "monty>=v2025.1.3",
+    "monty>=2026.2.18",
     "clusterscope==0.0.18",
     "setuptools<81.0.0",
     "requests",
     "orjson",
     "tqdm",
-    "submitit",
+    "submitit>=1.5.4",
     "hydra-core",
     "torchtnt",
     "pyyaml",
@@ -37,8 +37,8 @@ dependencies = [
 dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
 docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book>=2.0", "torch-dftd"]
 adsorbml = ["dscribe", "x3dase", "scikit-image"]
-torchsim = ["torch-sim-atomistic>=0.5.2; python_version >= '3.12'"]
-extras = ["pymatgen", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops==0.2.0", "pyarrow"]
+torchsim = ["torch-sim-atomistic>=0.6.0; python_version >= '3.12'"]
+extras = ["pymatgen>=2025.1.9", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops>=0.3.0", "pyarrow"]
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"

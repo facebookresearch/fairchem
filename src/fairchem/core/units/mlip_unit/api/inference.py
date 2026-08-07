@@ -32,6 +32,77 @@ DEFAULT_SPIN = 0
 ALLOWED_DTYPES = [torch.float32, torch.float64]
 
 
+class MergeMoleConsistencyError(ValueError):
+    """Raised when input data is incompatible with an already merged MOLE model."""
+
+
+def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
+    """
+    UMA-specific validation: handle charge/spin for OMOL task.
+
+    Sets default values for charge and spin in atoms.info and validates
+    they are within acceptable ranges.
+
+    Args:
+        atoms: ASE Atoms object
+        task_name: Task name (e.g., "omol", "omat")
+        logger: Optional logger for warnings. If None, uses Python logging module.
+    """
+    import logging as log_module
+
+    import numpy as np
+
+    _logger = logger if logger is not None else log_module
+
+    # Set charge defaults
+    if "charge" not in atoms.info:
+        if task_name == UMATask.OMOL.value:
+            _logger.warning(
+                "task_name='omol' detected, but charge is not set in atoms.info. "
+                "Defaulting to charge=0. Ensure charge is an integer representing "
+                "the total charge on the system and is within the range -100 to 100."
+            )
+        atoms.info["charge"] = DEFAULT_CHARGE
+
+    # Set spin defaults (OMOL uses spin=1, others use spin=0)
+    if "spin" not in atoms.info:
+        if task_name == UMATask.OMOL.value:
+            atoms.info["spin"] = DEFAULT_SPIN_OMOL
+            _logger.warning(
+                "task_name='omol' detected, but spin multiplicity is not set in "
+                "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
+                "representing the spin multiplicity from 0 to 100."
+            )
+        else:
+            atoms.info["spin"] = DEFAULT_SPIN
+
+    # Validate charge range
+    charge = atoms.info["charge"]
+    if not isinstance(charge, (int, np.integer)):
+        raise TypeError(
+            f"Invalid type for charge: {type(charge)}. "
+            "Charge must be an integer representing the total charge on the system."
+        )
+    if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+        raise ValueError(
+            f"Invalid value for charge: {charge}. "
+            f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+        )
+
+    # Validate spin range
+    spin = atoms.info["spin"]
+    if not isinstance(spin, (int, np.integer)):
+        raise TypeError(
+            f"Invalid type for spin: {type(spin)}. "
+            "Spin must be an integer representing the spin multiplicity."
+        )
+    if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+        raise ValueError(
+            f"Invalid value for spin: {spin}. "
+            f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+        )
+
+
 @dataclass
 class MLIPInferenceCheckpoint:
     # contains original config that trained the model
@@ -58,15 +129,14 @@ class InferenceSettings:
 
     # Flag to enable or disable activation checkpointing during
     # inference. This will dramatically decrease the memory footprint
-    # especially for large number of atoms (ie 10+) at a slight cost to
+    # especially for large number of atoms (i.e. 10k+) at a slight cost to
     # inference speed.
     activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
-    # inference. If this is used, the input composition, total charge
-    # and spin MUST remain constant throughout the simulation this will
-    # slightly increase speed and reduce memory footprint used by the
-    # parameters significantly
+    # inference. This slightly increases speed and significantly reduces
+    # parameter memory. If composition, task, total charge, or spin changes,
+    # MLIPPredictUnit falls back to an unmerged model.
     merge_mole: bool = False
 
     # Flag to enable or disable the compilation of the inference model.
@@ -117,11 +187,19 @@ class InferenceSettings:
     predict_untrained_forces: set[str] = field(default_factory=set)
     predict_untrained_stress: set[str] = field(default_factory=set)
     predict_untrained_hessian: set[str] = field(default_factory=set)
-    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+    # Disable for backends whose custom backward operators lack vmap rules.
+    # The loop uses less memory but performs one backward pass per force component.
+    hessian_vmap: bool = True
 
     # When True, allow backbones to add their default untrained tasks
     # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
     auto_add_default_untrained_tasks: bool = True
+
+    # Maximum number of atoms per system for padding. Required when
+    # compile=True for models that use padding (e.g., AllScAIP).
+    # All inputs will be padded to this size. Larger values consume more
+    # VRAM but allow bigger systems; reduce if you run into OOM errors.
+    max_atoms: int | None = None
 
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
@@ -148,9 +226,25 @@ class InferenceSettings:
         return config
 
 
-# this is most general setting that works for most systems and models,
-# not optimized for speed
+# Default to the fast path while retaining full FP32 precision. If the input
+# changes in a way that is incompatible with the merged MOLE model, the
+# predictor automatically falls back to an unmerged and uncompiled model.
 def inference_settings_default():
+    return InferenceSettings(
+        tf32=False,
+        activation_checkpointing=False,
+        merge_mole=True,
+        compile=True,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+
+# Batch mode is the stable entry point for heterogeneous inputs. It currently
+# uses the general unmerged and uncompiled path; keeping it as a named mode lets
+# us optimize heterogeneous batches independently in future releases (for
+# example, by enabling compilation without merging MOLE).
+def inference_settings_batch():
     return InferenceSettings(
         tf32=False,
         activation_checkpointing=True,
@@ -161,10 +255,9 @@ def inference_settings_default():
     )
 
 
-# this setting is designed for running long simulations or optimizations
-# where the system composition (atoms, charge, spin) stays constant over
-# the course the simulation. For smaller systems
-# activation_checkpointing can be turned off for some extra speed gain
+# Turbo uses the same fast path as the default settings, with TF32 enabled for
+# additional speed on supported hardware. It remains opt-in because it trades
+# a small amount of precision for speed.
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
@@ -189,6 +282,7 @@ def inference_settings_traineval():
 
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
+    "batch": inference_settings_batch(),
     "turbo": inference_settings_turbo(),
     "traineval": inference_settings_traineval(),
 }

@@ -15,17 +15,17 @@ from monty.dev import requires
 
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 
-# Try to import nvalchemiops at module load
 try:
-    from nvalchemiops.neighborlist.neighbor_utils import estimate_max_neighbors
-    from nvalchemiops.neighborlist.neighborlist import neighbor_list
+    from nvalchemiops.torch.neighbors import neighbor_list
+    from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
 
     def nvalchemiops_installed() -> bool:
         return True
 
 except ImportError as e:
     logging.debug(
-        f"nvalchemiops not available: {e}. Install with `pip install nvalchemiops`"
+        f"nvalchemiops not available: {e}. "
+        "Install with `pip install nvalchemi-toolkit-ops`"
     )
     estimate_max_neighbors = None
     neighbor_list = None
@@ -146,11 +146,15 @@ def get_neighbors_nvidia(
     )
     num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=device)
 
+    # nvalchemi wants cell=None and pbc=None for non-periodic systems
+    neighbor_cell = None if not bool(pbc.any().item()) else cell
+    neighbor_pbc = None if neighbor_cell is None else pbc
+
     neighbor_list(
         positions=positions,
         cutoff=nvidia_cutoff,
-        cell=cell,
-        pbc=pbc,
+        cell=neighbor_cell,
+        pbc=neighbor_pbc,
         batch_idx=batch.int(),
         method=f"batch_{method}",
         neighbor_matrix=neighbor_matrix,

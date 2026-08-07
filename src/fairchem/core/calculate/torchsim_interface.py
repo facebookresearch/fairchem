@@ -84,8 +84,16 @@ def _simstate_to_atomicdata_batch(
     cell_offsets = torch.empty((0, 3), dtype=target_dtype, device=positions.device)
     nedges = torch.zeros(n_systems, dtype=torch.long, device=positions.device)
 
-    charge = sim_state.charge.long()  # (n_systems,)
-    spin = sim_state.spin.long()  # (n_systems,)
+    charge = (
+        sim_state.charge.long()
+        if sim_state.has_extras("charge")
+        else torch.zeros(n_systems, dtype=torch.long, device=positions.device)
+    )
+    spin = (
+        sim_state.spin.long()
+        if sim_state.has_extras("spin")
+        else torch.zeros(n_systems, dtype=torch.long, device=positions.device)
+    )
 
     fixed = torch.zeros_like(atomic_numbers, dtype=torch.long)
     tags = torch.zeros_like(atomic_numbers, dtype=torch.long)
@@ -174,7 +182,6 @@ class FairChemModel(_TSModelInterface):
         dtype: torch.dtype | None = None,
         compute_stress: bool = False,
         task_name: UMATask | str | None = None,
-        retain_graph: bool = False,
     ) -> None:
         """Initialize the FairChem model.
 
@@ -191,8 +198,6 @@ class FairChemModel(_TSModelInterface):
             compute_stress (bool): Whether to compute stress tensor
             task_name (UMATask | str | None): Task type for UMA models (optional,
                 only needed for UMA models)
-            retain_graph (bool): Whether to retain the computation graph for
-                backpropagation. Defaults to False, which detaches output tensors.
 
         Raises:
             ImportError: If torch-sim is not installed
@@ -213,7 +218,6 @@ class FairChemModel(_TSModelInterface):
         self._compute_stress = compute_stress
         self._compute_forces = True
         self._memory_scales_with = "n_atoms"  # TODO: this does vary with model type
-        self.retain_graph = retain_graph
 
         # Convert Path to string for consistency
         model = str(model) if isinstance(model, Path) else model
@@ -309,6 +313,4 @@ class FairChemModel(_TSModelInterface):
                 stress = stress.view(-1, 3, 3)
             results["stress"] = stress
 
-        if not self.retain_graph:
-            return {k: v.detach() for k, v in results.items()}
-        return results
+        return {k: v.detach() for k, v in results.items()}

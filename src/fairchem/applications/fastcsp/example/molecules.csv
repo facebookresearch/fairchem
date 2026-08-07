@@ -1,0 +1,3 @@
+name,smiles,select_for_fastcsp,conformers_path,refcode,z,spg
+XULDUD,C1CC2=COC=C12,1,conformers/conformers_fastcsp/XULDUD/,"XULDUD01,XULDUD","[1, 2, 4]","[[1],[2],[14]]"
+WIDBAO,CN(C)C(=S)N1C(=S)Sc2ccccc12,2,conformers/conformers_fastcsp/WIDBAO/,WIDBAO,"[2, 4]","[[14, 2, 4]]"

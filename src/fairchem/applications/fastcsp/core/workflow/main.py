@@ -19,13 +19,15 @@ The workflow stages are:
 1. generate: Generate crystal structures using Genarris
 2. process_generated: Process and deduplicate raw structures
 3. relax: ML-based structure relaxation using UMA
-4. filter: Energy filtering and final deduplication
-5. evaluate: Compare against experimental data (optional)
+4. compute_conformer_corrections (optional): Per-conformer fragment energy corrections
+5. filter: Energy filtering and final deduplication
+6. evaluate: Compare against experimental data (optional)
+7. compute_free_energy (optional): Quasi-harmonic vibrational free energies
 """
 
 from __future__ import annotations
 
-import argparse
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -38,10 +40,10 @@ from fairchem.applications.fastcsp.core.utils.configuration import (
 from fairchem.applications.fastcsp.core.utils.slurm import wait_for_jobs
 
 if TYPE_CHECKING:
-    import argparse
+    from argparse import Namespace
 
 
-def load_config(args: argparse.Namespace) -> dict[str, Any]:
+def load_config(args: Namespace) -> dict[str, Any]:
     """
     Load and validate FastCSP workflow configuration from YAML file.
 
@@ -62,23 +64,7 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
     return config
 
 
-def detect_restart(root_dir: Path, log_file: str = "FastCSP.log") -> bool:
-    """
-    Detect if this is a workflow restart by checking for existing log file.
-
-    Args:
-        root_dir: Root directory where the log file would be located
-        log_file: Name of the log file to check (default: "FastCSP.log")
-
-    Returns:
-        bool: True if this appears to be a restart (log file exists with content),
-              False for a fresh start
-    """
-    log_path = root_dir / log_file
-    return log_path.exists() and log_path.stat().st_size > 0
-
-
-def main(args: argparse.Namespace) -> None:
+def main(args: Namespace) -> None:
     """
     Main orchestration function for the FastCSP crystal structure prediction workflow.
 
@@ -86,8 +72,10 @@ def main(args: argparse.Namespace) -> None:
     1. generate: Crystal structure generation using Genarris
     2. process_generated: Structure processing and initial deduplication
     3. relax: ML-based structure relaxation using Universal Model for Atoms
-    4. filter: Energy filtering and final structure deduplication
-    5. evaluate: Experimental structure comparison (optional)
+    4. compute_conformer_corrections: Per-conformer fragment energy corrections (optional)
+    5. filter: Energy filtering and final structure deduplication
+    6. evaluate: Experimental structure comparison (optional)
+    7. compute_free_energy: Quasi-harmonic vibrational free energies (optional)
 
     Args:
         args: Command line arguments containing:
@@ -110,13 +98,23 @@ def main(args: argparse.Namespace) -> None:
     root = Path(config["root"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
 
+    # Config and molecules info into root
+    if not (root / "config.yaml").exists():
+        shutil.copy2(args.config, root / "config.yaml")
+    if not (root / "molecules.csv").exists():
+        shutil.copy2(config["molecules"], root / "molecules.csv")
+
     # Reorder stages based on dependencies
     args.stages = reorder_stages_by_dependencies(args.stages)
-
     # Set up logging to FastCSP.log in root directory
     log_file = root / "FastCSP.log"
-    is_restart = detect_restart(root)
-    logging.setup_fastcsp_logger(log_file=log_file, append=True)
+    is_restart = logging.detect_restart(root)
+    log_config = config.get("logging", {})
+    console_output = log_config.get("console", True)
+    log_level = log_config.get("level", "INFO")
+    logging.setup_fastcsp_logger(
+        log_file=log_file, level=log_level, console_output=console_output, append=True
+    )
     logging.ensure_all_modules_use_central_logger()
     logger = logging.get_central_logger()
 
@@ -147,7 +145,7 @@ def main(args: argparse.Namespace) -> None:
 
         genarris_config = get_genarris_config(config)
         jobs = run_genarris_jobs(
-            output_dir=root / "genarris",
+            output_dir=root / "generated_structures",
             genarris_config=genarris_config,
             molecules_file=config["molecules"],
         )
@@ -156,7 +154,7 @@ def main(args: argparse.Namespace) -> None:
 
     # 2. Read Genarris outputs, deduplicate, and create Parquet files
     if "process_generated" in args.stages:
-        logging.log_stage_start(logger, "deduplication of Genarris structures")
+        logging.log_stage_start(logger, "processing of Genarris structures")
         from fairchem.applications.fastcsp.core.workflow.process_generated import (
             get_pre_relax_filter_config,
             process_genarris_outputs,
@@ -164,41 +162,74 @@ def main(args: argparse.Namespace) -> None:
 
         pre_relax_config = get_pre_relax_filter_config(config)
         jobs = process_genarris_outputs(
-            input_dir=root / "genarris",
+            input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_problematic=pre_relax_config["remove_problematic"],
+            remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
+            bin_by_conf=pre_relax_config["bin_by_conf"],
+            bin_by_z=pre_relax_config["bin_by_z"],
+            bin_by_spg=pre_relax_config["bin_by_spg"],
+            density_bin_size=pre_relax_config["density_bin_size"],
             npartitions=pre_relax_config["npartitions"],
+            assign_groups=pre_relax_config["assign_groups"],
+            density_tol=pre_relax_config["density_tol"],
+            apply_niggli_filter=pre_relax_config["apply_niggli_filter"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
-            logger, "deduplicating structures from Genarris", len(jobs)
+            logger, "processing of Genarris structures", len(jobs)
         )
 
     # 3. Relax structures using UMA MLIP
     if "relax" in args.stages:
-        logging.log_stage_start(logger, "ML-relaxation of deduplicated structures")
+        logging.log_stage_start(logger, "ML-relaxation of processed structures")
         from fairchem.applications.fastcsp.core.workflow.relax import (
             get_relax_config_and_dir,
             run_relax_jobs,
         )
 
-        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        relax_config, relax_output_dir = get_relax_config_and_dir(config, verbose=True)
         jobs = run_relax_jobs(
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
             relax_config=relax_config,
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
-        logging.log_stage_complete(logger, "relaxing structures", len(jobs))
-
-    # 4. Filter, deduplicate, and rank structures
-    if "filter" in args.stages:
-        logging.log_stage_start(
-            logger, "filtering and deduplication of ML-relaxed structures"
+        logging.log_stage_complete(
+            logger, "ML-relaxation of processed structures", len(jobs)
         )
+
+    # 4. (Optional) Apply per-conformer fragment energy corrections.
+    if "compute_conformer_corrections" in args.stages:
+        logging.log_stage_start(
+            logger, "conformer-corrections on ML-relaxed structures"
+        )
+        from fairchem.applications.fastcsp.core.workflow.conformer_correction import (
+            get_conformer_corrections_config_and_dirs,
+            run_conformer_corrections_jobs,
+        )
+
+        cc_config, cc_input_dir, cc_output_dir = (
+            get_conformer_corrections_config_and_dirs(config, verbose=True)
+        )
+        jobs = run_conformer_corrections_jobs(
+            input_dir=cc_input_dir,
+            output_dir=cc_output_dir,
+            cc_config=cc_config,
+        )
+        wait_for_jobs(jobs)
+        logging.log_stage_complete(
+            logger, "conformer-corrections on ML-relaxed structures", len(jobs)
+        )
+
+    # 5. Filter, deduplicate, and rank structures
+    if "filter" in args.stages:
+        logging.log_stage_start(logger, "filtering of ML-relaxed structures")
         from fairchem.applications.fastcsp.core.workflow.filter import (
             filter_and_deduplicate_structures,
             get_post_relax_config,
@@ -213,18 +244,31 @@ def main(args: argparse.Namespace) -> None:
             input_dir=relax_output_dir / "raw_structures",
             output_dir=relax_output_dir / "filtered_structures",
             post_relax_config=post_relax_config,
+            remove_problematic=post_relax_config["remove_problematic"],
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
-            density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
+            density_min_cutoff=post_relax_config["density_min_cutoff"],  # g/cm³
+            density_max_cutoff=post_relax_config["density_max_cutoff"],  # g/cm³
+            assign_groups=post_relax_config["assign_groups"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
+            bin_by_conf=post_relax_config["bin_by_conf"],
+            bin_by_z=post_relax_config["bin_by_z"],
+            bin_by_spg=post_relax_config["bin_by_spg"],
+            density_bin_size=post_relax_config["density_bin_size"],
+            energy_bin_size=post_relax_config["energy_bin_size"],
+            remove_duplicates=post_relax_config["remove_duplicates"],
+            density_tol=post_relax_config["density_tol"],
+            energy_tol=post_relax_config["energy_tol"],
+            apply_niggli_filter=post_relax_config["apply_niggli_filter"],
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
-            logger, "filtering and deduplicating ML-relaxed structures", len(jobs)
+            logger, "filtering of ML-relaxed structures", len(jobs)
         )
 
-    # 5. (Optional) Compare predicted structures to experimental
+    # 6. (Optional) Compare predicted structures to experimental
     # using either CSD API or pymatgen StructureMatcher
     if "evaluate" in args.stages:
         logging.log_stage_start(
@@ -239,11 +283,10 @@ def main(args: argparse.Namespace) -> None:
         )
 
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
-        eval_config, eval_method = get_eval_config_and_method(config)
-
+        eval_config, eval_method, eval_dir_name = get_eval_config_and_method(config)
         jobs = compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
-            output_dir=relax_output_dir / "matched_structures",
+            output_dir=relax_output_dir / eval_dir_name,
             eval_method=eval_method,
             eval_config=eval_config,
             molecules_file=config["molecules"],
@@ -252,19 +295,37 @@ def main(args: argparse.Namespace) -> None:
             wait_for_jobs(jobs)
         logging.log_stage_complete(logger, "evaluation against experimental structures")
 
-    # 6. (Optional) Calculate free energies for structures
-    # TODO: Implementation in progress - will be available soon
-    if "free_energy" in args.stages:
-        logger.info("Free energy calculations requested...")
-        # calculate_free_energies(
-        #     relax_output_dir / "matched_structures",
-        #     relax_output_dir / "free_energy_results",
-        #     config,
-        # )
-        logger.info("Free energy calculations functionality coming soon...")
-        logger.info(
-            "Please check future releases or contact the developers for updates."
+    # 7. (Optional) Calculate vibrational free energies for structures
+    if "compute_free_energy" in args.stages:
+        logging.log_stage_start(logger, "vibrational free energy calculations")
+        from fairchem.applications.fastcsp.core.workflow.free_energy import (
+            collect_free_energy_results,
+            compute_free_energies,
+            get_free_energy_config,
+        )
+        from fairchem.applications.fastcsp.core.workflow.relax import (
+            get_relax_config_and_dir,
         )
 
-    logger.info("🎉 FastCSP workflow completed successfully!")
+        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        fe_config = get_free_energy_config(config)
+        fe_input_dir = relax_output_dir / fe_config["input_directory"]
+        fe_output_dir = relax_output_dir / "free_energy"
+        jobs = compute_free_energies(
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        wait_for_jobs(jobs)
+        collect_free_energy_results(
+            jobs=jobs,
+            input_dir=fe_input_dir,
+            output_dir=fe_output_dir,
+            fe_config=fe_config,
+        )
+        logging.log_stage_complete(
+            logger, "vibrational free energy calculations", len(jobs)
+        )
+
+    logger.info("🎉 FastCSP workflow completed!")
     logger.info("=" * 80)

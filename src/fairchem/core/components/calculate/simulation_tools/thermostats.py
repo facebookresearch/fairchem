@@ -16,7 +16,9 @@ from ase import units
 from ase.md.bussi import Bussi
 from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
+from ase.md.nptberendsen import NPTBerendsen
 from ase.md.verlet import VelocityVerlet
+from monty.json import jsanitize
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -104,11 +106,13 @@ class NoseHooverNVT(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         thermostat = dyn._thermostat
-        return {
-            "class_name": "NoseHooverNVT",
-            "eta": thermostat._eta.tolist(),
-            "p_eta": thermostat._p_eta.tolist(),
-        }
+        return jsanitize(
+            {
+                "class_name": "NoseHooverNVT",
+                "eta": thermostat._eta,
+                "p_eta": thermostat._p_eta,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         thermostat = dyn._thermostat
@@ -135,17 +139,19 @@ class BussiThermostat(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "BussiThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-            "transferred_energy": float(dyn.transferred_energy),
-        }
+        return jsanitize(
+            {
+                "class_name": "BussiThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+                "transferred_energy": dyn.transferred_energy,
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
@@ -181,16 +187,18 @@ class LangevinThermostat(Thermostat):
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
         rng_state = dyn.rng.get_state()
-        return {
-            "class_name": "LangevinThermostat",
-            "rng_state": {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            },
-        }
+        return jsanitize(
+            {
+                "class_name": "LangevinThermostat",
+                "rng_state": {
+                    "algorithm": rng_state[0],
+                    "keys": rng_state[1],
+                    "pos": rng_state[2],
+                    "has_gauss": rng_state[3],
+                    "cached_gaussian": rng_state[4],
+                },
+            }
+        )
 
     def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
         rng = state["rng_state"]
@@ -203,3 +211,33 @@ class LangevinThermostat(Thermostat):
                 rng["cached_gaussian"],
             )
         )
+
+
+@dataclass
+class BerendsenNPT(Thermostat):
+    """
+    Berendsen NPT thermostat/barostat for constant pressure simulations.
+    """
+
+    temperature_K: float
+    pressure_bar: float = 1.0
+    taut_fs: float = 5.0
+    taup_fs: float = 500.0
+    compressibility_bar: float = 5e-7
+
+    def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
+        return NPTBerendsen(
+            atoms=atoms,
+            timestep=timestep_fs * units.fs,
+            temperature_K=self.temperature_K,
+            pressure_au=self.pressure_bar * units.bar,
+            taut=self.taut_fs * units.fs,
+            taup=self.taup_fs * units.fs,
+            compressibility_au=self.compressibility_bar / units.bar,
+        )
+
+    def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:
+        return {"class_name": "BerendsenNPT"}
+
+    def restore_state(self, dyn: MolecularDynamics, state: dict[str, Any]) -> None:
+        pass

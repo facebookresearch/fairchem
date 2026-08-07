@@ -209,11 +209,11 @@ Browse source code, report issues, and contribute
 :::
 
 :::{card} Papers Using FAIRChem
-:link: ./core/papers_using_models.md
+:link: ./core/fair_chemistry_papers.md
 
 See how researchers are using our models
 +++
-[View publications →](./core/papers_using_models.md)
+[View publications →](./core/fair_chemistry_papers.md)
 :::
 
 :::{card} Open in Codespaces
@@ -233,4 +233,4 @@ Access pretrained UMA checkpoints
 :::
 ::::
 
-[Terms of Use](https://opensource.fb.com/legal/terms) | [Privacy Policy](https://opensource.fb.com/legal/privacy)
+Copyright © Meta Platforms, Inc | [Terms of Use](https://opensource.fb.com/legal/terms) | [Privacy Policy](https://opensource.fb.com/legal/privacy)

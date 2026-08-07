@@ -7,11 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import pickle
-
 import ase
 import ase.units as units
 from fairchem.data.oc.databases.pkls import SOLVENT_PKL_PATH
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 
 class Solvent:
@@ -49,7 +49,7 @@ class Solvent:
             self.name = str(self.atoms.symbols)
         elif solvent_id_from_db is not None:
             with open(solvent_db_path, "rb") as fp:
-                solvent_db = pickle.load(fp)
+                solvent_db = safe_pickle_load(fp)
             self._load_solvent(solvent_db[solvent_id_from_db])
 
         self.molar_mass = sum(self.atoms.get_masses())

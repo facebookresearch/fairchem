@@ -1,4 +1,9 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
 Tests for SphericalSmearing class.
 """
 
@@ -25,7 +30,9 @@ def test_spherical_smearing_comprehensive():
         smearing = SphericalSmearing(max_n=2, option=option)
 
         # Test basic shapes and dimensions
-        xyz = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float32)
+        xyz = torch.tensor(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=torch.float32
+        )
         output = smearing(xyz)
 
         assert output.shape == (3, smearing.out_dim)
@@ -41,20 +48,28 @@ def test_spherical_smearing_comprehensive():
 
         # Test m/n pairing: m must satisfy 0 <= m <= n
         for n_val, m_val in zip(smearing.n, smearing.m):
-            assert 0 <= m_val <= n_val, f"Invalid pairing in {option} mode: m={m_val}, n={n_val}"
+            assert (
+                0 <= m_val <= n_val
+            ), f"Invalid pairing in {option} mode: m={m_val}, n={n_val}"
 
     # Test option filtering logic
     all_sm = SphericalSmearing(max_n=2, option="all")
     sine_sm = SphericalSmearing(max_n=2, option="sine")
     cosine_sm = SphericalSmearing(max_n=2, option="cosine")
 
-    assert all(n % 2 == 1 for n in sine_sm.n), f"Sine mode has even n values: {sine_sm.n}"
-    assert all(n % 2 == 0 for n in cosine_sm.n), f"Cosine mode has odd n values: {cosine_sm.n}"
+    assert all(
+        n % 2 == 1 for n in sine_sm.n
+    ), f"Sine mode has even n values: {sine_sm.n}"
+    assert all(
+        n % 2 == 0 for n in cosine_sm.n
+    ), f"Cosine mode has odd n values: {cosine_sm.n}"
     assert len(sine_sm.n) + len(cosine_sm.n) == len(all_sm.n)
 
     # Test Y_00 constant: Y_00 = 1/sqrt(4π) ≈ 0.282 for any normalized vector
     y00_expected = 1.0 / np.sqrt(4 * np.pi)
-    assert torch.allclose(output[:, 0], torch.tensor(y00_expected, dtype=torch.float32), atol=1e-3)
+    assert torch.allclose(
+        output[:, 0], torch.tensor(y00_expected, dtype=torch.float32), atol=1e-3
+    )
 
 
 def test_spherical_smearing_edge_cases():
@@ -62,14 +77,17 @@ def test_spherical_smearing_edge_cases():
     smearing = SphericalSmearing(max_n=2, option="all")
 
     # Test axis-aligned vectors (including negative directions)
-    xyz = torch.tensor([
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [-1.0, 0.0, 0.0],
-        [0.0, -1.0, 0.0],
-        [0.0, 0.0, -1.0]
-    ], dtype=torch.float32)
+    xyz = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, -1.0],
+        ],
+        dtype=torch.float32,
+    )
     output = smearing(xyz)
 
     assert output.shape == (6, smearing.out_dim)

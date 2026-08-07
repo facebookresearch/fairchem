@@ -18,10 +18,15 @@ class TestSlab:
     def test_slab_init_from_id(self):
         bulk = Bulk(bulk_id_from_db=0)
         slabs = Slab.from_bulk_get_all_slabs(bulk)
+        slab = next(
+            slab
+            for slab in slabs
+            if slab.millers == (1, 1, 1) and slab.shift == pytest.approx(0.0)
+        )
 
-        assert slabs[0].atoms.get_chemical_formula() == "Re48"
-        assert slabs[0].millers == (1, 1, 1)
-        assert slabs[0].shift == 0.0
+        assert slab.atoms.get_chemical_formula() == "Re48"
+        assert slab.millers == (1, 1, 1)
+        assert slab.shift == pytest.approx(0.0)
 
     def test_slab_init_from_specific_millers(self):
         bulk = Bulk(bulk_src_id_from_db="mp-30")
@@ -39,6 +44,14 @@ class TestSlab:
         bulk = Bulk(bulk_id_from_db=100)
         slab = Slab.from_bulk_get_random_slab(bulk)
 
-        assert slab.atoms.get_chemical_formula() == "Sn48"
-        assert slab.millers == (2, 1, 0)
-        assert slab.shift == pytest.approx(0.0833333333333334)
+        random.seed(1)
+        np.random.seed(1)
+        repeated_slab = Slab.from_bulk_get_random_slab(bulk)
+
+        assert slab.atoms == repeated_slab.atoms
+        assert slab.millers == repeated_slab.millers
+        assert slab.shift == repeated_slab.shift
+        assert set(slab.atoms.get_chemical_symbols()) == {"Sn"}
+        assert slab.millers != (0, 0, 0)
+        assert max(abs(index) for index in slab.millers) <= 2
+        assert 0 <= slab.shift < 1

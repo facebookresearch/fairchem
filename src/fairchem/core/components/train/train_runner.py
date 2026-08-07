@@ -9,21 +9,21 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
-from torchtnt.framework.callback import Callback
 from torchtnt.framework.fit import fit
 
-from fairchem.core.common import distutils
 from fairchem.core.common.utils import get_subdirectories_sorted_by_time
+from fairchem.core.components.callbacks import (
+    StopBeforeTimeoutCallback,
+    TrainCheckpointCallback,
+)
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
     import torch
     from torchtnt.framework import EvalUnit, TrainUnit
-    from torchtnt.framework.state import State
-    from torchtnt.framework.unit import TTrainUnit
+    from torchtnt.framework.callback import Callback
 
 
 @runtime_checkable
@@ -69,56 +69,6 @@ def get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | 
     return most_recent_viable_checkpoint
 
 
-class TrainCheckpointCallback(Callback):
-    def __init__(
-        self,
-        checkpoint_every_n_steps: int,
-        max_saved_checkpoints: int = 2,
-    ):
-        self.checkpoint_every_n_steps = checkpoint_every_n_steps
-        self.max_saved_checkpoints = max_saved_checkpoints
-        self.save_callback = None
-        self.load_callback = None
-        self.checkpoint_dir = None
-
-    def set_runner_callbacks(
-        self, save_callback: callable, load_callback: callable, checkpoint_dir: str
-    ) -> None:
-        self.save_callback = save_callback
-        self.load_callback = load_callback
-        self.checkpoint_dir = checkpoint_dir
-
-    def on_train_step_start(self, state: State, unit: TTrainUnit) -> None:
-        # We try to save the checkpoint on_train_step_start instead of at the on_train_step_end because both the step and epoch counts are consistently updated before it gets here
-        # if we did this at on_train_step_end, the step would be correct but the epoch would have not been incremented and break the edge case on the last step of an epoch
-        assert (
-            self.save_callback
-        ), "Must initialize set_checkpoint_call_backs from Runner!"
-        step = unit.train_progress.num_steps_completed
-        if (
-            self.checkpoint_every_n_steps is not None
-            and step % self.checkpoint_every_n_steps == 0
-        ):
-            self.save_callback(os.path.join(self.checkpoint_dir, f"step_{step}"))
-            # on main rank only
-            # if there are too many checkpoints, delete the oldest one
-            if distutils.is_master():
-                checkpoint_dirs_by_time = get_subdirectories_sorted_by_time(
-                    self.checkpoint_dir
-                )
-                for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:
-                    if not os.path.islink(dir):
-                        shutil.rmtree(dir)
-
-    def on_train_end(self, state: State, unit: TTrainUnit) -> None:
-        if self.checkpoint_every_n_steps is not None:
-            # also always checkpoint on train end
-            assert (
-                self.save_callback
-            ), "Must initialize set_checkpoint_call_backs from Runner!"
-            self.save_callback(os.path.join(self.checkpoint_dir, "final"))
-
-
 class TrainEvalRunner(Runner):
     def __init__(
         self,
@@ -129,6 +79,8 @@ class TrainEvalRunner(Runner):
         max_epochs: int | None = 1,
         evaluate_every_n_steps: Optional[int] = None,
         max_steps: int | None = None,
+        max_eval_steps_per_epoch: int | None = None,
+        stop_before_timeout_min: float | None = None,
     ):
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
@@ -137,9 +89,11 @@ class TrainEvalRunner(Runner):
         self.max_epochs = max_epochs
         self.max_steps = max_steps
         self.evaluate_every_n_steps = evaluate_every_n_steps
+        self.max_eval_steps_per_epoch = max_eval_steps_per_epoch
+        self.stop_before_timeout_min = stop_before_timeout_min
 
         checkpoint_callbacks = [
-            c for c in callbacks if isinstance(c, TrainCheckpointCallback)
+            c for c in self.callbacks if isinstance(c, TrainCheckpointCallback)
         ]
         assert len(checkpoint_callbacks) <= 1
         self.checkpoint_callback = (
@@ -149,12 +103,17 @@ class TrainEvalRunner(Runner):
         logging.info(f"Eval Dataloader size {len(self.eval_dataloader)}")
 
     def run(self) -> None:
-        if self.checkpoint_callback is not None:
-            self.checkpoint_callback.set_runner_callbacks(
-                self.save_state,
-                self.load_state,
-                self.job_config.metadata.checkpoint_dir,
-            )
+        self._set_runner_callbacks(self.callbacks)
+
+        callbacks = self.callbacks
+        if self.stop_before_timeout_min is not None:
+            callbacks = [
+                *callbacks,
+                StopBeforeTimeoutCallback(
+                    timeout_hr=self._get_slurm_timeout_hr(),
+                    stop_before_timeout_min=self.stop_before_timeout_min,
+                ),
+            ]
 
         fit(
             self.train_eval_unit,
@@ -162,9 +121,29 @@ class TrainEvalRunner(Runner):
             eval_dataloader=self.eval_dataloader,
             max_epochs=self.max_epochs,
             max_steps=self.max_steps,
-            callbacks=self.callbacks,
+            max_eval_steps_per_epoch=self.max_eval_steps_per_epoch,
+            callbacks=callbacks,
             evaluate_every_n_steps=self.evaluate_every_n_steps,
         )
+
+    def _set_runner_callbacks(self, callbacks: list[Callback]) -> None:
+        for callback in callbacks:
+            set_callbacks = getattr(callback, "set_runner_callbacks", None)
+            if callable(set_callbacks):
+                set_callbacks(
+                    self.save_state,
+                    self.load_state,
+                    self.job_config.metadata.checkpoint_dir,
+                )
+
+    def _get_slurm_timeout_hr(self) -> float:
+        try:
+            return float(self.job_config.scheduler.slurm.timeout_hr)
+        except AttributeError as e:
+            raise ValueError(
+                "runner.stop_before_timeout_min requires "
+                "job.scheduler.slurm.timeout_hr"
+            ) from e
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         # in the case of preemption, don't attempt to save a new checkpoint but try to move an existing to the checkpoint_location

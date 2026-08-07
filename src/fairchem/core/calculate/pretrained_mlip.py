@@ -73,20 +73,26 @@ def get_predict_unit(
     device: Literal["cuda", "cpu"] | None = None,
     cache_dir: str = CACHE_DIR,
     workers: int = 1,
+    seed: int = 41,
+    gp_config=None,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
 
     Args:
         model_name: Name of the model to load from available pretrained models.
-        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
-            (optimized for speed but requires fixed atomic composition). Advanced use cases can
-            use a custom InferenceSettings object.
+        inference_settings: Settings for inference. Both "default" and "turbo" use the
+            merge_mole + compile fast path, with automatic fallback if its fixed-input
+            contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
+            unmerged for heterogeneous inputs. More advanced use cases can use a custom
+            InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
+        seed: Optional random seed for reproducibility. If provided, will set the random seed for
+            Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -112,6 +118,8 @@ def get_predict_unit(
         atom_refs,
         form_elem_refs,
         workers,
+        seed,
+        gp_config=gp_config,
     )
 
 

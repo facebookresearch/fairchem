@@ -10,11 +10,11 @@ from __future__ import annotations
 import gzip
 import json
 import os
-import pickle
 from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ class OMolRunner(CalculateRunner):
             benchmark: Benchmark function to evaluate the input data
         """
         with open(input_data, "rb") as f:
-            input_data = pickle.load(f)
+            input_data = safe_pickle_load(f)
         self.result_glob_pattern = f"{benchmark_name}_*-*.json.gz"
         self.benchmark_name = benchmark_name
         self.benchmark = benchmark

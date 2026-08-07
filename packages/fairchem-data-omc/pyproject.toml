@@ -9,7 +9,7 @@ description = "Code for generating OMC VASP inputs"
 license = {text = "MIT License"}
 dependencies = [
     "ase",
-    "atomate2==0.0.12",
+    "atomate2>=0.0.12",
     "pymatgen",
     "pyyaml",
     "tqdm"

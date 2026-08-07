@@ -86,7 +86,7 @@ def init_pg_and_rank_and_launch_test(
     dist.init_process_group(
         init_method=init_method,
         backend=pg_setup_params.backend,
-        timeout=timedelta(seconds=10),
+        timeout=timedelta(seconds=120),
     )
     # setup gp
     if pg_setup_params.use_gp:

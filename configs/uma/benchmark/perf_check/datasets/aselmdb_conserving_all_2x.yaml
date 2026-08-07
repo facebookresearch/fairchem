@@ -1,0 +1,317 @@
+
+data_root_dir: "."
+cpu_graph: false
+
+oc20_forces_key: oc20_forces
+omol_forces_key: omol_forces
+omat_forces_key: omat_forces
+odac_forces_key: odac_forces
+omc_forces_key: omc_forces
+
+max_atoms: 350
+min_atoms: 0
+
+exclude_keys: [
+  "id",
+  "fid",
+  "absolute_idx",
+  "target_pos",
+  "ref_energy",
+  "pbc",
+  "nads",
+  "oc22",
+  "formation_energy",
+  "total_charge",
+]
+
+oc20_train:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/oc20/oc20_train.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: oc20_energy
+    forces: ${datasets.oc20_forces_key}
+    stress: oc20_stress
+  transforms:
+    common_transform:
+      dataset_name: oc20
+    stress_reshape_transform:
+      dataset_name: oc20
+
+oc20_val:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/oc20/oc20_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: oc20_energy
+    forces: ${datasets.oc20_forces_key}
+    stress: oc20_stress
+  transforms:
+    common_transform:
+      dataset_name: oc20
+    stress_reshape_transform:
+      dataset_name: oc20
+
+omol_train:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omol/omol_train.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+    molecule_cell_size: 120.0
+  key_mapping:
+    energy: omol_energy
+    forces: ${datasets.omol_forces_key}
+    stress: omol_stress
+  transforms:
+    common_transform:
+      dataset_name: omol
+    stress_reshape_transform:
+      dataset_name: omol
+
+omol_val:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omol/omol_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+    molecule_cell_size: 120.0
+  key_mapping:
+    energy: omol_energy
+    forces: ${datasets.omol_forces_key}
+    stress: omol_stress
+  transforms:
+    common_transform:
+      dataset_name: omol
+    stress_reshape_transform:
+      dataset_name: omol
+
+omat_train:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omat/omat_train.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omat_energy
+    forces: ${datasets.omat_forces_key}
+    stress: omat_stress
+  transforms:
+    common_transform:
+      dataset_name: omat
+    stress_reshape_transform:
+      dataset_name: omat
+
+omat_val:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omat/omat_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omat_energy
+    forces: ${datasets.omat_forces_key}
+    stress: omat_stress
+  transforms:
+    common_transform:
+      dataset_name: omat
+    stress_reshape_transform:
+      dataset_name: omat
+
+odac_train:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/odac/odac_train.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: odac_energy
+    forces: ${datasets.odac_forces_key}
+    stress: odac_stress
+  transforms:
+    common_transform:
+      dataset_name: odac
+    stress_reshape_transform:
+      dataset_name: odac
+
+odac_val:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/odac/odac_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: odac_energy
+    forces: ${datasets.odac_forces_key}
+    stress: odac_stress
+  transforms:
+    common_transform:
+      dataset_name: odac
+    stress_reshape_transform:
+      dataset_name: odac
+
+omc_train:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omc/omc_train.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omc_energy
+    forces: ${datasets.omc_forces_key}
+    stress: omc_stress
+  transforms:
+    common_transform:
+      dataset_name: omc
+    stress_reshape_transform:
+      dataset_name: omc
+
+omc_val:
+  splits:
+    train:
+      src:
+        - ${datasets.data_root_dir}/omc/omc_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omc_energy
+    forces: ${datasets.omc_forces_key}
+    stress: omc_stress
+  transforms:
+    common_transform:
+      dataset_name: omc
+    stress_reshape_transform:
+      dataset_name: omc
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol: ${datasets.omol_train}
+    oc20: ${datasets.oc20_train}
+    omat: ${datasets.omat_train}
+    odac: ${datasets.odac_train}
+    omc: ${datasets.omc_train}
+  combined_dataset_config:
+    sampling:
+      type: explicit
+      ratios:
+        omol.train: 4.0
+        omc.train: 0.25
+        omat.train: 16.0
+        oc20.train: 0.5
+        odac.train: 0.25
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol: ${datasets.omol_val}
+    oc20: ${datasets.oc20_val}
+    omat: ${datasets.omat_val}
+    odac: ${datasets.odac_val}
+    omc: ${datasets.omc_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${datasets.train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${datasets.max_atoms}
+    min_atoms: ${datasets.min_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: 0
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${datasets.exclude_keys}
+
+val_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${datasets.val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${datasets.max_atoms}
+    min_atoms: ${datasets.min_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: 0
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${datasets.exclude_keys}

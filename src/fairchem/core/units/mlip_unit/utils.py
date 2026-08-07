@@ -17,6 +17,7 @@ from omegaconf import DictConfig
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
+from fairchem.core.models.uma.compat import apply_uma_compat_fixups
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
@@ -50,6 +51,8 @@ def load_inference_model(
         checkpoint = torch.load(
             checkpoint_location, map_location="cpu", weights_only=False
         )
+
+    apply_uma_compat_fixups(checkpoint, checkpoint_location=checkpoint_location)
 
     if overrides is not None:
         checkpoint.model_config = update_configs(checkpoint.model_config, overrides)
@@ -94,22 +97,25 @@ def load_tasks(checkpoint_location: str) -> list[Task]:
 
 
 @contextmanager
-def tf32_context_manager():
-    # Store the original settings
-    original_allow_tf32_matmul = torch.backends.cuda.matmul.allow_tf32
+def tf32_context_manager(tf32: bool):
+    """
+    Temporarily configure and restore TF32-related precision settings.
+
+    Args:
+        tf32: Whether to enable TF32 for float32 matmul and cuDNN operations.
+    """
+    original_precision = torch.get_float32_matmul_precision()
     original_allow_tf32_cudnn = torch.backends.cudnn.allow_tf32
-    original_float32_matmul_precision = torch.get_float32_matmul_precision()
+    configured_precision = "high" if tf32 else "highest"
     try:
-        # Set the desired settings
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
+        torch.backends.cudnn.allow_tf32 = tf32
+        if configured_precision != original_precision:
+            torch.set_float32_matmul_precision(configured_precision)
         yield
     finally:
-        # Revert to the original settings
-        torch.backends.cuda.matmul.allow_tf32 = original_allow_tf32_matmul
+        if configured_precision != original_precision:
+            torch.set_float32_matmul_precision(original_precision)
         torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
-        torch.set_float32_matmul_precision(original_float32_matmul_precision)
 
 
 def update_configs(original_config, new_config):

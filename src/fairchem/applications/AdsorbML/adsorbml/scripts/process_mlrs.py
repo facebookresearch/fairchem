@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 """
 This script processes ML relaxations and sets it up for the next step.
 - Reads final energy and structure for each relaxation
@@ -26,13 +27,14 @@ from __future__ import annotations
 import argparse
 import multiprocessing as mp
 import os
-import pickle
 from collections import defaultdict
 
 import numpy as np
 from ase.io import read
 from fairchem.data.oc.utils.flag_anomaly import DetectTrajAnomaly
 from tqdm import tqdm
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 SURFACE_CHANGE_CUTOFF_MULTIPLIER = 1.5
 DESORPTION_CUTOFF_MULTIPLIER = 1.5
@@ -149,7 +151,7 @@ if __name__ == "__main__":
     METADATA = args.metadata
     SURFACE_DIR = args.surface_dir
 
-    metadata_by_sid = pickle.load(open(METADATA, "rb"))
+    metadata_by_sid = safe_pickle_load(METADATA)
     mp_args = list(metadata_by_sid.items())
     pool = mp.Pool(args.workers)
     print("Processing ML trajectories...")

@@ -7,12 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import pickle
-
 import ase
 import ase.units as units
 import numpy as np
 from fairchem.data.oc.databases.pkls import ION_PKL_PATH
+
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 
 class Ion:
@@ -45,7 +45,7 @@ class Ion:
             self.name = str(self.atoms.symbols)
         else:
             with open(ion_db_path, "rb") as fp:
-                ion_db = pickle.load(fp)
+                ion_db = safe_pickle_load(fp)
             if ion_id_from_db is not None:
                 self._load_ion(ion_db[ion_id_from_db])
             else:

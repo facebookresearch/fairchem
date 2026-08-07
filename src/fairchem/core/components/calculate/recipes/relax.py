@@ -13,6 +13,8 @@ from ase.constraints import FixSymmetry
 from ase.optimize import FIRE
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ase import Atoms
     from ase.filters import Filter
     from ase.optimize import Optimizer
@@ -25,6 +27,7 @@ def relax_atoms(
     optimizer_cls: type[Optimizer] | None = None,
     fix_symmetry: bool = False,
     cell_filter_cls: type[Filter] | None = None,
+    observers: list[tuple[Callable, int]] | None = None,
 ) -> Atoms:
     """Simple helper function to run relaxations and return the relaxed Atoms
 
@@ -35,6 +38,8 @@ def relax_atoms(
         optimizer_cls: ASE optimizer. Default FIRE
         fix_symmetry: fix structure symmetry in relaxation: Default False
         cell_filter_cls: An instance of an ASE filter.
+        observers: Optional list of (callback, interval) tuples to attach to
+            the optimizer. Each callback is called every ``interval`` steps.
 
     Returns:
         Atoms: relaxed atoms
@@ -50,6 +55,10 @@ def relax_atoms(
 
     optimizer_cls = FIRE if optimizer_cls is None else optimizer_cls
     opt = optimizer_cls(_atoms, logfile=None)
+    if observers:
+        for callback, interval in observers:
+            opt.attach(callback, interval=interval)
+
     opt.run(fmax=fmax, steps=steps)
 
     atoms.info |= {

@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
-import pickle
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -17,6 +16,7 @@ from ase.io.jsonio import encode
 from ase.optimize import LBFGS
 from tqdm import tqdm
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.recipes.adsorbml import run_adsorbml
 
@@ -71,7 +71,7 @@ class AdsorbMLRunner(CalculateRunner):
         self.steps = steps
         self.optimizer_cls = optimizer_cls
         with open(input_data_path, "rb") as f:
-            input_data = pickle.load(f)
+            input_data = safe_pickle_load(f)
         super().__init__(calculator=calculator, input_data=input_data)
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:

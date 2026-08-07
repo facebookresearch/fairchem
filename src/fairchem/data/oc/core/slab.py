@@ -24,6 +24,8 @@ from pymatgen.core.surface import (
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
+from fairchem.core.common.safe_pickle import safe_pickle_load
+
 if TYPE_CHECKING:
     import ase
     from pymatgen.core.structure import Structure
@@ -180,7 +182,7 @@ class Slab:
         assert os.path.exists(precomputed_slabs_pkl)
 
         with open(precomputed_slabs_pkl, "rb") as fp:
-            slabs = pickle.load(fp)
+            slabs = safe_pickle_load(fp)
 
         is_slab_obj = np.all([isinstance(s, Slab) for s in slabs])
         if is_slab_obj:

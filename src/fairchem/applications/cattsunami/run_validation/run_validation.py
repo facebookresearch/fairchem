@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 """
 A python script to run a validation of the ML NEB model on a set of NEB calculations.
 This script has not been written to run in parallel, but should be modified to do so.
@@ -18,9 +19,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from ase.io import read
-from ase.optimize import BFGS
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
 from ase.mep import DyNEB
+from ase.optimize import BFGS
+
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 if TYPE_CHECKING:
     import ase
@@ -303,7 +305,19 @@ if __name__ == "__main__":
 
     # Unpack arguments
     args = parser.parse_args()
-    df = pd.read_pickle(args.mapping_file_path)
+    mapping_path = args.mapping_file_path
+    ext = mapping_path.rsplit(".", 1)[-1]
+    if ext == "parquet":
+        df = pd.read_parquet(mapping_path)
+    elif ext == "csv":
+        df = pd.read_csv(mapping_path)
+    else:
+        raise ValueError(
+            f"Unsupported file format '.{ext}' for mapping_file_path. "
+            "Use parquet or csv. Pickle files are no longer supported due to "
+            "security concerns (arbitrary code execution). Convert with: "
+            "pd.read_pickle('file.pkl').to_parquet('file.parquet')"
+        )
     entries = df.to_dict("records")
     checkpoint_path = args.checkpoint_path
     delta_fmax_climb = float(args.delta_fmax_climb)
@@ -330,11 +344,11 @@ if __name__ == "__main__":
             neb_frames = read(args.trajectory_path + "/" + file, index=":")[0:10]
 
             conv = False
-            
+
             for image in neb_frames:
                 image.calc = FAIRChemCalculator(predictor, task_name="oc20")
             neb = DyNEB(neb_frames, k=k)
-            
+
             # Optimize:
             optimizer = BFGS(
                 neb,
@@ -400,7 +414,7 @@ if __name__ == "__main__":
 
     # Process the results to get the % success and % convergence
     df = pd.DataFrame(entries)
-    df.to_pickle(f"{args.output_file_path}/{model_id}/results.pkl")
+    df.to_parquet(f"{args.output_file_path}/{model_id}/results.parquet")
 
     df["all_converged_ml"] = df.apply(all_converged, axis=1)
     df["both_barrierless"] = df.apply(both_barrierless, axis=1)
@@ -435,4 +449,4 @@ if __name__ == "__main__":
     print(
         f"Results including DFT SPs:\n% Success within 0.1 eV for converged: {conv_success_in_0_1}\n% Success within 0.05 eV for converged: {conv_success_in_0_05}\n% Success within 0.1 eV for all: {all_success_in_0_1}\n% Success within 0.05 eV for all: {all_success_in_0_05}\n% Convergence: {convergence}"
     )
-    df.to_pickle(f"{args.output_file_path}/{model_id}/results.pkl")
+    df.to_parquet(f"{args.output_file_path}/{model_id}/results.parquet")

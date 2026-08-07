@@ -1,0 +1,75 @@
+# Training benchmark config — 2x systems per batch variant
+# Same architecture as production but sampling ratios adjusted to pack
+# ~11 systems per batch (2x production) by upweighting small-atom datasets.
+
+defaults:
+  - datasets: aselmdb_conserving_all_2x
+  - tasks: oc20_omol_conserving_all
+  - backbone: K4L2
+  - optimizer: adamw
+  - _self_
+
+job:
+  device_type: CPU
+  scheduler:
+    mode: LOCAL
+    distributed_init_method: FILE
+  debug: True
+
+act_type: gate
+ff_type: spectral
+num_experts: 64
+bf16: False
+moe_layer_type: pytorch
+regress_stress: True
+direct_forces: False
+max_neighbors: 30
+cutoff_radius: 6.0
+max_steps: null
+max_epochs: 1
+
+backbone:
+  dataset_list: ["oc20", "omol", "omat", "odac", "omc"]
+
+heads:
+  energyandforcehead:
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
+    head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
+    head_kwargs:
+      wrap_property: False
+    dataset_names:
+      - omol
+      - oc20
+      - omat
+      - odac
+      - omc
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${datasets.train_dataloader}
+  eval_dataloader: ${datasets.val_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
+      heads: ${heads}
+      pass_through_head_outputs: True
+    optimizer_fn: ${optimizer}
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 1
+      lr_min_factor: 0.01
+      epochs: 1
+    print_every: 1
+    clip_grad_norm: 100
+    bf16: ${bf16}
+  max_epochs: ${max_epochs}
+  max_steps: ${max_steps}
+  callbacks:
+    - _target_: fairchem.core.components.benchmark.training.BenchmarkTrainCallback
+      benchmark_results_path: ???

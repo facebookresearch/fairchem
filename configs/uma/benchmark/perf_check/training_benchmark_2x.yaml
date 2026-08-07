@@ -1,0 +1,24 @@
+# Benchmark training fidelity and throughput: fp32 baseline vs candidate
+# 2x systems per batch variant — heavier sampling of small-atom datasets
+# (omat, omol) to pack ~11 systems per batch instead of ~5.5.
+#
+# Fake datasets are auto-generated and cached on first run.
+#
+# Usage:
+#   fairchem -c configs/uma/benchmark/perf_check/training_benchmark_2x.yaml
+
+defaults:
+  - job: local
+  - _self_
+
+job:
+  device_type: CPU
+
+runner:
+  _target_: fairchem.core.components.benchmark.training.TrainingBenchmarkRunner
+  training_config: configs/uma/benchmark/perf_check/training_inner_2x.yaml
+  device: "cuda"
+  bf16: False
+  throughput_steps: 50
+  seed: 42
+  candidate_overrides: null
