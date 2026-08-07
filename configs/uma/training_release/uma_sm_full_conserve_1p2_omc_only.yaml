@@ -11,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 32
+    num_nodes: 8
     slurm:
       account: ${cluster.account}
       qos: h200_ocp_high
@@ -19,7 +19,7 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: uma_sm_full_conserving_v1_2b_retain_bug_fix_cpp_speed_test
+  run_name: uma_sm_full_conserving_v1_2b_retain_bug_fix_cpp_omc_only
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
@@ -32,7 +32,7 @@ max_neighbors: 300
 cutoff_radius: 6
 epochs: 2.5
 steps: null #3216000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
-max_atoms: 350
+max_atoms: 1400
 bf16: False
 cpu_graph: True
 otf_graph: False
@@ -91,51 +91,51 @@ train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
     omc: ${dataset.omc_train}
-    omol: ${dataset.omol_train}
-    odac: ${dataset.odac_train}
-    omat: ${dataset.omat_train}
-    omat_rattle: ${dataset.omat_rattle_train}
-    oc20: ${dataset.oc20_train}
-    oc22: ${dataset.oc22_train}
-    oc25: ${dataset.oc25_train}
+    #omol: ${dataset.omol_train}
+    #odac: ${dataset.odac_train}
+    #omat: ${dataset.omat_train}
+    #omat_rattle: ${dataset.omat_rattle_train}
+    #oc20: ${dataset.oc20_train}
+    #oc22: ${dataset.oc22_train}
+    #oc25: ${dataset.oc25_train}
     omc_single_atoms: ${dataset.omc_single_atoms}
-    omol_single_atoms: ${dataset.omol_single_atoms}
-    odac_single_atoms: ${dataset.odac_single_atoms}
-    omat_single_atoms: ${dataset.omat_single_atoms}
-    oc20_single_atoms: ${dataset.oc20_single_atoms}
-    oc22_single_atoms: ${dataset.oc22_single_atoms}
-    oc25_single_atoms: ${dataset.oc25_single_atoms}
+    #omol_single_atoms: ${dataset.omol_single_atoms}
+    #odac_single_atoms: ${dataset.odac_single_atoms}
+    #omat_single_atoms: ${dataset.omat_single_atoms}
+    #oc20_single_atoms: ${dataset.oc20_single_atoms}
+    #oc22_single_atoms: ${dataset.oc22_single_atoms}
+    #oc25_single_atoms: ${dataset.oc25_single_atoms}
   combined_dataset_config:
     sampling:
       type: explicit
       ratios:
-        omol.train: 8.0
-        oc20.train: 1.0
+        #omol.train: 8.0
+        #oc20.train: 1.0
         omc.train: 2.0
-        odac.train: 1.0
-        omat.train: 2.0
-        omat_rattle.train: 1.0
-        oc22.train: 1.0
-        oc25.train: 8.0
-        omol_single_atoms.train: 640.0
-        oc20_single_atoms.train: 640.0
+        #odac.train: 1.0
+        #omat.train: 2.0
+        #omat_rattle.train: 1.0
+        #oc22.train: 1.0
+        #oc25.train: 8.0
+        #omol_single_atoms.train: 640.0
+        #oc20_single_atoms.train: 640.0
         omc_single_atoms.train: 640.0
-        odac_single_atoms.train: 640.0
-        omat_single_atoms.train: 640.0
-        oc22_single_atoms.train: 640.0
-        oc25_single_atoms.train: 640.0
+        #odac_single_atoms.train: 640.0
+        #omat_single_atoms.train: 640.0
+        #oc22_single_atoms.train: 640.0
+        #oc25_single_atoms.train: 640.0
 
 val_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
     omc: ${dataset.omc_val}
-    omol: ${dataset.omol_val}
-    omol_1: ${dataset.omol_1_val}
-    odac: ${dataset.odac_val}
-    omat: ${dataset.omat_val}
-    oc20: ${dataset.oc20_val}
-    oc22: ${dataset.oc22_val}
-    oc25: ${dataset.oc25_val}
+    #omol: ${dataset.omol_val}
+    #omol_1: ${dataset.omol_1_val}
+    #odac: ${dataset.odac_val}
+    #omat: ${dataset.omat_val}
+    #oc20: ${dataset.oc20_val}
+    #oc22: ${dataset.oc22_val}
+    #oc25: ${dataset.oc25_val}
   combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
 
 train_dataloader:

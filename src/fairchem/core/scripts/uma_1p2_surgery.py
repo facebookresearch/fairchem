@@ -114,6 +114,7 @@ def remove_omat_rattle(checkpoint):
     # Add single atom support
     checkpoint.model_config["supports_single_atoms"] = True
     checkpoint.model_config["model_id"] = "UMA-S-1.2"
+    checkpoint.model_config["backbone"]["model_version"] = 1.2
     return checkpoint
 
 

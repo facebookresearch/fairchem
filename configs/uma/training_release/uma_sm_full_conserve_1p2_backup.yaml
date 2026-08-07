@@ -11,28 +11,28 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 32
+    num_nodes: 16
     slurm:
       account: ${cluster.account}
-      qos: h200_ocp_high
+      qos: h100_ocp_high
       mem_gb: ${cluster.mem_gb}
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: uma_sm_full_conserving_v1_2b_retain_bug_fix_cpp_speed_test
+  run_name: uma_sm_full_conserving_v1_2b_retain_bug_fix_backup_2p5_epochs
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
     project: uma
 
-moe_layer_type: fairchem_cpp
+moe_layer_type: pytorch
 num_moe_experts: 64
 max_neighbors: 300
 cutoff_radius: 6
 epochs: 2.5
 steps: null #3216000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
-max_atoms: 350
+max_atoms: 700
 bf16: False
 cpu_graph: True
 otf_graph: False
