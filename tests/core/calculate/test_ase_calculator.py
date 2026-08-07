@@ -30,7 +30,6 @@ import ase.io
 import numpy as np
 import numpy.testing as npt
 import pytest
-import torch
 from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.io.jsonio import decode
@@ -336,19 +335,27 @@ def test_relaxation_final_energy(slab_atoms, all_models_predict_unit):
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 @pytest.mark.parametrize("inference_settings", ["default", "turbo"])
 def test_calculator_configurations(
-    inference_settings, slab_atoms, declared_predict_unit
+    inference_settings,
+    slab_atoms,
+    pretrained_checkpoint,
+    compile_reset_state,
 ):
-    # turbo mode requires compilation and needs to reset here
-    if inference_settings == "turbo":
-        torch.compiler.reset()
+    predict_unit = get_predict_unit_for_test(
+        pretrained_checkpoint,
+        inference_settings=inference_settings,
+    )
 
-    datasets = list(declared_predict_unit.dataset_to_tasks.keys())
+    assert predict_unit.inference_settings.merge_mole is True
+    assert predict_unit.inference_settings.compile is True
+    assert predict_unit.inference_settings.tf32 is (inference_settings == "turbo")
+
+    datasets = list(predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
-        declared_predict_unit,
+        predict_unit,
         task_name=datasets[0],
     )
     slab_atoms.calc = calc
-    assert declared_predict_unit.model.module.otf_graph is True
+    assert predict_unit.model.module.otf_graph is True
     # Test energy calculation
     energy = slab_atoms.get_potential_energy()
     assert isinstance(energy, float)

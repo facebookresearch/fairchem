@@ -182,7 +182,7 @@ class TestRayCluster:
             # Start head and workers
             requirements = {
                 "nodes": 2,
-                "gpus_per_task": 8,
+                "slurm_gpus_per_task": 8,
                 "cpus_per_task": 192,
                 "timeout_min": 60,
             }
@@ -218,7 +218,7 @@ class TestRayCluster:
             # Start head
             head_requirements = {
                 "nodes": 1,
-                "gpus_per_task": 8,
+                "slurm_gpus_per_task": 8,
                 "cpus_per_task": 192,
             }
 
@@ -237,7 +237,7 @@ class TestRayCluster:
             # Start workers
             worker_requirements = {
                 "nodes": 2,
-                "gpus_per_task": 8,
+                "slurm_gpus_per_task": 8,
                 "cpus_per_task": 192,
             }
 
