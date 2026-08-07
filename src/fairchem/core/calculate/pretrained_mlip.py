@@ -81,9 +81,11 @@ def get_predict_unit(
 
     Args:
         model_name: Name of the model to load from available pretrained models.
-        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
-            (optimized for speed but requires fixed atomic composition). Advanced use cases can
-            use a custom InferenceSettings object.
+        inference_settings: Settings for inference. Both "default" and "turbo" use the
+            merge_mole + compile fast path, with automatic fallback if its fixed-input
+            contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
+            unmerged for heterogeneous inputs. More advanced use cases can use a custom
+            InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
