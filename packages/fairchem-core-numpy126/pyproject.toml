@@ -13,7 +13,7 @@ dependencies = [
     "ray[serve]>=2.53.0",
     "numpy>=1.26.4,<2",
     "scipy>=1.15.0",
-    "lmdb>=1.6.2,<=1.7.3",
+    "lmdb>=2.0.0",
     "numba>=0.62.0",
     "e3nn>=0.5",
     "huggingface_hub>=0.27.1",
