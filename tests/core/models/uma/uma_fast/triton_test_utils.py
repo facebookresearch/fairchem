@@ -45,7 +45,7 @@ def node_to_edge_wigner_permute_launcher(
 
     Returns:
         out: Rotated edge features [E, 9, 2C] in M-major order (src||tgt)
-        x_edge: Pre-Wigner gathered features [E, 9, 2C] for backward dW
+        x_edge: Pre-Wigner gathered features [E, 9, 2C] (computed via PyTorch for backward tests)
     """
     # x: [N, 9, C] - node features with 9 coefficients (lmax=2)
     assert x.ndim == 3, "x must be 3D [N, 9, C]"
@@ -63,13 +63,8 @@ def node_to_edge_wigner_permute_launcher(
     # Flatten wigner [E, 9, 9] -> [E, 81]
     wigner_flat = wigner.reshape(num_edges, -1)
 
-    # Allocate outputs
+    # Allocate output (x_edge eliminated from kernel - computed below for tests)
     out = torch.empty(
-        (num_edges, 9, sphere_channels * 2),
-        dtype=x.dtype,
-        device=x.device,
-    )
-    x_edge = torch.empty(
         (num_edges, 9, sphere_channels * 2),
         dtype=x.dtype,
         device=x.device,
@@ -85,7 +80,6 @@ def node_to_edge_wigner_permute_launcher(
         edge_index,
         wigner_flat,
         out,
-        x_edge,
         num_edges,
         sphere_channels,
         x.stride(0),
@@ -95,12 +89,14 @@ def node_to_edge_wigner_permute_launcher(
         out.stride(0),
         out.stride(1),
         out.stride(2),
-        x_edge.stride(0),
-        x_edge.stride(1),
-        x_edge.stride(2),
         BLOCK_C=BLOCK_C,
         GRID_E_STRIDE=num_edges,
     )
+
+    # Compute x_edge via PyTorch for backward tests (no longer kernel output)
+    x_src = x[edge_index[0]]  # [E, 9, C]
+    x_tgt = x[edge_index[1]]  # [E, 9, C]
+    x_edge = torch.cat([x_src, x_tgt], dim=-1)  # [E, 9, 2C]
 
     return out, x_edge
 
@@ -121,7 +117,7 @@ def permute_wigner_inv_edge_to_node_launcher(
 
     Returns:
         out: Rotated features [E, 9, C] in L-major order
-        x_l: Permuted input [E, 9, C] (saved for backward dW computation)
+        x_l: Permuted input [E, 9, C] (computed via PyTorch for backward tests)
     """
     # x: [E, 9, C] - edge features with 9 coefficients (lmax=2)
     assert x.ndim == 3, "x must be 3D [E, 9, C]"
@@ -137,19 +133,21 @@ def permute_wigner_inv_edge_to_node_launcher(
     E, num_coeffs, C = x.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
     out = torch.empty_like(x)
-    x_l = torch.empty_like(x)
 
     # Use E as GRID_E_STRIDE so each program handles exactly one edge
     permute_wigner_inv_edge_to_node_kernel[(E, num_c_blocks)](
         x,
         wigner,
         out,
-        x_l,
         E,
         C,
         BLOCK_C=BLOCK_C,
         GRID_E_STRIDE=E,
     )
+
+    # Compute x_l via PyTorch for backward tests (no longer kernel output)
+    x_l = x[:, M_TO_L_GATHER_IDX, :]  # M→L permutation
+
     return out, x_l
 
 

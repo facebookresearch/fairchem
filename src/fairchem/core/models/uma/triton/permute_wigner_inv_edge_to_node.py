@@ -46,15 +46,12 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
 
         # Allocation VISIBLE to torch.compile (can be optimized)
         out = torch.empty_like(x)
-        x_l = torch.empty_like(x)
-
-        # Ensure inputs are contiguous for Triton
-        x = x.contiguous()
 
         # ONLY kernel launch is opaque (via custom_op with mutates_args)
-        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node(x, wigner, out, x_l)
+        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node(x, wigner, out)
 
-        ctx.save_for_backward(x_l, wigner)
+        # Save x (M-major) instead of x_l — bwd_dw kernel permutes internally
+        ctx.save_for_backward(x, wigner)
         return out
 
     @staticmethod
@@ -69,11 +66,8 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             grad_x: [E, 9, C] in M-major order
             grad_wigner: [E, 9, 9]
         """
-        x_l, wigner = ctx.saved_tensors
+        x_m, wigner = ctx.saved_tensors
         num_edges = grad_out.shape[0]
-
-        # Ensure contiguous for Triton (x_l from empty_like is always contiguous)
-        grad_out = grad_out.contiguous()
 
         # Allocation VISIBLE to torch.compile
         grad_x = torch.empty_like(grad_out)
@@ -90,9 +84,9 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             device=grad_out.device,
         )
 
-        # ONLY kernel launch is opaque
+        # Pass x_m (M-major) — kernel handles M→L permutation internally
         torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dw(
-            grad_out, x_l, grad_wigner_flat
+            grad_out, x_m, grad_wigner_flat
         )
 
         grad_wigner = grad_wigner_flat.reshape(num_edges, 9, 9)
