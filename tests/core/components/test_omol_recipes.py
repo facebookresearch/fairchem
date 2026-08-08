@@ -28,6 +28,7 @@ from fairchem.core.components.calculate.recipes.omol import (
     conformers,
     distance_scaling,
     ieea,
+    interaction_energy,
     ligand_pocket,
     ligand_strain,
     protonation,
@@ -321,6 +322,27 @@ class TestOmolRecipes(unittest.TestCase):
         assert "pocket" in result["protein_complex"]
         assert "ligand_pocket" in result["protein_complex"]
         assert result["protein_complex"]["ligand"] == {"test": "pocket_result"}
+        assert mock_single_point.call_count == 3
+
+    @patch("fairchem.core.components.calculate.recipes.omol.single_point_job")
+    @patch("fairchem.core.components.calculate.recipes.omol.tqdm")
+    def test_interaction_energy(self, mock_tqdm, mock_single_point):
+        """Test NCIA two-body interaction-energy single points."""
+        mock_tqdm.side_effect = lambda x, **kwargs: x
+        mock_single_point.return_value = {"test": "ixn_result"}
+
+        input_data = {
+            "08.002_125": {
+                "dimer": self.water_atoms.copy(),
+                "monomer_a": self.water_atoms.copy(),
+                "monomer_b": self.methane_atoms.copy(),
+            }
+        }
+
+        result = interaction_energy(input_data, self.calculator)
+
+        assert set(result["08.002_125"]) == {"dimer", "monomer_a", "monomer_b"}
+        assert result["08.002_125"]["dimer"] == {"test": "ixn_result"}
         assert mock_single_point.call_count == 3
 
     @patch("fairchem.core.components.calculate.recipes.omol.single_point_job")

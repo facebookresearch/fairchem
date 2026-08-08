@@ -369,6 +369,52 @@ def ligand_pocket(input_data: dict[str, Any], calculator: Calculator) -> dict[st
     return all_results
 
 
+def interaction_energy(
+    input_data: dict[str, Any], calculator: Calculator
+) -> dict[str, Any]:
+    """
+    Single-point energies/forces for two-body intermolecular interaction-energy
+    datapoints (monomer-referenced), e.g. the NCIA data sets.
+
+    Each `identifier` is one dimer; we run single points on the dimer and each
+    monomer as it sits inside the dimer. This recipe does NOT compute the
+    interaction energy itself -- the evaluator reconstructs
+    E_int = E_dimer - E_monomer_a - E_monomer_b from these per-component results.
+
+    Data-format invariant: for each identifier the monomer atoms must be an exact
+    partition of the "dimer" atoms (identical symbol AND position). Build monomers
+    by slicing the dimer geometry. Each Atoms must carry charge/spin in atoms.info.
+
+    Args:
+        input_data (dict): Input data organized by system identifier, with each
+            entry containing ASE Atoms objects for the dimer and each monomer,
+            e.g. {"dimer": Atoms, "monomer_a": Atoms, "monomer_b": Atoms}
+        calculator: ASE calculator object (e.g., FAIRChemCalculator) to use for energy/force calculations
+
+    Returns:
+        dict: Results organized in the following form -
+        {
+            "identifier_1": {
+                "dimer": {
+                    "atoms": MSONAtoms dictionary of the structure,
+                    "energy": Total energy (eV),
+                    "forces": Forces as a list (eV/Å),
+                },
+                "monomer_a": { ... },
+                "monomer_b": { ... },
+            },
+            "identifier_2": { ... },
+        }
+    """
+    all_results = {}
+    for identifier, entry in tqdm(input_data.items(), total=len(input_data)):
+        component_results = {}
+        for component_name, atoms in entry.items():
+            component_results[component_name] = single_point_job(atoms, calculator)
+        all_results[identifier] = component_results
+    return all_results
+
+
 def ligand_strain(input_data: dict[str, Any], calculator: Calculator) -> dict[str, Any]:
     """
     Calculate ligand strain energies in protein-bound conformations.
