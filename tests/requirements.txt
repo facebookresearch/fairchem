@@ -7,7 +7,7 @@ setuptools<84.0.0
 torch==2.13.0
 torchtnt==0.2.4
 numba==0.66.0
-numpy==2.4.6
+numpy==2.5.1
 scikit-learn==1.9.0
 lmdb==1.6.2
 pymatgen==v2026.5.4
