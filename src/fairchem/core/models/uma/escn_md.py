@@ -322,6 +322,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
+        preserve_connectivity: bool = False,
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
@@ -368,6 +369,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.preserve_connectivity = preserve_connectivity
         self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
@@ -656,6 +658,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
                 node_partition=node_partition,
+                preserve_connectivity=self.preserve_connectivity,
             )
         else:
             # this assume edge_index is provided

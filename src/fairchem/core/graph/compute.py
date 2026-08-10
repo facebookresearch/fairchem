@@ -123,6 +123,7 @@ def generate_graph(
     radius_pbc_version: int,
     pbc: torch.Tensor,
     node_partition: torch.Tensor | None = None,
+    preserve_connectivity: bool = False,
 ) -> dict:
     """Generate a graph representation from atomic structure data.
 
@@ -138,6 +139,7 @@ def generate_graph(
         radius_pbc_version: the version of radius_pbc impl (1, 2, or 3 for NVIDIA)
         pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
         node_partition (torch.Tensor | None): The partitioning of the nodes (atoms) for distributed inference. If provided, returned graph will be filtered to keep only edges where the target atom (edge_index[1,:]) belongs to the current rank's partition.
+        preserve_connectivity (bool): If True, re-add the shortest edges the max_neighbors budget dropped that the graph cannot stay connected without. Nearest-k truncation alone can split a physically connected structure into disconnected components.
 
     Returns:
         dict: A dictionary containing the generated graph with the following keys:
@@ -165,6 +167,7 @@ def generate_graph(
         max_neighbors,
         enforce_max_neighbors_strictly,
         pbc=pbc,
+        preserve_connectivity=preserve_connectivity,
     )
 
     # for v2 it is still faster right now to not do this post filtering, need to investigate further
