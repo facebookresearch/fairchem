@@ -90,6 +90,16 @@ def collate_predictions(predict_fn):
     return collated_predict
 
 
+def _prepare_inference_gradients(backbone, data: AtomicData) -> None:
+    regress_config = getattr(backbone, "regress_config", None)
+    if regress_config is None or regress_config.direct_forces:
+        return
+    if regress_config.forces or regress_config.stress:
+        data["pos"].requires_grad_(True)
+    if regress_config.stress:
+        data["cell"].requires_grad_(True)
+
+
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
@@ -493,6 +503,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         for key, val in data_device:
             if torch.is_tensor(val) and val.is_floating_point():
                 data_device[key] = val.to(dtype)
+
+        backbone = self.model.module.backbone
+        _prepare_inference_gradients(backbone, data_device)
 
         # Model handles any per-prediction checks (e.g., MOLE consistency)
         try:
