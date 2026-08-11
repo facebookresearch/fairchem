@@ -86,6 +86,17 @@ jobs:
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
+      - name: Resolve optional test paths
+        shell: bash
+        run: |
+          test_paths="${{ matrix.shard.paths }}"
+          if [[ "${{ matrix.shard.name }}" == "core" \
+            && -d tests/core/optimizers ]]; then
+            test_paths+=" tests/core/optimizers"
+          fi
+          echo "TEST_PATHS=$test_paths" >> "$GITHUB_ENV"
+          echo "Testing: $test_paths"
+
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
         with:
@@ -137,13 +148,15 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          read -r -a test_paths <<< "$TEST_PATHS"
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" "${test_paths[@]}" --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          read -r -a test_paths <<< "$TEST_PATHS"
+          pytest -m "serial and not gpu" "${test_paths[@]}" -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-coverage
