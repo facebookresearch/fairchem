@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.distributed._functional_collectives as funcol
+from omegaconf import OmegaConf
 from torch import distributed as dist
 from torch.distributed.nn.functional import all_reduce
 
@@ -189,7 +190,16 @@ def initialized() -> bool:
 
 
 def set_gp_config(config: GraphParallelConfig) -> None:
+    """
+    Store the graph parallel config as a plain dataclass.
+
+    Hydra passes a DictConfig, whose attribute reads torch.compile cannot
+    trace; the per-layer read then splits the backbone forward into a frame
+    per layer.
+    """
     global _GP_CONFIG
+    if OmegaConf.is_config(config):
+        config = OmegaConf.to_object(config)
     _GP_CONFIG = config
 
 
@@ -284,6 +294,30 @@ class ReduceFromModelParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return grad_output
+
+
+def all_reduce_sum_with_grad(input: torch.Tensor) -> torch.Tensor:
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    return AllReduceSumWithGrad.apply(input)
+
+
+class AllReduceSumWithGrad(torch.autograd.Function):
+    """
+    Sum a tensor across the graph parallel group, differentiably.
+
+    The backward is a second sum, where ReduceFromModelParallelRegion's is the
+    identity: every rank consumes the reduced value independently, so one
+    rank's contribution collects gradient from all of them.
+    """
+
+    @staticmethod
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        ctx.group = get_gp_group()
+        return funcol.all_reduce(input, "sum", ctx.group)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
+        return funcol.all_reduce(grad_output, "sum", ctx.group)
 
 
 def scatter_to_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
