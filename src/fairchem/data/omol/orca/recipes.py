@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 import psutil
-from omdata.orca.calc import (
+from fairchem.data.omol.orca.calc import (
     NBO_FLAGS,
     OPT_PARAMETERS,
     ORCA_BASIS,
@@ -69,11 +69,10 @@ def single_point_calculation(
     calc_kwargs:
         Additional kwargs for the custom Orca calculator
     """
-    from quacc import SETTINGS
+    if outputdir:
+        from quacc import SETTINGS
 
-    if outputdir is None:
-        outputdir = os.getcwd()
-    SETTINGS.RESULTS_DIR = outputdir
+        SETTINGS.RESULTS_DIR = outputdir
 
     if orcasimpleinput is None:
         orcasimpleinput = ORCA_SIMPLE_INPUT.copy()
@@ -158,11 +157,10 @@ def ase_relaxation(
     calc_kwargs:
         Additional kwargs for the custom Orca calculator
     """
-    from quacc import SETTINGS
+    if outputdir:
+        from quacc import SETTINGS
 
-    if outputdir is None:
-        outputdir = os.getcwd()
-    SETTINGS.RESULTS_DIR = outputdir
+        SETTINGS.RESULTS_DIR = outputdir
 
     if orcasimpleinput is None:
         orcasimpleinput = ORCA_SIMPLE_INPUT.copy()
