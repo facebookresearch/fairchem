@@ -377,6 +377,94 @@ def test_parallel_predict_unit_gpu(
     )
 
 
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason="Multi-GPU (4+) test, skipped in CI",
+)
+@pytest.mark.gpu()
+@pytest.mark.parametrize("num_atoms", [10, 50, 100])
+@pytest.mark.parametrize(
+    "workers, gp_mode",
+    [
+        # All-gather (default GP)
+        (1, None),
+        (2, None),
+        (4, None),
+        # A2A + spatial
+        (1, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        (2, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        (4, GraphParallelConfig(mode="all_to_all", partition="spatial")),
+        # A2A + index_split
+        (1, GraphParallelConfig(mode="all_to_all", partition="index_split")),
+        (2, GraphParallelConfig(mode="all_to_all", partition="index_split")),
+        (4, GraphParallelConfig(mode="all_to_all", partition="index_split")),
+    ],
+)
+@pytest.mark.pretrained("uma-s-1p1")
+def test_full_model_gp_correctness(num_atoms, workers, gp_mode, pretrained_checkpoint):
+    """
+    Full-model GP correctness: compare ParallelMLIPPredictUnit (no-GP /
+    allgather / A2A-spatial / A2A-index_split at 1/2/4 workers) against a
+    single-GPU reference on energy, forces, and stress.
+    """
+    seed = 42
+    model_path = _resolve_checkpoint_path(pretrained_checkpoint)
+    ifsets = InferenceSettings(
+        tf32=False,
+        merge_mole=True,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+
+    seed_everywhere(seed)
+    ppunit = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device="cuda",
+        inference_settings=ifsets,
+        num_workers=workers,
+        gp_config=gp_mode,
+    )
+    pp_results = ppunit.predict(atomic_data)
+    distutils.cleanup_gp_ray()
+
+    seed_everywhere(seed)
+    ref_unit = get_predict_unit_for_test(
+        pretrained_checkpoint, device="cuda", inference_settings=ifsets
+    )
+    ref_results = ref_unit.predict(atomic_data)
+
+    assert torch.allclose(
+        pp_results["energy"].detach().cpu(),
+        ref_results["energy"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Energy mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"pp={pp_results['energy'].item():.6f}, "
+        f"ref={ref_results['energy'].item():.6f}"
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu(),
+        ref_results["forces"].detach().cpu(),
+        atol=FORCE_TOL,
+    ), (
+        f"Forces mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}, "
+        f"max_diff={torch.max(torch.abs(pp_results['forces'].detach().cpu() - ref_results['forces'].detach().cpu())).item():.6e}"
+    )
+    assert torch.allclose(
+        pp_results["stress"].detach().cpu(),
+        ref_results["stress"].detach().cpu(),
+        atol=ATOL,
+    ), (
+        f"Stress mismatch: workers={workers}, gp_mode={gp_mode}, "
+        f"num_atoms={num_atoms}"
+    )
+
+
 def _test_parallel_predict_unit_batch_impl(
     workers, device, checkpointing, pretrained_checkpoint, gp_mode=None
 ):
