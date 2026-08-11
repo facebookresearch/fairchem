@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
-    AllToAllCollect,
     GPContext,
     all_to_all_collect,
     build_gp_context,
@@ -21,7 +20,6 @@ from fairchem.core.common.parallelism.graph_partition import (
 )
 
 __all__ = [
-    "AllToAllCollect",
     "GPContext",
     "PartitionStrategy",
     "all_to_all_collect",
