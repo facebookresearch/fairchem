@@ -780,9 +780,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Must be set before graph generation so the computation graph
         # tracks positions and cell through edge distance calculations.
         if not self.regress_config.direct_forces:
-            if self.regress_config.forces or self.regress_config.stress:
+            if (
+                self.regress_config.forces or self.regress_config.stress
+            ) and not data_dict["pos"].requires_grad:
                 data_dict["pos"].requires_grad_(True)
-            if self.regress_config.stress:
+            if self.regress_config.stress and not data_dict["cell"].requires_grad:
                 data_dict["cell"].requires_grad_(True)
 
         with record_function("generate_graph"):
