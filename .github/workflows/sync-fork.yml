@@ -1,0 +1,33 @@
+name: sync fork
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-fork-main
+  cancel-in-progress: true
+
+jobs:
+  push-to-private:
+    if: github.repository == facebookresearch/fairchem
+    runs-on: ubuntu-latest
+    environment: sync-private
+    steps:
+      - name: Checkout public repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT}}
+
+      - name: Push to private repository
+        run: |
+          git push \
+            https://github.com/fairinternal/fairchem.git \
+            HEAD:refs/heads/main \
+            --force

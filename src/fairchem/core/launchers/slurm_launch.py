@@ -25,7 +25,7 @@ from submitit.slurm.slurm import SlurmJobEnvironment
 from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import distutils
-from fairchem.core.common.gp_utils import setup_graph_parallel_groups
+from fairchem.core.common.gp_utils import set_gp_config, setup_graph_parallel_groups
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
     setup_env_vars,
@@ -147,12 +147,13 @@ class SlurmSPMDProgram(Checkpointable):
                 self.config.job.metadata.slurm_env.job_id,
             )
 
-        if self.config.job.graph_parallel_group_size is not None:
+        if self.config.job.graph_parallel.group_size > 1:
             logging.info("Setting up graph parallel...")
             setup_graph_parallel_groups(
-                self.config.job.graph_parallel_group_size,
+                self.config.job.graph_parallel.group_size,
                 dist_config["distributed_backend"],
             )
+            set_gp_config(self.config.job.graph_parallel)
 
         self._init_logger()
 
@@ -277,7 +278,9 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> list:
         mem_gb=scheduler_cfg.slurm.mem_gb,
         timeout_min=scheduler_cfg.slurm.timeout_hr * 60,
         slurm_partition=scheduler_cfg.slurm.partition,
-        gpus_per_node=scheduler_cfg.ranks_per_node,
+        gpus_per_node=(
+            0 if cfg.job.device_type == DeviceType.CPU else scheduler_cfg.ranks_per_node
+        ),
         cpus_per_task=scheduler_cfg.slurm.cpus_per_task,
         tasks_per_node=scheduler_cfg.ranks_per_node,
         nodes=scheduler_cfg.num_nodes,

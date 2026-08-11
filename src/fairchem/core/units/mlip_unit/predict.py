@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+import gc
 import logging
 import math
 import os
@@ -38,9 +39,11 @@ from fairchem.core.common.distutils import (
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
+    ExecutionMode,
     maybe_update_settings_backend,
 )
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.api.inference import MergeMoleConsistencyError
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
@@ -55,6 +58,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ray.serve.handle import DeploymentHandle
 
+    from fairchem.core.common.gp_utils import GraphParallelConfig
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
@@ -84,6 +88,16 @@ def collate_predictions(predict_fn):
         return {prop: torch.cat(val) for prop, val in collated_preds.items()}
 
     return collated_predict
+
+
+def _prepare_inference_gradients(backbone, data: AtomicData) -> None:
+    regress_config = getattr(backbone, "regress_config", None)
+    if regress_config is None or regress_config.direct_forces:
+        return
+    if regress_config.forces or regress_config.stress:
+        data["pos"].requires_grad_(True)
+    if regress_config.stress:
+        data["cell"].requires_grad_(True)
 
 
 class MLIPPredictUnitProtocol(Protocol):
@@ -116,29 +130,51 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if inference_settings is None:
             inference_settings = InferenceSettings()
 
-        self.inference_settings = inference_settings
-        self._setup_threads(inference_settings)
+        # Named inference modes (e.g., default, turbo) are shared module-level instances. We keep a
+        # private copy so a change driven by a contract break does not alter other predictors.
+        self.inference_settings = copy.deepcopy(inference_settings)
+        self._inference_model_path = inference_model_path
+        self._overrides = copy.deepcopy(overrides)
+        self._requested_device = device
+        self._setup_threads(self.inference_settings)
 
         if self.inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Load checkpoint first to get model type; UMA compat fixups run downstream in load_inference_model.
+        self._load_model()
+        self._setup_device(device)
+
+        self.model.eval()
+        self.lazy_model_intialized = False
+        self.assert_on_nans = assert_on_nans
+        self._warned_upcast = False
+
+        if self.model.module.backbone.regress_config.direct_forces:
+            logging.warning(
+                "This is a direct-force model. Direct force predictions may lead to "
+                "discontinuities in the potential energy surface and energy conservation errors."
+            )
+
+    def _load_model(self) -> None:
+        """Load a fresh, unprepared model from the inference checkpoint."""
+        # Load checkpoint first to get model type; UMA compat fixups run downstream
+        # in load_inference_model.
         checkpoint = torch.load(
-            inference_model_path, map_location="cpu", weights_only=False
+            self._inference_model_path, map_location="cpu", weights_only=False
         )
 
         # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
         # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
-        if torch.device(device).type == "cuda":
+        if torch.device(self._requested_device).type == "cuda":
             self.inference_settings = maybe_update_settings_backend(
                 self.inference_settings, checkpoint.model_config
             )
 
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
-            checkpoint, overrides, self.inference_settings
+            checkpoint, self._overrides, self.inference_settings
         )
 
         # Set default dtype during model construction so that non-persistent
@@ -150,7 +186,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         try:
             # Load model with overrides, passing pre-loaded checkpoint
             self.model, checkpoint = load_inference_model(
-                inference_model_path,
+                self._inference_model_path,
                 use_ema=True,
                 overrides=final_overrides,
                 preloaded_checkpoint=checkpoint,
@@ -192,19 +228,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"{[t.name for t in untrained_tasks]}"
             )
             self.model.module.add_tasks(untrained_tasks)
-
-        self._setup_device(device)
-
         self.model.eval()
-        self.lazy_model_intialized = False
-        self.assert_on_nans = assert_on_nans
-        self._warned_upcast = False
-
-        if self.model.module.backbone.regress_config.direct_forces:
-            logging.warning(
-                "This is a direct-force model. Direct force predictions may lead to "
-                "discontinuities in the potential energy surface and energy conservation errors."
-            )
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -408,6 +432,33 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if task.element_references is not None:
                 task.element_references.to(self.device)
 
+    def _fall_back_from_fast_path(
+        self, consistency_error: MergeMoleConsistencyError
+    ) -> None:
+        logging.warning(
+            "The UMA fast path (merge_mole + compile) is only available for "
+            "fixed composition, task, charge, and spin. This is optimized for "
+            "MD applications. Falling back to a less optimized version for "
+            "subsequent evaluations. "
+            f"Reason: '{consistency_error}'.\n"
+            "Use inference_settings='batch' for heterogeneous batched evaluations."
+        )
+
+        # Fall back to unmerged and uncompiled model:
+        # 1. change flags
+        self.inference_settings.merge_mole = False
+        self.inference_settings.compile = False
+        if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
+            self.inference_settings.execution_mode = ExecutionMode.GENERAL
+        self.lazy_model_intialized = False
+        # 2. clear old model and relative memory
+        del self.model
+        gc.collect()
+        if torch.device(self._requested_device).type == "cuda":
+            torch.cuda.empty_cache()
+        # 3. reload model with the new settings
+        self._load_model()
+
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
@@ -424,7 +475,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            self._lazy_init(data)
+            try:
+                self._lazy_init(data)
+            except MergeMoleConsistencyError as error:
+                self._fall_back_from_fast_path(error)
+                self._lazy_init(data)
 
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms
@@ -449,8 +504,16 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if torch.is_tensor(val) and val.is_floating_point():
                 data_device[key] = val.to(dtype)
 
+        backbone = self.model.module.backbone
+        _prepare_inference_gradients(backbone, data_device)
+
         # Model handles any per-prediction checks (e.g., MOLE consistency)
-        self.model.module.on_predict_check(data_device)
+        try:
+            self.model.module.on_predict_check(data_device)
+        except MergeMoleConsistencyError as error:
+            self._fall_back_from_fast_path(error)
+            self._lazy_init(data)
+            self.model.module.on_predict_check(data_device)
 
         return self._run_inference(data_device, undo_element_references)
 
@@ -460,6 +523,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
+        # Inference differentiates outputs with respect to inputs, not weights.
+        self.model.requires_grad_(False)
 
         self.model.to(self.inference_settings.base_precision_dtype)
 
@@ -542,10 +607,12 @@ class MLIPWorkerLocal:
         predictor_config: dict,
         master_port: int | None = None,
         master_address: str | None = None,
+        gp_config: GraphParallelConfig | None = None,
     ):
         self.worker_id = worker_id
         self.world_size = world_size
         self.predictor_config = predictor_config
+        self.gp_config = gp_config
         self.master_address = (
             ray.util.get_node_ip_address() if master_address is None else master_address
         )
@@ -575,7 +642,9 @@ class MLIPWorkerLocal:
             rank=self.worker_id,
             world_size=self.world_size,
         )
-        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+        if self.gp_config is not None:
+            gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+            gp_utils.set_gp_config(self.gp_config)
         self.predict_unit = hydra.utils.instantiate(self.predictor_config)
         self.device = get_device_for_local_rank()
         logging.info(
@@ -623,8 +692,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         num_workers: int = 1,
         num_workers_per_node: int = 8,
         log_level: int = logging.INFO,
+        gp_config: GraphParallelConfig | None = None,
     ):
         super().__init__()
+
+        gp_config = gp_utils.resolve_gp_config_for_workers(gp_config, num_workers)
+
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,
             device="cpu",
@@ -706,7 +779,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
-        ).remote(0, num_workers, predict_unit_config)
+        ).remote(0, num_workers, predict_unit_config, gp_config=gp_config)
 
         local_gpu_or_cpu = ray.get(rank0_worker.get_device_for_local_rank.remote())
         os.environ[CURRENT_DEVICE_TYPE_STR] = local_gpu_or_cpu
@@ -716,6 +789,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             worker_id=0,
             world_size=num_workers,
             predictor_config=predict_unit_config,
+            gp_config=gp_config,
         )
         master_addr, master_port = self.local_rank0.get_master_address_and_port()
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
@@ -748,6 +822,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                     predict_unit_config,
                     master_port,
                     master_addr,
+                    gp_config=gp_config,
                 )
                 self.workers.append(actor)
                 worker_id += 1

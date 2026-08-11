@@ -35,6 +35,7 @@ from fairchem.core.models.uma.nn.mole_utils import (
     replace_linear_with_MOLE,
     replace_MOLE_with_linear,
 )
+from fairchem.core.units.mlip_unit.api.inference import MergeMoleConsistencyError
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
@@ -247,28 +248,39 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
 
         # Normalize to reduced compositions
         reduced = compositions / compositions.sum(dim=1, keepdim=True)
-        assert reduced.isclose(reduced[0:1].expand_as(reduced), rtol=1e-5).all(), (
-            "All systems in batch must have the same reduced composition "
-            "when using merge_mole"
-        )
+        if not reduced.isclose(reduced[0:1].expand_as(reduced), rtol=1e-5).all():
+            raise MergeMoleConsistencyError(
+                "All systems in batch must have the same reduced composition "
+                "when using merge_mole"
+            )
 
         # Check charge, spin, dataset are the same across systems
         charge = data.charge
-        if isinstance(charge, torch.Tensor):
-            assert (charge == charge[0]).all(), (
+        if isinstance(charge, torch.Tensor) and not (charge == charge[0]).all():
+            raise MergeMoleConsistencyError(
                 f"All systems must have the same charge for merge_mole, "
                 f"got {charge}"
             )
 
         spin = data.spin
-        if isinstance(spin, torch.Tensor):
-            assert (
-                spin == spin[0]
-            ).all(), f"All systems must have the same spin for merge_mole, got {spin}"
+        if isinstance(spin, torch.Tensor) and not (spin == spin[0]).all():
+            raise MergeMoleConsistencyError(
+                f"All systems must have the same spin for merge_mole, got {spin}"
+            )
 
         dataset = data.dataset
         if isinstance(dataset, torch.Tensor) and dataset.numel() > 1:
-            assert (dataset == dataset[0]).all(), (
+            if not (dataset == dataset[0]).all():
+                raise MergeMoleConsistencyError(
+                    f"All systems must have the same dataset for merge_mole, "
+                    f"got {dataset}"
+                )
+        elif (
+            isinstance(dataset, (list, tuple))
+            and len(dataset) > 1
+            and any(item != dataset[0] for item in dataset[1:])
+        ):
+            raise MergeMoleConsistencyError(
                 f"All systems must have the same dataset for merge_mole, "
                 f"got {dataset}"
             )
@@ -315,9 +327,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         merged_norm = merged[0].float() / merged[0].sum()
         curr_norm = current[0].float().to(device) / current[0].sum().to(device)
 
-        assert merged_norm.isclose(
-            curr_norm, rtol=1e-5
-        ).all(), "Compositions differ from merged model"
+        if not merged_norm.isclose(curr_norm, rtol=1e-5).all():
+            raise MergeMoleConsistencyError("Compositions differ from merged model")
 
         # Charge and spin are tensors that need device alignment
         merged_charge = merged[1]
@@ -326,11 +337,15 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
             if isinstance(current[1], torch.Tensor)
             else current[1]
         )
-        assert (
+        charge_matches = (
             (merged_charge == curr_charge).all()
             if isinstance(merged_charge, torch.Tensor)
             else merged_charge == curr_charge
-        ), f"Charge differs: {merged_charge} vs {current[1]}"
+        )
+        if not charge_matches:
+            raise MergeMoleConsistencyError(
+                f"Charge differs: {merged_charge} vs {current[1]}"
+            )
 
         merged_spin = merged[2]
         curr_spin = (
@@ -338,13 +353,20 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
             if isinstance(current[2], torch.Tensor)
             else current[2]
         )
-        assert (
+        spin_matches = (
             (merged_spin == curr_spin).all()
             if isinstance(merged_spin, torch.Tensor)
             else merged_spin == curr_spin
-        ), f"Spin differs: {merged_spin} vs {current[2]}"
+        )
+        if not spin_matches:
+            raise MergeMoleConsistencyError(
+                f"Spin differs: {merged_spin} vs {current[2]}"
+            )
 
-        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
+        if merged[3] != current[3]:
+            raise MergeMoleConsistencyError(
+                f"Dataset differs: {merged[3]} vs {current[3]}"
+            )
 
     def on_predict_check(self, data: AtomicData) -> None:
         """
