@@ -46,6 +46,18 @@ L_TO_M_GATHER_IDX = [0] * 9
 for i, val in enumerate(M_TO_L_GATHER_IDX):
     L_TO_M_GATHER_IDX[val] = i
 
+
+def _compact_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    return torch.cat(
+        (
+            wigner[:, :1, :1].flatten(1),
+            wigner[:, 1:4, 1:4].flatten(1),
+            wigner[:, 4:9, 4:9].flatten(1),
+        ),
+        dim=1,
+    )
+
+
 # =============================================================================
 # Tests: Validation Errors
 # =============================================================================
@@ -128,6 +140,56 @@ def test_umas_fast_gpu_validation_accepts_hessian_loop():
     settings.hessian_vmap = False
 
     UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+def test_compact_edge_degree_matches_dense():
+    torch.manual_seed(42)
+    num_edges, channels = 16, 8
+    scatter_target = torch.arange(num_edges, device="cuda")
+    x = torch.randn(
+        num_edges, 9, channels, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    radial = torch.randn(
+        num_edges, 3 * channels, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    dense = torch.zeros(
+        num_edges, 9, 9, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    with torch.no_grad():
+        dense[:, 0, 0] = torch.randn(num_edges, device="cuda", dtype=torch.float64)
+        dense[:, 1:4, 1:4] = torch.randn(
+            num_edges, 3, 3, device="cuda", dtype=torch.float64
+        )
+        dense[:, 4:9, 4:9] = torch.randn(
+            num_edges, 5, 5, device="cuda", dtype=torch.float64
+        )
+    compact = _compact_l2_wigner(dense.detach()).requires_grad_()
+    dense_inputs = (x, radial, dense)
+    compact_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in (x, radial)
+    ) + (compact,)
+
+    def run(inputs):
+        return UMASFastGPUBackend.edge_degree_scatter(
+            inputs[0], inputs[1], inputs[2], scatter_target, 3, channels, 4.0
+        )
+
+    dense_out = run(dense_inputs)
+    compact_out = run(compact_inputs)
+    grad_out = torch.randn_like(dense_out)
+    dense_grads = torch.autograd.grad(dense_out, dense_inputs, grad_out)
+    compact_grads = torch.autograd.grad(compact_out, compact_inputs, grad_out)
+
+    torch.testing.assert_close(compact_out, dense_out, rtol=0, atol=0)
+    torch.testing.assert_close(compact_grads[0], dense_grads[0], rtol=0, atol=0)
+    torch.testing.assert_close(compact_grads[1], dense_grads[1], rtol=2e-15, atol=3e-16)
+    torch.testing.assert_close(
+        compact_grads[2],
+        _compact_l2_wigner(dense_grads[2]),
+        rtol=1e-14,
+        atol=5e-16,
+    )
 
 
 # =============================================================================
@@ -464,6 +526,34 @@ def test_permute_wigner_inv_matches_pytorch(sphere_channels):
 
 
 @pytest.mark.gpu()
+def test_legacy_backend_rotations_accept_compact_wigner():
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 16, 32, 128
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
+    dense = _create_block_diagonal_wigner(num_edges, "cuda")
+    compact = _compact_l2_wigner(dense)
+    nodes = torch.randn(num_nodes, 9, channels, device="cuda")
+    edges = torch.randn(num_edges, 9, channels, device="cuda")
+    scatter_target = torch.arange(num_edges, device="cuda")
+
+    dense_node_to_edge = UMASFastGPUBackend.node_to_edge_wigner_permute(
+        nodes, edge_index, dense
+    )
+    compact_node_to_edge = UMASFastGPUBackend.node_to_edge_wigner_permute(
+        nodes, edge_index, compact
+    )
+    dense_edge_to_node = UMASFastGPUBackend.permute_wigner_inv_edge_to_node(
+        edges, dense, scatter_target, num_edges
+    )
+    compact_edge_to_node = UMASFastGPUBackend.permute_wigner_inv_edge_to_node(
+        edges, compact, scatter_target, num_edges
+    )
+
+    torch.testing.assert_close(compact_node_to_edge, dense_node_to_edge)
+    torch.testing.assert_close(compact_edge_to_node, dense_edge_to_node)
+
+
+@pytest.mark.gpu()
 @pytest.mark.parametrize("sphere_channels", [128, 256, 512])
 def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
     """
@@ -571,6 +661,9 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
     assert torch.allclose(
         baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
+    assert torch.allclose(
+        baseline_out["stress"], test_out["stress"], rtol=5e-4, atol=5e-5
+    ), f"Stress mismatch: max diff = {(baseline_out['stress'] - test_out['stress']).abs().max()}"
 
 
 @pytest.mark.gpu()

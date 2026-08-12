@@ -1482,6 +1482,15 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
 
 
 @triton.jit
+def _wig_idx(i: tl.constexpr, j: tl.constexpr):
+    if i == 0:
+        return 0
+    if i < 4:
+        return 1 + (i - 1) * 3 + j - 1
+    return 10 + (i - 4) * 5 + j - 4
+
+
+@triton.jit
 def _wig_rot9(w_ptr, wb, x0, x1, x2, x3, x4, x5, x6, x7, x8):
     """
     Block-diagonal Wigner rotate y = W @ x for the 9 lmax=2 coefficients.
@@ -1491,24 +1500,24 @@ def _wig_rot9(w_ptr, wb, x0, x1, x2, x3, x4, x5, x6, x7, x8):
     """
     xs = (x0, x1, x2, x3, x4, x5, x6, x7, x8)
     y0 = tl.load(w_ptr + wb + 0) * xs[0]
-    y1 = tl.load(w_ptr + wb + 1 * 9 + 1) * xs[1]
-    y2 = tl.load(w_ptr + wb + 2 * 9 + 1) * xs[1]
-    y3 = tl.load(w_ptr + wb + 3 * 9 + 1) * xs[1]
+    y1 = tl.load(w_ptr + wb + _wig_idx(1, 1)) * xs[1]
+    y2 = tl.load(w_ptr + wb + _wig_idx(2, 1)) * xs[1]
+    y3 = tl.load(w_ptr + wb + _wig_idx(3, 1)) * xs[1]
     for j in tl.static_range(2, 4):
-        y1 += tl.load(w_ptr + wb + 1 * 9 + j) * xs[j]
-        y2 += tl.load(w_ptr + wb + 2 * 9 + j) * xs[j]
-        y3 += tl.load(w_ptr + wb + 3 * 9 + j) * xs[j]
-    y4 = tl.load(w_ptr + wb + 4 * 9 + 4) * xs[4]
-    y5 = tl.load(w_ptr + wb + 5 * 9 + 4) * xs[4]
-    y6 = tl.load(w_ptr + wb + 6 * 9 + 4) * xs[4]
-    y7 = tl.load(w_ptr + wb + 7 * 9 + 4) * xs[4]
-    y8 = tl.load(w_ptr + wb + 8 * 9 + 4) * xs[4]
+        y1 += tl.load(w_ptr + wb + _wig_idx(1, j)) * xs[j]
+        y2 += tl.load(w_ptr + wb + _wig_idx(2, j)) * xs[j]
+        y3 += tl.load(w_ptr + wb + _wig_idx(3, j)) * xs[j]
+    y4 = tl.load(w_ptr + wb + _wig_idx(4, 4)) * xs[4]
+    y5 = tl.load(w_ptr + wb + _wig_idx(5, 4)) * xs[4]
+    y6 = tl.load(w_ptr + wb + _wig_idx(6, 4)) * xs[4]
+    y7 = tl.load(w_ptr + wb + _wig_idx(7, 4)) * xs[4]
+    y8 = tl.load(w_ptr + wb + _wig_idx(8, 4)) * xs[4]
     for j in tl.static_range(5, 9):
-        y4 += tl.load(w_ptr + wb + 4 * 9 + j) * xs[j]
-        y5 += tl.load(w_ptr + wb + 5 * 9 + j) * xs[j]
-        y6 += tl.load(w_ptr + wb + 6 * 9 + j) * xs[j]
-        y7 += tl.load(w_ptr + wb + 7 * 9 + j) * xs[j]
-        y8 += tl.load(w_ptr + wb + 8 * 9 + j) * xs[j]
+        y4 += tl.load(w_ptr + wb + _wig_idx(4, j)) * xs[j]
+        y5 += tl.load(w_ptr + wb + _wig_idx(5, j)) * xs[j]
+        y6 += tl.load(w_ptr + wb + _wig_idx(6, j)) * xs[j]
+        y7 += tl.load(w_ptr + wb + _wig_idx(7, j)) * xs[j]
+        y8 += tl.load(w_ptr + wb + _wig_idx(8, j)) * xs[j]
     return y0, y1, y2, y3, y4, y5, y6, y7, y8
 
 
@@ -1521,24 +1530,24 @@ def _wig_rotT9(w_ptr, wb, g0, g1, g2, g3, g4, g5, g6, g7, g8):
     """
     gs = (g0, g1, g2, g3, g4, g5, g6, g7, g8)
     dx0 = tl.load(w_ptr + wb + 0) * gs[0]
-    dx1 = tl.load(w_ptr + wb + 1 * 9 + 1) * gs[1]
-    dx2 = tl.load(w_ptr + wb + 1 * 9 + 2) * gs[1]
-    dx3 = tl.load(w_ptr + wb + 1 * 9 + 3) * gs[1]
+    dx1 = tl.load(w_ptr + wb + _wig_idx(1, 1)) * gs[1]
+    dx2 = tl.load(w_ptr + wb + _wig_idx(1, 2)) * gs[1]
+    dx3 = tl.load(w_ptr + wb + _wig_idx(1, 3)) * gs[1]
     for i in tl.static_range(2, 4):
-        dx1 += tl.load(w_ptr + wb + i * 9 + 1) * gs[i]
-        dx2 += tl.load(w_ptr + wb + i * 9 + 2) * gs[i]
-        dx3 += tl.load(w_ptr + wb + i * 9 + 3) * gs[i]
-    dx4 = tl.load(w_ptr + wb + 4 * 9 + 4) * gs[4]
-    dx5 = tl.load(w_ptr + wb + 4 * 9 + 5) * gs[4]
-    dx6 = tl.load(w_ptr + wb + 4 * 9 + 6) * gs[4]
-    dx7 = tl.load(w_ptr + wb + 4 * 9 + 7) * gs[4]
-    dx8 = tl.load(w_ptr + wb + 4 * 9 + 8) * gs[4]
+        dx1 += tl.load(w_ptr + wb + _wig_idx(i, 1)) * gs[i]
+        dx2 += tl.load(w_ptr + wb + _wig_idx(i, 2)) * gs[i]
+        dx3 += tl.load(w_ptr + wb + _wig_idx(i, 3)) * gs[i]
+    dx4 = tl.load(w_ptr + wb + _wig_idx(4, 4)) * gs[4]
+    dx5 = tl.load(w_ptr + wb + _wig_idx(4, 5)) * gs[4]
+    dx6 = tl.load(w_ptr + wb + _wig_idx(4, 6)) * gs[4]
+    dx7 = tl.load(w_ptr + wb + _wig_idx(4, 7)) * gs[4]
+    dx8 = tl.load(w_ptr + wb + _wig_idx(4, 8)) * gs[4]
     for i in tl.static_range(5, 9):
-        dx4 += tl.load(w_ptr + wb + i * 9 + 4) * gs[i]
-        dx5 += tl.load(w_ptr + wb + i * 9 + 5) * gs[i]
-        dx6 += tl.load(w_ptr + wb + i * 9 + 6) * gs[i]
-        dx7 += tl.load(w_ptr + wb + i * 9 + 7) * gs[i]
-        dx8 += tl.load(w_ptr + wb + i * 9 + 8) * gs[i]
+        dx4 += tl.load(w_ptr + wb + _wig_idx(i, 4)) * gs[i]
+        dx5 += tl.load(w_ptr + wb + _wig_idx(i, 5)) * gs[i]
+        dx6 += tl.load(w_ptr + wb + _wig_idx(i, 6)) * gs[i]
+        dx7 += tl.load(w_ptr + wb + _wig_idx(i, 7)) * gs[i]
+        dx8 += tl.load(w_ptr + wb + _wig_idx(i, 8)) * gs[i]
     return dx0, dx1, dx2, dx3, dx4, dx5, dx6, dx7, dx8
 
 
@@ -1553,10 +1562,10 @@ def _wig_dw_store1(dw_ptr, wb, a, b):
     tl.store(dw_ptr + wb + 0, tl.sum(a[0] * b[0]))
     for i in tl.static_range(1, 4):
         for j in tl.static_range(1, 4):
-            tl.store(dw_ptr + wb + i * 9 + j, tl.sum(a[i] * b[j]))
+            tl.store(dw_ptr + wb + _wig_idx(i, j), tl.sum(a[i] * b[j]))
     for i in tl.static_range(4, 9):
         for j in tl.static_range(4, 9):
-            tl.store(dw_ptr + wb + i * 9 + j, tl.sum(a[i] * b[j]))
+            tl.store(dw_ptr + wb + _wig_idx(i, j), tl.sum(a[i] * b[j]))
 
 
 @triton.jit
@@ -1569,10 +1578,16 @@ def _wig_dw_store2(dw_ptr, wb, a1, b1, a2, b2):
     tl.store(dw_ptr + wb + 0, tl.sum(a1[0] * b1[0] + a2[0] * b2[0]))
     for i in tl.static_range(1, 4):
         for j in tl.static_range(1, 4):
-            tl.store(dw_ptr + wb + i * 9 + j, tl.sum(a1[i] * b1[j] + a2[i] * b2[j]))
+            tl.store(
+                dw_ptr + wb + _wig_idx(i, j),
+                tl.sum(a1[i] * b1[j] + a2[i] * b2[j]),
+            )
     for i in tl.static_range(4, 9):
         for j in tl.static_range(4, 9):
-            tl.store(dw_ptr + wb + i * 9 + j, tl.sum(a1[i] * b1[j] + a2[i] * b2[j]))
+            tl.store(
+                dw_ptr + wb + _wig_idx(i, j),
+                tl.sum(a1[i] * b1[j] + a2[i] * b2[j]),
+            )
 
 
 # =============================================================================
@@ -1589,7 +1604,7 @@ def _wig_dw_store2(dw_ptr, wb, a1, b1, a2, b2):
 def wigner_conv1_fused_fwd_kernel(
     x_ptr,  # [N, 9, C] node feats (L-major)
     edge_index_ptr,  # [2, E]
-    wigner_ptr,  # [E, 81] flattened 9x9
+    wigner_ptr,  # [E, 35] compact block-diagonal matrix
     radial_ptr,  # [E, RTOT] conv1 radial (RTOT = 6*C for lmax2: 768+512+256)
     m0_ptr,  # [E, 3*2C]
     m1_ptr,  # [E, 4*2C]
@@ -1617,7 +1632,7 @@ def wigner_conv1_fused_fwd_kernel(
     while edge_id < num_edges:
         idx0 = tl.load(edge_index_ptr + edge_id).to(tl.int64)
         idx1 = tl.load(edge_index_ptr + edge_stride + edge_id).to(tl.int64)
-        w_base = edge_id * 81
+        w_base = edge_id * 35
 
         # ---- load all 9 L-major coeffs, src & tgt ----
         s_base = idx0 * x_stride_n + c * x_stride_c
@@ -1698,12 +1713,12 @@ def wigner_conv1_fused_bwd_kernel(
     gm0_ptr,  # [E, 3*2C] grad wrt m0 buffer
     gm1_ptr,  # [E, 4*2C]
     gm2_ptr,  # [E, 2*2C]
-    wigner_ptr,  # [E, 81]
+    wigner_ptr,  # [E, 35] compact block-diagonal matrix
     radial_ptr,  # [E, 6C] conv1 radial
     x_ptr,  # [N, 9, C] node feats (re-gathered for x recompute)
     edge_index_ptr,  # [2, E]
     grad_out_ptr,  # direct [N, 9, C] or per-edge [E, 9, 2C] node gradient
-    gwig_ptr,  # [E, 81] out: grad wrt wigner (block-diagonal)
+    gwig_ptr,  # [E, 35] out: grad wrt compact wigner
     grad_rad_ptr,  # [E, 6C] out: grad wrt radial
     num_edges,
     x_stride_n,
@@ -1735,7 +1750,7 @@ def wigner_conv1_fused_bwd_kernel(
     RAD = 6 * C2  # 1536 for C=128
 
     while edge_id < num_edges:
-        w_base = edge_id * 81
+        w_base = edge_id * 35
 
         # ---- re-gather L-major x (src & tgt) from x_full + edge_index ----
         idx0 = tl.load(edge_index_ptr + edge_id).to(tl.int64)
@@ -1769,40 +1784,40 @@ def wigner_conv1_fused_bwd_kernel(
         # kept explicit so the y-recompute and grad_x below match the original
         # kernel's FMA contraction bit-for-bit (grad_x is 1-ULP sensitive)
         w00 = tl.load(wigner_ptr + w_base + 0)
-        w11 = tl.load(wigner_ptr + w_base + 1 * 9 + 1)
-        w12 = tl.load(wigner_ptr + w_base + 1 * 9 + 2)
-        w13 = tl.load(wigner_ptr + w_base + 1 * 9 + 3)
-        w21 = tl.load(wigner_ptr + w_base + 2 * 9 + 1)
-        w22 = tl.load(wigner_ptr + w_base + 2 * 9 + 2)
-        w23 = tl.load(wigner_ptr + w_base + 2 * 9 + 3)
-        w31 = tl.load(wigner_ptr + w_base + 3 * 9 + 1)
-        w32 = tl.load(wigner_ptr + w_base + 3 * 9 + 2)
-        w33 = tl.load(wigner_ptr + w_base + 3 * 9 + 3)
-        w44 = tl.load(wigner_ptr + w_base + 4 * 9 + 4)
-        w45 = tl.load(wigner_ptr + w_base + 4 * 9 + 5)
-        w46 = tl.load(wigner_ptr + w_base + 4 * 9 + 6)
-        w47 = tl.load(wigner_ptr + w_base + 4 * 9 + 7)
-        w48 = tl.load(wigner_ptr + w_base + 4 * 9 + 8)
-        w54 = tl.load(wigner_ptr + w_base + 5 * 9 + 4)
-        w55 = tl.load(wigner_ptr + w_base + 5 * 9 + 5)
-        w56 = tl.load(wigner_ptr + w_base + 5 * 9 + 6)
-        w57 = tl.load(wigner_ptr + w_base + 5 * 9 + 7)
-        w58 = tl.load(wigner_ptr + w_base + 5 * 9 + 8)
-        w64 = tl.load(wigner_ptr + w_base + 6 * 9 + 4)
-        w65 = tl.load(wigner_ptr + w_base + 6 * 9 + 5)
-        w66 = tl.load(wigner_ptr + w_base + 6 * 9 + 6)
-        w67 = tl.load(wigner_ptr + w_base + 6 * 9 + 7)
-        w68 = tl.load(wigner_ptr + w_base + 6 * 9 + 8)
-        w74 = tl.load(wigner_ptr + w_base + 7 * 9 + 4)
-        w75 = tl.load(wigner_ptr + w_base + 7 * 9 + 5)
-        w76 = tl.load(wigner_ptr + w_base + 7 * 9 + 6)
-        w77 = tl.load(wigner_ptr + w_base + 7 * 9 + 7)
-        w78 = tl.load(wigner_ptr + w_base + 7 * 9 + 8)
-        w84 = tl.load(wigner_ptr + w_base + 8 * 9 + 4)
-        w85 = tl.load(wigner_ptr + w_base + 8 * 9 + 5)
-        w86 = tl.load(wigner_ptr + w_base + 8 * 9 + 6)
-        w87 = tl.load(wigner_ptr + w_base + 8 * 9 + 7)
-        w88 = tl.load(wigner_ptr + w_base + 8 * 9 + 8)
+        w11 = tl.load(wigner_ptr + w_base + _wig_idx(1, 1))
+        w12 = tl.load(wigner_ptr + w_base + _wig_idx(1, 2))
+        w13 = tl.load(wigner_ptr + w_base + _wig_idx(1, 3))
+        w21 = tl.load(wigner_ptr + w_base + _wig_idx(2, 1))
+        w22 = tl.load(wigner_ptr + w_base + _wig_idx(2, 2))
+        w23 = tl.load(wigner_ptr + w_base + _wig_idx(2, 3))
+        w31 = tl.load(wigner_ptr + w_base + _wig_idx(3, 1))
+        w32 = tl.load(wigner_ptr + w_base + _wig_idx(3, 2))
+        w33 = tl.load(wigner_ptr + w_base + _wig_idx(3, 3))
+        w44 = tl.load(wigner_ptr + w_base + _wig_idx(4, 4))
+        w45 = tl.load(wigner_ptr + w_base + _wig_idx(4, 5))
+        w46 = tl.load(wigner_ptr + w_base + _wig_idx(4, 6))
+        w47 = tl.load(wigner_ptr + w_base + _wig_idx(4, 7))
+        w48 = tl.load(wigner_ptr + w_base + _wig_idx(4, 8))
+        w54 = tl.load(wigner_ptr + w_base + _wig_idx(5, 4))
+        w55 = tl.load(wigner_ptr + w_base + _wig_idx(5, 5))
+        w56 = tl.load(wigner_ptr + w_base + _wig_idx(5, 6))
+        w57 = tl.load(wigner_ptr + w_base + _wig_idx(5, 7))
+        w58 = tl.load(wigner_ptr + w_base + _wig_idx(5, 8))
+        w64 = tl.load(wigner_ptr + w_base + _wig_idx(6, 4))
+        w65 = tl.load(wigner_ptr + w_base + _wig_idx(6, 5))
+        w66 = tl.load(wigner_ptr + w_base + _wig_idx(6, 6))
+        w67 = tl.load(wigner_ptr + w_base + _wig_idx(6, 7))
+        w68 = tl.load(wigner_ptr + w_base + _wig_idx(6, 8))
+        w74 = tl.load(wigner_ptr + w_base + _wig_idx(7, 4))
+        w75 = tl.load(wigner_ptr + w_base + _wig_idx(7, 5))
+        w76 = tl.load(wigner_ptr + w_base + _wig_idx(7, 6))
+        w77 = tl.load(wigner_ptr + w_base + _wig_idx(7, 7))
+        w78 = tl.load(wigner_ptr + w_base + _wig_idx(7, 8))
+        w84 = tl.load(wigner_ptr + w_base + _wig_idx(8, 4))
+        w85 = tl.load(wigner_ptr + w_base + _wig_idx(8, 5))
+        w86 = tl.load(wigner_ptr + w_base + _wig_idx(8, 6))
+        w87 = tl.load(wigner_ptr + w_base + _wig_idx(8, 7))
+        w88 = tl.load(wigner_ptr + w_base + _wig_idx(8, 8))
 
         # ---- recompute rotated y (L-major) from x + wigner ----
         x0s, x1s, x2s, x3s, x4s, x5s, x6s, x7s, x8s = xs
@@ -1981,7 +1996,7 @@ def wigner_inv_conv2_fused_fwd_kernel(
     g0_ptr,  # [E, 3*C] conv2 fc_m0 output (rows M0,M1,M2)
     g1_ptr,  # [E, 4*C] conv2 m=1 block-GEMM output (rows M3,M4,M5,M6)
     g2_ptr,  # [E, 2*C] conv2 m=2 block-GEMM output (rows M7,M8)
-    W_ptr,  # [E, 81] flattened inverse-wigner 9x9
+    W_ptr,  # [E, 35] compact inverse-wigner
     OUT_ptr,  # [E, 9, C] rotated features (L-major) for scatter
     num_edges,
     C: tl.constexpr,  # sphere_channels (128)
@@ -1999,7 +2014,7 @@ def wigner_inv_conv2_fused_fwd_kernel(
     g2_row = 2 * C
 
     while edge_id < num_edges:
-        w_base = edge_id * 81
+        w_base = edge_id * 35
         out_base = edge_id * 9 * C
 
         g0b = edge_id * g0_row
@@ -2060,7 +2075,7 @@ def wigner_inv_conv2_scatter_fwd_kernel(
         x8 = tl.load(g2_ptr + g2b + 0 * C + c, mask=c_mask, other=0.0)
         ys = _wig_rot9(
             wigner_ptr,
-            edge_id * 81,
+            edge_id * 35,
             x0,
             x1,
             x2,
@@ -2090,11 +2105,11 @@ def wigner_inv_conv2_fused_bwd_kernel(
     g0_ptr,  # [E, 3*C] saved conv2 GEMM buffers (for dW recompute of x_l)
     g1_ptr,  # [E, 4*C]
     g2_ptr,  # [E, 2*C]
-    W_ptr,  # [E, 81] inverse-wigner
+    W_ptr,  # [E, 35] compact inverse-wigner
     dg0_ptr,  # [E, 3*C] out: grad wrt g0
     dg1_ptr,  # [E, 4*C] out: grad wrt g1
     dg2_ptr,  # [E, 2*C] out: grad wrt g2
-    dw_ptr,  # [E, 81] out: grad wrt wigner (block-diagonal)
+    dw_ptr,  # [E, 35] out: grad wrt compact wigner
     num_edges,
     C: tl.constexpr,
     BLOCK_C: tl.constexpr,  # == C (all channels; needed for tl.sum over C in dW)
@@ -2117,7 +2132,7 @@ def wigner_inv_conv2_fused_bwd_kernel(
     g2_row = 2 * C
 
     while edge_id < num_edges:
-        w_base = edge_id * 81
+        w_base = edge_id * 35
         if GATHER_NODE_GRAD:
             node = tl.load(scatter_target_ptr + edge_id)
             dy_base = node * 9 * C

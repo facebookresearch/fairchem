@@ -41,6 +41,13 @@ from fairchem.core.models.uma.triton.kernels import (
     wigner_inv_conv2_scatter_fwd_kernel,
 )
 
+
+def _compact_l2_wigner(wigner: Tensor, num_edges: int) -> Tensor:
+    if wigner.ndim != 2 or wigner.shape[1] != 35:
+        raise ValueError("wigner must have shape [E, 35]")
+    return wigner.reshape(num_edges, 35)
+
+
 # =============================================================================
 # Producer-side fused wigner -> conv1 (emits conv1's GEMM-ready packed buffers)
 # =============================================================================
@@ -145,7 +152,7 @@ class WignerConv1FusedFunction(torch.autograd.Function):
     """
     Autograd function for the producer-side fused wigner->conv1 emit.
 
-    Forward: (x_full [N,9,C], edge_index, wigner [E,9,9], radial) -> the three
+    Forward: (x_full [N,9,C], edge_index, wigner [E,35], radial) -> the three
     GEMM-ready packed buffers (m0, m1, m2).
     Backward: grads wrt node features (via the gather transpose), wigner, radial.
     """
@@ -155,7 +162,7 @@ class WignerConv1FusedFunction(torch.autograd.Function):
         ctx,
         x_full: torch.Tensor,
         edge_index: torch.Tensor,
-        wigner_flat: torch.Tensor,
+        wigner: torch.Tensor,
         radial: torch.Tensor,
         C: int,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -165,7 +172,7 @@ class WignerConv1FusedFunction(torch.autograd.Function):
         Args:
             x_full: Node features [N, 9, C] (L-major).
             edge_index: Edge indices [2, E].
-            wigner_flat: Flattened Wigner matrices [E, 81].
+            wigner: Compact Wigner blocks [E, 35].
             radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
             C: sphere_channels.
 
@@ -174,8 +181,8 @@ class WignerConv1FusedFunction(torch.autograd.Function):
         """
         x_full = x_full.contiguous()
         radial = radial.contiguous()
-        wigner_flat = wigner_flat.contiguous()
         E = edge_index.shape[1]
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
         C2 = 2 * C
         dev, dt = x_full.device, x_full.dtype
 
@@ -187,7 +194,7 @@ class WignerConv1FusedFunction(torch.autograd.Function):
             x_full, edge_index, wigner_flat, radial, m0, m1, m2, C
         )
 
-        ctx.save_for_backward(edge_index, wigner_flat, radial, x_full)
+        ctx.save_for_backward(edge_index, wigner, radial, x_full)
         ctx.N = x_full.shape[0]
         ctx.C = C
         return m0, m1, m2
@@ -201,21 +208,22 @@ class WignerConv1FusedFunction(torch.autograd.Function):
             gm0/gm1/gm2: Grads wrt the packed buffers.
 
         Returns:
-            grad_x [N, 9, C], None (edge_index), grad_wigner [E, 81],
+            grad_x [N, 9, C], None (edge_index), grad_wigner [E, 35],
             grad_radial [E, 6*2C], None (C).
         """
-        edge_index, wigner_flat, radial, x_full = ctx.saved_tensors
+        edge_index, wigner, radial, x_full = ctx.saved_tensors
         N, C = ctx.N, ctx.C
         E = edge_index.shape[1]
         C2 = 2 * C
         dev, dt = x_full.device, x_full.dtype
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
 
         direct_scatter = not torch.are_deterministic_algorithms_enabled()
         if direct_scatter:
             grad_out = torch.zeros((N, 9, C), device=dev, dtype=dt)
         else:
             grad_out = torch.empty((E, 9, C2), device=dev, dtype=dt)
-        gwig = torch.zeros((E, 81), device=dev, dtype=dt)
+        gwig = torch.zeros_like(wigner_flat)
         grad_rad = torch.empty((E, 6 * C2), device=dev, dtype=dt)
 
         torch.ops.fairchem._kernel_wigner_conv1_fused_bwd(
@@ -260,15 +268,14 @@ def wigner_conv1_fused_op(
     Args:
         x_full: Node features [N, 9, C] (L-major).
         edge_index: Edge indices [2, E].
-        wigner: Wigner rotation matrices [E, 9, 9].
+        wigner: Compact Wigner blocks [E, 35].
         radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
         C: sphere_channels.
 
     Returns:
         (m0, m1, m2) GEMM-ready packed buffers.
     """
-    wigner_flat = wigner.reshape(edge_index.shape[1], 81)
-    return WignerConv1FusedFunction.apply(x_full, edge_index, wigner_flat, radial, C)
+    return WignerConv1FusedFunction.apply(x_full, edge_index, wigner, radial, C)
 
 
 # =============================================================================
@@ -441,7 +448,7 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
     """
     Autograd function for the consumer-side fused inv-wigner <- conv2 emit.
 
-    Forward: (g0 [E,3C], g1 [E,4C], g2 [E,2C], wigner [E,9,9]) -> x_rotated
+    Forward: (g0 [E,3C], g1 [E,4C], g2 [E,2C], wigner [E,35]) -> x_rotated
     [E, 9, C] (L-major).
     Backward: grads wrt the three GEMM buffers and wigner.
     """
@@ -452,7 +459,7 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
         g0: torch.Tensor,
         g1: torch.Tensor,
         g2: torch.Tensor,
-        wigner_flat: torch.Tensor,
+        wigner: torch.Tensor,
         C: int,
     ) -> torch.Tensor:
         """
@@ -462,7 +469,7 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
             g0: conv2 fc_m0 output [E, 3C] (rows M0,M1,M2).
             g1: conv2 m=1 block-GEMM output [E, 4C] (rows M3,M4,M5,M6).
             g2: conv2 m=2 block-GEMM output [E, 2C] (rows M7,M8).
-            wigner_flat: Flattened inverse Wigner [E, 81] (envelope pre-fused).
+            wigner: Compact inverse Wigner blocks [E, 35].
             C: sphere_channels.
 
         Returns:
@@ -471,8 +478,8 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
         g0 = g0.contiguous()
         g1 = g1.contiguous()
         g2 = g2.contiguous()
-        wigner_flat = wigner_flat.contiguous()
         E = g0.shape[0]
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
         dev, dt = g0.device, g0.dtype
 
         out = torch.empty((E, 9, C), device=dev, dtype=dt)
@@ -481,7 +488,7 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
             g0, g1, g2, wigner_flat, out, C
         )
 
-        ctx.save_for_backward(g0, g1, g2, wigner_flat)
+        ctx.save_for_backward(g0, g1, g2, wigner)
         ctx.C = C
         return out
 
@@ -494,18 +501,18 @@ class WignerInvConv2FusedFunction(torch.autograd.Function):
             grad_out: Grad wrt x_rotated [E, 9, C] (L-major).
 
         Returns:
-            dg0 [E, 3C], dg1 [E, 4C], dg2 [E, 2C], dw [E, 81], None (C).
+            dg0 [E, 3C], dg1 [E, 4C], dg2 [E, 2C], dw [E, 35], None (C).
         """
-        g0, g1, g2, wigner_flat = ctx.saved_tensors
+        g0, g1, g2, wigner = ctx.saved_tensors
         C = ctx.C
         E = g0.shape[0]
         dev, dt = g0.device, g0.dtype
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
 
-        # dw is zeroed: only the block-diagonal entries are written by the kernel.
         dg0 = torch.empty((E, 3 * C), device=dev, dtype=dt)
         dg1 = torch.empty((E, 4 * C), device=dev, dtype=dt)
         dg2 = torch.empty((E, 2 * C), device=dev, dtype=dt)
-        dw = torch.zeros((E, 81), device=dev, dtype=dt)
+        dw = torch.zeros_like(wigner_flat)
 
         torch.ops.fairchem._kernel_wigner_inv_conv2_fused_bwd(
             grad_out.contiguous(), g0, g1, g2, wigner_flat, dg0, dg1, dg2, dw, C
@@ -527,15 +534,13 @@ def wigner_inv_conv2_fused_op(
         g0: conv2 fc_m0 output [E, 3C] (rows M0,M1,M2).
         g1: conv2 m=1 block-GEMM output [E, 4C] (rows M3,M4,M5,M6).
         g2: conv2 m=2 block-GEMM output [E, 2C] (rows M7,M8).
-        wigner: inverse Wigner (envelope pre-fused) [E, 9, 9].
+        wigner: Compact inverse Wigner blocks [E, 35].
         C: sphere_channels.
 
     Returns:
         x_rotated [E, 9, C] (L-major).
     """
-    E = g0.shape[0]
-    wigner_flat = wigner.reshape(E, 81)
-    return WignerInvConv2FusedFunction.apply(g0, g1, g2, wigner_flat, C)
+    return WignerInvConv2FusedFunction.apply(g0, g1, g2, wigner, C)
 
 
 class WignerInvConv2ScatterFunction(torch.autograd.Function):
@@ -547,7 +552,7 @@ class WignerInvConv2ScatterFunction(torch.autograd.Function):
         g0: torch.Tensor,
         g1: torch.Tensor,
         g2: torch.Tensor,
-        wigner_flat: torch.Tensor,
+        wigner: torch.Tensor,
         scatter_target: torch.Tensor,
         num_nodes: int,
         C: int,
@@ -555,8 +560,8 @@ class WignerInvConv2ScatterFunction(torch.autograd.Function):
         g0 = g0.contiguous()
         g1 = g1.contiguous()
         g2 = g2.contiguous()
-        wigner_flat = wigner_flat.contiguous()
         E = g0.shape[0]
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
         out = torch.zeros((num_nodes, 9, C), device=g0.device, dtype=g0.dtype)
 
         if torch.are_deterministic_algorithms_enabled():
@@ -570,20 +575,21 @@ class WignerInvConv2ScatterFunction(torch.autograd.Function):
                 g0, g1, g2, wigner_flat, scatter_target, out, C
             )
 
-        ctx.save_for_backward(scatter_target, g0, g1, g2, wigner_flat)
+        ctx.save_for_backward(scatter_target, g0, g1, g2, wigner)
         ctx.C = C
         return out
 
     @staticmethod
     def backward(ctx, grad_out):
-        scatter_target, g0, g1, g2, wigner_flat = ctx.saved_tensors
+        scatter_target, g0, g1, g2, wigner = ctx.saved_tensors
         C = ctx.C
         E = g0.shape[0]
         dev, dt = g0.device, g0.dtype
+        wigner_flat = _compact_l2_wigner(wigner, E).contiguous()
         dg0 = torch.empty((E, 3 * C), device=dev, dtype=dt)
         dg1 = torch.empty((E, 4 * C), device=dev, dtype=dt)
         dg2 = torch.empty((E, 2 * C), device=dev, dtype=dt)
-        dw = torch.zeros((E, 81), device=dev, dtype=dt)
+        dw = torch.zeros_like(wigner_flat)
         torch.ops.fairchem._kernel_wigner_inv_conv2_scatter_bwd(
             grad_out.contiguous(),
             scatter_target,
@@ -615,7 +621,6 @@ def wigner_inv_conv2_scatter_op(
     Uses direct atomic accumulation by default and preserves PyTorch's
     deterministic-algorithm behavior through a materialized fallback.
     """
-    wigner_flat = wigner.reshape(g0.shape[0], 81)
     return WignerInvConv2ScatterFunction.apply(
-        g0, g1, g2, wigner_flat, scatter_target, num_nodes, C
+        g0, g1, g2, wigner, scatter_target, num_nodes, C
     )

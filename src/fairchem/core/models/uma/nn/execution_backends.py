@@ -33,6 +33,21 @@ __all__ = [
 _M0_COL_INDICES_L_ORDER = [0, 2, 6]
 
 
+def _dense_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    if wigner.ndim == 3:
+        if wigner.shape[1:] != (9, 9):
+            raise ValueError("wigner must have shape [E, 35] or [E, 9, 9]")
+        return wigner
+    if wigner.ndim != 2 or wigner.shape[1] != 35:
+        raise ValueError("wigner must have shape [E, 35] or [E, 9, 9]")
+    num_edges = wigner.shape[0]
+    return (
+        torch.nn.functional.pad(wigner[:, :1].view(num_edges, 1, 1), (0, 8, 0, 8))
+        + torch.nn.functional.pad(wigner[:, 1:10].view(num_edges, 3, 3), (1, 5, 1, 5))
+        + torch.nn.functional.pad(wigner[:, 10:].view(num_edges, 5, 5), (4, 0, 4, 0))
+    )
+
+
 class ExecutionMode(str, Enum):
     """
     Execution mode for model inference.
@@ -368,8 +383,20 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         mappingReduced,
         coefficient_index: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        # Passthrough — Triton kernels handle L-to-M internally
-        return wigner, wigner_inv
+        if wigner.shape[-1] == 35:
+            return wigner, wigner_inv
+
+        def pack_blocks(value: torch.Tensor) -> torch.Tensor:
+            return torch.cat(
+                (
+                    value[:, :1, :1].flatten(1),
+                    value[:, 1:4, 1:4].flatten(1),
+                    value[:, 4:9, 4:9].flatten(1),
+                ),
+                dim=1,
+            )
+
+        return pack_blocks(wigner), pack_blocks(wigner_inv)
 
     @staticmethod
     def node_to_edge_wigner_permute(
@@ -381,7 +408,9 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             UMASFastGPUNodeToEdgeWignerPermute,
         )
 
-        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
+        return UMASFastGPUNodeToEdgeWignerPermute.apply(
+            x_full, edge_index, _dense_l2_wigner(wigner)
+        )
 
     @staticmethod
     def permute_wigner_inv_edge_to_node(
@@ -395,7 +424,9 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
         # Rotate M->L using Triton kernel
-        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
+        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(
+            x_message, _dense_l2_wigner(wigner_inv)
+        )
         # Scatter to nodes
         new_embedding = torch.zeros(
             (num_nodes,) + x_rotated.shape[1:],
@@ -416,6 +447,22 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         rescale_factor: float,
     ) -> torch.Tensor:
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
+
+        if wigner_inv.shape[-1] == 35:
+            wigner = wigner_inv.reshape(-1, 35)
+            x_edge_embedding = torch.cat(
+                (
+                    wigner[:, 0:1, None] * radial[:, 0:1],
+                    wigner[:, (2, 5, 8), None] * radial[:, 1:2],
+                    wigner[:, (12, 17, 22, 27, 32), None] * radial[:, 2:3],
+                ),
+                dim=1,
+            )
+            return x.index_add(
+                0,
+                scatter_target,
+                x_edge_embedding.to(x.dtype) / rescale_factor,
+            )
 
         # Select m=0 columns from L-ordered wigner_inv
         wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
@@ -447,7 +494,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         Args:
             x_full: Node features [N, 9, C] (L-major).
             edge_index: Edge indices [2, E].
-            wigner: Wigner rotation matrices [E, 9, 9].
+            wigner: Compact Wigner rotation blocks [E, 35].
             radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
             sphere_channels: Number of channels C.
 
@@ -492,7 +539,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             g0: conv2 fc_m0 output [E, 3C].
             g1: conv2 m=1 block-GEMM output [E, 4C].
             g2: conv2 m=2 block-GEMM output [E, 2C].
-            wigner_inv_envelope: Inverse Wigner (envelope pre-fused) [E, 9, 9].
+            wigner_inv_envelope: Compact inverse Wigner blocks with the
+                envelope pre-fused [E, 35].
             scatter_target: Pre-computed local target indices [E] for
                 scattering into the node output tensor. In the non-GP case
                 this is ``edge_index[1]``; under GP it is the caller's
