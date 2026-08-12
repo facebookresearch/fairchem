@@ -89,7 +89,7 @@ def _kernel_wigner_conv1_fused_fwd(
 
 @triton_op(
     "fairchem::_kernel_wigner_conv1_fused_bwd",
-    mutates_args=("grad_edge", "gwig", "grad_rad"),
+    mutates_args=("grad_out", "gwig", "grad_rad"),
 )
 def _kernel_wigner_conv1_fused_bwd(
     gm0: Tensor,
@@ -99,16 +99,17 @@ def _kernel_wigner_conv1_fused_bwd(
     radial: Tensor,
     x_full: Tensor,
     edge_index: Tensor,
-    grad_edge: Tensor,
+    grad_out: Tensor,
     gwig: Tensor,
     grad_rad: Tensor,
     C: int,
+    direct_scatter: bool,
 ) -> None:
     """
     Kernel-only wrapper: launches the producer backward kernel.
 
-    Mutates grad_edge/gwig/grad_rad in-place. gwig must be zero-initialized (only
-    the block-diagonal entries are written).
+    Mutates grad_out/gwig/grad_rad in-place. grad_out must be zero-initialized
+    when direct_scatter is enabled, as must gwig in both modes.
     """
     E = wigner_flat.shape[0]
 
@@ -123,7 +124,7 @@ def _kernel_wigner_conv1_fused_bwd(
         radial,
         x_full,
         edge_index,
-        grad_edge,
+        grad_out,
         gwig,
         grad_rad,
         E,
@@ -132,6 +133,7 @@ def _kernel_wigner_conv1_fused_bwd(
         x_full.stride(2),
         edge_index.stride(0),
         C=C,
+        DIRECT_SCATTER=direct_scatter,
         BLOCK_C=C,
         GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
         num_warps=1,
@@ -207,8 +209,11 @@ class WignerConv1FusedFunction(torch.autograd.Function):
         C2 = 2 * C
         dev, dt = x_full.device, x_full.dtype
 
-        # gwig is zeroed: only the block-diagonal entries are written by the kernel.
-        grad_edge = torch.empty((E, 9, C2), device=dev, dtype=dt)
+        direct_scatter = not torch.are_deterministic_algorithms_enabled()
+        if direct_scatter:
+            grad_out = torch.zeros((N, 9, C), device=dev, dtype=dt)
+        else:
+            grad_out = torch.empty((E, 9, C2), device=dev, dtype=dt)
         gwig = torch.zeros((E, 81), device=dev, dtype=dt)
         grad_rad = torch.empty((E, 6 * C2), device=dev, dtype=dt)
 
@@ -220,19 +225,24 @@ class WignerConv1FusedFunction(torch.autograd.Function):
             radial,
             x_full,
             edge_index,
-            grad_edge,
+            grad_out,
             gwig,
             grad_rad,
             C,
+            direct_scatter,
         )
 
-        # Scatter per-edge grad wrt x (L-major src|tgt) to node gradients.
-        grad_x = torch.zeros((N, 9, C), device=dev, dtype=dt)
-        gsrc = grad_edge[:, :, :C].reshape(E, 9 * C)
-        gtgt = grad_edge[:, :, C:].reshape(E, 9 * C)
-        gxf = grad_x.view(N, 9 * C)
-        gxf.index_add_(0, edge_index[0], gsrc)
-        gxf.index_add_(0, edge_index[1], gtgt)
+        if direct_scatter:
+            grad_x = grad_out
+        else:
+            grad_x = torch.zeros((N, 9, C), device=dev, dtype=dt)
+            grad_x.view(N, 9 * C).index_add_(
+                0, edge_index[0], grad_out[:, :, :C].reshape(E, 9 * C)
+            )
+            grad_x.view(N, 9 * C).index_add_(
+                0, edge_index[1], grad_out[:, :, C:].reshape(E, 9 * C)
+            )
+
         return grad_x, None, gwig, grad_rad, None
 
 

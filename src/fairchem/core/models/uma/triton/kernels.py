@@ -1702,7 +1702,7 @@ def wigner_conv1_fused_bwd_kernel(
     radial_ptr,  # [E, 6C] conv1 radial
     x_ptr,  # [N, 9, C] node feats (re-gathered for x recompute)
     edge_index_ptr,  # [2, E]
-    grad_edge_ptr,  # [E, 9, 2C] out: per-edge grad wrt x (L-major, for scatter)
+    grad_out_ptr,  # direct [N, 9, C] or per-edge [E, 9, 2C] node gradient
     gwig_ptr,  # [E, 81] out: grad wrt wigner (block-diagonal)
     grad_rad_ptr,  # [E, 6C] out: grad wrt radial
     num_edges,
@@ -1711,6 +1711,7 @@ def wigner_conv1_fused_bwd_kernel(
     x_stride_c,
     edge_stride,
     C: tl.constexpr,
+    DIRECT_SCATTER: tl.constexpr,
     BLOCK_C: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
@@ -1720,7 +1721,8 @@ def wigner_conv1_fused_bwd_kernel(
       2. recompute rotated y-values from x + wigner
       3. grad_radial = sum over reuse of (grad_m * y)
       4. grad wrt rotated y (M-major) g_y = grad_m * radial ; permute M->L to g_l
-      5. grad_x = W^T @ g_l  (block-diagonal) -> per-edge L-major buffer
+      5. grad_x = W^T @ g_l (block-diagonal), either accumulated by node or
+         stored per edge for a deterministic index_add
       6. grad_W = g_l @ x_l^T  (block-diagonal outer product)
     """
     edge_id = tl.program_id(0)
@@ -1937,11 +1939,25 @@ def wigner_conv1_fused_bwd_kernel(
             w48 * gy4t + w58 * gy5t + w68 * gy6t + w78 * gy7t + w88 * gy8t,
         )
 
-        # store per-edge grad_x (L-major src|tgt)
-        gb = edge_id * 9 * C2
-        for i in tl.static_range(9):
-            tl.store(grad_edge_ptr + gb + i * C2 + c, dxs[i], mask=c_mask)
-            tl.store(grad_edge_ptr + gb + i * C2 + C + c, dxt[i], mask=c_mask)
+        if DIRECT_SCATTER:
+            for i in tl.static_range(9):
+                tl.atomic_add(
+                    grad_out_ptr + s_base + i * x_stride_m,
+                    dxs[i],
+                    mask=c_mask,
+                    sem="relaxed",
+                )
+                tl.atomic_add(
+                    grad_out_ptr + t_base + i * x_stride_m,
+                    dxt[i],
+                    mask=c_mask,
+                    sem="relaxed",
+                )
+        else:
+            gb = edge_id * 9 * C2
+            for i in tl.static_range(9):
+                tl.store(grad_out_ptr + gb + i * C2 + c, dxs[i], mask=c_mask)
+                tl.store(grad_out_ptr + gb + i * C2 + C + c, dxt[i], mask=c_mask)
 
         # ---- grad_W = g_l @ x_l^T (block-diagonal), summed over src & tgt ----
         # dW[i,j] = sum_c ( gy_i_src*x_j_src + gy_i_tgt*x_j_tgt )

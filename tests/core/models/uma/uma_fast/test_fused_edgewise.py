@@ -282,7 +282,56 @@ def test_wigner_conv1_fused_gradcheck(sphere_channels):
         atol=1e-4,
         rtol=1e-3,
         fast_mode=True,
+        nondet_tol=1e-12,  # Node accumulation uses atomic adds.
     )
+
+
+@pytest.mark.gpu()
+def test_wigner_conv1_fused_deterministic_backward(
+    torch_deterministic, compile_reset_state
+):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, 128
+    x = torch.randn(num_nodes, 9, channels, device="cuda", requires_grad=True)
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
+    wigner = _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_()
+    radial = torch.randn(num_edges, 12 * channels, device="cuda", requires_grad=True)
+    compiled = torch.compile(wigner_conv1_fused_op, fullgraph=True, dynamic=True)
+    outputs = compiled(x, edge_index, wigner, radial, channels)
+    grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+
+    first = torch.autograd.grad(
+        outputs, (x, wigner, radial), grad_outputs, retain_graph=True
+    )
+    second = torch.autograd.grad(outputs, (x, wigner, radial), grad_outputs)
+
+    for first_grad, second_grad in zip(first, second):
+        assert torch.equal(first_grad, second_grad)
+
+
+@pytest.mark.gpu()
+def test_wigner_conv1_fused_dynamic_compile(compile_reset_state):
+    torch.manual_seed(42)
+    num_nodes, channels = 8, 128
+    compiled = torch.compile(wigner_conv1_fused_op, fullgraph=True, dynamic=True)
+
+    for num_edges in (17, 31):
+        x = torch.randn(num_nodes, 9, channels, device="cuda", requires_grad=True)
+        edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
+        wigner = _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_()
+        radial = torch.randn(
+            num_edges, 12 * channels, device="cuda", requires_grad=True
+        )
+        outputs = compiled(x, edge_index, wigner, radial, channels)
+        grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+        grads = torch.autograd.grad(outputs, (x, wigner, radial), grad_outputs)
+
+        assert tuple(output.shape[0] for output in outputs) == (num_edges,) * 3
+        assert tuple(grad.shape for grad in grads) == (
+            x.shape,
+            wigner.shape,
+            radial.shape,
+        )
 
 
 @pytest.mark.gpu()
