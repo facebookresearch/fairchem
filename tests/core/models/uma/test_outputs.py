@@ -256,6 +256,57 @@ class TestComputeEnergy:
         assert node_embedding.grad is not None
         assert torch.allclose(node_embedding.grad, torch.ones_like(node_embedding))
 
+    @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
+    @pytest.mark.parametrize("dynamic", [False, True])
+    def test_float64_compile_index_add_regression(self, compile_reset_state, dynamic):
+        # Regression for pytorch/pytorch#108963.
+        def fn():
+            value = torch.zeros(1, dtype=torch.float64, device="cuda")
+            index = torch.tensor([0], dtype=torch.long, device="cuda")
+            source = torch.rand(1, dtype=torch.float64, device="cuda")
+            return source, value.index_add(0, index, source, alpha=2.0) / 2
+
+        torch.manual_seed(0)
+        source, output = torch.compile(fn, fullgraph=True, dynamic=dynamic)()
+
+        assert torch.equal(
+            output.contiguous().view(torch.uint8),
+            source.contiguous().view(torch.uint8),
+        )
+
+    @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
+    @pytest.mark.parametrize("dynamic", [False, True])
+    def test_float64_compile(self, compile_reset_state, dynamic):
+        energy_block = nn.Linear(8, 1).cuda()
+
+        def fn(node_embedding, batch):
+            return compute_energy(
+                {"node_embedding": node_embedding}, energy_block, batch, num_systems=4
+            )
+
+        node_embedding = torch.randn(
+            257, 9, 8, device="cuda", dtype=torch.float32, requires_grad=True
+        )
+        batch = torch.arange(257, device="cuda") % 4
+        expected = fn(node_embedding, batch)
+        actual = torch.compile(fn, fullgraph=True, dynamic=dynamic)(
+            node_embedding, batch
+        )
+
+        for actual_output, expected_output in zip(actual, expected):
+            assert torch.equal(
+                actual_output.contiguous().view(torch.uint8),
+                expected_output.contiguous().view(torch.uint8),
+            )
+        expected_grad = torch.autograd.grad(expected[1].sum(), node_embedding)[0]
+        actual_grad = torch.autograd.grad(actual[1].sum(), node_embedding)[0]
+        assert torch.equal(
+            actual_grad.contiguous().view(torch.uint8),
+            expected_grad.contiguous().view(torch.uint8),
+        )
+
     def test_reduce_mean(self):
         """Test that reduce='mean' divides energy by natoms per system."""
         emb, energy_block = _make_emb_and_block(
