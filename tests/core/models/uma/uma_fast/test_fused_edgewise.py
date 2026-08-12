@@ -205,6 +205,38 @@ def test_wigner_inv_conv2_fused_matches_pytorch(sphere_channels):
     ), f"Max diff: {(ref_out - triton_out).abs().max()}"
 
 
+@pytest.mark.gpu()
+def test_fused_edgewise_empty_graph():
+    channels = 128
+    x = torch.randn(2, 9, channels, device="cuda", requires_grad=True)
+    edge_index = torch.empty(2, 0, dtype=torch.long, device="cuda")
+    wigner = torch.empty(0, 9, 9, device="cuda", requires_grad=True)
+    radial = torch.empty(0, 12 * channels, device="cuda", requires_grad=True)
+
+    conv1_outputs = wigner_conv1_fused_op(x, edge_index, wigner, radial, channels)
+    sum(output.sum() for output in conv1_outputs).backward()
+    assert [output.shape for output in conv1_outputs] == [
+        (0, 6 * channels),
+        (0, 8 * channels),
+        (0, 4 * channels),
+    ]
+    assert torch.count_nonzero(x.grad) == 0
+    assert wigner.grad.shape == wigner.shape
+    assert radial.grad.shape == radial.shape
+
+    g0 = torch.empty(0, 3 * channels, device="cuda", requires_grad=True)
+    g1 = torch.empty(0, 4 * channels, device="cuda", requires_grad=True)
+    g2 = torch.empty(0, 2 * channels, device="cuda", requires_grad=True)
+    wigner_inv = torch.empty(0, 9, 9, device="cuda", requires_grad=True)
+    conv2_output = wigner_inv_conv2_fused_op(g0, g1, g2, wigner_inv, channels)
+    conv2_output.sum().backward()
+    assert conv2_output.shape == (0, 9, channels)
+    assert g0.grad.shape == g0.shape
+    assert g1.grad.shape == g1.shape
+    assert g2.grad.shape == g2.shape
+    assert wigner_inv.grad.shape == wigner_inv.shape
+
+
 # =============================================================================
 # Tests: autograd gradcheck for both fused custom ops
 # =============================================================================

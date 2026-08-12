@@ -32,7 +32,7 @@ import torch
 from torch import Tensor
 from torch.library import triton_op, wrap_triton
 
-from fairchem.core.models.uma.triton.constants import GRID_E_STRIDE
+from fairchem.core.models.uma.triton.constants import FUSED_WIGNER_GRID_E_STRIDE
 from fairchem.core.models.uma.triton.kernels import (
     wigner_conv1_fused_bwd_kernel,
     wigner_conv1_fused_fwd_kernel,
@@ -63,7 +63,11 @@ def _kernel_wigner_conv1_fused_fwd(
     Kernel-only wrapper: launches the producer forward kernel, mutates m0/m1/m2.
     """
     E = edge_index.shape[1]
-    wrap_triton(wigner_conv1_fused_fwd_kernel)[(GRID_E_STRIDE,)](
+
+    def grid(_meta):
+        return (torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),)
+
+    wrap_triton(wigner_conv1_fused_fwd_kernel)[grid](
         x_full,
         edge_index,
         wigner_flat,
@@ -78,7 +82,7 @@ def _kernel_wigner_conv1_fused_fwd(
         x_full.stride(2),
         edge_index.stride(0),
         BLOCK_C=C,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -107,7 +111,11 @@ def _kernel_wigner_conv1_fused_bwd(
     the block-diagonal entries are written).
     """
     E = wigner_flat.shape[0]
-    wrap_triton(wigner_conv1_fused_bwd_kernel)[(GRID_E_STRIDE,)](
+
+    def grid(_meta):
+        return (torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),)
+
+    wrap_triton(wigner_conv1_fused_bwd_kernel)[grid](
         gm0,
         gm1,
         gm2,
@@ -125,7 +133,7 @@ def _kernel_wigner_conv1_fused_bwd(
         edge_index.stride(0),
         C=C,
         BLOCK_C=C,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -248,7 +256,7 @@ def wigner_conv1_fused_op(
     Returns:
         (m0, m1, m2) GEMM-ready packed buffers.
     """
-    wigner_flat = wigner.reshape(edge_index.shape[1], -1)
+    wigner_flat = wigner.reshape(edge_index.shape[1], 81)
     return WignerConv1FusedFunction.apply(x_full, edge_index, wigner_flat, radial, C)
 
 
@@ -274,7 +282,14 @@ def _kernel_wigner_inv_conv2_fused_fwd(
     """
     E = g0.shape[0]
     num_c_blocks = (C + C - 1) // C
-    wrap_triton(wigner_inv_conv2_fused_fwd_kernel)[(GRID_E_STRIDE, num_c_blocks)](
+
+    def grid(_meta):
+        return (
+            torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),
+            num_c_blocks,
+        )
+
+    wrap_triton(wigner_inv_conv2_fused_fwd_kernel)[grid](
         g0,
         g1,
         g2,
@@ -283,7 +298,7 @@ def _kernel_wigner_inv_conv2_fused_fwd(
         E,
         C,
         BLOCK_C=C,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -311,7 +326,11 @@ def _kernel_wigner_inv_conv2_fused_bwd(
     block-diagonal entries are written).
     """
     E = g0.shape[0]
-    wrap_triton(wigner_inv_conv2_fused_bwd_kernel)[(GRID_E_STRIDE,)](
+
+    def grid(_meta):
+        return (torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),)
+
+    wrap_triton(wigner_inv_conv2_fused_bwd_kernel)[grid](
         grad_out,
         g0,
         g1,
@@ -324,7 +343,7 @@ def _kernel_wigner_inv_conv2_fused_bwd(
         E,
         C,
         BLOCK_C=C,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -426,5 +445,5 @@ def wigner_inv_conv2_fused_op(
         x_rotated [E, 9, C] (L-major).
     """
     E = g0.shape[0]
-    wigner_flat = wigner.reshape(E, -1)
+    wigner_flat = wigner.reshape(E, 81)
     return WignerInvConv2FusedFunction.apply(g0, g1, g2, wigner_flat, C)
