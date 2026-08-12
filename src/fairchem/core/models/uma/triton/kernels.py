@@ -2096,3 +2096,138 @@ def wigner_inv_conv2_fused_bwd_kernel(
         _wig_dw_store1(dw_ptr, w_base, dy, x)
 
         edge_id += GRID_E_STRIDE
+
+
+@triton.jit
+def packed_gate_fwd_kernel(
+    x0_full_ptr,
+    x1_ptr,
+    x2_ptr,
+    y0_ptr,
+    y1_ptr,
+    y2_ptr,
+    num_edges,
+    x0_full_stride_n,
+    x0_full_stride_c,
+    x1_stride_n,
+    x1_stride_c,
+    x2_stride_n,
+    x2_stride_c,
+    C: tl.constexpr,
+    GRID_E_STRIDE: tl.constexpr,
+):
+    edge = tl.program_id(0)
+    c = tl.arange(0, C)
+    while edge < num_edges:
+        x0_base = edge * x0_full_stride_n
+        gate0 = tl.sigmoid(tl.load(x0_full_ptr + x0_base + c * x0_full_stride_c))
+        gate1 = tl.sigmoid(tl.load(x0_full_ptr + x0_base + (C + c) * x0_full_stride_c))
+        x1_base = edge * x1_stride_n
+        x2_base = edge * x2_stride_n
+        y0_base = edge * 3 * C
+        y1_base = edge * 4 * C
+        y2_base = edge * 2 * C
+        scalar = tl.load(x0_full_ptr + x0_base + (2 * C + c) * x0_full_stride_c)
+        tl.store(y0_ptr + y0_base + c, scalar * tl.sigmoid(scalar))
+        tl.store(
+            y0_ptr + y0_base + C + c,
+            tl.load(x0_full_ptr + x0_base + (3 * C + c) * x0_full_stride_c) * gate0,
+        )
+        tl.store(
+            y0_ptr + y0_base + 2 * C + c,
+            tl.load(x0_full_ptr + x0_base + (4 * C + c) * x0_full_stride_c) * gate1,
+        )
+        gates1 = (gate0, gate1, gate0, gate1)
+        for i in tl.static_range(4):
+            input_offset = x1_base + (i * C + c) * x1_stride_c
+            tl.store(
+                y1_ptr + y1_base + i * C + c,
+                tl.load(x1_ptr + input_offset) * gates1[i],
+            )
+        for i in tl.static_range(2):
+            input_offset = x2_base + (i * C + c) * x2_stride_c
+            tl.store(
+                y2_ptr + y2_base + i * C + c,
+                tl.load(x2_ptr + input_offset) * gate1,
+            )
+        edge += GRID_E_STRIDE
+
+
+@triton.jit
+def packed_gate_bwd_kernel(
+    gy0_ptr,
+    gy1_ptr,
+    gy2_ptr,
+    x0_full_ptr,
+    x1_ptr,
+    x2_ptr,
+    gx0_full_ptr,
+    gx1_ptr,
+    gx2_ptr,
+    num_edges,
+    x0_full_stride_n,
+    x0_full_stride_c,
+    x1_stride_n,
+    x1_stride_c,
+    x2_stride_n,
+    x2_stride_c,
+    C: tl.constexpr,
+    GRID_E_STRIDE: tl.constexpr,
+):
+    edge = tl.program_id(0)
+    c = tl.arange(0, C)
+    while edge < num_edges:
+        x0_base = edge * x0_full_stride_n
+        gate0 = tl.sigmoid(tl.load(x0_full_ptr + x0_base + c * x0_full_stride_c))
+        gate1 = tl.sigmoid(tl.load(x0_full_ptr + x0_base + (C + c) * x0_full_stride_c))
+        x1_base = edge * x1_stride_n
+        x2_base = edge * x2_stride_n
+        y0_base = edge * 3 * C
+        y1_base = edge * 4 * C
+        y2_base = edge * 2 * C
+        scalar = tl.load(x0_full_ptr + x0_base + (2 * C + c) * x0_full_stride_c)
+        scalar_sigmoid = tl.sigmoid(scalar)
+        scalar_grad = tl.load(gy0_ptr + y0_base + c)
+        scalar_grad *= scalar_sigmoid * (1.0 + scalar * (1.0 - scalar_sigmoid))
+        gx0_base = edge * 5 * C
+        tl.store(gx0_full_ptr + gx0_base + 2 * C + c, scalar_grad)
+
+        gate0_grad = tl.zeros((C,), tl.float32)
+        gate1_grad = tl.zeros((C,), tl.float32)
+        grad = tl.load(gy0_ptr + y0_base + C + c)
+        value = tl.load(x0_full_ptr + x0_base + (3 * C + c) * x0_full_stride_c)
+        tl.store(gx0_full_ptr + gx0_base + 3 * C + c, grad * gate0)
+        gate0_grad += grad * value
+        grad = tl.load(gy0_ptr + y0_base + 2 * C + c)
+        value = tl.load(x0_full_ptr + x0_base + (4 * C + c) * x0_full_stride_c)
+        tl.store(gx0_full_ptr + gx0_base + 4 * C + c, grad * gate1)
+        gate1_grad += grad * value
+
+        gates1 = (gate0, gate1, gate0, gate1)
+        for i in tl.static_range(4):
+            input_offset = x1_base + (i * C + c) * x1_stride_c
+            output_offset = y1_base + i * C + c
+            grad = tl.load(gy1_ptr + output_offset)
+            value = tl.load(x1_ptr + input_offset)
+            tl.store(gx1_ptr + output_offset, grad * gates1[i])
+            if i == 0 or i == 2:
+                gate0_grad += grad * value
+            else:
+                gate1_grad += grad * value
+        for i in tl.static_range(2):
+            input_offset = x2_base + (i * C + c) * x2_stride_c
+            output_offset = y2_base + i * C + c
+            grad = tl.load(gy2_ptr + output_offset)
+            value = tl.load(x2_ptr + input_offset)
+            tl.store(gx2_ptr + output_offset, grad * gate1)
+            gate1_grad += grad * value
+
+        tl.store(
+            gx0_full_ptr + gx0_base + c,
+            gate0_grad * gate0 * (1.0 - gate0),
+        )
+        tl.store(
+            gx0_full_ptr + gx0_base + C + c,
+            gate1_grad * gate1 * (1.0 - gate1),
+        )
+        edge += GRID_E_STRIDE

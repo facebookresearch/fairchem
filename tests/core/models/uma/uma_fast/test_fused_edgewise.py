@@ -4,14 +4,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests:  Correctness of the two producer/consumer edgewise fusions used by the
+Tests:  Correctness of the edgewise fusions used by the
         UMA-S fast-GPU backend at lmax=mmax=2:
           - producer: wigner_conv1_fused (gather + Wigner + L→M + radial
             scale/pack into the three conv1 GEMM buffers)
           - consumer: wigner_inv_conv2_fused (M→L unpack of the conv2 GEMM
             buffers + inverse-Wigner rotate)
-        Kernel-vs-PyTorch-reference forward tests plus autograd gradcheck for
-        both custom ops (grads wrt node features / GEMM buffers, Wigner, radial).
+          - packed gate: SiLU/sigmoid activation between conv1 and conv2
+        Kernel-vs-PyTorch-reference forward tests, Wigner autograd gradcheck,
+        and packed-gate first- and second-order derivative checks.
 CI:     test_gpu_sweep (units shard).
 """
 
@@ -20,7 +21,9 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.models.uma.nn.activation import GateActivation
 from fairchem.core.models.uma.triton import (
+    packed_gate_op,
     wigner_conv1_fused_op,
     wigner_inv_conv2_fused_op,
 )
@@ -288,3 +291,131 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
         rtol=1e-3,
         fast_mode=True,
     )
+
+
+def _ref_packed_gate(x0_full, x1, x2, channels):
+    num_edges = x0_full.shape[0]
+    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+    ref_message = torch.cat(
+        (
+            x0_full[:, 2 * channels :].view(num_edges, 3, channels),
+            x1.view(num_edges, 4, channels),
+            x2.view(num_edges, 2, channels),
+        ),
+        dim=1,
+    )
+    return tuple(
+        value.flatten(1)
+        for value in activation(x0_full[:, : 2 * channels], ref_message).split(
+            (3, 4, 2), dim=1
+        )
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("num_edges", [0, 32])
+def test_packed_gate_matches_materialized_activation(num_edges):
+    torch.manual_seed(42)
+    channels = 128
+    x0_backing = torch.randn(
+        num_edges, 12 * channels, device="cuda", requires_grad=True
+    )
+    x1_backing = torch.randn(num_edges, 8 * channels, device="cuda", requires_grad=True)
+    x2_backing = torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True)
+    x0_full = x0_backing[:, : 5 * channels]
+    x1 = x1_backing[:, : 4 * channels]
+    x2 = x2_backing[:, : 2 * channels]
+
+    ref_x0 = x0_full.detach().clone().requires_grad_()
+    ref_x1 = x1.detach().clone().requires_grad_()
+    ref_x2 = x2.detach().clone().requires_grad_()
+    ref_outputs = _ref_packed_gate(ref_x0, ref_x1, ref_x2, channels)
+    grad_outputs = tuple(torch.randn_like(value) for value in ref_outputs)
+    ref_grads = torch.autograd.grad(ref_outputs, (ref_x0, ref_x1, ref_x2), grad_outputs)
+
+    outputs = packed_gate_op(x0_full, x1, x2, channels)
+    grads = torch.autograd.grad(outputs, (x0_full, x1, x2), grad_outputs)
+    for actual, expected in zip(outputs, ref_outputs, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+    for actual, expected in zip(grads, ref_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.gpu()
+def test_packed_gate_second_order_matches_materialized_activation():
+    torch.manual_seed(42)
+    num_edges, channels = 7, 128
+    inputs = (
+        torch.randn(num_edges, 5 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+    )
+    reference_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in inputs
+    )
+    outputs = packed_gate_op(*inputs, channels)
+    reference_outputs = _ref_packed_gate(*reference_inputs, channels)
+    grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+    grads = torch.autograd.grad(outputs, inputs, grad_outputs, create_graph=True)
+    reference_grads = torch.autograd.grad(
+        reference_outputs,
+        reference_inputs,
+        grad_outputs,
+        create_graph=True,
+    )
+    vectors = tuple(torch.randn_like(value) for value in inputs)
+    second_grads = torch.autograd.grad(grads, inputs, vectors)
+    reference_second_grads = torch.autograd.grad(
+        reference_grads, reference_inputs, vectors
+    )
+
+    for actual, expected in zip(grads, reference_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+    for actual, expected in zip(second_grads, reference_second_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=2e-5, atol=2e-6)
+
+
+@pytest.mark.gpu()
+def test_packed_gate_dynamic_compile(compile_reset_state):
+    channels = 128
+    compiled = torch.compile(packed_gate_op, fullgraph=True, dynamic=True)
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(
+                num_edges,
+                5 * channels,
+                device="cuda",
+                requires_grad=True,
+            ),
+            torch.randn(
+                num_edges,
+                4 * channels,
+                device="cuda",
+                requires_grad=True,
+            ),
+            torch.randn(
+                num_edges,
+                2 * channels,
+                device="cuda",
+                requires_grad=True,
+            ),
+        )
+        reference_inputs = tuple(
+            value.detach().clone().requires_grad_() for value in inputs
+        )
+        grad_outputs = (
+            torch.randn(num_edges, 3 * channels, device="cuda"),
+            torch.randn_like(inputs[1]),
+            torch.randn_like(inputs[2]),
+        )
+
+        outputs = compiled(*inputs, channels)
+        reference_outputs = packed_gate_op(*reference_inputs, channels)
+        grads = torch.autograd.grad(outputs, inputs, grad_outputs)
+        reference_grads = torch.autograd.grad(
+            reference_outputs, reference_inputs, grad_outputs
+        )
+        for actual, expected in zip(outputs, reference_outputs, strict=True):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        for actual, expected in zip(grads, reference_grads, strict=True):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)

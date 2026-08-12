@@ -16,6 +16,7 @@ from .fused_wigner import wigner_conv1_fused_op, wigner_inv_conv2_fused_op
 from .node_to_edge_wigner_permute import (
     NodeToEdgeWignerPermuteFunction as UMASFastGPUNodeToEdgeWignerPermute,
 )
+from .packed_gate import packed_gate_op
 from .permute_wigner_inv_edge_to_node import (
     PermuteWignerInvEdgeToNodeFunction as UMASFastGPUPermuteWignerInvEdgeToNode,
 )
@@ -25,4 +26,5 @@ __all__ = [
     "UMASFastGPUPermuteWignerInvEdgeToNode",
     "wigner_conv1_fused_op",
     "wigner_inv_conv2_fused_op",
+    "packed_gate_op",
 ]

@@ -269,10 +269,18 @@ class Edgewise(torch.nn.Module):
             x_full, edge_index, wigner, x_edge, sphere_channels
         )
         if self.act_type == "gate":
-            x_blocks, x_0_gating = self.so2_conv_1.gemm_blocks_from_packed(
-                m0_buf, m1_buf, m2_buf
-            )
-            x_blocks = self.act.forward_m_blocks(x_0_gating, x_blocks)
+            if x_full.dtype == torch.float32:
+                x0, x1, x2 = self.so2_conv_1.gemm_outputs_from_packed(
+                    m0_buf, m1_buf, m2_buf
+                )
+                x_blocks = self.backend.fused_gate_activation(
+                    x0, x1, x2, self.hidden_channels
+                )
+            else:
+                x_blocks, x_0_gating = self.so2_conv_1.gemm_blocks_from_packed(
+                    m0_buf, m1_buf, m2_buf
+                )
+                x_blocks = self.act.forward_m_blocks(x_0_gating, x_blocks)
             g0, g1, g2 = self.so2_conv_2.gemms_from_blocks(x_blocks)
         else:
             x_message, x_0_gating = self.so2_conv_1.gemms_from_packed(

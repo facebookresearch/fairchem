@@ -461,6 +461,17 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
     @staticmethod
+    def fused_gate_activation(
+        x0_full: torch.Tensor,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        channels: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        from fairchem.core.models.uma.triton import packed_gate_op
+
+        return packed_gate_op(x0_full, x1, x2, channels)
+
+    @staticmethod
     def fused_conv2_inv_edge_to_node(
         g0: torch.Tensor,
         g1: torch.Tensor,
