@@ -16,6 +16,7 @@ import torch
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
+    from fairchem.core.models.uma.nn.activation import GateActivation
     from fairchem.core.units.mlip_unit.api.inference import (
         InferenceSettings,
     )
@@ -508,15 +509,26 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
     @staticmethod
-    def fused_gate_activation(
+    def gate_activation(
         x0_full: torch.Tensor,
         x1: torch.Tensor,
         x2: torch.Tensor,
         channels: int,
+        activation: GateActivation,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        from fairchem.core.models.uma.triton import packed_gate_op
+        if (
+            channels > 0
+            and channels & (channels - 1) == 0
+            and x0_full.dtype == torch.float32
+            and x1.dtype == torch.float32
+            and x2.dtype == torch.float32
+        ):
+            from fairchem.core.models.uma.triton import packed_gate_op
 
-        return packed_gate_op(x0_full, x1, x2, channels)
+            return packed_gate_op(x0_full, x1, x2, channels)
+
+        gating, x0 = x0_full.split((2 * channels, 3 * channels), dim=-1)
+        return activation.forward_m_blocks(gating, (x0, x1, x2))
 
     @staticmethod
     def fused_conv2_inv_edge_to_node(

@@ -43,9 +43,24 @@ from fairchem.core.models.uma.triton.kernels import (
 
 
 def _compact_l2_wigner(wigner: Tensor, num_edges: int) -> Tensor:
-    if wigner.ndim != 2 or wigner.shape[1] != 35:
+    if wigner.ndim != 2 or wigner.shape != (num_edges, 35):
         raise ValueError("wigner must have shape [E, 35]")
     return wigner.reshape(num_edges, 35)
+
+
+def _prepare_l2_wigner(wigner: Tensor, num_edges: int) -> Tensor:
+    if wigner.ndim == 2 and wigner.shape == (num_edges, 35):
+        return wigner
+    if wigner.ndim == 3 and wigner.shape == (num_edges, 9, 9):
+        return torch.cat(
+            (
+                wigner[:, :1, :1].flatten(1),
+                wigner[:, 1:4, 1:4].flatten(1),
+                wigner[:, 4:9, 4:9].flatten(1),
+            ),
+            dim=1,
+        )
+    raise ValueError("wigner must have shape [E, 35] or [E, 9, 9]")
 
 
 # =============================================================================
@@ -268,13 +283,14 @@ def wigner_conv1_fused_op(
     Args:
         x_full: Node features [N, 9, C] (L-major).
         edge_index: Edge indices [2, E].
-        wigner: Compact Wigner blocks [E, 35].
+        wigner: Compact Wigner blocks [E, 35] or a dense matrix [E, 9, 9].
         radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
         C: sphere_channels.
 
     Returns:
         (m0, m1, m2) GEMM-ready packed buffers.
     """
+    wigner = _prepare_l2_wigner(wigner, edge_index.shape[1])
     return WignerConv1FusedFunction.apply(x_full, edge_index, wigner, radial, C)
 
 
@@ -534,12 +550,13 @@ def wigner_inv_conv2_fused_op(
         g0: conv2 fc_m0 output [E, 3C] (rows M0,M1,M2).
         g1: conv2 m=1 block-GEMM output [E, 4C] (rows M3,M4,M5,M6).
         g2: conv2 m=2 block-GEMM output [E, 2C] (rows M7,M8).
-        wigner: Compact inverse Wigner blocks [E, 35].
+        wigner: Compact inverse Wigner blocks [E, 35] or a dense matrix [E, 9, 9].
         C: sphere_channels.
 
     Returns:
         x_rotated [E, 9, C] (L-major).
     """
+    wigner = _prepare_l2_wigner(wigner, g0.shape[0])
     return WignerInvConv2FusedFunction.apply(g0, g1, g2, wigner, C)
 
 
@@ -621,6 +638,7 @@ def wigner_inv_conv2_scatter_op(
     Uses direct atomic accumulation by default and preserves PyTorch's
     deterministic-algorithm behavior through a materialized fallback.
     """
+    wigner = _prepare_l2_wigner(wigner, g0.shape[0])
     return WignerInvConv2ScatterFunction.apply(
         g0, g1, g2, wigner, scatter_target, num_nodes, C
     )

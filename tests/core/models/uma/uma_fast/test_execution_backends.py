@@ -26,6 +26,7 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.models.uma.nn.activation import GateActivation
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
 from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
@@ -140,6 +141,65 @@ def test_umas_fast_gpu_validation_accepts_hessian_loop():
     settings.hessian_vmap = False
 
     UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    ("channels", "dtype"),
+    [(96, torch.float32), (128, torch.bfloat16)],
+)
+def test_umas_fast_gpu_gate_activation_fallback(channels, dtype):
+    torch.manual_seed(42)
+    num_edges = 16
+    inputs = (
+        torch.randn(num_edges, 5 * channels, device="cuda", dtype=dtype),
+        torch.randn(num_edges, 4 * channels, device="cuda", dtype=dtype),
+        torch.randn(num_edges, 2 * channels, device="cuda", dtype=dtype),
+    )
+    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+    gating, x0 = inputs[0].split((2 * channels, 3 * channels), dim=-1)
+    expected = activation.forward_m_blocks(gating, (x0, inputs[1], inputs[2]))
+    actual = UMASFastGPUBackend.gate_activation(*inputs, channels, activation)
+
+    for actual_block, expected_block in zip(actual, expected, strict=True):
+        torch.testing.assert_close(actual_block, expected_block, rtol=0, atol=0)
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
+    compile_reset_state,
+):
+    torch.manual_seed(42)
+    channels = 96
+    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+
+    def fn(x0_full, x1, x2):
+        return UMASFastGPUBackend.gate_activation(x0_full, x1, x2, channels, activation)
+
+    compiled = torch.compile(fn, fullgraph=True, dynamic=True)
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(num_edges, 5 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+        )
+        reference_inputs = tuple(
+            value.detach().clone().requires_grad_() for value in inputs
+        )
+        actual = compiled(*inputs)
+        expected = fn(*reference_inputs)
+        grad_outputs = tuple(torch.randn_like(value) for value in actual)
+        actual_grads = torch.autograd.grad(actual, inputs, grad_outputs)
+        expected_grads = torch.autograd.grad(expected, reference_inputs, grad_outputs)
+
+        for actual_block, expected_block in zip(actual, expected, strict=True):
+            torch.testing.assert_close(
+                actual_block, expected_block, rtol=1e-6, atol=1e-6
+            )
+        for actual_grad, expected_grad in zip(
+            actual_grads, expected_grads, strict=True
+        ):
+            torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-6, atol=1e-6)
 
 
 @pytest.mark.gpu()

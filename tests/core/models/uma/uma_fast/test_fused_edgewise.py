@@ -218,6 +218,69 @@ def test_wigner_inv_conv2_fused_matches_pytorch(sphere_channels):
 
 
 @pytest.mark.gpu()
+def test_exported_fused_ops_accept_dense_wigner(torch_deterministic):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 16, 128
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
+    dense = _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_()
+    compact = _compact_l2_wigner(dense.detach()).requires_grad_()
+    x_dense = torch.randn(num_nodes, 9, channels, device="cuda", requires_grad=True)
+    x_compact = x_dense.detach().clone().requires_grad_()
+    radial_dense = torch.randn(
+        num_edges, 12 * channels, device="cuda", requires_grad=True
+    )
+    radial_compact = radial_dense.detach().clone().requires_grad_()
+
+    dense_outputs = wigner_conv1_fused_op(
+        x_dense, edge_index, dense, radial_dense, channels
+    )
+    compact_outputs = wigner_conv1_fused_op(
+        x_compact, edge_index, compact, radial_compact, channels
+    )
+    grad_outputs = tuple(torch.randn_like(value) for value in dense_outputs)
+    dense_grads = torch.autograd.grad(
+        dense_outputs, (x_dense, dense, radial_dense), grad_outputs
+    )
+    compact_grads = torch.autograd.grad(
+        compact_outputs, (x_compact, compact, radial_compact), grad_outputs
+    )
+
+    for actual, expected in zip(dense_outputs, compact_outputs, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(dense_grads[0], compact_grads[0], rtol=0, atol=0)
+    torch.testing.assert_close(
+        _compact_l2_wigner(dense_grads[1]), compact_grads[1], rtol=0, atol=0
+    )
+    torch.testing.assert_close(dense_grads[2], compact_grads[2], rtol=0, atol=0)
+
+    dense_inv = _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_()
+    compact_inv = _compact_l2_wigner(dense_inv.detach()).requires_grad_()
+    dense_inputs = tuple(
+        torch.randn(num_edges, multiple * channels, device="cuda", requires_grad=True)
+        for multiple in (3, 4, 2)
+    )
+    compact_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in dense_inputs
+    )
+    dense_output = wigner_inv_conv2_fused_op(*dense_inputs, dense_inv, channels)
+    compact_output = wigner_inv_conv2_fused_op(*compact_inputs, compact_inv, channels)
+    grad_output = torch.randn_like(dense_output)
+    dense_grads = torch.autograd.grad(
+        dense_output, (*dense_inputs, dense_inv), grad_output
+    )
+    compact_grads = torch.autograd.grad(
+        compact_output, (*compact_inputs, compact_inv), grad_output
+    )
+
+    torch.testing.assert_close(dense_output, compact_output, rtol=0, atol=0)
+    for actual, expected in zip(dense_grads[:-1], compact_grads[:-1], strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        _compact_l2_wigner(dense_grads[-1]), compact_grads[-1], rtol=0, atol=0
+    )
+
+
+@pytest.mark.gpu()
 @pytest.mark.parametrize("sphere_channels", [128, 256])
 def test_wigner_inv_conv2_scatter_matches_materialized(sphere_channels):
     torch.manual_seed(42)
@@ -362,7 +425,8 @@ def test_wigner_conv1_fused_deterministic_backward(
 
 
 @pytest.mark.gpu()
-def test_wigner_conv1_fused_dynamic_compile(compile_reset_state):
+@pytest.mark.parametrize("dense_wigner", [False, True])
+def test_wigner_conv1_fused_dynamic_compile(compile_reset_state, dense_wigner):
     torch.manual_seed(42)
     num_nodes, channels = 8, 128
     compiled = torch.compile(wigner_conv1_fused_op, fullgraph=True, dynamic=True)
@@ -370,9 +434,10 @@ def test_wigner_conv1_fused_dynamic_compile(compile_reset_state):
     for num_edges in (17, 31):
         x = torch.randn(num_nodes, 9, channels, device="cuda", requires_grad=True)
         edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
-        wigner = _compact_l2_wigner(
-            _create_block_diagonal_wigner(num_edges, "cuda")
-        ).requires_grad_()
+        wigner = _create_block_diagonal_wigner(num_edges, "cuda")
+        if not dense_wigner:
+            wigner = _compact_l2_wigner(wigner)
+        wigner.requires_grad_()
         radial = torch.randn(
             num_edges, 12 * channels, device="cuda", requires_grad=True
         )
