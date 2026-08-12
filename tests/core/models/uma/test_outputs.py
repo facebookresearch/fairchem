@@ -260,6 +260,7 @@ class TestComputeEnergy:
     @pytest.mark.compile_gpu()
     @pytest.mark.parametrize("dynamic", [False, True])
     def test_float64_compile_index_add_regression(self, compile_reset_state, dynamic):
+        # Regression for pytorch/pytorch#108963.
         def fn():
             value = torch.zeros(1, dtype=torch.float64, device="cuda")
             index = torch.tensor([0], dtype=torch.long, device="cuda")
