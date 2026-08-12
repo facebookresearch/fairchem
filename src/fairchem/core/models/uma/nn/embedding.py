@@ -186,14 +186,11 @@ class ChgSpinEmbedding(nn.Module):
             if self.embedding_target == "charge":
                 return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
             elif self.embedding_target == "spin":
-                zero_idxs = torch.where(x == 0)[0]
                 emb = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
-                # this sets the null spin embedding to zero
-                emb[zero_idxs] = 0
-                return emb
+                return emb * (x != 0).unsqueeze(-1)
         elif self.embedding_type == "lin_emb":
             if self.embedding_target == "spin":
-                x[x == 0] = -100
+                x = torch.where(x == 0, -100, x)
             return self.lin_emb(x.unsqueeze(-1).float())
         elif self.embedding_type == "rand_emb":
             # Use tensor arithmetic instead of dict lookup (compile-friendly)
