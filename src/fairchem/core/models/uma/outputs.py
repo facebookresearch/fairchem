@@ -81,8 +81,6 @@ def reduce_node_to_system(
     return reduced, system_values
 
 
-# Compile produces the wrong values using index_add with float64 precision :(
-@torch.compiler.disable
 def compute_energy(
     emb: dict[str, torch.Tensor],
     energy_block: torch.nn.Module,
