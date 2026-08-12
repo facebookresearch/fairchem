@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   push-to-private:
-    if: github.repository == facebookresearch/fairchem
+    if: github.repository == 'facebookresearch/fairchem'
     runs-on: ubuntu-latest
     environment: sync-private
     steps:
