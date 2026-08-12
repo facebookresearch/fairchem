@@ -2028,8 +2028,65 @@ def wigner_inv_conv2_fused_fwd_kernel(
 
 
 @triton.jit
+def wigner_inv_conv2_scatter_fwd_kernel(
+    g0_ptr,
+    g1_ptr,
+    g2_ptr,
+    wigner_ptr,
+    scatter_target_ptr,
+    out_ptr,
+    num_edges,
+    C: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+    GRID_E_STRIDE: tl.constexpr,
+):
+    """Inverse-rotate packed edge features and accumulate them by target node."""
+    edge_id = tl.program_id(0)
+    c = tl.arange(0, BLOCK_C)
+    c_mask = c < C
+
+    while edge_id < num_edges:
+        g0b = edge_id * 3 * C
+        g1b = edge_id * 4 * C
+        g2b = edge_id * 2 * C
+        x0 = tl.load(g0_ptr + g0b + 0 * C + c, mask=c_mask, other=0.0)
+        x1 = tl.load(g1_ptr + g1b + 2 * C + c, mask=c_mask, other=0.0)
+        x2 = tl.load(g0_ptr + g0b + 1 * C + c, mask=c_mask, other=0.0)
+        x3 = tl.load(g1_ptr + g1b + 0 * C + c, mask=c_mask, other=0.0)
+        x4 = tl.load(g2_ptr + g2b + 1 * C + c, mask=c_mask, other=0.0)
+        x5 = tl.load(g1_ptr + g1b + 3 * C + c, mask=c_mask, other=0.0)
+        x6 = tl.load(g0_ptr + g0b + 2 * C + c, mask=c_mask, other=0.0)
+        x7 = tl.load(g1_ptr + g1b + 1 * C + c, mask=c_mask, other=0.0)
+        x8 = tl.load(g2_ptr + g2b + 0 * C + c, mask=c_mask, other=0.0)
+        ys = _wig_rot9(
+            wigner_ptr,
+            edge_id * 81,
+            x0,
+            x1,
+            x2,
+            x3,
+            x4,
+            x5,
+            x6,
+            x7,
+            x8,
+        )
+        node = tl.load(scatter_target_ptr + edge_id)
+        out_base = node * 9 * C
+        for i in tl.static_range(9):
+            tl.atomic_add(
+                out_ptr + out_base + i * C + c,
+                ys[i],
+                mask=c_mask,
+                sem="relaxed",
+            )
+        edge_id += GRID_E_STRIDE
+
+
+@triton.jit
 def wigner_inv_conv2_fused_bwd_kernel(
-    dy_ptr,  # [E, 9, C] grad wrt x_rotated (L-major)
+    dy_ptr,  # [E, 9, C] edge or [N, 9, C] node gradient
+    scatter_target_ptr,  # [E] target node; ignored unless gathering node gradients
     g0_ptr,  # [E, 3*C] saved conv2 GEMM buffers (for dW recompute of x_l)
     g1_ptr,  # [E, 4*C]
     g2_ptr,  # [E, 2*C]
@@ -2042,6 +2099,7 @@ def wigner_inv_conv2_fused_bwd_kernel(
     C: tl.constexpr,
     BLOCK_C: tl.constexpr,  # == C (all channels; needed for tl.sum over C in dW)
     GRID_E_STRIDE: tl.constexpr,
+    GATHER_NODE_GRAD: tl.constexpr,
 ):
     """
     Fused conv2-buffer + inv-wigner backward. For each edge:
@@ -2060,7 +2118,11 @@ def wigner_inv_conv2_fused_bwd_kernel(
 
     while edge_id < num_edges:
         w_base = edge_id * 81
-        dy_base = edge_id * 9 * C
+        if GATHER_NODE_GRAD:
+            node = tl.load(scatter_target_ptr + edge_id)
+            dy_base = node * 9 * C
+        else:
+            dy_base = edge_id * 9 * C
 
         # ---- load dy (L-major) ----
         dy = (

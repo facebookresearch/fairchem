@@ -11,19 +11,19 @@ intermediates out of DRAM around the SO2 convolutions on the umas_fast_gpu path:
 
 - Producer (wigner_conv1_fused_op): expands node_to_edge_wigner_permute to emit
   conv1's scaled + GEMM-packed buffers (m0, m1, m2) directly from registers.
-- Consumer (wigner_inv_conv2_fused_op): absorbs the conv2-output M->L unpack and
-  the inverse-Wigner rotation, emitting x_rotated [E, 9, C]; the node scatter
-  (index_add) stays OUTSIDE the op (visible to torch.compile).
+- Consumer (wigner_inv_conv2_scatter_op): absorbs the conv2-output M->L unpack,
+  inverse-Wigner rotation, and node scatter without materializing [E, 9, C].
 
 torch.compile-safe: kernel launches are wrapped via torch.library.triton_op
-(visible to inductor via wrap_triton) while tensor allocation and the
-node-feature scatter stay in the autograd.Function so inductor can optimize them.
-Both backwards re-derive their inputs (re-gather node features / reuse the saved
-GEMM buffers) instead of stashing the large per-layer intermediates.
+(visible to inductor via wrap_triton) while tensor allocation stays in the
+autograd.Function so inductor can optimize it.
+The backward kernels re-derive their inputs (re-gather node features / reuse the
+saved GEMM buffers) instead of stashing the large per-layer intermediates.
 
 Public API:
 - wigner_conv1_fused_op / WignerConv1FusedFunction   (producer, conv1)
 - wigner_inv_conv2_fused_op / WignerInvConv2FusedFunction   (consumer, conv2 inv)
+- wigner_inv_conv2_scatter_op / WignerInvConv2ScatterFunction (consumer + scatter)
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from fairchem.core.models.uma.triton.kernels import (
     wigner_conv1_fused_fwd_kernel,
     wigner_inv_conv2_fused_bwd_kernel,
     wigner_inv_conv2_fused_fwd_kernel,
+    wigner_inv_conv2_scatter_fwd_kernel,
 )
 
 # =============================================================================
@@ -314,6 +315,40 @@ def _kernel_wigner_inv_conv2_fused_fwd(
 
 
 @triton_op(
+    "fairchem::_kernel_wigner_inv_conv2_scatter_fwd",
+    mutates_args=("out",),
+)
+def _kernel_wigner_inv_conv2_scatter_fwd(
+    g0: Tensor,
+    g1: Tensor,
+    g2: Tensor,
+    wigner_flat: Tensor,
+    scatter_target: Tensor,
+    out: Tensor,
+    C: int,
+) -> None:
+    """Launch the fused inverse-Wigner rotation and node scatter."""
+    E = g0.shape[0]
+
+    def grid(_meta):
+        return (torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),)
+
+    wrap_triton(wigner_inv_conv2_scatter_fwd_kernel)[grid](
+        g0,
+        g1,
+        g2,
+        wigner_flat,
+        scatter_target,
+        out,
+        E,
+        C,
+        BLOCK_C=C,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
+        num_warps=1,
+    )
+
+
+@triton_op(
     "fairchem::_kernel_wigner_inv_conv2_fused_bwd",
     mutates_args=("dg0", "dg1", "dg2", "dw"),
 )
@@ -342,6 +377,7 @@ def _kernel_wigner_inv_conv2_fused_bwd(
 
     wrap_triton(wigner_inv_conv2_fused_bwd_kernel)[grid](
         grad_out,
+        grad_out,  # Ignored when GATHER_NODE_GRAD is false.
         g0,
         g1,
         g2,
@@ -354,6 +390,49 @@ def _kernel_wigner_inv_conv2_fused_bwd(
         C,
         BLOCK_C=C,
         GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
+        GATHER_NODE_GRAD=False,
+        num_warps=1,
+    )
+
+
+@triton_op(
+    "fairchem::_kernel_wigner_inv_conv2_scatter_bwd",
+    mutates_args=("dg0", "dg1", "dg2", "dw"),
+)
+def _kernel_wigner_inv_conv2_scatter_bwd(
+    grad_out: Tensor,
+    scatter_target: Tensor,
+    g0: Tensor,
+    g1: Tensor,
+    g2: Tensor,
+    wigner_flat: Tensor,
+    dg0: Tensor,
+    dg1: Tensor,
+    dg2: Tensor,
+    dw: Tensor,
+    C: int,
+) -> None:
+    E = g0.shape[0]
+
+    def grid(_meta):
+        return (torch.sym_max(1, torch.sym_min(E, FUSED_WIGNER_GRID_E_STRIDE)),)
+
+    wrap_triton(wigner_inv_conv2_fused_bwd_kernel)[grid](
+        grad_out,
+        scatter_target,
+        g0,
+        g1,
+        g2,
+        wigner_flat,
+        dg0,
+        dg1,
+        dg2,
+        dw,
+        E,
+        C,
+        BLOCK_C=C,
+        GRID_E_STRIDE=FUSED_WIGNER_GRID_E_STRIDE,
+        GATHER_NODE_GRAD=True,
         num_warps=1,
     )
 
@@ -457,3 +536,86 @@ def wigner_inv_conv2_fused_op(
     E = g0.shape[0]
     wigner_flat = wigner.reshape(E, 81)
     return WignerInvConv2FusedFunction.apply(g0, g1, g2, wigner_flat, C)
+
+
+class WignerInvConv2ScatterFunction(torch.autograd.Function):
+    """Inverse-Wigner rotation with direct target-node accumulation."""
+
+    @staticmethod
+    def forward(
+        ctx,
+        g0: torch.Tensor,
+        g1: torch.Tensor,
+        g2: torch.Tensor,
+        wigner_flat: torch.Tensor,
+        scatter_target: torch.Tensor,
+        num_nodes: int,
+        C: int,
+    ) -> torch.Tensor:
+        g0 = g0.contiguous()
+        g1 = g1.contiguous()
+        g2 = g2.contiguous()
+        wigner_flat = wigner_flat.contiguous()
+        E = g0.shape[0]
+        out = torch.zeros((num_nodes, 9, C), device=g0.device, dtype=g0.dtype)
+
+        if torch.are_deterministic_algorithms_enabled():
+            edge_out = torch.empty((E, 9, C), device=g0.device, dtype=g0.dtype)
+            torch.ops.fairchem._kernel_wigner_inv_conv2_fused_fwd(
+                g0, g1, g2, wigner_flat, edge_out, C
+            )
+            out.index_add_(0, scatter_target, edge_out)
+        else:
+            torch.ops.fairchem._kernel_wigner_inv_conv2_scatter_fwd(
+                g0, g1, g2, wigner_flat, scatter_target, out, C
+            )
+
+        ctx.save_for_backward(scatter_target, g0, g1, g2, wigner_flat)
+        ctx.C = C
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        scatter_target, g0, g1, g2, wigner_flat = ctx.saved_tensors
+        C = ctx.C
+        E = g0.shape[0]
+        dev, dt = g0.device, g0.dtype
+        dg0 = torch.empty((E, 3 * C), device=dev, dtype=dt)
+        dg1 = torch.empty((E, 4 * C), device=dev, dtype=dt)
+        dg2 = torch.empty((E, 2 * C), device=dev, dtype=dt)
+        dw = torch.zeros((E, 81), device=dev, dtype=dt)
+        torch.ops.fairchem._kernel_wigner_inv_conv2_scatter_bwd(
+            grad_out.contiguous(),
+            scatter_target,
+            g0,
+            g1,
+            g2,
+            wigner_flat,
+            dg0,
+            dg1,
+            dg2,
+            dw,
+            C,
+        )
+        return dg0, dg1, dg2, dw, None, None, None
+
+
+def wigner_inv_conv2_scatter_op(
+    g0: torch.Tensor,
+    g1: torch.Tensor,
+    g2: torch.Tensor,
+    wigner: torch.Tensor,
+    scatter_target: torch.Tensor,
+    num_nodes: int,
+    C: int,
+) -> torch.Tensor:
+    """
+    Rotate packed conv2 outputs and accumulate them into target nodes.
+
+    Uses direct atomic accumulation by default and preserves PyTorch's
+    deterministic-algorithm behavior through a materialized fallback.
+    """
+    wigner_flat = wigner.reshape(g0.shape[0], 81)
+    return WignerInvConv2ScatterFunction.apply(
+        g0, g1, g2, wigner_flat, scatter_target, num_nodes, C
+    )

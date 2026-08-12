@@ -484,10 +484,9 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         """
         Consumer-side fusion: unpack conv2 GEMM buffers + inv-rotate + scatter.
 
-        Fuses the M->L unpack and inverse-Wigner rotation of the three conv2
-        block-GEMM outputs (g0,g1,g2) into one op emitting x_rotated [E,9,C];
-        the [E,9,C] M-major intermediate never materializes. The scatter
-        (index_add) stays outside the fused op (visible to torch.compile).
+        Fuses the M->L unpack, inverse-Wigner rotation, and node scatter of the
+        three conv2 block-GEMM outputs (g0,g1,g2) without materializing an
+        [E,9,C] intermediate.
 
         Args:
             g0: conv2 fc_m0 output [E, 3C].
@@ -504,18 +503,17 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         Returns:
             Node embeddings [N, 9, C] accumulated from edge messages.
         """
-        from fairchem.core.models.uma.triton import wigner_inv_conv2_fused_op
+        from fairchem.core.models.uma.triton import wigner_inv_conv2_scatter_op
 
-        x_rotated = wigner_inv_conv2_fused_op(
-            g0, g1, g2, wigner_inv_envelope, sphere_channels
+        return wigner_inv_conv2_scatter_op(
+            g0,
+            g1,
+            g2,
+            wigner_inv_envelope,
+            scatter_target,
+            num_nodes,
+            sphere_channels,
         )
-        new_embedding = torch.zeros(
-            (num_nodes,) + x_rotated.shape[1:],
-            dtype=x_rotated.dtype,
-            device=x_rotated.device,
-        )
-        new_embedding.index_add_(0, scatter_target, x_rotated)
-        return new_embedding
 
 
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {

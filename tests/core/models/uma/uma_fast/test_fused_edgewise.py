@@ -26,6 +26,7 @@ from fairchem.core.models.uma.triton import (
     packed_gate_op,
     wigner_conv1_fused_op,
     wigner_inv_conv2_fused_op,
+    wigner_inv_conv2_scatter_op,
 )
 from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
 from tests.core.models.uma.uma_fast.triton_test_utils import (
@@ -206,6 +207,34 @@ def test_wigner_inv_conv2_fused_matches_pytorch(sphere_channels):
 
 
 @pytest.mark.gpu()
+@pytest.mark.parametrize("sphere_channels", [128, 256])
+def test_wigner_inv_conv2_scatter_matches_materialized(sphere_channels):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, sphere_channels
+    inputs = (
+        torch.randn(num_edges, 3 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+        _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_(),
+    )
+    reference_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in inputs
+    )
+    scatter_target = torch.randint(0, num_nodes, (num_edges,), device="cuda")
+
+    output = wigner_inv_conv2_scatter_op(*inputs, scatter_target, num_nodes, channels)
+    edge_output = wigner_inv_conv2_fused_op(*reference_inputs, channels)
+    reference = torch.zeros_like(output).index_add_(0, scatter_target, edge_output)
+    grad_output = torch.randn_like(output)
+    grads = torch.autograd.grad(output, inputs, grad_output)
+    reference_grads = torch.autograd.grad(reference, reference_inputs, grad_output)
+
+    torch.testing.assert_close(output, reference, rtol=1e-5, atol=1e-5)
+    for actual, expected in zip(grads, reference_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.gpu()
 def test_fused_edgewise_empty_graph():
     channels = 128
     x = torch.randn(2, 9, channels, device="cuda", requires_grad=True)
@@ -235,6 +264,14 @@ def test_fused_edgewise_empty_graph():
     assert g1.grad.shape == g1.shape
     assert g2.grad.shape == g2.shape
     assert wigner_inv.grad.shape == wigner_inv.shape
+
+    scatter_target = torch.empty(0, dtype=torch.long, device="cuda")
+    scattered = wigner_inv_conv2_scatter_op(
+        g0, g1, g2, wigner_inv, scatter_target, 2, channels
+    )
+    scattered.sum().backward()
+    assert scattered.shape == (2, 9, channels)
+    assert torch.count_nonzero(scattered) == 0
 
 
 # =============================================================================
@@ -372,6 +409,54 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
         rtol=1e-3,
         fast_mode=True,
     )
+
+
+@pytest.mark.gpu()
+def test_wigner_inv_conv2_scatter_dynamic_compile(compile_reset_state):
+    torch.manual_seed(42)
+    num_nodes, channels = 8, 128
+    compiled = torch.compile(wigner_inv_conv2_scatter_op, fullgraph=True, dynamic=True)
+
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(num_edges, 3 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+            _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_(),
+        )
+        scatter_target = torch.randint(0, num_nodes, (num_edges,), device="cuda")
+        output = compiled(*inputs, scatter_target, num_nodes, channels)
+        grads = torch.autograd.grad(output, inputs, torch.randn_like(output))
+
+        assert output.shape == (num_nodes, 9, channels)
+        assert tuple(grad.shape for grad in grads) == tuple(
+            value.shape for value in inputs
+        )
+
+
+@pytest.mark.gpu()
+def test_wigner_inv_conv2_scatter_deterministic(
+    torch_deterministic, compile_reset_state
+):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, 128
+    inputs = (
+        torch.randn(num_edges, 3 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+        _create_block_diagonal_wigner(num_edges, "cuda").requires_grad_(),
+    )
+    scatter_target = torch.randint(0, num_nodes, (num_edges,), device="cuda")
+    compiled = torch.compile(wigner_inv_conv2_scatter_op, fullgraph=True, dynamic=True)
+    first = compiled(*inputs, scatter_target, num_nodes, channels)
+    second = compiled(*inputs, scatter_target, num_nodes, channels)
+    grad_output = torch.randn_like(first)
+    first_grads = torch.autograd.grad(first, inputs, grad_output)
+    second_grads = torch.autograd.grad(second, inputs, grad_output)
+
+    assert torch.equal(first, second)
+    for first_grad, second_grad in zip(first_grads, second_grads, strict=True):
+        assert torch.equal(first_grad, second_grad)
 
 
 def _ref_packed_gate(x0_full, x1, x2, channels):
