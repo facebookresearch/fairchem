@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Literal
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, ListConfig
-from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -185,8 +184,8 @@ def balance_channels_batched(
     Returns:
         Modified embeddings with the specified channel range balanced to sum to target.
 
-    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
-    which provides correct gradients in both forward and backward passes.
+    Under graph parallelism the per-system sums are partial, so they are
+    reduced across the group with a differentiable all-reduce.
     """
     out_emb = emb.clone()
     num_systems = len(natoms)
@@ -203,7 +202,7 @@ def balance_channels_batched(
 
     # Reduce partial sums across all graph parallel ranks
     if gp_utils.initialized():
-        system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
+        system_sums = gp_utils.all_reduce_sum_with_grad(system_sums)
 
     # Batched correction: broadcast target to all channels
     target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
@@ -780,9 +779,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Must be set before graph generation so the computation graph
         # tracks positions and cell through edge distance calculations.
         if not self.regress_config.direct_forces:
-            if self.regress_config.forces or self.regress_config.stress:
+            if (
+                self.regress_config.forces or self.regress_config.stress
+            ) and not data_dict["pos"].requires_grad:
                 data_dict["pos"].requires_grad_(True)
-            if self.regress_config.stress:
+            if self.regress_config.stress and not data_dict["cell"].requires_grad:
                 data_dict["cell"].requires_grad_(True)
 
         with record_function("generate_graph"):
