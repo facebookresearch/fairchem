@@ -3,7 +3,7 @@ ase==3.29.0
 ase-db-backends==0.11.0
 e3nn==0.6.0
 huggingface-hub==1.26.0
-setuptools<84.0.0
+setuptools<85.0.0
 torch==2.13.0
 torchtnt==0.2.4
 numba==0.66.0
