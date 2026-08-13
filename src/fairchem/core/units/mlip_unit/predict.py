@@ -539,6 +539,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             # The model's scalars are fixed at inference, so this skips dynamo's
             # TensorifyScalarRestartAnalysis retrace during compile.
             torch._dynamo.config.specialize_float = True
+            # The model uses custom autograd.Functions, which AOTAutogradCache
+            # refuses to cache unless this is set, so without it the largest
+            # graph is re-compiled from scratch on every process start.
+            import torch._functorch.config as _functorch_config
+
+            _functorch_config.autograd_cache_allow_custom_autograd_functions = True
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
