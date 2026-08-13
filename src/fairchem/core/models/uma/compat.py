@@ -16,7 +16,12 @@ this module entirely once both UMA 1.1 and 1.2 are deprecated.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+import logging
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal, MutableMapping
+from uuid import uuid4
+
+from fairchem.core.common import distutils
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
@@ -37,7 +42,68 @@ _UMA_BACKBONE_SHORT_NAME = "escnmd_moe_backbone"
 _UMA_BACKBONE_FQN_SUFFIX = "uma.escn_moe.eSCNMDMoeBackbone"
 
 
-def get_uma_version(model_config: dict | None) -> UmaVersion:
+def is_uma_moe_backbone_config(backbone_config: Mapping | None) -> bool:
+    """
+    Return whether a backbone config describes an UMA MoE model.
+
+    The UMA MoE backbone is also shared by models such as eSEN with
+    ``num_experts == 0``. Those models do not have model-ID-gated behavior and
+    therefore do not require a ``model_id``.
+
+    Args:
+        backbone_config: Backbone configuration to classify.
+
+    Returns:
+        Whether the configuration describes an UMA backbone with experts.
+    """
+    if not isinstance(backbone_config, Mapping):
+        return False
+
+    model = backbone_config.get("model")
+    if not isinstance(model, str) or not (
+        model == _UMA_BACKBONE_SHORT_NAME or model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
+    ):
+        return False
+
+    num_experts = backbone_config.get("num_experts")
+    return isinstance(num_experts, int) and num_experts > 0
+
+
+def ensure_uma_model_id(model_config: MutableMapping) -> str | None:
+    """
+    Add a generated ID to an untagged UMA MoE model config.
+
+    Existing IDs are preserved, and non-UMA model configs are unchanged.
+
+    Args:
+        model_config: Model configuration to update in place.
+
+    Returns:
+        The existing or generated UMA model ID, or ``None`` for non-UMA models.
+    """
+    if not is_uma_moe_backbone_config(model_config.get("backbone")):
+        return None
+
+    model_id = model_config.get("model_id")
+    if isinstance(model_id, str) and model_id.strip():
+        return model_id
+
+    model_id = f"UMA-{uuid4().hex[:12]}" if distutils.is_master() else None
+    model_id_list = [model_id]
+    distutils.broadcast_object_list(model_id_list, src=0)
+    model_id = model_id_list[0]
+    if not isinstance(model_id, str):
+        raise RuntimeError("Failed to broadcast the generated UMA model_id")
+    model_config["model_id"] = model_id
+    if distutils.is_master():
+        logging.warning(
+            "No model_id was provided for an UMA MoE model. Generated model_id=%r.",
+            model_id,
+        )
+    return model_id
+
+
+def get_uma_version(model_config: Mapping | None) -> UmaVersion:
     """Classify what fix-up a checkpoint needs (see :func:`apply_uma_compat_fixups`).
 
     * ``"not_uma"`` — not a UMA MoE backbone. This includes non-UMA models and
@@ -50,20 +116,10 @@ def get_uma_version(model_config: dict | None) -> UmaVersion:
     * ``"tagged"`` — already has a ``model_id`` (UMA 1.2+ or custom) → no-op. The
       1.2 ``include_self`` rule lives in the backbone, keyed on ``model_id``.
     """
-    if not isinstance(model_config, dict):
+    if not isinstance(model_config, Mapping):
         return "not_uma"
     backbone = model_config.get("backbone", {})
-    if not isinstance(backbone, dict):
-        return "not_uma"
-    model = backbone.get("model")
-    if not isinstance(model, str) or not (
-        model == _UMA_BACKBONE_SHORT_NAME or model.endswith(_UMA_BACKBONE_FQN_SUFFIX)
-    ):
-        return "not_uma"
-
-    # UMA uses num_experts > 0; eSCNMDMoeBackbone with num_experts == 0
-    # (e.g. eSEN) is not UMA.
-    if not isinstance(backbone.get("num_experts"), int) or backbone["num_experts"] == 0:
+    if not is_uma_moe_backbone_config(backbone):
         return "not_uma"
 
     model_id = model_config.get("model_id")
