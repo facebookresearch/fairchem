@@ -36,7 +36,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.components.batch_server import get_app_handle_with_retry
+from fairchem.core.components.batch_server import ModelSpec, get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
     ExecutionMode,
@@ -900,9 +900,10 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     Works with both ``BatchPredictServer`` (single model) and
     ``MultiplexedBatchPredictServer`` (on-demand model loading). For
-    multiplexed deployments, pass ``multiplexed_model_id`` to ``from_deployment_connection_info``
-    which binds the Ray Serve ``multiplexed_model_id`` to the handle so
-    that all requests are transparently routed to the correct model.
+    multiplexed deployments, pass a ``ModelSpec`` to
+    ``from_deployment_connection_info``. Its deterministic ``model_id`` is
+    bound to the Ray Serve handle for replica-affinity routing, while the
+    complete spec travels with every request.
 
     Can be constructed directly with a server handle, or via
     ``from_deployment_connection_info`` to connect to an already-running deployment.
@@ -921,32 +922,32 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         server_handle: DeploymentHandle,
-        multiplexed_model_id: str | None = None,
+        model_spec: ModelSpec | None = None,
     ):
         """
         Args:
             server_handle: Ray Serve deployment handle for a
                 ``BatchPredictServer`` or ``MultiplexedBatchPredictServer``.
-            multiplexed_model_id: Optional model identifier for multiplexed
-                deployments in the format
-                ``"checkpoint_name_or_path:settings"``. When provided, the
-                handle is configured with Ray Serve's
-                ``multiplexed_model_id`` so that all calls are routed to
-                the correct model on the server.
+            model_spec: Typed model configuration for a multiplexed deployment.
+                Its derived ``model_id`` is bound to the handle for routing, and
+                the full spec is sent with each remote call.
         """
-        if multiplexed_model_id is not None:
+        if model_spec is not None:
+            if not isinstance(model_spec, ModelSpec):
+                raise TypeError(
+                    f"model_spec must be a ModelSpec, got {type(model_spec).__name__}"
+                )
             if not server_handle.is_multiplexed.remote().result():
                 raise ValueError(
-                    f"multiplexed_model_id={multiplexed_model_id!r} was "
-                    "provided but the deployment is not a multiplexed "
-                    "server. Use MultiplexedBatchPredictServer or remove "
-                    "the multiplexed_model_id argument."
+                    f"model_spec={model_spec!r} was provided but the deployment "
+                    "is not a multiplexed server. Use "
+                    "MultiplexedBatchPredictServer or remove the model_spec argument."
                 )
             server_handle = server_handle.options(
-                multiplexed_model_id=multiplexed_model_id
+                multiplexed_model_id=model_spec.model_id
             )
         self.server_handle = server_handle
-        self._multiplexed_model_id = multiplexed_model_id
+        self._model_spec = model_spec
         # Identity-based cache for ``validate_atoms_data``.
         # ``ase_calculator.calculate()`` calls validate on every
         # optimizer step with the same ``atoms.info`` dict object;
@@ -966,14 +967,14 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         self._request_timeout_s = _resolve_batch_server_timeout()
 
     @property
-    def multiplexed_model_id(self) -> str | None:
-        """
-        The multiplexed model ID bound to this unit's server handle.
+    def model_spec(self) -> ModelSpec | None:
+        """The model configuration sent to a multiplexed deployment."""
+        return self._model_spec
 
-        Read-only — changing this after construction would have no effect
-        on the already-configured handle.
-        """
-        return self._multiplexed_model_id
+    @property
+    def multiplexed_model_id(self) -> str | None:
+        """The identity token derived from ``model_spec`` for Serve routing."""
+        return self._model_spec.model_id if self._model_spec is not None else None
 
     @classmethod
     def from_deployment_connection_info(
@@ -981,7 +982,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         deployment_name: str = "predict-server",
         ray_address: str | None = None,
         namespace: str | None = None,
-        multiplexed_model_id: str | None = None,
+        model_spec: ModelSpec | None = None,
     ) -> BatchServerPredictUnit:
         """
         Connect to an already-running server by deployment name.
@@ -993,9 +994,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
                 is unset, assumes Ray is already initialised locally.
             namespace: Ray namespace. Falls back to
                 ``RAY_NAMESPACE_SERVE_FAIRCHEM`` env var.
-            multiplexed_model_id: Optional model identifier for multiplexed
-                deployments in the format
-                ``"checkpoint_name_or_path:settings"``.
+            model_spec: Typed model configuration for a multiplexed deployment.
 
         Returns:
             A ``BatchServerPredictUnit`` connected to the remote deployment.
@@ -1015,7 +1014,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
         return cls(
             cls._handle_cache[cache_key],
-            multiplexed_model_id=multiplexed_model_id,
+            model_spec=model_spec,
         )
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
@@ -1027,9 +1026,11 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.remote(data, undo_element_references).result(
-            timeout_s=self._request_timeout_s
-        )
+        result = self.server_handle.remote(
+            data,
+            spec=self._model_spec,
+            undo_element_references=undo_element_references,
+        ).result(timeout_s=self._request_timeout_s)
         return result
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
@@ -1053,7 +1054,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         if key in self._validated_info_keys:
             return
         updated_info = self.server_handle.validate_atoms_data.remote(
-            dict(atoms.info), task_name
+            dict(atoms.info), task_name, spec=self._model_spec
         ).result(timeout_s=self._request_timeout_s)
         atoms.info.update(updated_info)
         self._validated_info_keys.add(key)
@@ -1061,23 +1062,23 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     @cached_property
     def dataset_to_tasks(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
-            "dataset_to_tasks"
+            "dataset_to_tasks", spec=self._model_spec
         ).result(timeout_s=self._request_timeout_s)
 
     @cached_property
     def atom_refs(self) -> dict | None:
-        return self.server_handle.get_predict_unit_attribute.remote("atom_refs").result(
-            timeout_s=self._request_timeout_s
-        )
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "atom_refs", spec=self._model_spec
+        ).result(timeout_s=self._request_timeout_s)
 
     @cached_property
     def inference_settings(self) -> InferenceSettings:
         return self.server_handle.get_predict_unit_attribute.remote(
-            "inference_settings"
+            "inference_settings", spec=self._model_spec
         ).result(timeout_s=self._request_timeout_s)
 
     @cached_property
     def form_elem_refs(self) -> dict:
         return self.server_handle.get_predict_unit_attribute.remote(
-            "form_elem_refs"
+            "form_elem_refs", spec=self._model_spec
         ).result(timeout_s=self._request_timeout_s)
