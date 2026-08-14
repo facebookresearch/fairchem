@@ -10,9 +10,9 @@ Tests:  Ray Serve inference server in three modes:
            live deployment).
         3. Multiplexed server (on-demand model loading via
            MultiplexedBatchPredictServer).
-Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Locked to
+Models: uma-s-1p1, uma-s-1p2 (integration-test markers). Locked to
         UMA-S only because the base GPU runner OOMs with uma-m-1p1's
-        Ray Serve replicas.
+        Ray Serve replicas. Pure ModelSpec tests remain CPU-safe.
 CI:     test_gpu_sweep (models shard).
 """
 
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections import OrderedDict, defaultdict
 from contextlib import suppress
 from pathlib import Path
 
@@ -33,6 +34,9 @@ from ray import serve
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.batch_server import (
+    MODEL_SPEC_CACHE_CAPACITY,
+    ModelSpec,
+    MultiplexedBatchPredictServer,
     get_ray_connection_info,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
@@ -40,6 +44,7 @@ from fairchem.core.components.batch_server import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 from tests.conftest import sweep_model, uma_models
 
@@ -48,7 +53,170 @@ DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
 
-pytestmark = [pytest.mark.gpu, pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+
+def test_model_spec_default_preset_has_canonical_identity():
+    implicit = ModelSpec("x")
+    explicit = ModelSpec("x", "default")
+
+    assert implicit.inference_settings == explicit.inference_settings
+    assert implicit.model_id == explicit.model_id
+
+
+def test_model_spec_preserves_colon_bearing_checkpoint():
+    spec = ModelSpec("s3://bucket/uma.pt", source="path")
+
+    assert spec.checkpoint == "s3://bucket/uma.pt"
+    assert spec.canonical_dict()["checkpoint"] == "s3://bucket/uma.pt"
+    assert spec.model_id.startswith("uma.pt-")
+
+
+def test_model_spec_identity_covers_settings_and_canonicalizes_sets():
+    stress_a = InferenceSettings(
+        execution_mode="general",
+        predict_untrained_stress={"omat", "omol"},
+    )
+    stress_b = InferenceSettings(
+        execution_mode="general",
+        predict_untrained_stress={"omol", "omat"},
+    )
+    fast = InferenceSettings(
+        execution_mode="umas_fast_pytorch",
+        predict_untrained_stress={"omat", "omol"},
+    )
+
+    assert ModelSpec("x", stress_a).model_id == ModelSpec("x", stress_b).model_id
+    assert ModelSpec("x", stress_a).model_id != ModelSpec("x", fast).model_id
+    assert (
+        ModelSpec("x", stress_a).model_id
+        != ModelSpec("x", InferenceSettings(execution_mode="general")).model_id
+    )
+    assert (
+        ModelSpec("x", stress_a, device="cpu").model_id
+        != ModelSpec("x", stress_a, device="cuda").model_id
+    )
+    assert (
+        ModelSpec("x", stress_a, overrides={"backbone": {"max_neighbors": 64}}).model_id
+        != ModelSpec(
+            "x", stress_a, overrides={"backbone": {"max_neighbors": 128}}
+        ).model_id
+    )
+
+
+def test_model_spec_rejects_unknown_preset_at_construction():
+    with pytest.raises(AssertionError, match="inference setting name"):
+        ModelSpec(checkpoint="x", inference_settings="nonsense")
+
+
+def test_model_spec_model_id_is_stable():
+    assert ModelSpec("x").model_id == "x-050e09e7dbf7"
+
+
+def test_model_spec_identity_is_immutable_after_construction():
+    settings = InferenceSettings(predict_untrained_stress={"omat"})
+    overrides = {"backbone": {"max_neighbors": 64}}
+    spec = ModelSpec("x", settings, overrides=overrides)
+    original_id = spec.model_id
+
+    settings.predict_untrained_stress.add("omol")
+    overrides["backbone"]["max_neighbors"] = 128
+    spec.inference_settings.predict_untrained_stress.add("oc20")
+    spec.overrides["backbone"]["max_neighbors"] = 256
+
+    assert spec.model_id == original_id
+    assert spec.canonical_dict()["inference_settings"]["predict_untrained_stress"] == [
+        "omat"
+    ]
+    assert spec.canonical_dict()["overrides"] == {"backbone": {"max_neighbors": 64}}
+    assert spec.loader_settings().predict_untrained_stress == {"omat"}
+    assert spec.loader_overrides() == {"backbone": {"max_neighbors": 64}}
+
+
+def test_batch_server_predict_unit_binds_and_sends_model_spec():
+    class FakeResponse:
+        def __init__(self, value):
+            self.value = value
+
+        def result(self, timeout_s=None):
+            return self.value
+
+    class FakeRemoteMethod:
+        def __init__(self, value):
+            self.value = value
+
+        def remote(self, *args, **kwargs):
+            return FakeResponse(self.value)
+
+    class FakeHandle:
+        def __init__(self):
+            self.is_multiplexed = FakeRemoteMethod(True)
+            self.bound_model_id = None
+            self.calls = []
+
+        def options(self, *, multiplexed_model_id):
+            self.bound_model_id = multiplexed_model_id
+            return self
+
+        def remote(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            return FakeResponse({"energy": torch.tensor([1.0])})
+
+    handle = FakeHandle()
+    spec = ModelSpec("x", InferenceSettings(execution_mode="general"))
+    unit = BatchServerPredictUnit(handle, model_spec=spec)
+    data = object()
+
+    result = unit.predict(data, undo_element_references=False)
+
+    assert handle.bound_model_id == spec.model_id
+    assert unit.model_spec is spec
+    assert unit.multiplexed_model_id == spec.model_id
+    assert handle.calls == [
+        (
+            (data,),
+            {"spec": spec, "undo_element_references": False},
+        )
+    ]
+    assert result["energy"].item() == 1.0
+
+
+def test_model_spec_registry_evicts_least_recently_used_spec():
+    server_class = MultiplexedBatchPredictServer.func_or_class
+    server = object.__new__(server_class)
+    server._specs = OrderedDict()
+    server._active_spec_counts = defaultdict(int)
+    server._spec_capacity = MODEL_SPEC_CACHE_CAPACITY
+    specs = [
+        ModelSpec(f"model-{index}") for index in range(MODEL_SPEC_CACHE_CAPACITY + 1)
+    ]
+
+    for spec in specs[:MODEL_SPEC_CACHE_CAPACITY]:
+        server._register_spec(spec)
+    server._register_spec(specs[0])
+    server._register_spec(specs[-1])
+
+    assert len(server._specs) == MODEL_SPEC_CACHE_CAPACITY
+    assert specs[0].model_id in server._specs
+    assert specs[1].model_id not in server._specs
+    assert specs[-1].model_id in server._specs
+
+
+def test_model_spec_registry_does_not_evict_in_flight_specs():
+    server_class = MultiplexedBatchPredictServer.func_or_class
+    server = object.__new__(server_class)
+    server._specs = OrderedDict()
+    server._active_spec_counts = defaultdict(int)
+    server._spec_capacity = 2
+    specs = [ModelSpec(f"model-{index}") for index in range(3)]
+
+    for spec in specs:
+        server._register_spec(spec, pin=True)
+
+    assert list(server._specs) == [spec.model_id for spec in specs]
+
+    server._release_spec(specs[0].model_id)
+
+    assert list(server._specs) == [spec.model_id for spec in specs[1:]]
+    assert len(server._specs) == server._spec_capacity
 
 
 @pytest.fixture()
@@ -138,6 +306,8 @@ def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
     """Test multiple concurrent Ray remote tasks hitting the inference server."""
 
@@ -173,6 +343,8 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
     conn_info = get_ray_connection_info(local_ray_cluster_with_head_file)
@@ -207,6 +379,8 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
         ), f"Stress shape mismatch for {atoms.get_chemical_formula()}"
 
 
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     """Test that BatchServerPredictUnit correctly fetches model metadata."""
 
@@ -223,6 +397,8 @@ def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     ), f"Expected 'omat' in tasks, got: {list(dataset_to_tasks.keys())}"
 
 
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
@@ -275,14 +451,13 @@ def test_rayserve_external_vs_local_comparison(
 
 
 @pytest.fixture()
-def uma_multiplexed_model_id(request):
+def uma_model_spec(request):
     """
-    Multiplexed model ID for the sweep model, or first available UMA model.
+    Model spec for the sweep model, or first available UMA model.
 
     Honors ``--sweep-model`` so per-model sweep CI jobs target the
     requested checkpoint. Skips when the sweep value is a filesystem
-    path — the multiplexed server is keyed by registered model name,
-    so paths cannot be exercised here.
+    path because this fixture exercises registry-backed model loading.
     """
     available_uma = uma_models()
     if not available_uma:
@@ -297,7 +472,7 @@ def uma_multiplexed_model_id(request):
         model = sweep
     else:
         model = available_uma[0]
-    return f"{model}:default"
+    return ModelSpec(model, source="registry")
 
 
 @pytest.fixture()
@@ -337,12 +512,14 @@ def local_multiplexed_cluster():
     ray.shutdown()
 
 
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_multiplexed_single_model(
-    local_multiplexed_cluster, uma_multiplexed_model_id, uma_predict_unit
+    local_multiplexed_cluster, uma_model_spec, uma_predict_unit
 ):
     """Test loading a single model via the multiplexed server."""
     unit = BatchServerPredictUnit.from_deployment_connection_info(
-        multiplexed_model_id=uma_multiplexed_model_id,
+        model_spec=uma_model_spec,
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
     )
 
@@ -364,28 +541,30 @@ def test_multiplexed_single_model(
     npt.assert_allclose(stress_mux, stress_local, atol=ATOL)
 
 
-def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_model_id):
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_multiplexed_switch_models(local_multiplexed_cluster, uma_model_spec):
     """Test switching between two different model keys."""
     available_uma = uma_models()
     if len(available_uma) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
 
-    # uma_multiplexed_model_id already encodes the sweep target (or first
-    # UMA model). Pick any other UMA model as the second key.
-    primary = uma_multiplexed_model_id.split(":")[0]
+    # uma_model_spec already identifies the sweep target (or first UMA model).
+    # Pick any other UMA model as the second spec.
+    primary = uma_model_spec.checkpoint
     other_candidates = [m for m in available_uma if m != primary]
     if not other_candidates:
         pytest.skip("No second UMA model available that differs from the primary")
 
-    key_a = uma_multiplexed_model_id
-    key_b = f"{other_candidates[0]}:default"
+    spec_a = uma_model_spec
+    spec_b = ModelSpec(other_candidates[0])
 
     unit_a = BatchServerPredictUnit.from_deployment_connection_info(
-        multiplexed_model_id=key_a,
+        model_spec=spec_a,
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
     )
     unit_b = BatchServerPredictUnit.from_deployment_connection_info(
-        multiplexed_model_id=key_b,
+        model_spec=spec_b,
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
     )
 
@@ -402,20 +581,18 @@ def test_multiplexed_switch_models(local_multiplexed_cluster, uma_multiplexed_mo
     ), "Different models should produce different energies"
 
 
-def test_multiplexed_concurrent_requests(
-    local_multiplexed_cluster, uma_multiplexed_model_id
-):
+@pytest.mark.gpu()
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_multiplexed_concurrent_requests(local_multiplexed_cluster, uma_model_spec):
     """Test concurrent requests to the multiplexed server."""
 
     @ray.remote
-    def compute_predictions_mux(
-        dep_name: str, multiplexed_model_id: str, atoms_dict: dict
-    ):
+    def compute_predictions_mux(dep_name: str, model_spec: ModelSpec, atoms_dict: dict):
         """Ray remote task using BatchServerPredictUnit directly."""
         atoms = Atoms.fromdict(atoms_dict)
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
         unit = BatchServerPredictUnit.from_deployment_connection_info(
-            multiplexed_model_id=multiplexed_model_id,
+            model_spec=model_spec,
             deployment_name=dep_name,
         )
         return unit.predict(atomic_data, undo_element_references=True)
@@ -424,9 +601,7 @@ def test_multiplexed_concurrent_requests(
     atoms_dicts = [a.todict() for a in systems]
 
     futures = [
-        compute_predictions_mux.remote(
-            MULTIPLEXED_DEPLOYMENT_NAME, uma_multiplexed_model_id, d
-        )
+        compute_predictions_mux.remote(MULTIPLEXED_DEPLOYMENT_NAME, uma_model_spec, d)
         for d in atoms_dicts
     ]
     results = ray.get(futures)
