@@ -7,14 +7,19 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import io
 import json
 import logging
 import os
+import re
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from dataclasses import asdict, dataclass, field
+from functools import cached_property
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import ray
 import torch
@@ -22,10 +27,11 @@ from ray import serve
 from ray.serve.schema import ApplicationStatus
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit.api.inference import guess_inference_settings
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
 def _to_cpu(obj: Any) -> Any:
@@ -35,7 +41,6 @@ def _to_cpu(obj: Any) -> Any:
     handles arbitrary object graphs containing tensors, ``nn.Module`` instances,
     OmegaConf containers, etc., without needing to walk and mutate the structure.
     """
-    import io
 
     buf = io.BytesIO()
     torch.save(obj, buf)
@@ -47,6 +52,107 @@ def _to_cpu(obj: Any) -> Any:
 # __init__s) so the two setup helpers can't drift apart silently.
 DEFAULT_MAX_BATCH_SIZE = 512
 DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
+MAX_NUM_MODELS_PER_REPLICA = 3
+MODEL_SPEC_CACHE_CAPACITY = MAX_NUM_MODELS_PER_REPLICA * 4
+
+
+def _canonicalize_model_spec_value(value: Any) -> Any:
+    """Convert nested model configuration values to stable JSON-compatible data."""
+    if isinstance(value, dict):
+        return {
+            str(key): _canonicalize_model_spec_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, (set, frozenset)):
+        normalized = [_canonicalize_model_spec_value(item) for item in value]
+        return sorted(
+            normalized,
+            key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
+        )
+    if isinstance(value, (list, tuple)):
+        return [_canonicalize_model_spec_value(item) for item in value]
+    if isinstance(value, torch.dtype):
+        return str(value).removeprefix("torch.")
+    return value
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Typed configuration and deterministic identity for a multiplexed model."""
+
+    checkpoint: str
+    inference_settings: InferenceSettings | str = "default"
+    device: str | None = None
+    overrides: dict | None = None
+    source: Literal["auto", "path", "registry"] = "auto"
+    _canonical_config: dict[str, Any] = field(init=False, repr=False, compare=False)
+    _loader_settings: InferenceSettings = field(init=False, repr=False, compare=False)
+    _loader_overrides: dict | None = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.checkpoint, str) or not self.checkpoint:
+            raise ValueError("checkpoint must be a non-empty string")
+        if self.source not in ("auto", "path", "registry"):
+            raise ValueError(
+                "source must be one of 'auto', 'path', or 'registry', "
+                f"got {self.source!r}"
+            )
+
+        settings = copy.deepcopy(guess_inference_settings(self.inference_settings))
+        overrides = (
+            copy.deepcopy(self.overrides) if self.overrides is not None else None
+        )
+        object.__setattr__(self, "inference_settings", copy.deepcopy(settings))
+        object.__setattr__(self, "overrides", copy.deepcopy(overrides))
+        object.__setattr__(self, "_loader_settings", settings)
+        object.__setattr__(self, "_loader_overrides", overrides)
+
+        settings_config = settings.to_omegaconf()
+        settings_config.pop("_target_", None)
+        object.__setattr__(
+            self,
+            "_canonical_config",
+            {
+                "checkpoint": self.checkpoint,
+                "inference_settings": _canonicalize_model_spec_value(settings_config),
+                "device": self.device,
+                "overrides": _canonicalize_model_spec_value(overrides or {}),
+                "source": self.source,
+            },
+        )
+
+    def canonical_dict(self) -> dict[str, Any]:
+        """Return a copy of the stable configuration used to derive ``model_id``."""
+        return copy.deepcopy(self._canonical_config)
+
+    @cached_property
+    def model_id(self) -> str:
+        """Return a readable deterministic identity token for Ray Serve routing."""
+        canonical_json = json.dumps(
+            self.canonical_dict(), sort_keys=True, separators=(",", ":")
+        )
+        digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:12]
+        short_name = re.sub(
+            r"[^A-Za-z0-9._-]+", "-", os.path.basename(self.checkpoint)
+        ).strip("-._")
+        short_name = (short_name or "model")[:48]
+        return f"{short_name}-{digest}"
+
+    def resolve_device(self) -> str:
+        """Resolve the device on the replica when the client leaves it unspecified."""
+        return self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+    def loader_settings(self) -> InferenceSettings:
+        """Return typed inference settings matching this spec's identity snapshot."""
+        return copy.deepcopy(self._loader_settings)
+
+    def loader_overrides(self) -> dict | None:
+        """Return model overrides matching this spec's identity snapshot."""
+        return copy.deepcopy(self._loader_overrides)
+
+
+class ModelSpecNotRegisteredError(KeyError):
+    """Raised when a routed identity has no configuration on the replica."""
 
 
 @dataclass
@@ -154,7 +260,7 @@ class BatchPredictServerMixin:
         # server's device).
         return _to_cpu(getattr(self.predict_unit, attribute_name))
 
-    def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
+    def validate_atoms_data(self, atoms_info: dict, task_name: str, **kwargs) -> dict:
         """
         Run the predict unit's validation and return the (possibly mutated) atoms.info.
 
@@ -237,7 +343,10 @@ class BatchPredictServerMixin:
         return results
 
     async def __call__(
-        self, data: AtomicData, undo_element_references: bool = True
+        self,
+        data: AtomicData,
+        undo_element_references: bool = True,
+        **kwargs,
     ) -> dict:
         """
         Main entry point for inference requests.
@@ -365,9 +474,9 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
 
     Unlike ``BatchPredictServer`` which serves a single pre-loaded model,
     this deployment loads models on demand using ``@serve.multiplexed``.
-    Different clients can request different models by passing a ``model_id``
-    and an LRU cache keeps up to ``max_num_models_per_replica`` models
-    resident on each replica.
+    Different clients request models with a :class:`ModelSpec`; its deterministic
+    ``model_id`` is used only for Serve routing and LRU cache identity. The spec
+    travels with each request and supplies the loader configuration.
 
     **Batching with per-model routing.**  ``@serve.batch`` collects requests
     from concurrent ``__call__`` invocations.  Because
@@ -407,7 +516,50 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
                 max_batch_size, batch_wait_timeout_s, max_concurrent_batches
             )
         )(self._predict_impl)
+        self._specs: OrderedDict[str, ModelSpec] = OrderedDict()
+        self._active_spec_counts: dict[str, int] = defaultdict(int)
+        self._spec_capacity = MODEL_SPEC_CACHE_CAPACITY
         logging.info("MultiplexedBatchPredictServer initialized")
+
+    def _register_spec(self, spec: ModelSpec, *, pin: bool = False) -> str:
+        """Record a model configuration long enough for the multiplexed loader."""
+        if not isinstance(spec, ModelSpec):
+            raise TypeError(f"spec must be a ModelSpec, got {type(spec).__name__}")
+
+        model_id = spec.model_id
+        existing = self._specs.get(model_id)
+        if existing is not None and existing.canonical_dict() != spec.canonical_dict():
+            raise ValueError(f"ModelSpec hash collision for model_id={model_id!r}")
+        self._specs[model_id] = spec
+        self._specs.move_to_end(model_id)
+        if pin:
+            self._active_spec_counts[model_id] += 1
+        self._evict_specs()
+        return model_id
+
+    def _release_spec(self, model_id: str) -> None:
+        """Unpin an in-flight spec and restore the steady-state cache bound."""
+        remaining = self._active_spec_counts[model_id] - 1
+        if remaining > 0:
+            self._active_spec_counts[model_id] = remaining
+        else:
+            self._active_spec_counts.pop(model_id, None)
+        self._evict_specs()
+
+    def _evict_specs(self) -> None:
+        """Evict least-recent specs that are not needed by active requests."""
+        while len(self._specs) > self._spec_capacity:
+            evictable_id = next(
+                (
+                    candidate_id
+                    for candidate_id in self._specs
+                    if candidate_id not in self._active_spec_counts
+                ),
+                None,
+            )
+            if evictable_id is None:
+                return
+            del self._specs[evictable_id]
 
     async def is_multiplexed(self) -> bool:
         return True
@@ -416,6 +568,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         self,
         data_list: list[AtomicData],
         model_id_list: list[str],
+        spec_list: list[ModelSpec],
         undo_element_references: bool = True,
     ) -> list[dict]:
         """
@@ -432,6 +585,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             data_list: List of AtomicData objects (automatically batched by
                 Ray Serve).
             model_id_list: Corresponding model IDs, one per request.
+            spec_list: Corresponding model specs, used to keep in-flight requests
+                registered even when the bounded spec table evicts older entries.
             undo_element_references: Whether to undo element references.
                 Ray Serve batches this into a list; the first value is used.
 
@@ -445,17 +600,26 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             else undo_element_references
         )
 
-        # Group (original_index, data) pairs by model_id
-        groups: dict[str, list[tuple[int, AtomicData]]] = defaultdict(list)
-        for i, (data, model_id) in enumerate(zip(data_list, model_id_list)):
-            groups[model_id].append((i, data))
+        # Group (original_index, data, spec) tuples by model_id.
+        groups: dict[str, list[tuple[int, AtomicData, ModelSpec]]] = defaultdict(list)
+        for i, (data, model_id, spec) in enumerate(
+            zip(data_list, model_id_list, spec_list)
+        ):
+            groups[model_id].append((i, data, spec))
 
         results: list[dict | None] = [None] * len(data_list)
 
         for model_id, indexed_items in groups.items():
+            group_spec = indexed_items[0][2]
+            registered_model_id = self._register_spec(group_spec)
+            if registered_model_id != model_id:
+                raise ValueError(
+                    f"Batched ModelSpec identity mismatch: received {model_id!r}, "
+                    f"derived {registered_model_id!r}."
+                )
             predict_unit = await self.get_model(model_id)  # LRU cache hit
 
-            indices, group_data = zip(*indexed_items)
+            indices, group_data, _ = zip(*indexed_items)
             group_results = self._run_batched_inference(
                 list(group_data), predict_unit, undo_refs
             )
@@ -464,103 +628,92 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
 
         return results
 
-    @serve.multiplexed(max_num_models_per_replica=3)
+    @serve.multiplexed(max_num_models_per_replica=MAX_NUM_MODELS_PER_REPLICA)
     async def get_model(self, model_id: str):
-        """
-        Load (or retrieve from cache) a predict unit by model key.
+        """Load or retrieve the predict unit identified by a registered spec."""
+        try:
+            spec = self._specs[model_id]
+        except KeyError as err:
+            raise ModelSpecNotRegisteredError(
+                f"No ModelSpec is registered for model_id={model_id!r} on this "
+                "replica. Send the ModelSpec with the request before loading it."
+            ) from err
+        self._specs.move_to_end(model_id)
 
-        The ``@serve.multiplexed`` decorator caches the *return value* of
-        this method in an LRU cache (keyed by ``model_id``).  Returning the
-        ``predict_unit`` directly means the cached object is the unit itself,
-        so subsequent calls for the same ``model_id`` skip the loading code
-        and return the cached unit without touching any instance state.
+        loader_kwargs = {
+            "inference_settings": spec.loader_settings(),
+            "device": spec.resolve_device(),
+        }
+        overrides = spec.loader_overrides()
+        if overrides:
+            loader_kwargs["overrides"] = overrides
 
-        Args:
-            model_id: Key in the format ``"checkpoint_name_or_path:settings"``
-                where ``settings`` is one of the recognized inference setting
-                names (e.g. ``"default"``, ``"batch"``, ``"turbo"``) or an
-                empty string for the default settings.
-
-        Returns:
-            The loaded ``MLIPPredictUnit`` for this model_id.
-        """
-        parts = model_id.split(":", 1)
-        checkpoint = parts[0]
-        settings_name = parts[1] if len(parts) > 1 and parts[1] else "default"
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        if os.path.isfile(checkpoint):
+        use_path = spec.source == "path" or (
+            spec.source == "auto" and os.path.isfile(spec.checkpoint)
+        )
+        if use_path:
             from fairchem.core.units.mlip_unit import load_predict_unit
 
-            predict_unit = load_predict_unit(
-                checkpoint,
-                inference_settings=settings_name,
-                device=device,
-            )
+            predict_unit = load_predict_unit(spec.checkpoint, **loader_kwargs)
         else:
             from fairchem.core.calculate import pretrained_mlip
 
             predict_unit = pretrained_mlip.get_predict_unit(
-                checkpoint,
-                inference_settings=settings_name,
-                device=device,
+                spec.checkpoint, **loader_kwargs
             )
 
-        logging.info(f"MultiplexedBatchPredictServer loaded model_id={model_id!r}")
+        logging.info(
+            "MultiplexedBatchPredictServer loaded model_id=%r spec=%s",
+            model_id,
+            json.dumps(spec.canonical_dict(), sort_keys=True),
+        )
         return predict_unit
 
     async def get_predict_unit_attribute(
-        self, attribute_name: str, model_id: str | None = None
+        self, attribute_name: str, spec: ModelSpec
     ) -> Any:
-        """
-        Get an attribute from a loaded predict unit.
+        """Get an attribute after registering and loading the requested model."""
+        model_id = self._register_spec(spec, pin=True)
+        try:
+            predict_unit = await self.get_model(model_id)
+            return _to_cpu(getattr(predict_unit, attribute_name))
+        finally:
+            self._release_spec(model_id)
 
-        Uses the ``multiplexed_model_id`` set on the request by the caller
-        to resolve the correct model first.
-        """
-        model_id = model_id or serve.get_multiplexed_model_id()
-        predict_unit = await self.get_model(model_id)
-        attr = getattr(predict_unit, attribute_name)
-        # Move any CUDA tensors to CPU before returning so callers (which
-        # may be CPU-only Ray workers) can deserialize the result without
-        # requiring CUDA.
-        return _to_cpu(attr)
-
-    async def validate_atoms_data(self, atoms_info: dict, task_name: str) -> dict:
-        """
-        Run model-specific validation after loading the correct model.
-        """
+    async def validate_atoms_data(
+        self, atoms_info: dict, task_name: str, spec: ModelSpec
+    ) -> dict:
+        """Run model-specific validation after registering the requested model."""
         from ase import Atoms
 
-        model_id = serve.get_multiplexed_model_id()
-        predict_unit = await self.get_model(model_id)
-        stub = Atoms()
-        stub.info = atoms_info
-        predict_unit.validate_atoms_data(stub, task_name)
-        return stub.info
+        model_id = self._register_spec(spec, pin=True)
+        try:
+            predict_unit = await self.get_model(model_id)
+            stub = Atoms()
+            stub.info = atoms_info
+            predict_unit.validate_atoms_data(stub, task_name)
+            return stub.info
+        finally:
+            self._release_spec(model_id)
 
     async def __call__(
-        self, data: AtomicData, undo_element_references: bool = True
+        self,
+        data: AtomicData,
+        spec: ModelSpec,
+        undo_element_references: bool = True,
     ) -> dict:
-        """
-        Main entry point for multiplexed inference requests.
-
-        ``serve.get_multiplexed_model_id()`` is called here (per-request
-        context) and forwarded explicitly to ``predict()``.  Inside the
-        ``@serve.batch`` function only one request context is active, so
-        the model ID cannot be reliably read there.
-
-        Args:
-            data: Single AtomicData object.
-            undo_element_references: Whether to undo element references.
-
-        Returns:
-            Prediction dictionary for this system.
-        """
-        model_id = serve.get_multiplexed_model_id()
-        predictions = await self.predict(data, model_id, undo_element_references)
-        return predictions
+        """Register the request's spec and forward its identity into the batch."""
+        model_id = self._register_spec(spec, pin=True)
+        try:
+            routed_model_id = serve.get_multiplexed_model_id()
+            if routed_model_id != model_id:
+                raise ValueError(
+                    "Ray Serve multiplexed_model_id does not match the request's "
+                    f"ModelSpec: routed={routed_model_id!r}, expected={model_id!r}."
+                )
+            return await self.predict(data, model_id, spec, undo_element_references)
+        finally:
+            self._release_spec(model_id)
 
 
 def _init_ray_and_serve(
