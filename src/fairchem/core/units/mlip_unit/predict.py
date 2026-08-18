@@ -36,7 +36,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.components.batch_server import ModelSpec, get_app_handle_with_retry
+from fairchem.core.components.serve_utils import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
     ExecutionMode,
@@ -44,6 +44,7 @@ from fairchem.core.models.uma.nn.execution_backends import (
 )
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.api.inference import MergeMoleConsistencyError
+from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
