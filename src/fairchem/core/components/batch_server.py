@@ -7,31 +7,55 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import copy
-import hashlib
 import io
 import json
 import logging
 import os
-import re
 import time
 from collections import OrderedDict, defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from functools import cached_property
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import ray
 import torch
 from ray import serve
-from ray.serve.schema import ApplicationStatus
 
+from fairchem.core.components.serve_utils import (
+    get_app_handle_with_retry,
+    get_ray_connection_info,
+    wait_for_serve_ready,
+)
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
-from fairchem.core.units.mlip_unit.api.inference import guess_inference_settings
+from fairchem.core.units.mlip_unit.api.model_spec import (
+    ModelSpec,
+    ModelSpecNotRegisteredError,
+)
+
+# ``ModelSpec`` and the Ray Serve lifecycle helpers live in leaf modules so that
+# ``units.mlip_unit.predict`` can import them without importing this module (a
+# cycle: batch_server -> units.mlip_unit -> predict -> batch_server). They are
+# re-exported here because this module was their original home.
+__all__ = [
+    "AutobatchConfig",
+    "AutobatchResult",
+    "BatchConfig",
+    "BatchPredictServer",
+    "DeploymentConfig",
+    "ModelSpec",
+    "ModelSpecNotRegisteredError",
+    "MultiplexedBatchPredictServer",
+    "get_app_handle_with_retry",
+    "get_ray_connection_info",
+    "probe_optimal_batch_size",
+    "setup_batch_predict_server",
+    "setup_multiplexed_batch_predict_server",
+    "wait_for_serve_ready",
+]
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
 def _to_cpu(obj: Any) -> Any:
@@ -54,105 +78,6 @@ DEFAULT_MAX_BATCH_SIZE = 512
 DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
 MAX_NUM_MODELS_PER_REPLICA = 3
 MODEL_SPEC_CACHE_CAPACITY = MAX_NUM_MODELS_PER_REPLICA * 4
-
-
-def _canonicalize_model_spec_value(value: Any) -> Any:
-    """Convert nested model configuration values to stable JSON-compatible data."""
-    if isinstance(value, dict):
-        return {
-            str(key): _canonicalize_model_spec_value(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (set, frozenset)):
-        normalized = [_canonicalize_model_spec_value(item) for item in value]
-        return sorted(
-            normalized,
-            key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
-        )
-    if isinstance(value, (list, tuple)):
-        return [_canonicalize_model_spec_value(item) for item in value]
-    if isinstance(value, torch.dtype):
-        return str(value).removeprefix("torch.")
-    return value
-
-
-@dataclass(frozen=True)
-class ModelSpec:
-    """Typed configuration and deterministic identity for a multiplexed model."""
-
-    checkpoint: str
-    inference_settings: InferenceSettings | str = "default"
-    device: str | None = None
-    overrides: dict | None = None
-    source: Literal["auto", "path", "registry"] = "auto"
-    _canonical_config: dict[str, Any] = field(init=False, repr=False, compare=False)
-    _loader_settings: InferenceSettings = field(init=False, repr=False, compare=False)
-    _loader_overrides: dict | None = field(init=False, repr=False, compare=False)
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.checkpoint, str) or not self.checkpoint:
-            raise ValueError("checkpoint must be a non-empty string")
-        if self.source not in ("auto", "path", "registry"):
-            raise ValueError(
-                "source must be one of 'auto', 'path', or 'registry', "
-                f"got {self.source!r}"
-            )
-
-        settings = copy.deepcopy(guess_inference_settings(self.inference_settings))
-        overrides = (
-            copy.deepcopy(self.overrides) if self.overrides is not None else None
-        )
-        object.__setattr__(self, "inference_settings", copy.deepcopy(settings))
-        object.__setattr__(self, "overrides", copy.deepcopy(overrides))
-        object.__setattr__(self, "_loader_settings", settings)
-        object.__setattr__(self, "_loader_overrides", overrides)
-
-        settings_config = settings.to_omegaconf()
-        settings_config.pop("_target_", None)
-        object.__setattr__(
-            self,
-            "_canonical_config",
-            {
-                "checkpoint": self.checkpoint,
-                "inference_settings": _canonicalize_model_spec_value(settings_config),
-                "device": self.device,
-                "overrides": _canonicalize_model_spec_value(overrides or {}),
-                "source": self.source,
-            },
-        )
-
-    def canonical_dict(self) -> dict[str, Any]:
-        """Return a copy of the stable configuration used to derive ``model_id``."""
-        return copy.deepcopy(self._canonical_config)
-
-    @cached_property
-    def model_id(self) -> str:
-        """Return a readable deterministic identity token for Ray Serve routing."""
-        canonical_json = json.dumps(
-            self.canonical_dict(), sort_keys=True, separators=(",", ":")
-        )
-        digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:12]
-        short_name = re.sub(
-            r"[^A-Za-z0-9._-]+", "-", os.path.basename(self.checkpoint)
-        ).strip("-._")
-        short_name = (short_name or "model")[:48]
-        return f"{short_name}-{digest}"
-
-    def resolve_device(self) -> str:
-        """Resolve the device on the replica when the client leaves it unspecified."""
-        return self.device or ("cuda" if torch.cuda.is_available() else "cpu")
-
-    def loader_settings(self) -> InferenceSettings:
-        """Return typed inference settings matching this spec's identity snapshot."""
-        return copy.deepcopy(self._loader_settings)
-
-    def loader_overrides(self) -> dict | None:
-        """Return model overrides matching this spec's identity snapshot."""
-        return copy.deepcopy(self._loader_overrides)
-
-
-class ModelSpecNotRegisteredError(KeyError):
-    """Raised when a routed identity has no configuration on the replica."""
 
 
 @dataclass
@@ -865,179 +790,6 @@ def setup_multiplexed_batch_predict_server(
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
     logging.info(f"MultiplexedBatchPredictServer deployed: name={deployment_name}")
     return handle
-
-
-def get_app_handle_with_retry(
-    deployment_name: str,
-    timeout_seconds: float = 60.0,
-    poll_interval_seconds: float = 1.0,
-):
-    """
-    Look up a Ray Serve app handle by name, retrying transient lookup
-    failures for up to ``timeout_seconds``.
-
-    The Serve controller is registered in the "serve" Ray namespace by the
-    driver that called ``serve.start()``. A consumer (e.g. a Ray task on a
-    fresh worker) may race the GCS sync of that actor entry and see a
-    transient "SERVE_CONTROLLER_ACTOR not found" failure. Non-transient
-    errors are re-raised immediately.
-
-    ``_prefer_local_routing=True`` is applied via ``handle._init()``
-    immediately after the handle is obtained, before any ``.options()``
-    or ``.remote()`` call can implicitly initialize it with the default
-    (``False``) value.
-    """
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        try:
-            handle = serve.get_app_handle(deployment_name)
-            # ``_prefer_local_routing`` must be set via ``_init()`` before any
-            # ``.options()`` or ``.remote()`` call initializes the handle.
-            handle._init(_prefer_local_routing=True)
-            return handle
-        except Exception as exc:
-            msg = str(exc)
-            transient = (
-                "SERVE_CONTROLLER_ACTOR" in msg
-                or "There is no Serve instance" in msg
-                or "Failed to look up actor" in msg
-            )
-            if not transient or time.monotonic() > deadline:
-                raise
-            logging.debug("Serve controller not visible yet (%s); retrying.", msg)
-            time.sleep(poll_interval_seconds)
-
-
-def wait_for_serve_ready(
-    app_name: str,
-    poll_interval_seconds: float = 2,
-    timeout_seconds: float = 600,
-) -> bool:
-    """
-    Wait for Ray Serve to be fully ready to accept requests.
-
-    Blocks until the Ray Serve controller is running and the specified
-    application reaches RUNNING status.
-
-    Args:
-        app_name: Name of the Ray Serve application to wait for.
-        poll_interval_seconds: How often to check status.
-        timeout_seconds: Maximum total time to wait before raising
-            ``TimeoutError``. Prevents indefinite hangs when a deployment
-            cannot be scheduled (e.g. no free GPU).
-
-    Returns:
-        True if server is ready.
-
-    Raises:
-        RuntimeError: If server fails to deploy.
-        TimeoutError: If the application does not reach RUNNING within
-            ``timeout_seconds``.
-    """
-    deadline = time.monotonic() + timeout_seconds
-
-    def _check_deadline(phase: str) -> None:
-        if time.monotonic() > deadline:
-            raise TimeoutError(
-                f"Timed out after {timeout_seconds}s waiting for Ray Serve "
-                f"({phase}) for app {app_name!r}."
-            )
-
-    # Phase 1: Wait for Ray Serve controller
-    logging.info("Waiting for Ray Serve controller to start...")
-    while True:
-        try:
-            status = serve.status()
-            logging.info("Ray Serve controller is running")
-            break
-        except Exception as e:
-            error_msg = str(e)
-            if (
-                "SERVE_CONTROLLER_ACTOR" in error_msg
-                or "Failed to look up actor" in error_msg
-            ):
-                logging.debug(f"Ray Serve controller not ready yet: {error_msg}")
-                _check_deadline("controller startup")
-                time.sleep(poll_interval_seconds)
-            else:
-                raise
-
-    # Phase 2: Wait for the application to be deployed and running
-    logging.info(f"Waiting for application '{app_name}' to be ready...")
-    while True:
-        _check_deadline("application RUNNING")
-        try:
-            status = serve.status()
-
-            if app_name not in status.applications:
-                logging.debug(f"Application '{app_name}' not found yet, waiting...")
-                time.sleep(poll_interval_seconds)
-                continue
-
-            app_status = status.applications[app_name]
-
-            if app_status.status == ApplicationStatus.RUNNING:
-                logging.info(f"Application '{app_name}' is RUNNING and ready")
-                return True
-            elif app_status.status == ApplicationStatus.DEPLOYING:
-                logging.debug(f"Application '{app_name}' is still deploying...")
-                time.sleep(poll_interval_seconds)
-            elif app_status.status in (
-                ApplicationStatus.DEPLOY_FAILED,
-                ApplicationStatus.UNHEALTHY,
-            ):
-                raise RuntimeError(
-                    f"Application '{app_name}' failed to deploy. "
-                    f"Status: {app_status.status}, Message: {app_status.message}"
-                )
-            else:
-                logging.debug(f"Application '{app_name}' status: {app_status.status}")
-                time.sleep(poll_interval_seconds)
-
-        except RuntimeError:
-            raise
-        except Exception as e:
-            logging.warning(f"Error checking serve status: {e}")
-            time.sleep(poll_interval_seconds)
-
-
-def get_ray_connection_info(head_file: str) -> dict[str, str | None]:
-    """
-    Read Ray connection info from a head.json file.
-
-    Args:
-        head_file: Path to head.json file from a Ray cluster.
-
-    Returns:
-        Dictionary with ``ray_address``, ``namespace_serve_fairchem``, and
-        ``local`` keys. For local clusters ``ray_address`` is *None*.
-    """
-    with open(head_file) as f:
-        head_info = json.load(f)
-
-    namespace_serve_fairchem = head_info.get("namespace_serve_fairchem")
-    is_local = head_info.get("local", False)
-
-    if is_local:
-        return {
-            "ray_address": None,
-            "namespace_serve_fairchem": namespace_serve_fairchem,
-            "local": True,
-        }
-
-    hostname = head_info.get("hostname")
-    client_port = head_info.get("client_port")
-
-    if not hostname or not client_port:
-        raise ValueError(
-            f"Invalid head.json: missing hostname or client_port in {head_file}"
-        )
-
-    return {
-        "ray_address": f"ray://{hostname}:{client_port}",
-        "namespace_serve_fairchem": namespace_serve_fairchem,
-        "local": False,
-    }
 
 
 @dataclass
