@@ -14,6 +14,8 @@ from functools import cached_property
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Literal, Protocol
 
+import ray
+from ray import serve
 from fairchem.core.components.batch_server import (
     AutobatchConfig,
     AutobatchResult,
@@ -221,8 +223,6 @@ class InferenceBatcher:
         Args:
             new_predict_unit: A new MLIPPredictUnit instance with the updated checkpoint
         """
-        import ray
-
         # Put the model in the object store so only a lightweight reference
         # travels through the Serve routing layer; Ray resolves it on the server.
         predict_unit_ref = ray.put(new_predict_unit)
@@ -239,9 +239,6 @@ class InferenceBatcher:
             hasattr(self, "predict_server_handle")
             and self.predict_server_handle is not None
         ):
-            import ray
-            from ray import serve
-
             # Check if Ray is still initialized before trying to delete
             if ray.is_initialized():
                 with contextlib.suppress(Exception):
@@ -269,9 +266,6 @@ class InferenceBatcher:
         # Optionally shutdown Ray Serve and Ray completely
         # This should only be used when you're SURE no other batchers are running
         if shutdown_ray:
-            import ray
-            from ray import serve
-
             with contextlib.suppress(Exception):
                 serve.shutdown()
 
