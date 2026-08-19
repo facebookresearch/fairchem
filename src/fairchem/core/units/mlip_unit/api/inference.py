@@ -32,6 +32,10 @@ DEFAULT_SPIN = 0
 ALLOWED_DTYPES = [torch.float32, torch.float64]
 
 
+class MergeMoleConsistencyError(ValueError):
+    """Raised when input data is incompatible with an already merged MOLE model."""
+
+
 def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
     """
     UMA-specific validation: handle charge/spin for OMOL task.
@@ -125,15 +129,14 @@ class InferenceSettings:
 
     # Flag to enable or disable activation checkpointing during
     # inference. This will dramatically decrease the memory footprint
-    # especially for large number of atoms (ie 10+) at a slight cost to
+    # especially for large number of atoms (i.e. 10k+) at a slight cost to
     # inference speed.
     activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
-    # inference. If this is used, the input composition, total charge
-    # and spin MUST remain constant throughout the simulation this will
-    # slightly increase speed and reduce memory footprint used by the
-    # parameters significantly
+    # inference. This slightly increases speed and significantly reduces
+    # parameter memory. If composition, task, total charge, or spin changes,
+    # MLIPPredictUnit falls back to an unmerged model.
     merge_mole: bool = False
 
     # Flag to enable or disable the compilation of the inference model.
@@ -184,7 +187,9 @@ class InferenceSettings:
     predict_untrained_forces: set[str] = field(default_factory=set)
     predict_untrained_stress: set[str] = field(default_factory=set)
     predict_untrained_hessian: set[str] = field(default_factory=set)
-    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+    # Disable for backends whose custom backward operators lack vmap rules.
+    # The loop uses less memory but performs one backward pass per force component.
+    hessian_vmap: bool = True
 
     # When True, allow backbones to add their default untrained tasks
     # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
@@ -221,9 +226,25 @@ class InferenceSettings:
         return config
 
 
-# this is most general setting that works for most systems and models,
-# not optimized for speed
+# Default to the fast path while retaining full FP32 precision. If the input
+# changes in a way that is incompatible with the merged MOLE model, the
+# predictor automatically falls back to an unmerged and uncompiled model.
 def inference_settings_default():
+    return InferenceSettings(
+        tf32=False,
+        activation_checkpointing=False,
+        merge_mole=True,
+        compile=True,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+
+# Batch mode is the stable entry point for heterogeneous inputs. It currently
+# uses the general unmerged and uncompiled path; keeping it as a named mode lets
+# us optimize heterogeneous batches independently in future releases (for
+# example, by enabling compilation without merging MOLE).
+def inference_settings_batch():
     return InferenceSettings(
         tf32=False,
         activation_checkpointing=True,
@@ -234,10 +255,9 @@ def inference_settings_default():
     )
 
 
-# this setting is designed for running long simulations or optimizations
-# where the system composition (atoms, charge, spin) stays constant over
-# the course the simulation. For smaller systems
-# activation_checkpointing can be turned off for some extra speed gain
+# Turbo uses the same fast path as the default settings, with TF32 enabled for
+# additional speed on supported hardware. It remains opt-in because it trades
+# a small amount of precision for speed.
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
@@ -262,6 +282,7 @@ def inference_settings_traineval():
 
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
+    "batch": inference_settings_batch(),
     "turbo": inference_settings_turbo(),
     "traineval": inference_settings_traineval(),
 }

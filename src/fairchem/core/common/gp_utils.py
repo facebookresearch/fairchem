@@ -8,12 +8,18 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
 import threading
+from dataclasses import dataclass
 
 import torch
+import torch.distributed._functional_collectives as funcol
+from omegaconf import OmegaConf
 from torch import distributed as dist
-from torch.distributed.nn.functional import all_reduce, reduce_scatter
+from torch.distributed.nn.functional import all_reduce
+
+from fairchem.core.common.utils import StrEnum
 
 """
 Functions to support graph parallel training.
@@ -25,6 +31,26 @@ https://github.com/facebookresearch/fairscale/blob/main/fairscale/nn/model_paral
 
 _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
+
+
+class GPMode(StrEnum):
+    ALLGATHER = "allgather"
+    ALL_TO_ALL = "all_to_all"
+
+
+class GPPartition(StrEnum):
+    INDEX_SPLIT = "index_split"
+    SPATIAL = "spatial"
+
+
+@dataclass
+class GraphParallelConfig:
+    group_size: int = 1
+    mode: GPMode = GPMode.ALLGATHER
+    partition: GPPartition = GPPartition.INDEX_SPLIT
+
+
+_GP_CONFIG: GraphParallelConfig | None = None
 
 _tls = threading.local()
 
@@ -97,6 +123,13 @@ def setup_graph_parallel_groups(
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
 
+    # Ensure a GP config exists so downstream code can read
+    # `get_gp_config().mode` without a None check. Callers that want
+    # non-default settings (A2A, spatial partition) should call
+    # `set_gp_config` explicitly after this.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=graph_parallel_group_size))
+
 
 def setup_gp(config) -> None:
     gp_size = config["gp_gpus"]
@@ -129,10 +162,18 @@ def setup_gp(config) -> None:
         if i == found[0]:
             _GRAPH_PARALLEL_GROUP = group
 
+    # Every entry point that sets up GP groups must also set a GP config so
+    # downstream code (e.g. escn_md.py) can read `get_gp_config().mode`
+    # without a None check. setup_graph_parallel_groups()'s callers set the
+    # config alongside; do the same here for parity.
+    if _GP_CONFIG is None:
+        set_gp_config(GraphParallelConfig(group_size=gp_size))
+
 
 def cleanup_gp() -> None:
     global _DATA_PARALLEL_GROUP
     global _GRAPH_PARALLEL_GROUP
+    global _GP_CONFIG
     assert _GRAPH_PARALLEL_GROUP is not None
     assert _DATA_PARALLEL_GROUP is not None
     with contextlib.suppress(ValueError):
@@ -141,10 +182,64 @@ def cleanup_gp() -> None:
         dist.destroy_process_group(_GRAPH_PARALLEL_GROUP)
     _DATA_PARALLEL_GROUP = None
     _GRAPH_PARALLEL_GROUP = None
+    _GP_CONFIG = None
 
 
 def initialized() -> bool:
     return _GRAPH_PARALLEL_GROUP is not None
+
+
+def set_gp_config(config: GraphParallelConfig) -> None:
+    """
+    Store the graph parallel config as a plain dataclass.
+
+    Hydra passes a DictConfig, whose attribute reads torch.compile cannot
+    trace; the per-layer read then splits the backbone forward into a frame
+    per layer.
+    """
+    global _GP_CONFIG
+    if OmegaConf.is_config(config):
+        config = OmegaConf.to_object(config)
+    _GP_CONFIG = config
+
+
+def get_gp_config() -> GraphParallelConfig | None:
+    return _GP_CONFIG
+
+
+def resolve_gp_config_for_workers(
+    gp_config: GraphParallelConfig | None,
+    num_workers: int,
+) -> GraphParallelConfig | None:
+    """
+    Reconcile a user-provided GraphParallelConfig with the target number
+    of workers.
+
+    Behavior:
+      - ``num_workers <= 1``: no GP is used; return ``gp_config`` unchanged
+        (may be ``None``).
+      - ``num_workers > 1``:
+          * If ``gp_config`` is ``None``, build a default
+            ``GraphParallelConfig(group_size=num_workers)``.
+          * If the config's ``group_size`` is still the default (1),
+            return a copy with ``group_size=num_workers``. The caller's
+            config is NOT mutated.
+          * If ``group_size == num_workers`` already, return it unchanged.
+          * Otherwise raise ``ValueError`` — an explicit mismatch is a
+            configuration error.
+    """
+    if num_workers <= 1:
+        return gp_config
+    if gp_config is None:
+        return GraphParallelConfig(group_size=num_workers)
+    if gp_config.group_size == 1:
+        return dataclasses.replace(gp_config, group_size=num_workers)
+    if gp_config.group_size != num_workers:
+        raise ValueError(
+            f"gp_config.group_size ({gp_config.group_size}) must equal "
+            f"num_workers ({num_workers})"
+        )
+    return gp_config
 
 
 def get_dp_group():
@@ -184,16 +279,45 @@ def reduce_from_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
 
 
 class ReduceFromModelParallelRegion(torch.autograd.Function):
-    @staticmethod
-    @torch.compiler.disable
-    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
-        # return _reduce(ctx, input) # this operates in place
-        return all_reduce(input, group=get_gp_group())  # this operats out of place
+    """
+    Sum a tensor across the graph parallel group.
+
+    The backward is the identity, not the adjoint. Differentiating the
+    all-reduce instead would apply a second one and scale the gradient by
+    the group size.
+    """
 
     @staticmethod
-    @torch.compiler.disable
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        return funcol.all_reduce(input, "sum", get_gp_group())
+
+    @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
         return grad_output
+
+
+def all_reduce_sum_with_grad(input: torch.Tensor) -> torch.Tensor:
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    return AllReduceSumWithGrad.apply(input)
+
+
+class AllReduceSumWithGrad(torch.autograd.Function):
+    """
+    Sum a tensor across the graph parallel group, differentiably.
+
+    The backward is a second sum, where ReduceFromModelParallelRegion's is the
+    identity: every rank consumes the reduced value independently, so one
+    rank's contribution collects gradient from all of them.
+    """
+
+    @staticmethod
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        ctx.group = get_gp_group()
+        return funcol.all_reduce(input, "sum", ctx.group)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> torch.Tensor:
+        return funcol.all_reduce(grad_output, "sum", ctx.group)
 
 
 def scatter_to_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
@@ -204,13 +328,11 @@ def scatter_to_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
 # this returns the values in place
 class ScatterToModelParallelRegion(torch.autograd.Function):
     @staticmethod
-    @torch.compiler.disable
     def forward(ctx, input: torch.Tensor, dim: int = -1) -> torch.Tensor:
         ctx.split_sizes = size_list_fn(input.shape[0], get_gp_world_size())
         return input.split(ctx.split_sizes)[get_gp_rank()]
 
     @staticmethod
-    @torch.compiler.disable
     def backward(ctx, grad_output: torch.Tensor):
         return gather_from_model_parallel_region_sum_grad(
             grad_output, sum(ctx.split_sizes)
@@ -264,35 +386,46 @@ def gather_from_model_parallel_region_sum_grad(
 
 
 class GatherFromModelParallelRegionGradPadded(torch.autograd.Function):
-    @staticmethod
-    @torch.compiler.disable
-    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
-        ctx.rank = get_gp_rank()
-        ctx.group = get_gp_group()
-        tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
-        dist.all_gather(tensor_list, input, group=ctx.group)
-        return tuple(tensor_list)
+    """
+    Gather every rank's tensor, returned as one tensor per rank.
+
+    Inputs must already be padded to a common length. The backward keeps
+    only this rank's slice, so gradients from the other ranks' copies are
+    dropped rather than summed.
+    """
 
     @staticmethod
-    @torch.compiler.disable
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        ctx.rank = get_gp_rank()
+        world = get_gp_world_size()
+        gathered = funcol.all_gather_tensor(input, 0, get_gp_group())
+        return tuple(gathered.chunk(world, dim=0))
+
+    @staticmethod
     def backward(ctx, *grad_outputs):
         return grad_outputs[ctx.rank]
 
 
 class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
+    """
+    Gather every rank's tensor, returned as one tensor per rank.
+
+    Differs from GatherFromModelParallelRegionGradPadded only in the
+    backward, which reduce-scatters so each rank receives the sum of all
+    ranks' gradients for its own slice.
+    """
+
     @staticmethod
-    @torch.compiler.disable
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
+        world = get_gp_world_size()
         if dist.get_backend() == "gloo":
             ctx.shape = input.shape
-        tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
-        dist.all_gather(tensor_list, input, group=ctx.group)
-        return tuple(tensor_list)
+        gathered = funcol.all_gather_tensor(input, 0, ctx.group)
+        return tuple(gathered.chunk(world, dim=0))
 
     @staticmethod
-    @torch.compiler.disable
     def backward(ctx, *grad_outputs):
         if dist.get_backend() == "gloo":
             grad_output = all_reduce(torch.cat(grad_outputs, dim=0), group=ctx.group)
@@ -301,9 +434,9 @@ class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
                 ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
             ]
             return result
-        local_grad_output = grad_outputs[ctx.rank]
-        output_tensor = torch.empty_like(local_grad_output)
-        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
+        return funcol.reduce_scatter_tensor(
+            torch.cat(grad_outputs, dim=0), "sum", 0, ctx.group
+        )
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
@@ -322,11 +455,9 @@ def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
 # avoid over head communication
 class ScaleBackwardGrad(torch.autograd.Function):
     @staticmethod
-    @torch.compiler.disable
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return input
 
     @staticmethod
-    @torch.compiler.disable
     def backward(ctx, grad_output: torch.Tensor):
         return dist.get_world_size(get_gp_group()) * grad_output

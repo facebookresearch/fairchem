@@ -15,6 +15,28 @@ from fairchem.data.oc.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
 from fairchem.data.oc.core.adsorbate_slab_config import get_interstitial_distances
 
 
+def assert_valid_adslab(adslab, slab, adsorbate, num_sites=100):
+    """
+    Check placement invariants independent of Pymatgen slab enumeration.
+    """
+    assert len(adslab.atoms_list) == num_sites
+    assert len(adslab.sites) == num_sites
+    assert len(np.unique(np.round(adslab.sites, decimals=4), axis=0)) == num_sites
+
+    num_slab_atoms = len(slab.atoms)
+    for atoms in adslab.atoms_list[:2]:
+        assert len(atoms) == num_slab_atoms + len(adsorbate.atoms)
+        np.testing.assert_allclose(
+            atoms.positions[:num_slab_atoms], slab.atoms.positions
+        )
+        np.testing.assert_allclose(atoms.cell, slab.atoms.cell)
+        assert atoms.get_chemical_symbols()[num_slab_atoms:] == (
+            adsorbate.atoms.get_chemical_symbols()
+        )
+        assert np.all(atoms.get_tags()[num_slab_atoms:] == 2)
+        assert np.array_equal(atoms.pbc, [True, True, False])
+
+
 @pytest.fixture(scope="class")
 def load_data(request):
     request.cls.bulk = Bulk(bulk_id_from_db=0)
@@ -29,27 +51,7 @@ class TestAdslab:
 
         slab = Slab.from_bulk_get_random_slab(self.bulk)
         adslab = AdsorbateSlabConfig(slab, self.adsorbate, num_sites=100)
-        assert (
-            len(adslab.atoms_list) == 100
-        ), f"Insufficient number of structures. Expected 100, got {len(adslab.atoms_list)}"
-
-        sites = ["%.04f_%.04f_%.04f" % (i[0], i[1], i[2]) for i in adslab.sites]
-        assert (
-            len(set(sites)) == 100
-        ), f"Insufficient number of sites. Expected 100, got {len(set(sites))}"
-
-        assert np.all(
-            np.isclose(
-                adslab.atoms_list[0].get_positions().mean(0),
-                np.array([6.2668884, 4.22961421, 16.47458617]),
-            )
-        )
-        assert np.all(
-            np.isclose(
-                adslab.atoms_list[1].get_positions().mean(0),
-                np.array([6.1967168, 4.73603662, 16.46990669]),
-            )
-        )
+        assert_valid_adslab(adslab, slab, self.adsorbate)
 
     def test_adslab_init_slab_only(self):
         random.seed(1)
@@ -59,27 +61,24 @@ class TestAdslab:
         slab_atoms = _slab.atoms
         slab = Slab(slab_atoms=slab_atoms)
         adslab = AdsorbateSlabConfig(slab, self.adsorbate, num_sites=100)
-        assert (
-            len(adslab.atoms_list) == 100
-        ), f"Insufficient number of structures. Expected 100, got {len(adslab.atoms_list)}"
+        assert_valid_adslab(adslab, slab, self.adsorbate)
 
-        sites = ["%.04f_%.04f_%.04f" % (i[0], i[1], i[2]) for i in adslab.sites]
-        assert (
-            len(set(sites)) == 100
-        ), f"Insufficient number of sites. Expected 100, got {len(set(sites))}"
+    def test_adslab_seeded_placement_is_deterministic(self):
+        random.seed(1)
+        np.random.seed(1)
+        slab = Slab.from_bulk_get_random_slab(self.bulk)
 
-        assert np.all(
-            np.isclose(
-                adslab.atoms_list[0].get_positions().mean(0),
-                np.array([6.2668884, 4.22961421, 16.47458617]),
-            )
-        )
-        assert np.all(
-            np.isclose(
-                adslab.atoms_list[1].get_positions().mean(0),
-                np.array([6.1967168, 4.73603662, 16.46990669]),
-            )
-        )
+        random.seed(2)
+        np.random.seed(2)
+        adslab1 = AdsorbateSlabConfig(slab, self.adsorbate, num_sites=2)
+
+        random.seed(2)
+        np.random.seed(2)
+        adslab2 = AdsorbateSlabConfig(slab, self.adsorbate, num_sites=2)
+
+        np.testing.assert_allclose(adslab1.sites, adslab2.sites)
+        for atoms1, atoms2 in zip(adslab1.atoms_list, adslab2.atoms_list):
+            np.testing.assert_allclose(atoms1.positions, atoms2.positions)
 
     def test_num_augmentations_per_site(self):
         random.seed(1)
@@ -91,7 +90,7 @@ class TestAdslab:
         )
         assert len(adslab.atoms_list) == 100
 
-        sites = ["%.04f_%.04f_%.04f" % (i[0], i[1], i[2]) for i in adslab.sites]
+        sites = [f"{i[0]:.4f}_{i[1]:.4f}_{i[2]:.4f}" for i in adslab.sites]
         assert len(set(sites)) == 1
 
     def test_placement_overlap(self):
@@ -107,21 +106,19 @@ class TestAdslab:
         )
         assert len(adslab.atoms_list) == 100
 
-        min_distance_close = []
-        for i in adslab.atoms_list:
-            min_distance_close.append(
-                np.isclose(min(get_interstitial_distances(i)), 0.1)
-            )
+        min_distance_close = [
+            np.isclose(min(get_interstitial_distances(atoms)), 0.1)
+            for atoms in adslab.atoms_list
+        ]
         assert all(min_distance_close)
 
         adslab = AdsorbateSlabConfig(
             slab, self.adsorbate, num_sites=100, interstitial_gap=0.5
         )
-        min_distance_close = []
-        for i in adslab.atoms_list:
-            min_distance_close.append(
-                np.isclose(min(get_interstitial_distances(i)), 0.5)
-            )
+        min_distance_close = [
+            np.isclose(min(get_interstitial_distances(atoms)), 0.5)
+            for atoms in adslab.atoms_list
+        ]
         assert all(min_distance_close)
 
     def test_is_adsorbate_com_on_normal(self):

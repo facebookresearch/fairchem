@@ -458,8 +458,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         Args:
             model_id: Key in the format ``"checkpoint_name_or_path:settings"``
                 where ``settings`` is one of the recognized inference setting
-                names (e.g. ``"default"``, ``"turbo"``) or an empty string for
-                the default settings.
+                names (e.g. ``"default"``, ``"batch"``, ``"turbo"``) or an
+                empty string for the default settings.
 
         Returns:
             The loaded ``MLIPPredictUnit`` for this model_id.
@@ -743,11 +743,20 @@ def get_app_handle_with_retry(
     fresh worker) may race the GCS sync of that actor entry and see a
     transient "SERVE_CONTROLLER_ACTOR not found" failure. Non-transient
     errors are re-raised immediately.
+
+    ``_prefer_local_routing=True`` is applied via ``handle._init()``
+    immediately after the handle is obtained, before any ``.options()``
+    or ``.remote()`` call can implicitly initialize it with the default
+    (``False``) value.
     """
     deadline = time.monotonic() + timeout_seconds
     while True:
         try:
-            return serve.get_app_handle(deployment_name)
+            handle = serve.get_app_handle(deployment_name)
+            # ``_prefer_local_routing`` must be set via ``_init()`` before any
+            # ``.options()`` or ``.remote()`` call initializes the handle.
+            handle._init(_prefer_local_routing=True)
+            return handle
         except Exception as exc:
             msg = str(exc)
             transient = (

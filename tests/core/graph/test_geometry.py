@@ -10,126 +10,168 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-from ase.geometry import wrap_positions as ase_wrap_positions
+from ase.geometry.geometry import general_find_mic
 
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.graph.geometry import (
+    compute_minkowski_op,
     minimum_image_displacement,
-    wrap_positions,
+)
+
+_ORTHO_CELL = torch.diag(
+    torch.tensor([10.0, 12.0, 8.0], dtype=torch.float64)
+).unsqueeze(0)
+_TRICLINIC_CELL = torch.tensor(
+    [[[10.0, 0.0, 0.0], [3.0, 9.0, 0.0], [0.0, 0.0, 8.0]]], dtype=torch.float64
+)
+_SKEWED_CELL = torch.tensor(
+    [[[6.0, 0.0, 0.0], [5.5, 3.0, 0.0], [2.0, 1.0, 7.0]]], dtype=torch.float64
 )
 
 
-def _random_cell(rng, min_length=3.0, max_length=10.0):
-    raw = rng.standard_normal((3, 3))
-    raw += np.eye(3) * 3.0
-    lengths = rng.uniform(min_length, max_length, size=3)
-    raw = raw / np.linalg.norm(raw, axis=1, keepdims=True) * lengths[:, None]
-    if np.linalg.det(raw) < 0:
-        raw[0] *= -1
-    return raw
+def _assert_matches_general_find_mic(
+    dr: torch.Tensor,
+    cell: torch.Tensor,
+    pbc: torch.Tensor,
+    batch: torch.Tensor,
+    minkowski_op: torch.Tensor | None = None,
+    atol: float = 1e-10,
+) -> None:
+    result = minimum_image_displacement(dr, cell, pbc, batch, minkowski_op=minkowski_op)
+    pbc_per_atom = pbc[batch]
+    cell_per_atom = cell[batch]
 
-
-class TestWrapPositionsAgainstASE:
-    """Both numpy and torch paths must agree with ASE on a random non-orthogonal cell."""
-
-    @pytest.fixture()
-    def random_system(self):
-        rng = np.random.default_rng(42)
-        cell = _random_cell(rng)
-        frac = rng.uniform(-0.5, 1.5, size=(50, 3))
-        pos = frac @ cell
-        return pos, cell
-
-    @pytest.mark.parametrize(
-        "pbc",
-        [
-            [True, True, True],
-            [True, False, True],
-            [False, False, False],
-        ],
-        ids=["full-pbc", "mixed-pbc", "no-pbc"],
-    )
-    def test_numpy_and_torch_match_ase(self, random_system, pbc):
-        pos, cell = random_system
-        pbc_arr = np.array(pbc)
-
-        expected = ase_wrap_positions(pos, cell, pbc=pbc_arr, eps=0)
-        result_np = wrap_positions(pos, cell, pbc_arr)
-        result_torch = wrap_positions(
-            torch.from_numpy(pos),
-            torch.from_numpy(cell),
-            torch.from_numpy(pbc_arr),
-        ).numpy()
-
-        np.testing.assert_allclose(result_np, expected, atol=1e-10)
-        np.testing.assert_allclose(result_torch, expected, atol=1e-10)
-
-
-class TestMinimumImageDisplacementAgainstASE:
-    """Minimum-image displacements must agree with ASE's mic distances."""
-
-    @pytest.fixture()
-    def random_system(self):
-        rng = np.random.default_rng(42)
-        cell = _random_cell(rng)
-        n_atoms = 20
-        frac = rng.uniform(0.0, 1.0, size=(n_atoms, 3))
-        pos = frac @ cell
-        return pos, cell
-
-    @pytest.mark.parametrize(
-        "pbc",
-        [
-            [True, True, True],
-            [True, False, True],
-            [False, False, False],
-        ],
-        ids=["full-pbc", "mixed-pbc", "no-pbc"],
-    )
-    def test_matches_ase_get_all_distances(self, random_system, pbc):
-        from ase import Atoms
-
-        pos, cell = random_system
-        pbc_arr = np.array(pbc)
-
-        atoms = Atoms(
-            symbols=["H"] * len(pos),
-            positions=pos,
-            cell=cell,
-            pbc=pbc_arr,
+    for i in range(dr.shape[0]):
+        expected, _ = general_find_mic(
+            dr[i].numpy()[None],
+            cell_per_atom[i].numpy(),
+            pbc=pbc_per_atom[i].numpy(),
+        )
+        np.testing.assert_allclose(
+            result[i].numpy(),
+            expected[0],
+            atol=atol,
+            err_msg=f"atom {i}: got {result[i].numpy()}, expected {expected[0]}",
         )
 
-        # ASE reference: all pairwise mic displacement vectors, shape (n, n, 3)
-        ase_vecs = atoms.get_all_distances(mic=True, vector=True)
 
-        n = len(pos)
-        for i in range(n):
-            # Displacement vectors from atom i to every other atom
-            dr_np = pos - pos[i]  # (n, 3) raw displacements
+# ── Correctness against ASE general_find_mic ──
 
-            dr = torch.from_numpy(dr_np)
-            cell_t = torch.from_numpy(cell).unsqueeze(0).expand(n, -1, -1)
-            pbc_t = torch.tensor(pbc).unsqueeze(0).expand(n, -1)
 
-            result = minimum_image_displacement(dr, cell_t, pbc_t).numpy()
+@pytest.mark.parametrize(
+    "cell, pbc, dr",
+    [
+        pytest.param(
+            _ORTHO_CELL,
+            torch.tensor([[True, False, True]]),
+            torch.tensor([[6.0, 7.0, 5.0], [-7.0, 3.0, 0.0]], dtype=torch.float64),
+            id="orthorhombic-partial-pbc",
+        ),
+        pytest.param(
+            _SKEWED_CELL,
+            torch.tensor([[True, True, True]]),
+            torch.tensor(
+                (torch.manual_seed(42), torch.randn(5, 3, dtype=torch.float64) * 5)[1]
+            ),
+            id="highly-skewed-triclinic",
+        ),
+    ],
+)
+def test_minimum_image_matches_general_find_mic(cell, pbc, dr):
+    batch = torch.zeros(dr.shape[0], dtype=torch.long)
+    _assert_matches_general_find_mic(dr, cell, pbc, batch)
 
-            np.testing.assert_allclose(
-                result,
-                ase_vecs[i],
-                atol=1e-10,
-                err_msg=f"MIC displacement mismatch for reference atom {i}",
-            )
 
-    def test_gradients_flow_through_cell(self):
-        """Verify autograd gradients survive through cell."""
-        cell = torch.eye(3, dtype=torch.float64) * 10.0
-        cell.requires_grad_(True)
-        cell_b = cell.unsqueeze(0).expand(2, -1, -1)
-        pbc = torch.tensor([[True, True, True], [True, True, True]])
-        dr = torch.tensor([[9.5, 0.5, 0.5], [0.5, 9.8, 0.0]], dtype=torch.float64)
+# ── Precomputed minkowski_op ──
 
-        result = minimum_image_displacement(dr, cell_b, pbc)
-        loss = result.sum()
-        loss.backward()
 
-        assert cell.grad is not None
-        assert cell.grad.abs().sum().item() > 0
+def test_precomputed_op_matches_on_the_fly():
+    batch = torch.zeros(4, dtype=torch.long)
+    pbc = torch.tensor([[True, True, True]])
+    torch.manual_seed(7)
+    dr = torch.randn(4, 3, dtype=torch.float64) * 3
+
+    result_fly = minimum_image_displacement(dr, _TRICLINIC_CELL, pbc, batch)
+    op = compute_minkowski_op(_TRICLINIC_CELL, pbc)
+    result_pre = minimum_image_displacement(
+        dr, _TRICLINIC_CELL, pbc, batch, minkowski_op=op
+    )
+
+    torch.testing.assert_close(result_pre, result_fly)
+
+
+def test_precomputed_op_matches_general_find_mic():
+    batch = torch.zeros(3, dtype=torch.long)
+    pbc = torch.tensor([[True, True, True]])
+    torch.manual_seed(99)
+    dr = torch.randn(3, 3, dtype=torch.float64) * 4
+    op = compute_minkowski_op(_SKEWED_CELL, pbc)
+
+    _assert_matches_general_find_mic(dr, _SKEWED_CELL, pbc, batch, minkowski_op=op)
+
+
+# ── Multi-system batch ──
+
+
+def test_mixed_cells_in_batch():
+    cell = torch.cat([_ORTHO_CELL, _TRICLINIC_CELL], dim=0)
+    pbc = torch.tensor([[True, True, True], [True, True, True]])
+    batch = torch.tensor([0, 0, 1, 1], dtype=torch.long)
+    dr = torch.tensor(
+        [[6.0, 0.0, 0.0], [0.5, 0.5, 0.5], [3.0, 2.0, 1.0], [1.0, -1.0, 0.0]],
+        dtype=torch.float64,
+    )
+    _assert_matches_general_find_mic(dr, cell, pbc, batch)
+
+
+# ── Collation ──
+
+
+def _make_sample(n_atoms, cell, pbc):
+    return AtomicData.from_dict(
+        {
+            "pos": torch.randn(n_atoms, 3),
+            "atomic_numbers": torch.ones(n_atoms, dtype=torch.long),
+            "cell": cell.view(1, 3, 3),
+            "pbc": pbc.view(1, 3),
+            "natoms": torch.tensor([n_atoms]),
+            "edge_index": torch.empty((2, 0), dtype=torch.long),
+            "cell_offsets": torch.empty((0, 3)),
+            "nedges": torch.tensor([0]),
+            "charge": torch.tensor([0]),
+            "spin": torch.tensor([0]),
+            "fixed": torch.zeros(n_atoms, dtype=torch.long),
+            "tags": torch.zeros(n_atoms, dtype=torch.long),
+            "sid": ["s"],
+            "dataset": "test",
+            "minkowski_op": compute_minkowski_op(cell.view(1, 3, 3), pbc.view(1, 3)),
+        }
+    )
+
+
+def test_collated_batch_matches_general_find_mic():
+    pbc = torch.tensor([True, True, True])
+    d1 = _make_sample(3, _TRICLINIC_CELL.squeeze(0), pbc)
+    d2 = _make_sample(
+        2, torch.diag(torch.tensor([12.0, 12.0, 12.0], dtype=torch.float64)), pbc
+    )
+    batch = data_list_collater([d1, d2], otf_graph=True)
+
+    dr = torch.tensor(
+        [
+            [8.0, 1.0, 0.0],
+            [0.5, 0.5, 0.5],
+            [-5.0, 6.0, 4.5],
+            [7.0, 0.0, 0.0],
+            [0.0, -3.0, 3.0],
+        ],
+        dtype=torch.float64,
+    )
+    _assert_matches_general_find_mic(
+        dr,
+        batch.cell.double(),
+        batch.pbc,
+        batch.batch,
+        minkowski_op=batch.minkowski_op.double(),
+    )

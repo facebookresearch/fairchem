@@ -10,10 +10,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
+import torch.distributed._functional_collectives as funcol
 from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.parallelism.graph_partition import (
+    PartitionStrategy,
+    partition_atoms_index_split,
+    partition_atoms_spatial,
+)
 
 
 def _safe_all_to_all(
@@ -61,8 +67,6 @@ class GPContext:
     Graph parallel context holding communication metadata for all-to-all.
 
     Runtime-only struct: every field is needed for the forward/backward pass.
-    Construction intermediates (node_partition, rank_assignments, needed_atoms,
-    global_to_local, etc.) are computed in build_gp_context but not stored.
 
     Attributes:
         rank: Current GP rank.
@@ -79,6 +83,7 @@ class GPContext:
         total_recv: Total number of embeddings to receive (sum of recv_splits).
         local_edge_idx: Indices into edge_index_local where source is a local atom.
         remote_edge_idx: Indices into edge_index_local where source is a remote atom.
+        rank_assignments: Rank owner for each atom, shape (total_atoms,).
     """
 
     rank: int
@@ -93,6 +98,7 @@ class GPContext:
     total_recv: int
     local_edge_idx: torch.Tensor
     remote_edge_idx: torch.Tensor
+    rank_assignments: torch.Tensor
 
 
 def _sparse_index_exchange(
@@ -189,6 +195,41 @@ def _sparse_index_exchange(
     send_indices_global = recv_buf
 
     return send_counts, send_indices_global
+
+
+@torch.compiler.disable
+def compute_a2a_partition(
+    pos: torch.Tensor,
+    total_atoms: int,
+    device: torch.device,
+    world_size: int,
+    rank: int,
+    strategy: PartitionStrategy,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute rank assignments and local node partition for A2A graph parallel.
+
+    Args:
+        pos: Atom positions, shape (N, 3).
+        total_atoms: Total number of atoms.
+        device: Device for output tensors.
+        world_size: Number of GP ranks.
+        rank: Current GP rank.
+        strategy: Partitioning strategy (SPATIAL or INDEX_SPLIT).
+
+    Returns:
+        Tuple of (rank_assignments, node_partition) where rank_assignments
+        is shape (N,) mapping each atom to a rank, and node_partition is
+        the indices of atoms belonging to this rank.
+    """
+    with record_function("a2a_partition"):
+        if strategy == PartitionStrategy.SPATIAL:
+            rank_assignments = partition_atoms_spatial(pos, world_size)
+        else:
+            rank_assignments = partition_atoms_index_split(
+                total_atoms, world_size, device
+            )
+    node_partition = (rank_assignments == rank).nonzero(as_tuple=True)[0]
+    return rank_assignments, node_partition
 
 
 @torch.compiler.disable
@@ -313,244 +354,33 @@ def build_gp_context(
         total_recv=total_recv,
         local_edge_idx=local_edge_idx,
         remote_edge_idx=remote_edge_idx,
+        rank_assignments=rank_assignments,
     )
-
-
-class AllToAllCollect(torch.autograd.Function):
-    """
-    Autograd function that uses all-to-all to collect only the needed
-    remote atom embeddings, replacing the all-gather approach.
-
-    Forward: Sends local atom embeddings to ranks that need them,
-    receives remote atom embeddings that we need. Returns only the
-    received remote embeddings (NOT concatenated with local).
-
-    Backward: Reverses the communication — sends gradient of received
-    embeddings back to their owners, receives gradient of sent
-    embeddings.
-
-    Optimizations over naive all-to-all:
-    - Uses ``all_to_all_single`` on NCCL to avoid Python list creation
-      from ``split()`` — communicates packed tensors directly.
-    - Returns the pre-allocated receive buffer directly instead of
-      ``torch.cat(recv_list)`` — avoids a redundant copy.
-    - Accepts precomputed ``send_splits``/``recv_splits`` to avoid
-      repeated ``.tolist()`` calls per layer.
-    """
-
-    @staticmethod
-    @torch.compiler.disable
-    def forward(
-        ctx,
-        x_local: torch.Tensor,
-        send_indices: torch.Tensor,
-        send_counts: torch.Tensor,
-        recv_counts: torch.Tensor,
-        gp_group: dist.ProcessGroup,
-        rank: int,
-        world_size: int,
-        precomputed_send_splits: list[int] | None = None,
-        precomputed_recv_splits: list[int] | None = None,
-        precomputed_total_recv: int | None = None,
-    ) -> torch.Tensor:
-        """
-        Forward all-to-all embedding collection.
-
-        Args:
-            x_local: Local atom embeddings,
-                shape (local_atoms, *feature_dims).
-            send_indices: Local indices of atoms to send,
-                ordered by dest rank.
-            send_counts: Number of atoms to send to each rank.
-            recv_counts: Number of atoms to receive from each rank.
-            gp_group: GP process group.
-            rank: GP rank.
-            world_size: GP world size.
-            precomputed_send_splits: Optional cached
-                send_counts.tolist().
-            precomputed_recv_splits: Optional cached
-                recv_counts.tolist().
-            precomputed_total_recv: Optional cached
-                sum(recv_splits).
-
-        Returns:
-            Received remote embeddings,
-                shape (sum(recv_counts), *feature_dims).
-        """
-        ctx.send_indices = send_indices
-        ctx.send_counts = send_counts
-        ctx.recv_counts = recv_counts
-        ctx.gp_group = gp_group
-        ctx.rank = rank
-        ctx.world_size = world_size
-        ctx.local_size = x_local.shape[0]
-        # Cache precomputed splits for backward
-        ctx.precomputed_send_splits = precomputed_send_splits
-        ctx.precomputed_recv_splits = precomputed_recv_splits
-
-        feature_shape = x_local.shape[1:]
-
-        # Gather atoms to send (index_select into contiguous buffer)
-        if send_indices.numel() > 0:
-            x_send = x_local[send_indices].contiguous()
-        else:
-            x_send = torch.empty(
-                0,
-                *feature_shape,
-                device=x_local.device,
-                dtype=x_local.dtype,
-            )
-
-        # Use precomputed splits if available
-        send_splits = (
-            precomputed_send_splits
-            if precomputed_send_splits is not None
-            else send_counts.tolist()
-        )
-        recv_splits = (
-            precomputed_recv_splits
-            if precomputed_recv_splits is not None
-            else recv_counts.tolist()
-        )
-        total_recv = (
-            precomputed_total_recv
-            if precomputed_total_recv is not None
-            else sum(recv_splits)
-        )
-        x_recv = torch.empty(
-            total_recv,
-            *feature_shape,
-            device=x_local.device,
-            dtype=x_local.dtype,
-        )
-
-        # Perform all-to-all communication
-        backend = dist.get_backend(gp_group)
-        if backend == "nccl":
-            # Use all_to_all_single for NCCL
-            dist.all_to_all_single(
-                x_recv,
-                x_send,
-                output_split_sizes=recv_splits,
-                input_split_sizes=send_splits,
-                group=gp_group,
-            )
-        else:
-            # Gloo fallback: use list-based pairwise send/recv
-            send_list = list(x_send.split(send_splits))
-            recv_list = list(x_recv.split(recv_splits))
-            _safe_all_to_all(recv_list, send_list, group=gp_group)
-
-        # x_recv already contains all received data in rank order
-        return x_recv
-
-    @staticmethod
-    @torch.compiler.disable
-    def backward(ctx, grad_received: torch.Tensor):
-        """
-        Reverse the all-to-all: send gradients back to the ranks that
-        originally sent us the embeddings.
-        """
-        send_counts = ctx.send_counts
-        recv_counts = ctx.recv_counts
-        send_indices = ctx.send_indices
-        gp_group = ctx.gp_group
-        local_size = ctx.local_size
-
-        feature_shape = grad_received.shape[1:]
-
-        # In backward, the roles are reversed
-        bwd_send_splits = (
-            ctx.precomputed_recv_splits
-            if ctx.precomputed_recv_splits is not None
-            else recv_counts.tolist()
-        )
-        bwd_recv_splits = (
-            ctx.precomputed_send_splits
-            if ctx.precomputed_send_splits is not None
-            else send_counts.tolist()
-        )
-
-        total_bwd_recv = sum(bwd_recv_splits)
-        grad_send_back = torch.empty(
-            total_bwd_recv,
-            *feature_shape,
-            device=grad_received.device,
-            dtype=grad_received.dtype,
-        )
-
-        # Reverse all-to-all
-        backend = dist.get_backend(gp_group)
-        if backend == "nccl":
-            dist.all_to_all_single(
-                grad_send_back,
-                grad_received.contiguous(),
-                output_split_sizes=bwd_recv_splits,
-                input_split_sizes=bwd_send_splits,
-                group=gp_group,
-            )
-        else:
-            # Gloo fallback
-            bwd_send_list = list(grad_received.split(bwd_send_splits))
-            bwd_recv_list = list(grad_send_back.split(bwd_recv_splits))
-            _safe_all_to_all(bwd_recv_list, bwd_send_list, group=gp_group)
-
-        # Scatter received gradients back to local positions
-        grad_local = torch.zeros(
-            local_size,
-            *feature_shape,
-            device=grad_received.device,
-            dtype=grad_received.dtype,
-        )
-
-        if total_bwd_recv > 0:
-            grad_local.index_add_(0, send_indices, grad_send_back)
-
-        # Return gradients for x_local only; None for all other inputs
-        return (
-            grad_local,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
 
 
 def all_to_all_collect(
     x_local: torch.Tensor,
     gp_ctx: GPContext,
-    send_indices: torch.Tensor,
 ) -> torch.Tensor:
     """
-    High-level function to collect remote embeddings via all-to-all.
+    Collect the remote atom embeddings this rank's edges need.
 
-    Returns the received remote embeddings (NOT including local).
-    The caller should concatenate [x_local, received] and use
-    gp_ctx.global_to_local to index into this combined tensor.
+    Returns only the received embeddings; the caller concatenates them with
+    the local ones to form the tensor ``edge_index_local`` indexes into.
+    Autograd supplies the reverse exchange and the scatter-add back into the
+    local embeddings.
 
     Args:
         x_local: Local atom embeddings, shape (local_atoms, *features).
         gp_ctx: Graph parallel context.
-        send_indices: Local indices of atoms to send.
 
     Returns:
-        x_received: Remote atom embeddings,
-            shape (total_needed, *features).
+        Remote atom embeddings, shape (total_recv, *features).
     """
-    return AllToAllCollect.apply(
-        x_local,
-        send_indices,
-        gp_ctx.send_counts,
-        gp_ctx.recv_counts,
-        gp_utils.get_gp_group(),
-        gp_ctx.rank,
-        gp_ctx.world_size,
-        gp_ctx.send_splits,
+    x_send = x_local[gp_ctx.send_indices]
+    return funcol.all_to_all_single_autograd(
+        x_send,
         gp_ctx.recv_splits,
-        gp_ctx.total_recv,
+        gp_ctx.send_splits,
+        gp_utils.get_gp_group(),
     )

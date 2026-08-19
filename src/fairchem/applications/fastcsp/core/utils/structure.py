@@ -5,208 +5,305 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 Structure Conversion, Manipulation, and Validation Utilities for FastCSP
-
-This module provides essential utilities for handling crystal structures throughout
-the FastCSP workflow. It implements efficient conversions between different structure
-representations, validation algorithms for structural integrity, and functions
-for high-throughput crystal structure processing.
-
-Key Features:
-- Structure hashing for efficient comparison and caching
-- Distributed processing support with consistent partitioning
-- Chemical composition validation and bonding analysis
-- Quality control checks for structural integrity
-
-Structure Validation:
-- Atomic composition conservation (Z-number preservation)
-- Covalent bonding network analysis using coordination environments
-
-The module is designed for both individual structure operations and batch processing
-of large crystal structure datasets common in high-throughput materials discovery.
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections import deque
 from typing import TYPE_CHECKING
 
+import ase.io
+import networkx as nx
 import numpy as np
+from ase import Atoms
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
+from scipy.sparse import csgraph
 
 if TYPE_CHECKING:
-    from ase import Atoms
+    from pathlib import Path
 
 
+# ---------------------------------------------------------------------------
+# Conversion helpers
+# ---------------------------------------------------------------------------
 def cif_to_structure(cif: str) -> Structure | None:
-    """
-    Convert CIF (Crystallographic Information File) string to pymatgen Structure object.
-
-    Args:
-        cif: CIF format string containing crystal structure data
-
-    Returns:
-        Structure object if conversion successful, None if cif is empty/invalid
-    """
+    """Parse a CIF string to a pymatgen ``Structure`` (``None`` if empty/falsy)."""
     return Structure.from_str(cif, fmt="cif") if cif else None
 
 
 def cif_to_atoms(cif: str) -> Atoms | None:
-    """
-    Convert CIF string to ASE (Atomic Simulation Environment) Atoms object.
-
-    This function provides a direct path from CIF format to ASE Atoms objects,
-    which are commonly used for structure optimization and analysis.
-
-    Args:
-        cif: CIF format string containing crystal structure data
-
-    Returns:
-        ASE Atoms object if conversion successful, None if cif is empty/invalid
-    """
+    """Parse a CIF string to an ASE ``Atoms`` (``None`` if empty/falsy)."""
     return AseAtomsAdaptor.get_atoms(cif_to_structure(cif)) if cif else None
 
 
+def _to_structure(
+    structure_or_atoms: Structure | Atoms | None,
+) -> Structure | None:
+    """Coerce ``None`` / ``Structure`` / ``Atoms`` -> ``Structure`` / ``None``."""
+    if structure_or_atoms is None:
+        return None
+    if isinstance(structure_or_atoms, Structure):
+        return structure_or_atoms
+    return AseAtomsAdaptor.get_structure(structure_or_atoms)
+
+
+# ---------------------------------------------------------------------------
+# Partitioning / grouping keys
+# ---------------------------------------------------------------------------
 def get_partition_id(key: str, npartitions: int = 1000) -> int:
-    """
-    Generate a consistent partition ID for distributed processing of structures.
-
-    This function creates deterministic partitioning for parallel processing,
-    ensuring that structures with the same key always map to the same partition.
-
-    Args:
-        key: String identifier for the structure (e.g., molecule_name + space_group)
-        npartitions: Total number of partitions for distribution (default: 1000)
-
-    Returns:
-        int: Partition ID in range [0, npartitions-1]
-
-    Notes:
-        - Deterministic: same key always produces same partition ID
-    """
-    key_encoded = key.encode("utf-8")
-    md5_hash = hashlib.md5()
-    md5_hash.update(key_encoded)
-    consistent_hash_hex = md5_hash.hexdigest()
-    consistent_hash_int = int(consistent_hash_hex, 16)
-    return consistent_hash_int % npartitions
+    """Return a deterministic ``key -> [0, npartitions)`` bucket (MD5-based)."""
+    return int(hashlib.md5(key.encode("utf-8")).hexdigest(), 16) % npartitions
 
 
-def get_structure_hash(
-    structure: Structure,
-    z: int,
-    use_density: bool = True,
-    use_volume: bool = True,
-    density_bin_size: float = 0.1,
-    vol_bin_size: float = 0.2,
+def get_structure_group(
+    mol_id: str,
+    conf_id: str | None = None,
+    z: int | None = None,
+    spg: int | None = None,
+    density: float | None = None,
+    density_bin_size: float | None = None,
+    energy: float | None = None,
+    energy_bin_size: float | None = None,
 ) -> str:
+    """Build a blocker-key string for deduplication grouping.
+
+    Key always starts with ``mol_id`` and includes ``z``. Each other optional
+    argument adds a segment when set, in order:
+
+    - ``conf_id``  -> ``conf={id}``
+    - ``spg``      -> ``spgN`` (generated space group number)
+    - ``density`` + ``density_bin_size``  -> ``d{bin:g}``
+    - ``energy`` + ``energy_bin_size``    -> ``e{bin:g}``
+
+    Example: ``"ACBNZA02_conf=0_z4_spg14_d1.5_e0.01"``.
     """
-    Generate a hash string for crystal structure grouping and fast pre-filtering.
+    parts = [str(mol_id)]
+    if conf_id is not None:
+        parts.append(f"conf={conf_id}")
+    parts.append(f"z{z}")
+    if spg is not None:
+        parts.append(f"spg{int(spg)}")
+    if density is not None and density_bin_size is not None:
+        parts.append(f"d{round(density / density_bin_size) * density_bin_size:g}")
+    if energy is not None and energy_bin_size is not None:
+        parts.append(f"e{round(energy / energy_bin_size) * energy_bin_size:g}")
+    return "_".join(parts)
 
-    Creates a binned hash based on chemical formula and geometric properties to
-    enable fast pre-filtering before expensive crystallographic comparisons.
-    This approach dramatically reduces the number of structure pairs that need
-    detailed comparison during deduplication.
 
-    Args:
-        structure: Pymatgen Structure object to hash
-        z: Number of formula units per unit cell
-        use_density: Include density in hash for geometric grouping
-        use_volume: Include volume in hash for size-based grouping
-        density_bin_size: Bin size for density discretization (g/cm³)
-        vol_bin_size: Bin size for volume discretization (Ų)
+# ---------------------------------------------------------------------------
+# JmolNN adjacency + graph primitives
+# ---------------------------------------------------------------------------
+def _adjacency_from_nn_info(nn_info: list[list[dict]]) -> np.ndarray:
+    """Build the 0/1 JmolNN adjacency matrix from a precomputed ``nn_info``.
 
-    Returns:
-        Hash string combining formula, Z, and optionally density/volume bins
-
-    Hashing Strategy:
-        1. Start with reduced chemical formula and Z value
-        2. Add binned density if use_density=True for packing similarity
-        3. Add binned volume if use_volume=True for volume grouping
-        4. Combine components for readable hash
-
-    Example:
-        >>> get_structure_hash(structure, z=4, use_density=True)
-        "C6H4O4_4_1.5_125.2"  # Formula_Z_density_volume
+    Split off so callers that also need the raw ``nn_info`` (e.g. the periodic
+    image vectors in :func:`extract_molecules`) don't pay for a second
+    ``JmolNN().get_all_nn_info(structure)`` call.
     """
-    # Start with chemical composition and stoichiometry
-    formula = structure.composition.reduced_formula
-    hash_components = [formula, str(z)]
-
-    # Add density-based grouping if requested
-    if use_density:
-        density = structure.density
-        # Bin density to group structures with similar packing
-        density_bin = round(density / density_bin_size) * density_bin_size
-        hash_components.append(f"{density_bin:.1f}")
-
-    # Add volume-based grouping if requested
-    if use_volume:
-        volume = structure.volume
-        # Bin volume to group structures with similar cell sizes
-        vol_bin = round(volume / vol_bin_size**3) * vol_bin_size**3
-        hash_components.append(f"{vol_bin:.1f}")
-
-    # Combine all components into single hash string
-    return "_".join(hash_components)
+    n = len(nn_info)
+    adj = np.zeros((n, n), dtype=int)
+    for i, neighbours in enumerate(nn_info):
+        for nb in neighbours:
+            adj[i, nb["site_index"]] = 1
+    return adj
 
 
-def check_no_changes_in_covalent_matrix(
-    initial_atoms: Atoms, final_atoms: Atoms
+def _labeled_graph(nn_matrix: np.ndarray, structure: Structure) -> nx.Graph:
+    """``nx.Graph`` from an adjacency matrix with an ``atomic_num`` per node.
+
+    ``atomic_num`` is what the categorical node match in the isomorphism test
+    keys off (see :func:`check_molecule_matches_reference`).
+    """
+    graph = nx.from_numpy_array(nn_matrix)
+    for i in range(nn_matrix.shape[0]):
+        graph.nodes[i]["atomic_num"] = structure[i].specie.number
+    return graph
+
+
+def jmolnn_adjacency(
+    structure_or_atoms: Structure | Atoms,
+) -> np.ndarray:
+    """Return the 0/1 JmolNN adjacency matrix. Accepts ``Structure`` or ``Atoms``."""
+    return _adjacency_from_nn_info(
+        JmolNN().get_all_nn_info(_to_structure(structure_or_atoms))
+    )
+
+
+def extract_molecules(structure: Structure) -> list[Atoms]:
+    """One PBC-unwrapped ASE ``Atoms`` per connected molecular fragment.
+
+    Same JmolNN bond definition as :func:`jmolnn_adjacency`, plus a BFS that
+    undoes periodic wrapping.
+    """
+    nn_info = JmolNN().get_all_nn_info(structure)
+    _, labels = csgraph.connected_components(
+        _adjacency_from_nn_info(nn_info), directed=False
+    )
+    lattice = structure.lattice.matrix
+    cart_coords = structure.cart_coords
+    species = [s.specie.symbol for s in structure.species]
+
+    atoms_list: list[Atoms] = []
+    for comp_id in range(int(labels.max()) + 1):
+        comp = np.where(labels == comp_id)[0]
+        anchor = int(comp[0])
+        offsets = {anchor: np.zeros(3)}
+        queue, visited = deque([anchor]), {anchor}
+        while queue:
+            u = queue.popleft()
+            for nb in nn_info[u]:
+                v = nb["site_index"]
+                if v in visited or labels[v] != comp_id:
+                    continue
+                # nn_info[u] gives v's periodic image relative to u, so adding
+                # is unconditionally correct (sign falls out naturally).
+                offsets[v] = offsets[u] + np.array(nb["image"], dtype=float)
+                visited.add(v)
+                queue.append(v)
+        positions = np.stack([cart_coords[i] + offsets[i] @ lattice for i in comp])
+        atoms_list.append(
+            Atoms(
+                symbols=[species[i] for i in comp],
+                positions=positions,
+                pbc=False,
+            )
+        )
+    return atoms_list
+
+
+# ---------------------------------------------------------------------------
+# Reference-molecule graph (Genarris seed anchor)
+# ---------------------------------------------------------------------------
+def reference_graph_from_atoms(
+    reference_atoms: Atoms | None,
+) -> nx.Graph | None:
+    """Build an ``nx.Graph`` for a single-molecule reference conformer.
+
+    Nodes carry ``atomic_num``; edges are JmolNN-derived (bond order dropped).
+    Returns ``None`` on failure.
+    """
+    if reference_atoms is None:
+        return None
+    try:
+        # XYZ-loaded molecules have no unit cell (cell rank < 3), which makes
+        # AseAtomsAdaptor.get_structure raise LinAlgError on the singular
+        # lattice. Pad with a large cubic box so pymatgen can build a periodic
+        # Structure for JmolNN.
+        if np.linalg.matrix_rank(np.array(reference_atoms.cell)) < 3:
+            reference_atoms = reference_atoms.copy()
+            reference_atoms.cell = np.eye(3) * 30.0
+            reference_atoms.center()
+            reference_atoms.pbc = True
+        structure = AseAtomsAdaptor.get_structure(reference_atoms)
+        nn_matrix = jmolnn_adjacency(structure)
+        if nn_matrix.shape[0] < 1:
+            return None
+        return _labeled_graph(nn_matrix, structure)
+    except Exception as e:
+        get_central_logger().warning(f"Failed to build reference graph: {e}")
+        return None
+
+
+def load_reference_graph(
+    conf_dir: Path | None,
+    conf_id: str,
+) -> nx.Graph | None:
+    """Load ``<conf_dir>/<conf_id>.{xyz,sdf,mol}`` and return its reference graph.
+
+    Returns ``None`` (and logs) if the directory / file is missing or unreadable.
+    """
+    logger = get_central_logger()
+    if conf_dir is None or not conf_dir.is_dir():
+        logger.warning(
+            f"No reference geometry directory for conf_id={conf_id} "
+            f"(conf_dir={conf_dir}); reference graph will be None."
+        )
+        return None
+    for ext in (".xyz", ".sdf", ".mol"):
+        candidate = conf_dir / f"{conf_id}{ext}"
+        if candidate.is_file():
+            try:
+                return reference_graph_from_atoms(ase.io.read(candidate))
+            except Exception as e:
+                logger.warning(f"Failed to read reference geometry {candidate}: {e}")
+                return None
+    logger.warning(
+        f"No reference geometry (.xyz/.sdf/.mol) for conf_id={conf_id} "
+        f"in {conf_dir}; reference graph will be None."
+    )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Validity checks
+# ---------------------------------------------------------------------------
+def check_correct_z(
+    structure_or_atoms: Structure | Atoms | None,
+    requested_z: int,
 ) -> bool:
+    """True iff the JmolNN connected-component count equals ``requested_z``.
+
+    ``None`` inputs return ``False``.
     """
-    Validate that covalent bonding network is preserved during structure relaxation.
+    structure = _to_structure(structure_or_atoms)
+    if structure is None:
+        return False
+    return csgraph.connected_components(jmolnn_adjacency(structure))[0] == requested_z
 
-    Compares the covalent bonding adjacency matrices before and after ML-based
-    relaxation to detect unwanted chemical reconstructions. This validation ensures
-    that the relaxation process only optimizes geometry without breaking or forming
-    chemical bonds, which would indicate problematic initial structures or
-    relaxation failures.
 
-    Args:
-        initial_atoms: Original structure before relaxation
-        final_atoms: Structure after ML-based relaxation
+def check_molecule_matches_reference(
+    structure: Structure | Atoms | None,
+    reference_graph: nx.Graph | None,
+) -> bool:
+    """True iff every connected fragment is isomorphic to ``reference_graph``.
 
-    Returns:
-        True if bonding network is preserved, False otherwise
-        Returns False if either structure is None (error handling)
+    Each connected component of the full-cell JmolNN graph is compared to the
+    reference via ``nx.is_isomorphic`` with a categorical node match on
+    ``atomic_num``. Catches topology errors (tautomers, rearranged rings,
+    wrong functional groups) that :func:`check_correct_z` cannot.
 
-    Algorithm:
-        1. Convert ASE Atoms to pymatgen Structures for analysis
-        2. Use JmolNN to identify covalent neighbors in both structures
-        3. Build adjacency matrices representing bonding networks
-        4. Compare matrices for exact equality
-
-    Validation Purpose:
-        - Detect atom overlaps that lead to artificial bonding
-        - Identify relaxation artifacts that break molecular integrity
-        - Filter out reconstructions that change chemical connectivity
+    ``False`` if either input is ``None`` or on exception.
     """
-    # Handle error cases where structures couldn't be processed
-    if initial_atoms is None or final_atoms is None:
+    structure = _to_structure(structure)
+    if structure is None or reference_graph is None:
+        return False
+    try:
+        graph = _labeled_graph(jmolnn_adjacency(structure), structure)
+        node_match = nx.algorithms.isomorphism.categorical_node_match("atomic_num", 0)
+        for comp_nodes in nx.connected_components(graph):
+            if not nx.is_isomorphic(
+                graph.subgraph(comp_nodes),
+                reference_graph,
+                node_match=node_match,
+            ):
+                return False
+        return True
+    except Exception as e:
+        get_central_logger().warning(f"Failed molecule-matches-reference check: {e}")
         return False
 
-    # Convert ASE Atoms to pymatgen Structures for neighbor analysis
-    initial_structure = AseAtomsAdaptor.get_structure(initial_atoms)
-    final_structure = AseAtomsAdaptor.get_structure(final_atoms)
 
-    # Build adjacency matrix for initial structure using Jmol bonding radii
-    initial_nn_info = JmolNN().get_all_nn_info(initial_structure)
-    initial_nn_matrix = np.zeros((len(initial_nn_info), len(initial_nn_info)))
-    for i in range(len(initial_nn_info)):
-        for j in range(len(initial_nn_info[i])):
-            # Mark bonded pairs in adjacency matrix
-            initial_nn_matrix[i, initial_nn_info[i][j]["site_index"]] = 1
+def check_connectivity_unchanged(
+    initial_structure_or_atoms: Structure | Atoms | None,
+    final_structure_or_atoms: Structure | Atoms | None,
+) -> bool:
+    """True iff the JmolNN adjacency is element-wise equal between two cells.
 
-    # Build adjacency matrix for final (relaxed) structure
-    final_nn_info = JmolNN().get_all_nn_info(final_structure)
-    final_nn_matrix = np.zeros((len(final_nn_info), len(final_nn_info)))
-    for i in range(len(final_nn_info)):
-        for j in range(len(final_nn_info[i])):
-            # Mark bonded pairs in adjacency matrix
-            final_nn_matrix[i, final_nn_info[i][j]["site_index"]] = 1
-
-    # Check that both bonding networks are identical
-    # Any difference indicates bond formation/breaking during relaxation
-    return np.array_equal(initial_nn_matrix, final_nn_matrix)
+    Used to compare pre- vs post-relax topology. ``False`` if either input is
+    ``None``, if atom counts differ, or on exception.
+    """
+    if initial_structure_or_atoms is None or final_structure_or_atoms is None:
+        return False
+    try:
+        initial_adj = jmolnn_adjacency(initial_structure_or_atoms)
+        final_adj = jmolnn_adjacency(final_structure_or_atoms)
+        if initial_adj.shape != final_adj.shape:
+            return False
+        return bool(np.array_equal(initial_adj, final_adj))
+    except Exception as e:
+        get_central_logger().warning(f"Failed connectivity-unchanged check: {e}")
+        return False
