@@ -35,6 +35,7 @@ from ray import serve
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.batch_server import (
     MODEL_SPEC_CACHE_CAPACITY,
+    BatchConfig,
     ModelSpec,
     MultiplexedBatchPredictServer,
     get_ray_connection_info,
@@ -52,6 +53,11 @@ ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
 MULTIPLEXED_DEPLOYMENT_NAME = "multiplexed-predict-server"
 NAMESPACE = "fairchem_inference_test"
+
+
+def test_batch_config_rejects_max_concurrent_batches():
+    with pytest.raises(TypeError, match="max_concurrent_batches"):
+        BatchConfig(max_concurrent_batches=2)
 
 
 def test_model_spec_default_preset_has_canonical_identity():
