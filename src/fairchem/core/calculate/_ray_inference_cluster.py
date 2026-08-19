@@ -23,10 +23,10 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-import backoff
 import ray
 import torch
 import yaml
+from monty.dev import requires
 from ray import serve
 
 from fairchem.core.common.utils import recursive_dict_merge
@@ -42,6 +42,13 @@ from fairchem.core.launchers.cluster.ray_cluster import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    import backoff
+
+    backoff_installed = True
+except ImportError:
+    backoff_installed = False
 
 
 def _find_free_localhost_port() -> int:
@@ -363,6 +370,7 @@ def start_ray_cluster(
     return str(head_file_path)
 
 
+@requires(backoff_installed, message="Requires `backoff` to be installed")
 @contextmanager
 def get_slurm_inference_raycluster(
     config: str | Path | None = None,

@@ -336,6 +336,9 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Dependency Compatibility
 
+- Optional packages imported by eagerly loaded `fairchem.core` modules must use
+  a guarded import and `monty.dev.requires` on the feature entry point so the
+  base package remains importable without the optional dependency.
 - `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
   not depend on enumeration order, seeded random coordinates, or atom counts
   unless those values are part of the public contract; prefer composition,
