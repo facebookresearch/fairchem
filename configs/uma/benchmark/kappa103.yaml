@@ -1,7 +1,11 @@
 defaults:
   - cluster: h100
   - checkpoint: uma_sm_mpa
+  - calculator: uma
   - _self_
+
+calculator:
+  task_name: omat
 
 benchmark_name: kappa103
 
@@ -31,10 +35,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.calculate.KappaRunner
-  calculator:
-    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
-    name_or_path: ${checkpoint.ckpt_path}
-    task_name: omat
+  calculator: ${calculator}
   input_data:
     _target_: fairchem.core.components.calculate.get_kappa103_data_list
     reference_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-phononDB-PBE-103-structures.extxyz
