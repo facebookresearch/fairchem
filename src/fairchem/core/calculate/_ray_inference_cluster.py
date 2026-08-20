@@ -25,10 +25,6 @@ from typing import Any
 
 import yaml
 
-from fairchem.core.calculate._batch_server import (
-    setup_batch_predict_server,
-    wait_for_serve_ready,
-)
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
     setup_batch_predict_server,
