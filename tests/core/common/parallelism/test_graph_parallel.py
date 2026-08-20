@@ -16,6 +16,7 @@ import torch.distributed as dist
 import torch.nn as nn
 from ase import Atoms
 
+from fairchem.core.common import device_utils as du
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
     gather_from_model_parallel_region_sum_grad,
@@ -328,12 +329,12 @@ def a2a_vs_allgather_test(atomic_numbers, edge_index):
     natoms = atomic_numbers.shape[0]
 
     # Partition atoms (same as gp_utils does)
-    node_partition = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    node_partition = torch.tensor_split(torch.arange(natoms, device=atomic_numbers.device), world_size)[rank]
     node_offset = node_partition.min().item()
 
     # Create rank assignments
     rank_assignments = partition_atoms_index_split(
-        natoms, world_size, torch.device("cpu")
+        natoms, world_size, atomic_numbers.device
     )
 
     # Filter edges: keep edges where target is in our partition
@@ -414,11 +415,11 @@ def a2a_backward_test(atomic_numbers, edge_index):
     natoms = atomic_numbers.shape[0]
 
     # Partition atoms
-    node_partition = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    node_partition = torch.tensor_split(torch.arange(natoms, device=atomic_numbers.device), world_size)[rank]
     node_offset = node_partition.min().item()
 
     rank_assignments = partition_atoms_index_split(
-        natoms, world_size, torch.device("cpu")
+        natoms, world_size, atomic_numbers.device
     )
 
     # Filter edges
@@ -551,7 +552,7 @@ def a2a_spatial_partition_test(atomic_numbers, edge_index, pos):
     natoms = atomic_numbers.shape[0]
 
     # --- All-gather with index-based partitioning (baseline) ---
-    node_partition_idx = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    node_partition_idx = torch.tensor_split(torch.arange(natoms, device=atomic_numbers.device), world_size)[rank]
     node_offset_idx = node_partition_idx.min().item()
 
     target_in_partition_idx = (edge_index[1] >= node_partition_idx.min()) & (
@@ -820,33 +821,49 @@ def test_energy_forces_stress_gp(world_size):
 # GPU tests (NCCL, 2 processes)
 # =========================================================================
 
+_ACCEL = du.get_available_accelerator()
+# NCCL on NVIDIA, oneCCL ("xccl") on Intel GPUs. Selecting by device type keeps
+# these tests meaningful on both instead of hard-failing wherever NCCL is absent.
+_GPU_BACKEND = du.distributed_backend(_ACCEL) if _ACCEL else "gloo"
+
 _skip_if_ci = pytest.mark.skipif(
     os.environ.get("CI") == "true",
     reason="Multi-GPU test, skipped in CI",
 )
 
+_skip_if_no_gpu = pytest.mark.skipif(
+    _ACCEL is None,
+    reason="Multi-GPU test requires a cuda/xpu accelerator",
+)
 
-def _to_cuda(*tensors):
-    device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
+
+def _to_accelerator(*tensors):
+    """Move tensors onto this GP rank's slice of whichever accelerator exists.
+
+    Was hard-coded to cuda:{rank}; now follows the detected backend so these
+    tests exercise Intel GPUs too instead of erroring out.
+    """
+    device = torch.device(f"{_ACCEL}:{gp_utils.get_gp_rank()}")
     return tuple(t.to(device) for t in tensors)
 
 
 def a2a_vs_allgather_test_gpu(atomic_numbers, edge_index):
-    (atomic_numbers, edge_index) = _to_cuda(atomic_numbers, edge_index)
+    (atomic_numbers, edge_index) = _to_accelerator(atomic_numbers, edge_index)
     return a2a_vs_allgather_test(atomic_numbers, edge_index)
 
 
 def a2a_backward_test_gpu(atomic_numbers, edge_index):
-    (atomic_numbers, edge_index) = _to_cuda(atomic_numbers, edge_index)
+    (atomic_numbers, edge_index) = _to_accelerator(atomic_numbers, edge_index)
     return a2a_backward_test(atomic_numbers, edge_index)
 
 
 def a2a_spatial_partition_test_gpu(atomic_numbers, edge_index, pos):
-    (atomic_numbers, edge_index, pos) = _to_cuda(atomic_numbers, edge_index, pos)
+    (atomic_numbers, edge_index, pos) = _to_accelerator(atomic_numbers, edge_index, pos)
     return a2a_spatial_partition_test(atomic_numbers, edge_index, pos)
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 @pytest.mark.parametrize(
     "num_atoms, edges",
     [
@@ -867,7 +884,7 @@ def test_a2a_vs_allgather_gpu(num_atoms, edges):
     )
     edge_index = torch.tensor(edges, dtype=torch.long)
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
     all_rank_results = spawn_multi_process(
         config,
         a2a_vs_allgather_test_gpu,
@@ -886,6 +903,7 @@ def test_a2a_vs_allgather_gpu(num_atoms, edges):
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 def test_a2a_backward_gpu():
     atomic_numbers = torch.tensor([2.0, 3.0, 5.0, 7.0])
     edge_index = torch.tensor(
@@ -893,7 +911,7 @@ def test_a2a_backward_gpu():
         dtype=torch.long,
     )
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
     all_rank_results = spawn_multi_process(
         config,
         a2a_backward_test_gpu,
@@ -916,6 +934,7 @@ def test_a2a_backward_gpu():
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 @pytest.mark.parametrize("world_size", [2, 3])
 def test_a2a_multi_rank_gpu(world_size):
     num_atoms = 6
@@ -927,7 +946,7 @@ def test_a2a_multi_rank_gpu(world_size):
     atomic_numbers = torch.arange(2, 2 + num_atoms, dtype=torch.float)
 
     config = PGConfig(
-        backend="nccl",
+        backend=_GPU_BACKEND,
         world_size=world_size,
         gp_group_size=world_size,
         use_gp=True,
@@ -947,6 +966,7 @@ def test_a2a_multi_rank_gpu(world_size):
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 def test_a2a_spatial_partition_gpu():
     num_atoms = 8
     pos = torch.cat(
@@ -967,7 +987,7 @@ def test_a2a_spatial_partition_gpu():
                 dst.append(j)
     edge_index = torch.tensor([src, dst], dtype=torch.long)
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
     all_rank_results = spawn_multi_process(
         config,
         a2a_spatial_partition_test_gpu,

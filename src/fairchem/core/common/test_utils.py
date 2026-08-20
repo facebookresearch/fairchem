@@ -51,6 +51,25 @@ class PGConfig:
     use_gp: bool = True
 
 
+def _to_cpu_for_ipc(obj):
+    """Move accelerator tensors to CPU before crossing a process boundary.
+
+    Results travel back to the parent through a multiprocessing.Manager dict,
+    which pickles them. CUDA tensors survive that via CUDA IPC, but XPU has no
+    equivalent -- torch raises "_share_fd_: only available on CPU". Detaching to
+    host memory here is correct for every backend and costs nothing at test
+    sizes, so the harness stops being CUDA-only.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu()
+    if isinstance(obj, dict):
+        return {k: _to_cpu_for_ipc(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [_to_cpu_for_ipc(v) for v in obj]
+        return type(obj)(converted) if not isinstance(obj, tuple) else tuple(converted)
+    return obj
+
+
 def init_env_rank_and_launch_test(
     rank: int,
     pg_setup_params: PGConfig,
@@ -63,7 +82,7 @@ def init_env_rank_and_launch_test(
     os.environ["WORLD_SIZE"] = str(pg_setup_params.world_size)
     os.environ["LOCAL_RANK"] = str(rank)
     os.environ["RANK"] = str(rank)
-    mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    mp_output_dict[rank] = _to_cpu_for_ipc(test_method(*args, **kwargs))  # pyre-fixme
 
 
 def init_pg_and_rank_and_launch_test(
@@ -95,7 +114,7 @@ def init_pg_and_rank_and_launch_test(
             "distributed_backend": pg_setup_params.backend,
         }
         setup_gp(config)
-    mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    mp_output_dict[rank] = _to_cpu_for_ipc(test_method(*args, **kwargs))  # pyre-fixme
 
 
 def spawn_multi_process(

@@ -137,3 +137,81 @@ def test_accelerator_matches_cpu_within_tolerance():
     assert torch.allclose(e_cpu, e_acc, atol=1e-3, rtol=1e-3), (
         f"cpu={e_cpu.tolist()} {ACCEL}={e_acc.tolist()}"
     )
+
+
+# --------------------------------------------------------------------------
+# The full MLIPPredictUnit path -- this is the code that used to hard-stop.
+# --------------------------------------------------------------------------
+
+
+def _predict_batch():
+    """A single small molecule in the format the mole test checkpoint expects."""
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+
+    atoms = build.molecule("H2O")
+    atoms.pbc = False
+    sample = AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+    )
+    sample["dataset"] = "oc20"
+    return data_list_collater([sample], otf_graph=True)
+
+
+def test_predict_unit_accepts_accelerator(conserving_mole_checkpoint):
+    """MLIPPredictUnit on the accelerator, end to end.
+
+    Stock fairchem asserted `device in ["cpu", "cuda"]` here, so device="xpu"
+    raised outright; and because anything not "cuda" resolved to CPU, merely
+    widening the assert would have produced a silently slow CPU run instead.
+    This asserts the unit actually lands on the accelerator.
+    """
+    from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
+
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
+    predictor = MLIPPredictUnit(inference_checkpoint_pt, device=ACCEL)
+
+    assert torch.device(predictor.device).type == ACCEL, (
+        f"requested {ACCEL} but predict unit resolved to {predictor.device} -- "
+        "this is the silent CPU downgrade the port exists to prevent"
+    )
+
+    # Device placement is lazy upstream: _lazy_init() runs on the first
+    # predict(), so the model sits on CPU until then. Drive a real prediction
+    # rather than inspecting parameters early.
+    out = predictor.predict(_predict_batch())
+    du.synchronize(ACCEL)
+
+    assert next(predictor.model.parameters()).device.type == ACCEL
+    assert "energy" in out and "forces" in out
+    assert torch.isfinite(out["energy"]).all()
+    assert torch.isfinite(out["forces"]).all()
+
+
+def test_predict_unit_auto_selects_accelerator(conserving_mole_checkpoint):
+    """device="auto" resolves to the hardware actually present."""
+    from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
+
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
+    predictor = MLIPPredictUnit(inference_checkpoint_pt, device="auto")
+    assert torch.device(predictor.device).type == ACCEL
+
+
+def test_predict_unit_refuses_absent_accelerator(conserving_mole_checkpoint):
+    """Asking for hardware this node lacks must raise, not fall back to CPU."""
+    from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
+
+    absent = [
+        d for d in du.ACCELERATOR_DEVICE_TYPES if not du.accelerator_is_available(d)
+    ]
+    if not absent:
+        pytest.skip("this node has every supported accelerator")
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
+    with pytest.raises((RuntimeError, ValueError, AssertionError)):
+        MLIPPredictUnit(inference_checkpoint_pt, device=absent[0])
