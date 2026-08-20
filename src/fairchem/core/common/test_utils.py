@@ -111,7 +111,8 @@ def spawn_multi_process(
 
     Args:
         world_size: number of processes
-        backend: backend to use. for example, "nccl", "gloo", etc
+        backend: backend to use. for example, "nccl", "xccl", "gloo".
+            Defaults to the backend matching the detected accelerator.
         test_method: callable to spawn. first 3 arguments are rank, world_size and mp output dict
         test_method_args: args for the test method
         test_method_kwargs: kwargs for the test method
@@ -146,7 +147,7 @@ def spawn_multi_process(
     return [mp_output_dict[i] for i in range(config.world_size)]
 
 
-def init_local_distributed_process_group(backend="nccl"):
+def init_local_distributed_process_group(backend=None):
     with tempfile.NamedTemporaryFile(delete=False) as f:
         init_file = f.name
     init_method = get_file_init_method(world_size=1, rank=0, filename=init_file)

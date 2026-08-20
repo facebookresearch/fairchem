@@ -12,6 +12,10 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
+
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
@@ -26,7 +30,7 @@ def load_predict_unit(
     path: str | Path,
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
-    device: Literal["cuda", "cpu"] | None = None,
+    device: Literal["cuda", "xpu", "cpu"] | None = None,
     atom_refs: dict | None = None,
     form_elem_refs: dict | None = None,
     workers: int = 1,
@@ -56,7 +60,7 @@ def load_predict_unit(
     """
 
     if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = get_available_accelerator() or "cpu"
         logging.warning(f"device was not explicitly set, using {device=}.")
 
     inference_settings = guess_inference_settings(inference_settings)

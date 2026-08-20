@@ -14,6 +14,10 @@ from typing import Any, Literal
 
 import torch
 
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
+
 from fairchem.core import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import UMATask
 from fairchem.core.common.utils import setup_imports, setup_logging
@@ -233,9 +237,9 @@ class FairChemModel(_TSModelInterface):
 
         # Use the efficient predictor API for optimal performance
         self._device = device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
+            get_available_accelerator() or "cpu"
         )
-        device_str: Literal["cuda", "cpu"] = (
+        device_str: Literal["cuda", "xpu", "cpu"] = (
             self._device.type
         )  # ty:ignore[invalid-assignment]
         self.task_name = task_name

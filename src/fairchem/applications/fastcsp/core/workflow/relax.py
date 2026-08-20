@@ -34,6 +34,9 @@ from ase.filters import FrechetCellFilter
 from ase.io import Trajectory
 from ase.optimize import BFGS, FIRE, LBFGS
 from ase.units import eV, kJ, mol
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
@@ -89,11 +92,13 @@ def create_calculator(relax_config):
     """
     if CHECKPOINTS[relax_config["calculator"]]["checkpoint"] is not None:
         predictor = mlip_unit.load_predict_unit(
-            CHECKPOINTS[relax_config["calculator"]]["checkpoint"], device="cuda"
+            CHECKPOINTS[relax_config["calculator"]]["checkpoint"],
+            device=get_available_accelerator() or "cpu",
         )
     else:
         predictor = pretrained_mlip.get_predict_unit(
-            CHECKPOINTS[relax_config["calculator"]]["model"], device="cuda"
+            CHECKPOINTS[relax_config["calculator"]]["model"],
+            device=get_available_accelerator() or "cpu",
         )
     calc = FAIRChemCalculator(
         predictor,

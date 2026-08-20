@@ -14,6 +14,9 @@ import ase
 from ase import units
 from ase.md.langevin import Langevin
 
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.components.runner import Runner
@@ -59,7 +62,7 @@ class ASELangevinUMARunner(Runner):
             predictor = pretrained_mlip.get_predict_unit(
                 self.model_name,
                 inference_settings=self.settings,
-                device="cuda",
+                device=get_available_accelerator() or "cpu",
                 workers=self.workers,
             )
             calc = FAIRChemCalculator(predictor, task_name=self.task_name)

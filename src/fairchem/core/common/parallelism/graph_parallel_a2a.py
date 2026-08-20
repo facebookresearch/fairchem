@@ -14,6 +14,7 @@ import torch.distributed._functional_collectives as funcol
 from torch import distributed as dist
 from torch.profiler import record_function
 
+from fairchem.core.common.device_utils import supports_native_all_to_all
 from fairchem.core.common import gp_utils
 from fairchem.core.common.parallelism.graph_partition import (
     PartitionStrategy,
@@ -39,7 +40,7 @@ def _safe_all_to_all(
         group: Process group.
     """
     backend = dist.get_backend(group)
-    if backend == "nccl":
+    if supports_native_all_to_all(backend):
         dist.all_to_all(output_list, input_list, group=group)
     else:
         # Gloo fallback: use pairwise send/recv
@@ -152,7 +153,7 @@ def _sparse_index_exchange(
     # So rank B's send_counts[A] = rank A's recv_counts[B].
     # all_to_all on a (world_size,) tensor transposes the count matrix.
     send_counts = torch.empty(world_size, dtype=torch.long, device=device)
-    if backend == "nccl":
+    if supports_native_all_to_all(backend):
         dist.all_to_all_single(send_counts, recv_counts.contiguous(), group=gp_group)
     else:
         # Gloo fallback: use pairwise send/recv
@@ -176,7 +177,7 @@ def _sparse_index_exchange(
     total_recv_indices = sum(recv_splits)
     recv_buf = torch.empty(total_recv_indices, dtype=torch.long, device=device)
 
-    if backend == "nccl":
+    if supports_native_all_to_all(backend):
         dist.all_to_all_single(
             recv_buf,
             send_buf,

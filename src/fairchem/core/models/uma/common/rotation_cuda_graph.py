@@ -11,23 +11,40 @@ import logging
 
 import torch
 
+from fairchem.core.common.device_utils import device_module, get_available_accelerator
 from fairchem.core.models.uma.common.rotation import eulers_to_wigner
 
 
 class RotMatWignerCudaGraph:
+    """Graph-capture wrapper for Wigner matrix construction.
+
+    Named "Cuda" for backwards compatibility, but backend-agnostic: it drives
+    whichever accelerator torch reports (``torch.cuda`` or ``torch.xpu``), both
+    of which expose ``Stream``/``make_graphed_callables``.
+    """
+
     def __init__(self):
-        assert torch.cuda.is_initialized(), "Cuda Graphs can only be used with GPUs"
+        self.device_type = get_available_accelerator()
+        assert (
+            self.device_type is not None
+        ), "Graph capture can only be used with GPUs (cuda or xpu)"
+        self._device_module = device_module(self.device_type)
+        assert (
+            self._device_module.is_initialized()
+        ), f"Graph capture requires an initialized {self.device_type} context"
         # lazy graph capture
         self.graph_mod = None
         # number of times graph capture has run, can be used to add logic to fail after certain number of times
         self.graph_capture_count = 0
         self.max_edge_size = None
-        logging.info("Using Cuda graphs for wigner matrix creation")
+        logging.info(
+            f"Using {self.device_type} graphs for wigner matrix creation"
+        )
 
     def _capture_graph(self, edge_dist_vec: torch.Tensor, jds: list[torch.Tensor]):
         self.max_edge_size = edge_dist_vec.shape[0]
         self.graph_mod = capture_rotmat_and_wigner_with_make_graph_callable(
-            edge_dist_vec, jds
+            edge_dist_vec, jds, device_type=self.device_type
         )
         self.graph_capture_count += 1
         if self.graph_capture_count % 10 == 5:
@@ -59,18 +76,26 @@ class RotMatWignerCudaGraph:
 
 
 def capture_rotmat_and_wigner_with_make_graph_callable(
-    edge_dist_vec: torch.Tensor, jds: list[torch.Tensor]
+    edge_dist_vec: torch.Tensor,
+    jds: list[torch.Tensor],
+    device_type: str | None = None,
 ):
-    s = torch.cuda.Stream()
-    s.wait_stream(torch.cuda.current_stream())
-    with torch.cuda.stream(s):
+    # Capture on a side stream so the capture does not serialise against work
+    # already queued on the default stream. torch.cuda and torch.xpu expose the
+    # same Stream / make_graphed_callables surface, so one code path covers both.
+    if device_type is None:
+        device_type = get_available_accelerator()
+    dev = device_module(device_type)
+    s = dev.Stream()
+    s.wait_stream(dev.current_stream())
+    with dev.stream(s):
         edge_dist_vec_clone = edge_dist_vec.clone()
         jds_clone = [jd.clone() for jd in jds]
-        graph_mod = torch.cuda.make_graphed_callables(
+        graph_mod = dev.make_graphed_callables(
             edge_rot_and_wigner_graph_capture_region,
             (edge_dist_vec_clone, jds_clone),
         )
-        torch.cuda.current_stream().wait_stream(s)
+        dev.current_stream().wait_stream(s)
         return graph_mod
 
 

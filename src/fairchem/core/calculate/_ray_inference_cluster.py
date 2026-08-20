@@ -25,6 +25,9 @@ from typing import Any
 
 import yaml
 
+from fairchem.core.common.device_utils import (
+    device_count,
+)
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
     setup_batch_predict_server,
@@ -652,8 +655,8 @@ def get_local_inference_raycluster(
         head_file: Path where head.json will be written. If None, creates
             a temp file.
         num_cpus: Number of CPUs for Ray. Defaults to 8.
-        num_gpus: Number of GPUs for Ray. If None, auto-detects via
-            torch.cuda.
+        num_gpus: Number of GPUs for Ray. If None, auto-detects via the
+            active accelerator backend (torch.cuda / torch.xpu).
         start_inference_server: If True (default), start FAIRChem Ray Serve
             inference server. Requires ``predict_unit`` to be provided.
         predict_unit: Predict unit to serve. Required when
@@ -675,7 +678,7 @@ def get_local_inference_raycluster(
         try:
             import torch
 
-            num_gpus = torch.cuda.device_count()
+            num_gpus = device_count()
         except ImportError:
             num_gpus = 0
 

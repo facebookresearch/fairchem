@@ -19,6 +19,17 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from fairchem.core.common.device_utils import (
+    accelerator_is_available,
+    empty_cache,
+    get_available_accelerator,
+    is_accelerator,
+    manual_seed_all,
+    max_memory_allocated,
+    reset_peak_memory_stats,
+    synchronize,
+    resolve_device_type,
+)
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
@@ -152,7 +163,7 @@ def run_inference(
     checkpoint: str,
     system: BenchmarkSystem,
     inference_settings: InferenceSettings,
-    device: str = "cuda",
+    device: str = "auto",
     seed: int = 42,
     warmup_iters: int = 0,
     timed_iters: int = 1,
@@ -177,8 +188,7 @@ def run_inference(
         InferenceResult with predictions and optional perf metrics.
     """
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    manual_seed_all(seed)
 
     if not os.path.exists(checkpoint):
         from fairchem.core.calculate.pretrained_mlip import (
@@ -192,9 +202,10 @@ def run_inference(
     )
     data = AtomicData.from_ase(system.atoms, task_name=system.task_name)
 
-    is_cuda = device == "cuda" and torch.cuda.is_available()
-    if is_cuda:
-        torch.cuda.reset_peak_memory_stats()
+    device = resolve_device_type(device)
+    is_accel = is_accelerator(device) and accelerator_is_available(device)
+    if is_accel:
+        reset_peak_memory_stats(device)
 
     # Warmup
     warmup_time = 0.0
@@ -202,16 +213,16 @@ def run_inference(
         warmup_start = time.perf_counter()
         for _ in range(warmup_iters):
             predictor.predict(data)
-            if is_cuda:
-                torch.cuda.synchronize()
+            if is_accel:
+                synchronize(device)
         warmup_time = time.perf_counter() - warmup_start
 
     # Timed iterations
     timed_start = time.perf_counter()
     for _ in range(timed_iters):
         preds = predictor.predict(data)
-        if is_cuda:
-            torch.cuda.synchronize()
+        if is_accel:
+            synchronize(device)
     wall_time = time.perf_counter() - timed_start
 
     # Extract predictions
@@ -226,14 +237,14 @@ def run_inference(
     peak_mem = None
     if timed_iters > 1 or warmup_iters > 0:
         qps = timed_iters / wall_time if wall_time > 0 else 0.0
-        if is_cuda:
-            peak_mem = torch.cuda.max_memory_allocated() / (1024**2)
+        if is_accel:
+            peak_mem = max_memory_allocated(device) / (1024**2)
 
     # Cleanup
     del predictor
     gc.collect()
-    if is_cuda:
-        torch.cuda.empty_cache()
+    if is_accel:
+        empty_cache(device)
 
     return InferenceResult(
         energy=energy,
@@ -346,7 +357,7 @@ class PerfCheckRunner(Runner):
     def __init__(
         self,
         checkpoint: str,
-        device: str = "cuda",
+        device: str = "auto",
         warmup_iters: int = 10,
         timed_iters: int = 50,
         seed: int = 42,
@@ -359,7 +370,7 @@ class PerfCheckRunner(Runner):
         self.checkpoint = checkpoint
         self.systems = get_default_benchmark_systems(seed=seed)
         self.inference_settings = inference_settings
-        self.device = device
+        self.device = resolve_device_type(device)
         self.warmup_iters = warmup_iters
         self.timed_iters = timed_iters
         self.seed = seed
@@ -434,9 +445,9 @@ class PerfCheckRunner(Runner):
                 results[system.name] = compare_results(
                     baselines[system.name], candidate
                 )
-            except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            except (RuntimeError, torch.OutOfMemoryError) as e:
                 if "out of memory" in str(e).lower() or isinstance(
-                    e, torch.cuda.OutOfMemoryError
+                    e, torch.OutOfMemoryError
                 ):
                     logger.warning("  OOM on %s", system.name)
                     results[system.name] = {"error": "OOM"}
@@ -601,7 +612,7 @@ def run_mixed_inference(
     pool: SystemPool,
     schedule: list[tuple[int, tuple[int, ...]]],
     warmup_steps: int,
-    device: str = "cuda",
+    device: str = "auto",
     oom_policy: str = "abort",
 ) -> MixedInferenceResult:
     """
@@ -629,21 +640,22 @@ def run_mixed_inference(
     if oom_policy not in {"abort", "skip"}:
         raise ValueError(f"oom_policy must be 'abort' or 'skip', got {oom_policy!r}")
 
-    is_cuda = device == "cuda" and torch.cuda.is_available()
+    device = resolve_device_type(device)
+    is_accel = is_accelerator(device) and accelerator_is_available(device)
 
     # Pre-build AtomicData once per pool entry; collation is cheap relative to fwd.
     atomic_data = [
         AtomicData.from_ase(s.atoms, task_name=s.task_name) for s in pool.systems
     ]
 
-    if is_cuda:
-        torch.cuda.reset_peak_memory_stats()
+    if is_accel:
+        reset_peak_memory_stats(device)
 
     def _step(indices: tuple[int, ...]) -> dict[str, torch.Tensor]:
         batch = atomicdata_list_to_batch([atomic_data[i] for i in indices])
         out = predict_unit.predict(batch)
-        if is_cuda:
-            torch.cuda.synchronize()
+        if is_accel:
+            synchronize(device)
         return out
 
     # Warmup
@@ -651,7 +663,7 @@ def run_mixed_inference(
     for bsz, indices in schedule[:warmup_steps]:
         try:
             _step(indices)
-        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        except (RuntimeError, torch.OutOfMemoryError) as e:
             if _is_oom(e) and oom_policy == "skip":
                 logger.warning("OOM during warmup at batch_size=%d", bsz)
                 continue
@@ -673,14 +685,14 @@ def run_mixed_inference(
             t0 = time.perf_counter()
             preds = _step(indices)
             dt = time.perf_counter() - t0
-        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        except (RuntimeError, torch.OutOfMemoryError) as e:
             if _is_oom(e) and oom_policy == "skip":
                 logger.warning(
                     "OOM at batch_size=%d; skipping remaining %d-batches", bsz, bsz
                 )
                 oom_sizes.add(bsz)
-                if is_cuda:
-                    torch.cuda.empty_cache()
+                if is_accel:
+                    empty_cache(device)
                 continue
             raise
 
@@ -707,7 +719,7 @@ def run_mixed_inference(
             atoms_per_sec=per_batch_atoms[bsz] / total if total > 0 else 0.0,
         )
 
-    peak_mem = torch.cuda.max_memory_allocated() / (1024**2) if is_cuda else None
+    peak_mem = max_memory_allocated(device) / (1024**2) if is_accel else None
 
     return MixedInferenceResult(
         per_system=per_system_pred,
@@ -720,7 +732,7 @@ def run_mixed_inference(
 
 
 def _is_oom(err: BaseException) -> bool:
-    return isinstance(err, torch.cuda.OutOfMemoryError) or (
+    return isinstance(err, torch.OutOfMemoryError) or (
         isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
     )
 
@@ -811,7 +823,7 @@ class MixedPerfCheckRunner(Runner):
     def __init__(
         self,
         checkpoint: str,
-        device: str = "cuda",
+        device: str = "auto",
         batch_sizes: list[int] | tuple[int, ...] = DEFAULT_BATCH_SIZES,
         warmup_steps: int = 20,
         timed_steps: int = 200,
@@ -827,7 +839,7 @@ class MixedPerfCheckRunner(Runner):
         )
 
         self.checkpoint = checkpoint
-        self.device = device
+        self.device = resolve_device_type(device)
         self.batch_sizes = tuple(int(b) for b in batch_sizes)
         self.warmup_steps = int(warmup_steps)
         self.timed_steps = int(timed_steps)
@@ -904,8 +916,7 @@ class MixedPerfCheckRunner(Runner):
 
         # Step 3: benchmark.
         torch.manual_seed(self.seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(self.seed)
+        manual_seed_all(self.seed)
 
         predict_unit = self._build_predict_unit()
         try:
@@ -920,8 +931,8 @@ class MixedPerfCheckRunner(Runner):
         finally:
             del predict_unit
             gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            if is_accelerator(device):
+                empty_cache(device)
 
         # Step 4: per-system error vs cached baseline.
         per_system_errors: dict[str, dict[str, Any]] = {}

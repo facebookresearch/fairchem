@@ -19,6 +19,9 @@ from omegaconf import OmegaConf
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 
+from fairchem.core.common.device_utils import (
+    distributed_backend,
+)
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     assign_device_for_local_rank,
@@ -73,7 +76,7 @@ class SPMDWorker:
     ):
         setup_env_local_multi_gpu(worker_id, master_port, master_address)
         assign_device_for_local_rank(device == "cpu", 0)
-        backend = "gloo" if device == "cpu" else "nccl"
+        backend = distributed_backend(device)
         dist.init_process_group(
             backend=backend,
             rank=worker_id,
@@ -116,7 +119,9 @@ class SPMDController(Runner):
         self.ranks_per_node = job_config.scheduler.ranks_per_node
         self.num_nodes = job_config.scheduler.num_nodes
         num_gpus_per_group = (
-            self.ranks_per_node if job_config.device_type == DeviceType.CUDA else 0
+            self.ranks_per_node
+            if job_config.device_type != DeviceType.CPU
+            else 0
         )
         bundle_gpus = {
             "GPU": num_gpus_per_group,

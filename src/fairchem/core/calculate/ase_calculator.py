@@ -123,7 +123,7 @@ class FAIRChemCalculator(Calculator):
         task_name: UMATask | None = None,
         inference_settings: InferenceSettings | str = "default",
         overrides: dict | None = None,
-        device: Literal["cuda", "cpu"] | None = None,
+        device: Literal["cuda", "xpu", "cpu"] | None = None,
         seed: int = 41,
         workers: int = 1,
     ) -> FAIRChemCalculator:

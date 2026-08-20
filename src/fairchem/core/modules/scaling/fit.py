@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import torch
+
+from fairchem.core.common.device_utils import get_available_accelerator
 import torch.nn as nn
 from fairchem.experimental.legacy.utils import build_config
 from torch.nn.parallel.distributed import DistributedDataParallel
@@ -40,7 +42,10 @@ def _prefilled_input(prompt: str, prefill: str = "") -> str:
 
 def _train_batch(trainer: BaseTrainer, batch) -> None:
     with torch.no_grad():
-        with torch.autocast("cuda", enabled=trainer.scaler is not None):
+        with torch.autocast(
+            device_type=get_available_accelerator() or "cpu",
+            enabled=trainer.scaler is not None,
+        ):
             out = trainer._forward(batch)
         loss = trainer._compute_loss(out, batch)
         del out, loss
