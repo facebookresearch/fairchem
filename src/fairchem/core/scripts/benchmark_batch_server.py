@@ -160,21 +160,16 @@ def _summarize(
     }
 
 
-def _collect(futures: list, backend: str) -> list[dict[str, Any]]:
+def _collect(futures: list) -> list[dict[str, Any]]:
     """
-    Collect results from submitted futures for the given concurrency backend.
+    Collect results from submitted futures.
 
     Args:
         futures: Futures returned by ``executor.submit``.
-        backend: The concurrency backend name.
 
     Returns:
         List of worker result dicts.
     """
-    if backend == "ray-actors":
-        import ray
-
-        return ray.get(list(futures))
     return [f.result() for f in as_completed(futures)]
 
 
@@ -194,7 +189,6 @@ def run_batched(
     workload: list[Atoms],
     task_name: str,
     batcher: InferenceBatcher,
-    backend: str,
 ) -> dict[str, float | int]:
     """Submit all systems concurrently through the batcher and summarize."""
     t0 = time.perf_counter()
@@ -204,7 +198,7 @@ def run_batched(
         )
         for atoms in workload
     ]
-    results = _collect(futures, backend)
+    results = _collect(futures)
     wall_time = time.perf_counter() - t0
     return _summarize([r["latency_s"] for r in results], wall_time, len(workload))
 
@@ -237,7 +231,7 @@ def sweep_batch_server(
         output_dir: Directory to write results and plots to.
         serial_samples: Number of systems used for the serial baseline.
         warmup_requests: Number of warmup requests before each timed run.
-        concurrency_backend: ``"threads"`` or ``"ray-actors"``.
+        concurrency_backend: Must be ``"threads"`` when invoked from the CLI.
         num_replicas: Number of batch-server replicas.
         min_batch_size: Autobatch minimum batch size (atoms).
         max_batch_size_cap: Autobatch maximum batch size cap (atoms).
@@ -257,9 +251,6 @@ def sweep_batch_server(
         backoff_factor=0.9,
     )
     max_requests = max(num_requests_list)
-    # threads/processes use max_workers; ray-actors uses num_workers.
-    worker_key = "num_workers" if concurrency_backend == "ray-actors" else "max_workers"
-
     aggregated: dict[str, Any] = {
         "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
         "model": model_name,
@@ -284,7 +275,7 @@ def sweep_batch_server(
             split_oom_batch=True,
             num_replicas=num_replicas,
             concurrency_backend=concurrency_backend,
-            concurrency_backend_options={worker_key: max_requests},
+            concurrency_backend_options={"max_workers": max_requests},
             deployment_name=f"benchmark-server-n{natoms_target}",
         ) as batcher:
             probe = [AtomicData.from_ase(probe_atoms, task_name=task_name)]
@@ -301,7 +292,6 @@ def sweep_batch_server(
                     build_workload(warmup_requests, natoms_target),
                     task_name,
                     batcher,
-                    concurrency_backend,
                 )
 
             # Serial baseline (bounded sample); QPS is ~constant in the workload
@@ -322,7 +312,6 @@ def sweep_batch_server(
                     build_workload(num_requests, natoms_target),
                     task_name,
                     batcher,
-                    concurrency_backend,
                 )
                 speedup = (
                     batched["qps"] / serial["qps"]
@@ -548,7 +537,7 @@ def main() -> int:
     parser.add_argument(
         "--concurrency-backend",
         type=str,
-        choices=["threads", "ray-actors"],
+        choices=["threads"],
         default="threads",
         help="Concurrency backend for submitting requests (default: threads).",
     )
