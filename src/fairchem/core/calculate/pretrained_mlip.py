@@ -75,6 +75,7 @@ def get_predict_unit(
     workers: int = 1,
     seed: int = 41,
     gp_config=None,
+    num_workers_per_node: int = 8,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -93,6 +94,7 @@ def get_predict_unit(
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
         seed: Optional random seed for reproducibility. If provided, will set the random seed for
             Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
+        num_workers_per_node: Number of prediction workers to place on each node.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -120,6 +122,7 @@ def get_predict_unit(
         workers,
         seed,
         gp_config=gp_config,
+        num_workers_per_node=num_workers_per_node,
     )
 
 

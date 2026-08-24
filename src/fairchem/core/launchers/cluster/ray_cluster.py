@@ -17,6 +17,7 @@ import random
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar
@@ -467,7 +468,7 @@ def _ray_head_script(
             metrics_plan = None
     try:
         ray_cmd = [
-            "ray",
+            str(Path(sys.executable).with_name("ray")),
             "start",
             "--head",
             f"--port={port}",
@@ -625,7 +626,7 @@ def worker_script(
     try:
         subprocess.run(
             [
-                "ray",
+                str(Path(sys.executable).with_name("ray")),
                 "start",
                 "--address",
                 "auto",
