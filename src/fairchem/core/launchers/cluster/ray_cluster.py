@@ -468,7 +468,9 @@ def _ray_head_script(
             metrics_plan = None
     try:
         ray_cmd = [
-            str(Path(sys.executable).with_name("ray")),
+            sys.executable,
+            "-m",
+            "ray.scripts.scripts",
             "start",
             "--head",
             f"--port={port}",
@@ -626,7 +628,9 @@ def worker_script(
     try:
         subprocess.run(
             [
-                str(Path(sys.executable).with_name("ray")),
+                sys.executable,
+                "-m",
+                "ray.scripts.scripts",
                 "start",
                 "--address",
                 "auto",
