@@ -564,6 +564,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     coeffs=self.wigner_data.coeffs,
                     U_blocks=self.wigner_data.U_blocks,
                     custom_kernels=self.wigner_data.custom_kernels,
+                    compact_l2=getattr(self.backend, "supports_fused_edgewise", False),
                 )
         else:
             Jd_buffers = [
@@ -581,9 +582,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
                 wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        # Both axis_angle_wigner_hybrid and eulers_to_wigner return contiguous D
-        # (created via torch.zeros + slice assignment)
-        # wigner_inv is made contiguous by .transpose().contiguous() above
+        # Both Wigner implementations return contiguous matrices or blocks.
         return wigner, wigner_inv
 
     def csd_embedding(self, charge, spin, dataset):
@@ -838,7 +837,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
-            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
+            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1)
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
@@ -854,6 +853,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
             # Pre-fuse envelope into wigner_inv
+            if wigner_inv.ndim == 3:
+                edge_envelope = edge_envelope.unsqueeze(-1)
             wigner_inv_envelope = wigner_inv * edge_envelope
 
             x_message = self.edge_degree_embedding(
