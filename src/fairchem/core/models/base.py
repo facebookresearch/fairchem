@@ -21,7 +21,7 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
     load_model_and_weights_from_checkpoint,
 )
-from fairchem.core.models.uma.compat import ensure_uma_model_id
+from fairchem.core.models.uma.compat import is_uma_moe_backbone_config
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -329,10 +329,10 @@ class HydraModel(nn.Module, HydraInterfaceMixin):
         self._tasks = None
         self._dataset_to_tasks = None
 
-        model_config = {"backbone": backbone, "model_id": model_id}
-        generated_model_id = ensure_uma_model_id(model_config)
-        if generated_model_id is not None:
-            model_id = generated_model_id
+        if is_uma_moe_backbone_config(backbone) and not (
+            isinstance(model_id, str) and model_id.strip()
+        ):
+            raise ValueError("UMA models require a nonblank model_id")
 
         # Does this model support inference on single atom systems
         self.supports_single_atoms = supports_single_atoms

@@ -332,11 +332,9 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   not depend on enumeration order, seeded random coordinates, or atom counts
   unless those values are part of the public contract; prefer composition,
   Miller index, shift, placement, and cell invariants that survive upgrades.
-- Do not make `HydraModel.model_id` unconditionally required. Older non-UMA
-  Hydra checkpoints are intentionally untagged, while new UMA MoE configs get
-  a generated ID. Generate it on rank zero after distributed setup, broadcast
-  it to every rank, and explicitly persist it in the resume/DCP model config;
-  setting only the model attribute does not make it part of the checkpoint.
+- Require a nonblank `model_id` when directly constructing an UMA MoE
+  `HydraModel`. Non-UMA Hydra models may remain untagged, and legacy UMA
+  checkpoint compatibility belongs only in the checkpoint loading path.
 
 Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
 

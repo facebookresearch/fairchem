@@ -7,9 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
-import re
-
 import pytest
 
 from fairchem.core.common.registry import registry
@@ -17,20 +14,40 @@ from fairchem.core.models.base import HydraModel
 
 
 @pytest.mark.parametrize("model_id", [None, "", "   "])
-def test_uma_moe_hydra_model_generates_model_id(model_id, caplog, monkeypatch):
+def test_uma_moe_hydra_model_requires_model_id(model_id):
+    backbone = {
+        "model": "fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone",
+        "num_experts": 8,
+    }
+
+    with pytest.raises(ValueError, match="require a nonblank model_id"):
+        HydraModel(backbone=backbone, heads={}, model_id=model_id)
+
+
+def test_uma_moe_hydra_model_accepts_model_id(monkeypatch):
     backbone = {
         "model": "fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone",
         "num_experts": 8,
     }
 
     class DummyBackbone:
-        def __init__(self, **kwargs):
-            pass
+        pass
 
     monkeypatch.setattr(registry, "get_model_class", lambda _: DummyBackbone)
-    with caplog.at_level(logging.WARNING):
-        model = HydraModel(backbone=backbone, heads={}, model_id=model_id)
+    model = HydraModel(backbone=backbone, heads={}, model_id="UMA-explicit")
 
-    assert re.fullmatch(r"UMA-[0-9a-f]{12}", model.model_id)
-    assert model.backbone.model_id == model.model_id
-    assert f"Generated model_id='{model.model_id}'" in caplog.text
+    assert model.model_id == "UMA-explicit"
+    assert model.backbone.model_id == "UMA-explicit"
+
+
+def test_non_uma_hydra_model_does_not_require_model_id(monkeypatch):
+    backbone = {"model": "some.module.Backbone"}
+
+    class DummyBackbone:
+        pass
+
+    monkeypatch.setattr(registry, "get_model_class", lambda _: DummyBackbone)
+    model = HydraModel(backbone=backbone, heads={})
+
+    assert model.model_id is None
+    assert model.backbone.model_id is None

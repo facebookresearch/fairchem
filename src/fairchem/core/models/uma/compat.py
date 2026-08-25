@@ -16,12 +16,8 @@ this module entirely once both UMA 1.1 and 1.2 are deprecated.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal, MutableMapping
-from uuid import uuid4
-
-from fairchem.core.common import distutils
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
@@ -67,40 +63,6 @@ def is_uma_moe_backbone_config(backbone_config: Mapping | None) -> bool:
 
     num_experts = backbone_config.get("num_experts")
     return isinstance(num_experts, int) and num_experts > 0
-
-
-def ensure_uma_model_id(model_config: MutableMapping) -> str | None:
-    """
-    Add a generated ID to an untagged UMA MoE model config.
-
-    Existing IDs are preserved, and non-UMA model configs are unchanged.
-
-    Args:
-        model_config: Model configuration to update in place.
-
-    Returns:
-        The existing or generated UMA model ID, or ``None`` for non-UMA models.
-    """
-    if not is_uma_moe_backbone_config(model_config.get("backbone")):
-        return None
-
-    model_id = model_config.get("model_id")
-    if isinstance(model_id, str) and model_id.strip():
-        return model_id
-
-    model_id = f"UMA-{uuid4().hex[:12]}" if distutils.is_master() else None
-    model_id_list = [model_id]
-    distutils.broadcast_object_list(model_id_list, src=0)
-    model_id = model_id_list[0]
-    if not isinstance(model_id, str):
-        raise RuntimeError("Failed to broadcast the generated UMA model_id")
-    model_config["model_id"] = model_id
-    if distutils.is_master():
-        logging.warning(
-            "No model_id was provided for an UMA MoE model. Generated model_id=%r.",
-            model_id,
-        )
-    return model_id
 
 
 def get_uma_version(model_config: Mapping | None) -> UmaVersion:
