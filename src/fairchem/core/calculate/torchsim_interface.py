@@ -16,6 +16,9 @@ import torch
 
 from fairchem.core import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import UMATask
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
 from fairchem.core.common.utils import setup_imports, setup_logging
 from fairchem.core.datasets.atomic_data import AtomicData
 
@@ -232,10 +235,8 @@ class FairChemModel(_TSModelInterface):
             task_name = UMATask(task_name)
 
         # Use the efficient predictor API for optimal performance
-        self._device = device or torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
-        device_str: Literal["cuda", "cpu"] = (
+        self._device = device or torch.device(get_available_accelerator() or "cpu")
+        device_str: Literal["cuda", "xpu", "cpu"] = (
             self._device.type
         )  # ty:ignore[invalid-assignment]
         self.task_name = task_name
