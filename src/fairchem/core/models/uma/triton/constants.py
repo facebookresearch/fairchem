@@ -19,6 +19,10 @@ BLOCK_C = 128
 # handling any number of edges (no upper bound).
 GRID_E_STRIDE = 2048
 
+# Fused Wigner kernels have enough work per edge to benefit from full edge
+# parallelism on large inference graphs.
+FUSED_WIGNER_GRID_E_STRIDE = 131072
+
 # Permutation indices for M-major to L-major ordering.
 # For lmax=2: coefficients ordered as (l=0), (l=1, m=-1,0,1), (l=2, m=-2,-1,0,1,2)
 # L-major: [0, 1, 2, 3, 4, 5, 6, 7, 8] = [l0, l1m-1, l1m0, l1m1, l2m-2, l2m-1, l2m0, l2m1, l2m2]

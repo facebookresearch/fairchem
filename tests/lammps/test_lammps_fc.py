@@ -8,12 +8,18 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 
+import hydra
 import numpy as np
 import pytest
 from ase import Atoms
-from fairchem.lammps.lammps_fc import restricted_cell_from_lammps_box
+
+pytest.importorskip("lammps")
+
+from fairchem.lammps import lammps_fc  # noqa: E402
+from fairchem.lammps.lammps_fc import restricted_cell_from_lammps_box  # noqa: E402
 
 
 def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
@@ -230,3 +236,63 @@ def test_cell_conversion_preserves_volume(box_name, boxlo, boxhi, xy, yz, xz):
         f"Volume mismatch for {box_name}: boxlo={boxlo}, boxhi={boxhi}, xy={xy}, yz={yz}, xz={xz}.\n"
         f"Expected: {expected_volume}, Actual: {actual_volume}"
     )
+
+
+def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
+    """
+    Test that the Hydra-decorated LAMMPS entry point composes config and starts.
+    """
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    lammps_state = {}
+    run_args = {}
+
+    def fake_instantiate(_cfg):
+        return object()
+
+    def fake_run_lammps_with_fairchem(
+        predictor,
+        lammps_input_path,
+        task_name,
+        charge=0,
+        spin=0,
+    ):
+        run_args.update(
+            {
+                "predictor": predictor,
+                "lammps_input_path": lammps_input_path,
+                "task_name": task_name,
+                "charge": charge,
+                "spin": spin,
+            }
+        )
+
+        class DummyLammps:
+            pass
+
+        lmp = DummyLammps()
+        lmp._predictor = predictor
+        lammps_state["lmp"] = lmp
+        return lmp
+
+    monkeypatch.setattr(lammps_fc.hydra.utils, "instantiate", fake_instantiate)
+    monkeypatch.setattr(
+        lammps_fc, "run_lammps_with_fairchem", fake_run_lammps_with_fairchem
+    )
+
+    old_argv = sys.argv[:]
+    try:
+        sys.argv = [
+            "lammps_fc.py",
+            f"hydra.run.dir={tmp_path}",
+            "hydra.output_subdir=null",
+        ]
+        lammps_fc.main()
+    finally:
+        sys.argv = old_argv
+        hydra.core.global_hydra.GlobalHydra.instance().clear()
+
+    assert run_args["lammps_input_path"] == "lammps_in_example.file"
+    assert run_args["task_name"] == "omol"
+    assert run_args["charge"] == 0
+    assert run_args["spin"] == 0
+    assert not hasattr(lammps_state["lmp"], "_predictor")
