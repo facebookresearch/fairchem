@@ -51,6 +51,30 @@ class PGConfig:
     use_gp: bool = True
 
 
+def _to_cpu_for_ipc(obj):
+    """Move accelerator tensors to CPU before crossing a process boundary.
+
+    Results travel back to the parent through a multiprocessing.Manager dict,
+    which pickles them. CUDA tensors survive that via CUDA IPC, but XPU has no
+    equivalent -- torch raises "_share_fd_: only available on CPU". Detaching to
+    host memory here is correct for every backend and costs nothing at test
+    sizes, so the harness stops being CUDA-only.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu()
+    if isinstance(obj, dict):
+        return {k: _to_cpu_for_ipc(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [_to_cpu_for_ipc(v) for v in obj]
+        if isinstance(obj, tuple):
+            # namedtuples take their fields positionally, not as one iterable.
+            return (
+                type(obj)(*converted) if hasattr(obj, "_fields") else tuple(converted)
+            )
+        return type(obj)(converted)
+    return obj
+
+
 def init_env_rank_and_launch_test(
     rank: int,
     pg_setup_params: PGConfig,
@@ -63,7 +87,7 @@ def init_env_rank_and_launch_test(
     os.environ["WORLD_SIZE"] = str(pg_setup_params.world_size)
     os.environ["LOCAL_RANK"] = str(rank)
     os.environ["RANK"] = str(rank)
-    mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    mp_output_dict[rank] = _to_cpu_for_ipc(test_method(*args, **kwargs))  # pyre-fixme
 
 
 def init_pg_and_rank_and_launch_test(
@@ -95,7 +119,7 @@ def init_pg_and_rank_and_launch_test(
             "distributed_backend": pg_setup_params.backend,
         }
         setup_gp(config)
-    mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    mp_output_dict[rank] = _to_cpu_for_ipc(test_method(*args, **kwargs))  # pyre-fixme
 
 
 def spawn_multi_process(
@@ -111,7 +135,8 @@ def spawn_multi_process(
 
     Args:
         world_size: number of processes
-        backend: backend to use. for example, "nccl", "gloo", etc
+        backend: backend to use. for example, "nccl", "xccl", "gloo".
+            Defaults to the backend matching the detected accelerator.
         test_method: callable to spawn. first 3 arguments are rank, world_size and mp output dict
         test_method_args: args for the test method
         test_method_kwargs: kwargs for the test method
@@ -146,7 +171,7 @@ def spawn_multi_process(
     return [mp_output_dict[i] for i in range(config.world_size)]
 
 
-def init_local_distributed_process_group(backend="nccl"):
+def init_local_distributed_process_group(backend=None):
     with tempfile.NamedTemporaryFile(delete=False) as f:
         init_file = f.name
     init_method = get_file_init_method(world_size=1, rank=0, filename=init_file)
