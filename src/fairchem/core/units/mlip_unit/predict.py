@@ -655,7 +655,12 @@ class MLIPWorkerLocal:
         setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
 
         device = self.predictor_config.get("device", "cpu")
-        assign_device_for_local_rank(device == "cpu", 0)
+        # Bind the device the caller asked for, not whatever autodetection
+        # finds: the backend below is derived from this same value, and a
+        # mismatch only surfaces later inside DDP.
+        assign_device_for_local_rank(
+            device == "cpu", 0, None if device == "cpu" else device
+        )
         # NCCL is NVIDIA-only; Intel GPUs use oneCCL via the native "xccl"
         # backend. distributed_backend() picks per device type and warns if the
         # build lacks the backend rather than failing deep inside init.

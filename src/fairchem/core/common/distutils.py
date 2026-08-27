@@ -26,6 +26,7 @@ from fairchem.core.common.device_utils import (
     accelerator_is_available,
     current_device_str,
     get_available_accelerator,
+    resolve_device_type,
     visible_devices_env,
 )
 from fairchem.core.common.device_utils import (
@@ -128,7 +129,9 @@ def setup(config) -> None:
                     f"local rank: {local_rank}, visible devices: {visible_devices_env()}"
                 )
 
-                assign_device_for_local_rank(config["cpu"], local_rank)
+                assign_device_for_local_rank(
+                    config["cpu"], local_rank, config.get("device_type")
+                )
 
                 dist.init_process_group(
                     backend=config["distributed_backend"],
@@ -143,7 +146,9 @@ def setup(config) -> None:
         if config.get("init_method") == "file":
             local_rank = int(os.environ.get("LOCAL_RANK", 0))
             rank = int(os.environ.get("RANK", 0))
-            assign_device_for_local_rank(config["cpu"], local_rank)
+            assign_device_for_local_rank(
+                config["cpu"], local_rank, config.get("device_type")
+            )
             assert os.path.isdir(config["shared_file_dir"])
             shared_filename = os.path.join(
                 config["shared_file_dir"],
@@ -165,7 +170,9 @@ def setup(config) -> None:
                 ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
                 setup_env_local()
             local_rank = int(os.environ["LOCAL_RANK"])
-            assign_device_for_local_rank(config["cpu"], local_rank)
+            assign_device_for_local_rank(
+                config["cpu"], local_rank, config.get("device_type")
+            )
 
             dist.init_process_group(
                 backend=config["distributed_backend"],
@@ -278,15 +285,37 @@ def gather_objects(data: T, group: dist.ProcessGroup = dist.group.WORLD) -> list
     return output
 
 
-def assign_device_for_local_rank(cpu: bool, local_rank: int) -> None:
+def assign_device_for_local_rank(
+    cpu: bool, local_rank: int, device_type: str | None = None
+) -> None:
+    """Bind this process to its accelerator for ``local_rank``.
+
+    Args:
+        cpu: Pin to CPU regardless of what hardware is present.
+        local_rank: Device index to bind within the node.
+        device_type: Accelerator to bind ("cuda"/"xpu"). ``None`` autodetects.
+            Passing the type the caller actually asked for matters when the
+            collective backend was chosen from that same request: autodetecting
+            here can bind a *different* accelerator than the backend expects,
+            which surfaces much later as "No backend type associated with
+            device type ..." from inside DDP rather than as a device error.
+    """
     if cpu:
         os.environ[CURRENT_DEVICE_TYPE_STR] = "cpu"
         return
 
-    device_type = get_available_accelerator()
-    assert (
-        device_type is not None
-    ), "cannot set cpu=false and no accelerator (cuda/xpu) available!"
+    if device_type is None:
+        device_type = get_available_accelerator()
+        assert (
+            device_type is not None
+        ), "cannot set cpu=false and no accelerator (cuda/xpu) available!"
+    else:
+        # An explicit request is validated rather than quietly reinterpreted:
+        # asking for hardware this node lacks is a misconfiguration, and
+        # substituting whatever is present hides it.
+        device_type = resolve_device_type(device_type)
+        assert device_type != "cpu", "cpu=False conflicts with device_type='cpu'"
+
     os.environ[CURRENT_DEVICE_TYPE_STR] = device_type
     set_accelerator_device(device_type, local_rank)
 

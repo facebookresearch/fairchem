@@ -75,7 +75,9 @@ class SPMDWorker:
         gp_config=None,
     ):
         setup_env_local_multi_gpu(worker_id, master_port, master_address)
-        assign_device_for_local_rank(device == "cpu", 0)
+        assign_device_for_local_rank(
+            device == "cpu", 0, None if device == "cpu" else device
+        )
         backend = distributed_backend(device)
         dist.init_process_group(
             backend=backend,
