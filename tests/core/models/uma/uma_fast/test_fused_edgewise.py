@@ -20,6 +20,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.models.uma.triton import (
     wigner_conv1_fused_op,
     wigner_inv_conv2_fused_op,
@@ -29,6 +30,12 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     wigner_conv1_fused_fwd_launcher,
     wigner_inv_conv2_fused_fwd_launcher,
 )
+
+# Accelerator these Triton tests run on. Triton itself is portable -- Intel
+# ships triton-xpu and the kernels compile and execute there -- so the
+# device follows the hardware rather than being pinned to NVIDIA. Numerical
+# agreement with the PyTorch reference is what these tests assert.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX (test refs only).
 L_TO_M_GATHER_IDX = [0] * 9
@@ -110,7 +117,7 @@ def test_wigner_conv1_fused_matches_pytorch(sphere_channels):
     Verify the producer conv1 fused kernel matches the PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 16
     num_edges = 32
     C2 = 2 * sphere_channels
@@ -185,7 +192,7 @@ def test_wigner_inv_conv2_fused_matches_pytorch(sphere_channels):
     Verify the consumer conv2 inv fused kernel matches the PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 32
     C = sphere_channels
 
@@ -218,7 +225,7 @@ def test_wigner_conv1_fused_gradcheck(sphere_channels):
     OOM. sphere_channels must be a multiple of BLOCK_C=128.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 8
     num_edges = 16
     C = sphere_channels
@@ -260,7 +267,7 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
     Uses fast_mode=True. sphere_channels must be a multiple of BLOCK_C=128.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 16
     C = sphere_channels
 

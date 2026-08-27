@@ -21,6 +21,7 @@ from ase.io import write
 from sklearn.model_selection import train_test_split
 
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
+from fairchem.core.common import device_utils
 from fairchem.core.common.utils import get_timestamp_uid
 from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
@@ -30,8 +31,7 @@ def set_seeds(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    device_utils.manual_seed_all(seed)
 
 
 def generate_random_bulk_structure():
@@ -267,7 +267,7 @@ def assert_efs_valid(energy, forces, stress):
 def test_e2e_finetuning_bulks(reg_task, type):
     set_seeds(42)
     with tempfile.TemporaryDirectory() as tmpdirname:
-        torch.cuda.empty_cache()
+        device_utils.empty_cache(device_utils.get_available_accelerator() or "cpu")
         # create a bulks dataset
         create_dataset(
             type=type, n_structures=100, train_ratio=0.8, output_dir=tmpdirname

@@ -11,16 +11,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.models.uma.escn_moe import (
     DatasetSpecificMoEWrapper,
     eSCNMDMoeBackbone,
 )
 from fairchem.core.models.uma.nn.mole import MOLE, MOLEGlobals
 
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
+
 
 @pytest.mark.gpu()
 def test_mole1_vs_linear_gpu():
-    mole1_vs_linear("cuda")
+    mole1_vs_linear(ACCELERATOR)
 
 
 def test_mole1_vs_linear_cpu():

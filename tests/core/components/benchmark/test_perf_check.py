@@ -23,6 +23,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+from fairchem.core.common import device_utils
 from fairchem.core.components.benchmark.perf_check import (
     BASELINE_SETTINGS,
     InferenceResult,
@@ -33,6 +34,12 @@ from fairchem.core.components.benchmark.perf_check import (
 )
 from fairchem.core.components.benchmark.systems import make_benchmark_system
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 def test_compare_results_and_format_table():
@@ -137,7 +144,7 @@ def test_run_inference_predictions_and_perf(pretrained_checkpoint):
 
     # Baseline mode: predictions only, no perf
     baseline = run_inference(
-        pretrained_checkpoint, system, BASELINE_SETTINGS, device="cuda"
+        pretrained_checkpoint, system, BASELINE_SETTINGS, device=ACCELERATOR
     )
     assert baseline.forces.shape == (8, 3)
     assert baseline.forces.dtype == np.float64
@@ -148,7 +155,7 @@ def test_run_inference_predictions_and_perf(pretrained_checkpoint):
         pretrained_checkpoint,
         system,
         InferenceSettings(tf32=False, compile=False),
-        device="cuda",
+        device=ACCELERATOR,
         warmup_iters=2,
         timed_iters=3,
     )
@@ -168,7 +175,7 @@ def test_benchmark_runner_end_to_end(tmp_path, pretrained_checkpoint):
 
     runner = PerfCheckRunner(
         checkpoint=pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         warmup_iters=2,
         timed_iters=3,
         inference_settings=InferenceSettings(tf32=True, compile=False),

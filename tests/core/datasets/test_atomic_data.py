@@ -15,12 +15,16 @@ import torch
 from ase.build import molecule
 from ase.data import atomic_masses
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import (
     AtomicData,
     atomicdata_list_to_batch,
     warn_if_upcasting,
 )
 from fairchem.core.graph.compute import get_pbc_distances
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 @pytest.fixture()
@@ -44,8 +48,8 @@ def test_masses_property_uses_atomic_numbers(dtype):
 
 
 @pytest.mark.gpu()
-def test_to_ase_single_cuda(ase_atoms):
-    atomic_data = AtomicData.from_ase(ase_atoms).cuda()
+def test_to_ase_single_accelerator(ase_atoms):
+    atomic_data = AtomicData.from_ase(ase_atoms).to(ACCELERATOR)
     atoms = atomic_data.to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
 

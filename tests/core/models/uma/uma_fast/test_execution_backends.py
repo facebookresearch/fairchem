@@ -23,6 +23,7 @@ import torch
 from ase.build import bulk
 
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
@@ -40,6 +41,12 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     node_to_edge_wigner_permute_launcher,
     permute_wigner_inv_edge_to_node_launcher,
 )
+
+# Accelerator these Triton tests run on. Triton itself is portable -- Intel
+# ships triton-xpu and the kernels compile and execute there -- so the
+# device follows the hardware rather than being pinned to NVIDIA. Numerical
+# agreement with the PyTorch reference is what these tests assert.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX - used only in test reference implementations
 L_TO_M_GATHER_IDX = [0] * 9
@@ -169,7 +176,7 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_pytorch backend)
@@ -180,7 +187,7 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
         execution_mode="umas_fast_pytorch",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -231,7 +238,7 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_pytorch backend)
@@ -242,7 +249,7 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
         execution_mode="umas_fast_pytorch",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -273,7 +280,7 @@ def test_node_to_edge_wigner_permute_gradcheck(sphere_channels):
     instead of full Jacobian computation to avoid OOM.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 8
     num_edges = 16
 
@@ -311,7 +318,7 @@ def test_permute_wigner_inv_edge_to_node_gradcheck(sphere_channels):
     instead of full Jacobian computation to avoid OOM.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 16
 
     # Create test inputs
@@ -414,7 +421,7 @@ def test_node_to_edge_wigner_permute_matches_pytorch(sphere_channels):
     Verify Triton kernel output matches PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 16
     num_edges = 32
 
@@ -444,7 +451,7 @@ def test_permute_wigner_inv_matches_pytorch(sphere_channels):
     Verify Triton kernel output matches PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 32
 
     # Create inputs
@@ -473,7 +480,7 @@ def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
     Regression test for a bug where channels > 128 were silently dropped.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 32
 
     # Create inputs (L-major for grad_out, L-major for x_l)
@@ -546,7 +553,7 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_gpu backend)
@@ -557,7 +564,7 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
         execution_mode="umas_fast_gpu",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -608,7 +615,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_gpu backend)
@@ -619,7 +626,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
         execution_mode="umas_fast_gpu",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -675,7 +682,7 @@ def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_s
         compile=False,
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
     baseline_out = baseline_predictor.predict(batch.clone())
 
@@ -694,7 +701,7 @@ def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_s
             compile=test_compile,
         )
         test_predictor = MLIPPredictUnit(
-            checkpoint_pt, "cuda", inference_settings=test_settings
+            checkpoint_pt, ACCELERATOR, inference_settings=test_settings
         )
         test_out = test_predictor.predict(batch.clone())
 
