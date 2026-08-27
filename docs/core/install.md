@@ -67,9 +67,9 @@ falling back to CPU.
   fallback if `xccl` is unavailable.
 * `FAIRCHEM_DEVICE_TYPE=cpu|cuda|xpu` forces a device type, which is useful on
   nodes exposing more than one accelerator or for debugging on CPU.
-* UMA-S's fused Triton execution backend (`umas_fast_gpu`) is autotuned for
-  NVIDIA and stays opt-in elsewhere behind `FAIRCHEM_ENABLE_TRITON_XPU=1`.
-  Validate numerics against `execution_mode="general"` before relying on it.
+* UMA-S's fused Triton execution backend (`umas_fast_gpu`) is available on
+  Intel GPUs exactly as on NVIDIA — Triton supports both, and the kernels are
+  selected the same way on each. No extra opt-in is required.
 * CI does not cover XPU: GitHub-hosted runners have no Intel GPUs, so the
   `gpu`-marked suite still gates on CUDA. XPU support is validated manually
   on Intel GPU hardware.

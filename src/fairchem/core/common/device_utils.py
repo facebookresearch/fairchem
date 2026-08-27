@@ -40,6 +40,7 @@ __all__ = [
     "accelerator_is_available",
     "current_device_str",
     "device_count",
+    "device_index_of",
     "device_module",
     "distributed_backend",
     "empty_cache",
@@ -53,7 +54,6 @@ __all__ = [
     "set_device",
     "supports_native_all_to_all",
     "synchronize",
-    "triton_accelerator_enabled",
     "visible_devices_env",
 ]
 
@@ -117,6 +117,21 @@ def device_type_of(device: str | torch.device) -> str:
     """
     try:
         return torch.device(device).type
+    except RuntimeError as exc:
+        raise ValueError(f"unrecognised device specification: {device!r}") from exc
+
+
+def device_index_of(device: str | torch.device | None) -> int | None:
+    """Return the device index of a spec, or None if it names no specific one.
+
+    'xpu:1' -> 1, 'xpu' -> None, 'cpu' -> None. Callers forward this to the
+    per-device torch APIs so that asking about device 1 does not silently
+    report device 0's numbers.
+    """
+    if device is None:
+        return None
+    try:
+        return torch.device(device).index
     except RuntimeError as exc:
         raise ValueError(f"unrecognised device specification: {device!r}") from exc
 
@@ -247,14 +262,32 @@ def device_count(device: str | torch.device | None = None) -> int:
     return device_module(device_type).device_count()
 
 
+def _device_api(device_type: str, name: str):
+    """Fetch a required attribute from a torch device module.
+
+    Both torch.cuda and torch.xpu expose every call this module uses, so a miss
+    means a backend is incomplete. Raising names the backend and the missing
+    call; the previous ``hasattr`` guards instead skipped silently, which
+    reports 0 bytes of memory or an unseeded RNG as success.
+    """
+    module = device_module(device_type)
+    api = getattr(module, name, None)
+    if api is None:
+        raise AttributeError(
+            f"torch.{device_type} does not provide {name!r}; fairchem's device "
+            f"layer requires it. This backend is not fully supported."
+        )
+    return api
+
+
 def empty_cache(device: str | torch.device) -> None:
-    """Release cached device memory, if the backend supports it."""
+    """Release cached device memory on every device of this type."""
     device_type = device_type_of(device)
     if device_type == "cpu":
         return
-    module = device_module(device_type)
-    if hasattr(module, "empty_cache"):
-        module.empty_cache()
+    # torch.{cuda,xpu}.empty_cache() take no device argument: they release
+    # cached blocks on every device, so there is no index to forward.
+    _device_api(device_type, "empty_cache")()
 
 
 def synchronize(device: str | torch.device) -> None:
@@ -272,9 +305,8 @@ def manual_seed_all(seed: int, device: str | torch.device | None = None) -> None
     )
     if device_type is None or device_type == "cpu":
         return
-    module = device_module(device_type)
-    if hasattr(module, "manual_seed_all"):
-        module.manual_seed_all(seed)
+    # Seeds every device of this type by design -- no index to forward.
+    _device_api(device_type, "manual_seed_all")(seed)
 
 
 def distributed_backend(device: str | torch.device) -> str:
@@ -331,63 +363,42 @@ def visible_devices_env(device: str | torch.device | None = None) -> str:
     return ", ".join(present) if present else "None"
 
 
-def triton_accelerator_enabled(device: str | torch.device | None = None) -> bool:
-    """Whether Triton kernels are opted in for a non-CUDA accelerator.
-
-    fairchem's fused kernels are written and autotuned for NVIDIA. Triton itself
-    is portable (Intel ships triton-xpu), but a kernel that compiles on another
-    backend is not thereby correct or fast: it may rely on backend-specific
-    intrinsics, and its ``num_warps``/``num_stages`` configs encode NVIDIA
-    occupancy assumptions. So these stay opt-in per backend, via
-    ``FAIRCHEM_ENABLE_TRITON_<DEVICE>=1`` (e.g. ``FAIRCHEM_ENABLE_TRITON_XPU``).
-
-    CUDA is always considered enabled -- it is the path the kernels target.
-    """
-    device_type = (
-        device_type_of(device) if device is not None else get_available_accelerator()
-    )
-    if device_type is None or device_type == "cpu":
-        return False
-    if device_type == "cuda":
-        return True
-    flag = os.environ.get(f"FAIRCHEM_ENABLE_TRITON_{device_type.upper()}", "")
-    return flag.strip().lower() in ("1", "true", "yes", "on")
-
-
 def reset_peak_memory_stats(device: str | torch.device | None = None) -> None:
-    """Reset the peak-memory counter, if the backend tracks one."""
+    """Reset the peak-memory counter for the given (or current) device."""
     device_type = (
         device_type_of(device) if device is not None else get_available_accelerator()
     )
     if device_type is None or device_type == "cpu":
         return
-    module = device_module(device_type)
-    if hasattr(module, "reset_peak_memory_stats"):
-        module.reset_peak_memory_stats()
+    _device_api(device_type, "reset_peak_memory_stats")(device_index_of(device))
 
 
 def max_memory_allocated(device: str | torch.device | None = None) -> int:
-    """Peak bytes allocated on the device since the last reset (0 on CPU)."""
+    """Peak bytes allocated since the last reset (0 on CPU).
+
+    An indexed spec ('xpu:1') reports that device; a bare type reports the
+    current one.
+    """
     device_type = (
         device_type_of(device) if device is not None else get_available_accelerator()
     )
     if device_type is None or device_type == "cpu":
         return 0
-    module = device_module(device_type)
-    return (
-        module.max_memory_allocated() if hasattr(module, "max_memory_allocated") else 0
-    )
+    return _device_api(device_type, "max_memory_allocated")(device_index_of(device))
 
 
 def memory_allocated(device: str | torch.device | None = None) -> int:
-    """Bytes currently allocated on the device (0 on CPU)."""
+    """Bytes currently allocated (0 on CPU).
+
+    An indexed spec ('xpu:1') reports that device; a bare type reports the
+    current one.
+    """
     device_type = (
         device_type_of(device) if device is not None else get_available_accelerator()
     )
     if device_type is None or device_type == "cpu":
         return 0
-    module = device_module(device_type)
-    return module.memory_allocated() if hasattr(module, "memory_allocated") else 0
+    return _device_api(device_type, "memory_allocated")(device_index_of(device))
 
 
 # Collective backends implementing all_to_all / all_to_all_single natively.

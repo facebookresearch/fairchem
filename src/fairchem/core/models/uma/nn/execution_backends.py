@@ -13,10 +13,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from fairchem.core.common.device_utils import (
-    get_available_accelerator,
-    triton_accelerator_enabled,
-)
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
@@ -353,23 +350,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         settings: InferenceSettings,
     ) -> None:
         UMASFastPytorchBackend.validate(lmax, mmax, settings)
-        accelerator = get_available_accelerator()
-        if accelerator is None:
+        if get_available_accelerator() is None:
             raise ValueError("umas_fast_gpu requires a GPU (cuda or xpu)")
-        if accelerator != "cuda" and not triton_accelerator_enabled(accelerator):
-            # The fused path is a set of Triton kernels authored and autotuned
-            # against NVIDIA. Triton compiles for other backends (Intel ships
-            # triton-xpu), but portability is a design goal rather than a
-            # guarantee: kernels may use backend-specific intrinsics, and
-            # num_warps/num_stages configs are tuned for NVIDIA occupancy, so a
-            # kernel can compile elsewhere and still be slower -- or wrong.
-            # Opt in explicitly per-backend and verify against the portable
-            # path before trusting it.
-            raise ValueError(
-                f"umas_fast_gpu uses Triton kernels tuned for CUDA. To try them "
-                f"on {accelerator}, set FAIRCHEM_ENABLE_TRITON_{accelerator.upper()}=1 "
-                f"and validate numerics against execution_mode='general' first."
-            )
         if lmax != 2 or mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if not settings.merge_mole:

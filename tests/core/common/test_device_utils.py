@@ -12,6 +12,8 @@ accelerator assertions skip cleanly when no GPU is present.
 
 from __future__ import annotations
 
+import types
+
 import pytest
 import torch
 
@@ -112,22 +114,6 @@ def test_all_to_all_capability(backend, native):
 
 
 # --------------------------------------------------------------------------
-# Triton kernels stay opt-in off CUDA
-# --------------------------------------------------------------------------
-
-
-def test_triton_is_opt_in_for_non_cuda(monkeypatch):
-    monkeypatch.delenv("FAIRCHEM_ENABLE_TRITON_XPU", raising=False)
-    assert du.triton_accelerator_enabled("xpu") is False
-    monkeypatch.setenv("FAIRCHEM_ENABLE_TRITON_XPU", "1")
-    assert du.triton_accelerator_enabled("xpu") is True
-
-
-def test_triton_always_on_for_cuda():
-    assert du.triton_accelerator_enabled("cuda") is True
-
-
-# --------------------------------------------------------------------------
 # real-hardware checks
 # --------------------------------------------------------------------------
 
@@ -181,3 +167,80 @@ def test_autograd_runs_on_accelerator():
     du.synchronize(ACCEL)
     assert x.grad is not None
     assert torch.allclose(x.grad, 2 * x.detach(), atol=1e-5)
+
+
+# --------------------------------------------------------------------------
+# device index handling
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [("cuda", None), ("cuda:0", 0), ("xpu", None), ("xpu:3", 3), ("cpu", None)],
+)
+def test_device_index_of(spec, expected):
+    assert du.device_index_of(spec) == expected
+
+
+def test_device_index_of_none():
+    assert du.device_index_of(None) is None
+
+
+def test_device_index_of_rejects_garbage():
+    with pytest.raises(ValueError):
+        du.device_index_of("not-a-device")
+
+
+def test_missing_device_api_raises_loudly(monkeypatch):
+    """An incomplete backend must fail, not silently report zero.
+
+    The previous hasattr() guards returned 0 bytes / skipped seeding, which
+    reads as success while the run is actually unmeasured or unseeded.
+    """
+    monkeypatch.setattr(du, "device_module", lambda d: types.SimpleNamespace())
+    with pytest.raises(AttributeError, match="memory_allocated"):
+        du._device_api("xpu", "memory_allocated")
+
+
+def test_required_apis_present_on_both_backends():
+    """Every call the device layer needs exists on cuda and xpu alike."""
+    required = (
+        "empty_cache",
+        "manual_seed_all",
+        "reset_peak_memory_stats",
+        "max_memory_allocated",
+        "memory_allocated",
+        "synchronize",
+        "set_device",
+        "current_device",
+        "device_count",
+        "is_available",
+    )
+    for device_type in du.ACCELERATOR_DEVICE_TYPES:
+        module = torch.get_device_module(device_type)
+        missing = [name for name in required if not hasattr(module, name)]
+        assert not missing, f"torch.{device_type} lacks {missing}"
+
+
+@requires_accelerator
+def test_memory_queries_are_per_device():
+    """An indexed spec must report THAT device, not the current one.
+
+    Regression test: the wrappers used to call torch's per-device memory APIs
+    with no argument, so ``memory_allocated("xpu:1")`` silently reported
+    device 0 -- reading as 0 bytes while memory was in fact allocated.
+    """
+    if du.device_count(ACCEL) < 2:
+        pytest.skip("needs at least 2 devices to tell them apart")
+
+    big = torch.empty(4096, 4096, dtype=torch.float32, device=f"{ACCEL}:1")
+    du.synchronize(ACCEL)
+    try:
+        on_one = du.memory_allocated(f"{ACCEL}:1")
+        assert on_one >= big.numel() * big.element_size()
+        # Bare type follows the current device, which is not device 1.
+        assert du.memory_allocated(ACCEL) == du.memory_allocated(f"{ACCEL}:0")
+        assert du.max_memory_allocated(f"{ACCEL}:1") >= on_one
+    finally:
+        del big
+        du.empty_cache(ACCEL)
