@@ -16,6 +16,7 @@ import random
 import sys
 from collections import defaultdict
 from contextlib import nullcontext
+from datetime import timedelta
 from functools import cached_property, wraps
 from typing import TYPE_CHECKING, ClassVar, Protocol
 
@@ -599,6 +600,27 @@ def move_tensors_to_cpu(data):
         return data
 
 
+def _parallel_mlip_process_group_timeout() -> timedelta | None:
+    """
+    Return the configured timeout for ParallelMLIP process groups.
+
+    PyTorch's backend-specific default is preserved when the environment
+    variable is unset.
+    """
+    raw_timeout = os.environ.get("FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS")
+    if raw_timeout is None:
+        return None
+    try:
+        timeout_seconds = float(raw_timeout)
+    except ValueError as error:
+        raise ValueError(
+            "FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS must be a number"
+        ) from error
+    if timeout_seconds <= 0:
+        raise ValueError("FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS must be positive")
+    return timedelta(seconds=timeout_seconds)
+
+
 class MLIPWorkerLocal:
     def __init__(
         self,
@@ -637,10 +659,19 @@ class MLIPWorkerLocal:
         device = self.predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
+        process_group_timeout = _parallel_mlip_process_group_timeout()
+        process_group_kwargs = {}
+        if process_group_timeout is not None:
+            process_group_kwargs["timeout"] = process_group_timeout
+            logging.info(
+                "Using %.1fs ParallelMLIP process-group timeout",
+                process_group_timeout.total_seconds(),
+            )
         dist.init_process_group(
             backend=backend,
             rank=self.worker_id,
             world_size=self.world_size,
+            **process_group_kwargs,
         )
         if self.gp_config is not None:
             gp_utils.setup_graph_parallel_groups(self.world_size, backend)
