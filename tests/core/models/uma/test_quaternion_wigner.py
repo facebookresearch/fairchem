@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.models.uma.common.quaternion.quaternion_utils import (
     BLEND_START,
     BLEND_WIDTH,
@@ -51,6 +52,9 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
     wigner_D,
 )
+
+# Accelerator these tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # =============================================================================
 # Reference Implementation for Testing (Not Used at Runtime)
@@ -327,6 +331,42 @@ STANDARD_TEST_EDGES = [
 
 class TestWignerDProperties:
     """Tests for mathematical properties of Wigner D matrices."""
+
+    def test_compact_l2_matches_dense(self, dtype, device, wigner_data):
+        edges = torch.randn(16, 3, dtype=dtype, device=device, requires_grad=True)
+        gamma = torch.randn(16, dtype=dtype, device=device)
+        kwargs = {
+            "gamma": gamma,
+            "coeffs": wigner_data.coeffs,
+            "U_blocks": wigner_data.U_blocks,
+            "custom_kernels": wigner_data.custom_kernels,
+        }
+        dense, dense_inv = axis_angle_wigner_hybrid(edges, 2, **kwargs)
+        compact, compact_inv = axis_angle_wigner_hybrid(
+            edges, 2, compact_l2=True, **kwargs
+        )
+
+        def pack(value):
+            return torch.cat(
+                (
+                    value[:, :1, :1].flatten(1),
+                    value[:, 1:4, 1:4].flatten(1),
+                    value[:, 4:9, 4:9].flatten(1),
+                ),
+                dim=1,
+            )
+
+        torch.testing.assert_close(compact, pack(dense), rtol=0, atol=0)
+        torch.testing.assert_close(compact_inv, pack(dense_inv), rtol=0, atol=0)
+        grad = torch.randn_like(compact)
+        grad_inv = torch.randn_like(compact_inv)
+        dense_grad = torch.autograd.grad(
+            (pack(dense), pack(dense_inv)), edges, (grad, grad_inv), retain_graph=True
+        )[0]
+        compact_grad = torch.autograd.grad(
+            (compact, compact_inv), edges, (grad, grad_inv)
+        )[0]
+        torch.testing.assert_close(compact_grad, dense_grad, rtol=0, atol=0)
 
     @pytest.mark.parametrize(
         "edge,desc",
@@ -676,6 +716,41 @@ class TestGradientStability:
 
 class TestTorchCompileCompatibility:
     """Tests for torch.compile compatibility of real-arithmetic functions."""
+
+    @pytest.mark.gpu()
+    def test_compact_l2_dynamic_compile(self, compile_reset_state):
+        torch.manual_seed(42)
+        kernels = CustomKernelModule().to(device=ACCELERATOR, dtype=torch.float32)
+
+        def fn(edges, gamma):
+            return axis_angle_wigner_hybrid(
+                edges,
+                2,
+                gamma=gamma,
+                custom_kernels=kernels,
+                compact_l2=True,
+            )
+
+        compiled = torch.compile(fn, fullgraph=True, dynamic=True)
+        for num_edges in (17, 31):
+            edges = torch.randn(
+                num_edges,
+                3,
+                device=ACCELERATOR,
+                dtype=torch.float32,
+                requires_grad=True,
+            )
+            compiled_edges = edges.detach().clone().requires_grad_()
+            gamma = torch.randn(num_edges, device=ACCELERATOR, dtype=torch.float32)
+            expected = fn(edges, gamma)
+            actual = compiled(compiled_edges, gamma)
+            grad_outputs = tuple(torch.randn_like(value) for value in expected)
+            expected_grad = torch.autograd.grad(expected, edges, grad_outputs)[0]
+            actual_grad = torch.autograd.grad(actual, compiled_edges, grad_outputs)[0]
+
+            for actual_value, expected_value in zip(actual, expected, strict=True):
+                torch.testing.assert_close(actual_value, expected_value)
+            torch.testing.assert_close(actual_grad, expected_grad)
 
     @pytest.mark.skipif(
         not hasattr(torch, "_dynamo"), reason="torch.compile not available"

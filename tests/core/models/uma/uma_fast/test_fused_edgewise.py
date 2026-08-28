@@ -4,14 +4,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests:  Correctness of the two producer/consumer edgewise fusions used by the
+Tests:  Correctness of the edgewise fusions used by the
         UMA-S fast-GPU backend at lmax=mmax=2:
           - producer: wigner_conv1_fused (gather + Wigner + L→M + radial
             scale/pack into the three conv1 GEMM buffers)
           - consumer: wigner_inv_conv2_fused (M→L unpack of the conv2 GEMM
             buffers + inverse-Wigner rotate)
-        Kernel-vs-PyTorch-reference forward tests plus autograd gradcheck for
-        both custom ops (grads wrt node features / GEMM buffers, Wigner, radial).
+          - packed gate: SiLU/sigmoid activation between conv1 and conv2
+        Kernel-vs-PyTorch-reference forward tests, Wigner autograd gradcheck,
+        and packed-gate first- and second-order derivative checks.
 CI:     test_gpu_sweep (units shard).
 """
 
@@ -21,9 +22,12 @@ import pytest
 import torch
 
 from fairchem.core.common import device_utils
+from fairchem.core.models.uma.nn.activation import GateActivation
 from fairchem.core.models.uma.triton import (
+    packed_gate_op,
     wigner_conv1_fused_op,
     wigner_inv_conv2_fused_op,
+    wigner_inv_conv2_scatter_op,
 )
 from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
 from tests.core.models.uma.uma_fast.triton_test_utils import (
@@ -31,10 +35,9 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     wigner_inv_conv2_fused_fwd_launcher,
 )
 
-# Accelerator these Triton tests run on. Triton itself is portable -- Intel
-# ships triton-xpu and the kernels compile and execute there -- so the
-# device follows the hardware rather than being pinned to NVIDIA. Numerical
-# agreement with the PyTorch reference is what these tests assert.
+# Accelerator these Triton tests run on. Triton is portable -- Intel ships
+# triton-xpu and these kernels are numerically correct there -- so the device
+# follows the hardware present rather than being pinned to NVIDIA.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX (test refs only).
@@ -57,6 +60,17 @@ def _create_block_diagonal_wigner(num_edges: int, device: str, dtype=torch.float
     wigner[:, 1:4, 1:4] = torch.randn(num_edges, 3, 3, device=device, dtype=dtype)
     wigner[:, 4:9, 4:9] = torch.randn(num_edges, 5, 5, device=device, dtype=dtype)
     return wigner
+
+
+def _compact_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    return torch.cat(
+        (
+            wigner[:, :1, :1].flatten(1),
+            wigner[:, 1:4, 1:4].flatten(1),
+            wigner[:, 4:9, 4:9].flatten(1),
+        ),
+        dim=1,
+    )
 
 
 # =============================================================================
@@ -209,6 +223,143 @@ def test_wigner_inv_conv2_fused_matches_pytorch(sphere_channels):
     ), f"Max diff: {(ref_out - triton_out).abs().max()}"
 
 
+@pytest.mark.gpu()
+def test_exported_fused_ops_accept_dense_wigner(torch_deterministic):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 16, 128
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device=ACCELERATOR)
+    dense = _create_block_diagonal_wigner(num_edges, ACCELERATOR).requires_grad_()
+    compact = _compact_l2_wigner(dense.detach()).requires_grad_()
+    x_dense = torch.randn(
+        num_nodes, 9, channels, device=ACCELERATOR, requires_grad=True
+    )
+    x_compact = x_dense.detach().clone().requires_grad_()
+    radial_dense = torch.randn(
+        num_edges, 12 * channels, device=ACCELERATOR, requires_grad=True
+    )
+    radial_compact = radial_dense.detach().clone().requires_grad_()
+
+    dense_outputs = wigner_conv1_fused_op(
+        x_dense, edge_index, dense, radial_dense, channels
+    )
+    compact_outputs = wigner_conv1_fused_op(
+        x_compact, edge_index, compact, radial_compact, channels
+    )
+    grad_outputs = tuple(torch.randn_like(value) for value in dense_outputs)
+    dense_grads = torch.autograd.grad(
+        dense_outputs, (x_dense, dense, radial_dense), grad_outputs
+    )
+    compact_grads = torch.autograd.grad(
+        compact_outputs, (x_compact, compact, radial_compact), grad_outputs
+    )
+
+    for actual, expected in zip(dense_outputs, compact_outputs, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(dense_grads[0], compact_grads[0], rtol=0, atol=0)
+    torch.testing.assert_close(
+        _compact_l2_wigner(dense_grads[1]), compact_grads[1], rtol=0, atol=0
+    )
+    torch.testing.assert_close(dense_grads[2], compact_grads[2], rtol=0, atol=0)
+
+    dense_inv = _create_block_diagonal_wigner(num_edges, ACCELERATOR).requires_grad_()
+    compact_inv = _compact_l2_wigner(dense_inv.detach()).requires_grad_()
+    dense_inputs = tuple(
+        torch.randn(
+            num_edges, multiple * channels, device=ACCELERATOR, requires_grad=True
+        )
+        for multiple in (3, 4, 2)
+    )
+    compact_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in dense_inputs
+    )
+    dense_output = wigner_inv_conv2_fused_op(*dense_inputs, dense_inv, channels)
+    compact_output = wigner_inv_conv2_fused_op(*compact_inputs, compact_inv, channels)
+    grad_output = torch.randn_like(dense_output)
+    dense_grads = torch.autograd.grad(
+        dense_output, (*dense_inputs, dense_inv), grad_output
+    )
+    compact_grads = torch.autograd.grad(
+        compact_output, (*compact_inputs, compact_inv), grad_output
+    )
+
+    torch.testing.assert_close(dense_output, compact_output, rtol=0, atol=0)
+    for actual, expected in zip(dense_grads[:-1], compact_grads[:-1], strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(
+        _compact_l2_wigner(dense_grads[-1]), compact_grads[-1], rtol=0, atol=0
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("sphere_channels", [128, 256])
+def test_wigner_inv_conv2_scatter_matches_materialized(sphere_channels):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, sphere_channels
+    inputs = (
+        torch.randn(num_edges, 3 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device=ACCELERATOR, requires_grad=True),
+        _compact_l2_wigner(
+            _create_block_diagonal_wigner(num_edges, ACCELERATOR)
+        ).requires_grad_(),
+    )
+    reference_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in inputs
+    )
+    scatter_target = torch.randint(0, num_nodes, (num_edges,), device=ACCELERATOR)
+
+    output = wigner_inv_conv2_scatter_op(*inputs, scatter_target, num_nodes, channels)
+    edge_output = wigner_inv_conv2_fused_op(*reference_inputs, channels)
+    reference = torch.zeros_like(output).index_add_(0, scatter_target, edge_output)
+    grad_output = torch.randn_like(output)
+    grads = torch.autograd.grad(output, inputs, grad_output)
+    reference_grads = torch.autograd.grad(reference, reference_inputs, grad_output)
+
+    torch.testing.assert_close(output, reference, rtol=1e-5, atol=1e-5)
+    for actual, expected in zip(grads, reference_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+@pytest.mark.gpu()
+def test_fused_edgewise_empty_graph():
+    channels = 128
+    x = torch.randn(2, 9, channels, device=ACCELERATOR, requires_grad=True)
+    edge_index = torch.empty(2, 0, dtype=torch.long, device=ACCELERATOR)
+    wigner = torch.empty(0, 35, device=ACCELERATOR, requires_grad=True)
+    radial = torch.empty(0, 12 * channels, device=ACCELERATOR, requires_grad=True)
+
+    conv1_outputs = wigner_conv1_fused_op(x, edge_index, wigner, radial, channels)
+    sum(output.sum() for output in conv1_outputs).backward()
+    assert [output.shape for output in conv1_outputs] == [
+        (0, 6 * channels),
+        (0, 8 * channels),
+        (0, 4 * channels),
+    ]
+    assert torch.count_nonzero(x.grad) == 0
+    assert wigner.grad.shape == wigner.shape
+    assert radial.grad.shape == radial.shape
+
+    g0 = torch.empty(0, 3 * channels, device=ACCELERATOR, requires_grad=True)
+    g1 = torch.empty(0, 4 * channels, device=ACCELERATOR, requires_grad=True)
+    g2 = torch.empty(0, 2 * channels, device=ACCELERATOR, requires_grad=True)
+    wigner_inv = torch.empty(0, 35, device=ACCELERATOR, requires_grad=True)
+    conv2_output = wigner_inv_conv2_fused_op(g0, g1, g2, wigner_inv, channels)
+    conv2_output.sum().backward()
+    assert conv2_output.shape == (0, 9, channels)
+    assert g0.grad.shape == g0.shape
+    assert g1.grad.shape == g1.shape
+    assert g2.grad.shape == g2.shape
+    assert wigner_inv.grad.shape == wigner_inv.shape
+
+    scatter_target = torch.empty(0, dtype=torch.long, device=ACCELERATOR)
+    scattered = wigner_inv_conv2_scatter_op(
+        g0, g1, g2, wigner_inv, scatter_target, 2, channels
+    )
+    scattered.sum().backward()
+    assert scattered.shape == (2, 9, channels)
+    assert torch.count_nonzero(scattered) == 0
+
+
 # =============================================================================
 # Tests: autograd gradcheck for both fused custom ops
 # =============================================================================
@@ -238,7 +389,7 @@ def test_wigner_conv1_fused_gradcheck(sphere_channels):
     edge_tgt = torch.randint(0, num_nodes, (num_edges,), device=device)
     edge_index = torch.stack([edge_src, edge_tgt], dim=0)
     wigner = torch.randn(
-        num_edges, 9, 9, device=device, dtype=torch.float64
+        num_edges, 35, device=device, dtype=torch.float64
     ).requires_grad_(True)
     radial = torch.randn(
         num_edges, 6 * C2, device=device, dtype=torch.float64
@@ -254,7 +405,64 @@ def test_wigner_conv1_fused_gradcheck(sphere_channels):
         atol=1e-4,
         rtol=1e-3,
         fast_mode=True,
+        nondet_tol=1e-12,  # Node accumulation uses atomic adds.
     )
+
+
+@pytest.mark.gpu()
+def test_wigner_conv1_fused_deterministic_backward(
+    torch_deterministic, compile_reset_state
+):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, 128
+    x = torch.randn(num_nodes, 9, channels, device=ACCELERATOR, requires_grad=True)
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device=ACCELERATOR)
+    wigner = _compact_l2_wigner(
+        _create_block_diagonal_wigner(num_edges, ACCELERATOR)
+    ).requires_grad_()
+    radial = torch.randn(
+        num_edges, 12 * channels, device=ACCELERATOR, requires_grad=True
+    )
+    compiled = torch.compile(wigner_conv1_fused_op, fullgraph=True, dynamic=True)
+    outputs = compiled(x, edge_index, wigner, radial, channels)
+    grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+
+    first = torch.autograd.grad(
+        outputs, (x, wigner, radial), grad_outputs, retain_graph=True
+    )
+    second = torch.autograd.grad(outputs, (x, wigner, radial), grad_outputs)
+
+    for first_grad, second_grad in zip(first, second):
+        assert torch.equal(first_grad, second_grad)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("dense_wigner", [False, True])
+def test_wigner_conv1_fused_dynamic_compile(compile_reset_state, dense_wigner):
+    torch.manual_seed(42)
+    num_nodes, channels = 8, 128
+    compiled = torch.compile(wigner_conv1_fused_op, fullgraph=True, dynamic=True)
+
+    for num_edges in (17, 31):
+        x = torch.randn(num_nodes, 9, channels, device=ACCELERATOR, requires_grad=True)
+        edge_index = torch.randint(0, num_nodes, (2, num_edges), device=ACCELERATOR)
+        wigner = _create_block_diagonal_wigner(num_edges, ACCELERATOR)
+        if not dense_wigner:
+            wigner = _compact_l2_wigner(wigner)
+        wigner.requires_grad_()
+        radial = torch.randn(
+            num_edges, 12 * channels, device=ACCELERATOR, requires_grad=True
+        )
+        outputs = compiled(x, edge_index, wigner, radial, channels)
+        grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+        grads = torch.autograd.grad(outputs, (x, wigner, radial), grad_outputs)
+
+        assert tuple(output.shape[0] for output in outputs) == (num_edges,) * 3
+        assert tuple(grad.shape for grad in grads) == (
+            x.shape,
+            wigner.shape,
+            radial.shape,
+        )
 
 
 @pytest.mark.gpu()
@@ -281,7 +489,7 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
         num_edges, 2 * C, device=device, dtype=torch.float64
     ).requires_grad_(True)
     wigner = torch.randn(
-        num_edges, 9, 9, device=device, dtype=torch.float64
+        num_edges, 35, device=device, dtype=torch.float64
     ).requires_grad_(True)
 
     def fn(a, b, c, w_in):
@@ -295,3 +503,193 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
         rtol=1e-3,
         fast_mode=True,
     )
+
+
+@pytest.mark.gpu()
+def test_wigner_inv_conv2_scatter_dynamic_compile(compile_reset_state):
+    torch.manual_seed(42)
+    num_nodes, channels = 8, 128
+    compiled = torch.compile(wigner_inv_conv2_scatter_op, fullgraph=True, dynamic=True)
+
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(
+                num_edges, 3 * channels, device=ACCELERATOR, requires_grad=True
+            ),
+            torch.randn(
+                num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True
+            ),
+            torch.randn(
+                num_edges, 2 * channels, device=ACCELERATOR, requires_grad=True
+            ),
+            _compact_l2_wigner(
+                _create_block_diagonal_wigner(num_edges, ACCELERATOR)
+            ).requires_grad_(),
+        )
+        scatter_target = torch.randint(0, num_nodes, (num_edges,), device=ACCELERATOR)
+        output = compiled(*inputs, scatter_target, num_nodes, channels)
+        grads = torch.autograd.grad(output, inputs, torch.randn_like(output))
+
+        assert output.shape == (num_nodes, 9, channels)
+        assert tuple(grad.shape for grad in grads) == tuple(
+            value.shape for value in inputs
+        )
+
+
+@pytest.mark.gpu()
+def test_wigner_inv_conv2_scatter_deterministic(
+    torch_deterministic, compile_reset_state
+):
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 8, 32, 128
+    inputs = (
+        torch.randn(num_edges, 3 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device=ACCELERATOR, requires_grad=True),
+        _compact_l2_wigner(
+            _create_block_diagonal_wigner(num_edges, ACCELERATOR)
+        ).requires_grad_(),
+    )
+    scatter_target = torch.randint(0, num_nodes, (num_edges,), device=ACCELERATOR)
+    compiled = torch.compile(wigner_inv_conv2_scatter_op, fullgraph=True, dynamic=True)
+    first = compiled(*inputs, scatter_target, num_nodes, channels)
+    second = compiled(*inputs, scatter_target, num_nodes, channels)
+    grad_output = torch.randn_like(first)
+    first_grads = torch.autograd.grad(first, inputs, grad_output)
+    second_grads = torch.autograd.grad(second, inputs, grad_output)
+
+    assert torch.equal(first, second)
+    for first_grad, second_grad in zip(first_grads, second_grads, strict=True):
+        assert torch.equal(first_grad, second_grad)
+
+
+def _ref_packed_gate(x0_full, x1, x2, channels):
+    num_edges = x0_full.shape[0]
+    activation = GateActivation(2, 2, channels, m_prime=True).to(ACCELERATOR)
+    ref_message = torch.cat(
+        (
+            x0_full[:, 2 * channels :].view(num_edges, 3, channels),
+            x1.view(num_edges, 4, channels),
+            x2.view(num_edges, 2, channels),
+        ),
+        dim=1,
+    )
+    return tuple(
+        value.flatten(1)
+        for value in activation(x0_full[:, : 2 * channels], ref_message).split(
+            (3, 4, 2), dim=1
+        )
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("num_edges", [0, 32])
+def test_packed_gate_matches_materialized_activation(num_edges):
+    torch.manual_seed(42)
+    channels = 128
+    x0_backing = torch.randn(
+        num_edges, 12 * channels, device=ACCELERATOR, requires_grad=True
+    )
+    x1_backing = torch.randn(
+        num_edges, 8 * channels, device=ACCELERATOR, requires_grad=True
+    )
+    x2_backing = torch.randn(
+        num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True
+    )
+    x0_full = x0_backing[:, : 5 * channels]
+    x1 = x1_backing[:, : 4 * channels]
+    x2 = x2_backing[:, : 2 * channels]
+
+    ref_x0 = x0_full.detach().clone().requires_grad_()
+    ref_x1 = x1.detach().clone().requires_grad_()
+    ref_x2 = x2.detach().clone().requires_grad_()
+    ref_outputs = _ref_packed_gate(ref_x0, ref_x1, ref_x2, channels)
+    grad_outputs = tuple(torch.randn_like(value) for value in ref_outputs)
+    ref_grads = torch.autograd.grad(ref_outputs, (ref_x0, ref_x1, ref_x2), grad_outputs)
+
+    outputs = packed_gate_op(x0_full, x1, x2, channels)
+    grads = torch.autograd.grad(outputs, (x0_full, x1, x2), grad_outputs)
+    for actual, expected in zip(outputs, ref_outputs, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+    for actual, expected in zip(grads, ref_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.gpu()
+def test_packed_gate_second_order_matches_materialized_activation():
+    torch.manual_seed(42)
+    num_edges, channels = 7, 128
+    inputs = (
+        torch.randn(num_edges, 5 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True),
+        torch.randn(num_edges, 2 * channels, device=ACCELERATOR, requires_grad=True),
+    )
+    reference_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in inputs
+    )
+    outputs = packed_gate_op(*inputs, channels)
+    reference_outputs = _ref_packed_gate(*reference_inputs, channels)
+    grad_outputs = tuple(torch.randn_like(output) for output in outputs)
+    grads = torch.autograd.grad(outputs, inputs, grad_outputs, create_graph=True)
+    reference_grads = torch.autograd.grad(
+        reference_outputs,
+        reference_inputs,
+        grad_outputs,
+        create_graph=True,
+    )
+    vectors = tuple(torch.randn_like(value) for value in inputs)
+    second_grads = torch.autograd.grad(grads, inputs, vectors)
+    reference_second_grads = torch.autograd.grad(
+        reference_grads, reference_inputs, vectors
+    )
+
+    for actual, expected in zip(grads, reference_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+    for actual, expected in zip(second_grads, reference_second_grads, strict=True):
+        torch.testing.assert_close(actual, expected, rtol=2e-5, atol=2e-6)
+
+
+@pytest.mark.gpu()
+def test_packed_gate_dynamic_compile(compile_reset_state):
+    channels = 128
+    compiled = torch.compile(packed_gate_op, fullgraph=True, dynamic=True)
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(
+                num_edges,
+                5 * channels,
+                device=ACCELERATOR,
+                requires_grad=True,
+            ),
+            torch.randn(
+                num_edges,
+                4 * channels,
+                device=ACCELERATOR,
+                requires_grad=True,
+            ),
+            torch.randn(
+                num_edges,
+                2 * channels,
+                device=ACCELERATOR,
+                requires_grad=True,
+            ),
+        )
+        reference_inputs = tuple(
+            value.detach().clone().requires_grad_() for value in inputs
+        )
+        grad_outputs = (
+            torch.randn(num_edges, 3 * channels, device=ACCELERATOR),
+            torch.randn_like(inputs[1]),
+            torch.randn_like(inputs[2]),
+        )
+
+        outputs = compiled(*inputs, channels)
+        reference_outputs = packed_gate_op(*reference_inputs, channels)
+        grads = torch.autograd.grad(outputs, inputs, grad_outputs)
+        reference_grads = torch.autograd.grad(
+            reference_outputs, reference_inputs, grad_outputs
+        )
+        for actual, expected in zip(outputs, reference_outputs, strict=True):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        for actual, expected in zip(grads, reference_grads, strict=True):
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
