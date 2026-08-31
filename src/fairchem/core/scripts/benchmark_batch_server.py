@@ -231,7 +231,8 @@ def sweep_batch_server(
         output_dir: Directory to write results and plots to.
         serial_samples: Number of systems used for the serial baseline.
         warmup_requests: Number of warmup requests before each timed run.
-        concurrency_backend: Must be ``"threads"`` when invoked from the CLI.
+        concurrency_backend: Concurrency backend for submitting requests. Only
+            ``"threads"`` is supported.
         num_replicas: Number of batch-server replicas.
         min_batch_size: Autobatch minimum batch size (atoms).
         max_batch_size_cap: Autobatch maximum batch size cap (atoms).
