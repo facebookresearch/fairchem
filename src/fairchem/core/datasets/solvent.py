@@ -12,6 +12,7 @@ import importlib.resources
 import json
 import logging
 import math
+import os
 from typing import TYPE_CHECKING
 
 import torch
@@ -56,6 +57,21 @@ _SOLVENT_STATS = {
     "en-halogen": {"transform": "linear", "scale": 0.174984},
 }
 
+# Experimental override: FAIRCHEM_SOLVENT_EPS_TRANSFORM=born switches the epsilon
+# channel to the Born factor (1 - 1/eps), the dielectric scaling that the Born /
+# generalized-Born / ALPB polarization energies and the C-PCM f(eps) all carry.
+# Also vacuum-anchored (1 - 1/1 = 0). The scale is the population std of
+# (1 - 1/eps) over the same 179 solvents. Default ("log") is bit-identical to the
+# historical behavior; every shipped checkpoint was trained with "log".
+_EPS_TRANSFORM_ENV = os.environ.get("FAIRCHEM_SOLVENT_EPS_TRANSFORM", "log")
+if _EPS_TRANSFORM_ENV == "born":
+    _SOLVENT_STATS["epsilon"] = {"transform": "born", "scale": 0.165059}
+elif _EPS_TRANSFORM_ENV != "log":
+    raise ValueError(
+        f"FAIRCHEM_SOLVENT_EPS_TRANSFORM must be 'log' or 'born', "
+        f"got {_EPS_TRANSFORM_ENV!r}"
+    )
+
 
 def _transform(name: str, value: float) -> float:
     """Apply a descriptor's vacuum-anchoring transform (0 at the gas phase)."""
@@ -64,6 +80,8 @@ def _transform(name: str, value: float) -> float:
         return float(value) - 1.0
     if transform == "log":
         return math.log(value)
+    if transform == "born":
+        return 1.0 - 1.0 / float(value)
     return float(value)
 
 # Names that map to the vacuum / gas-phase null vector instead of a lookup.
