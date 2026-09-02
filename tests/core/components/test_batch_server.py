@@ -488,7 +488,7 @@ def test_update_batch_config_redeploys_with_only_user_config_changed(monkeypatch
 
 
 def test_prepare_deployment_config_honors_explicit_num_gpus():
-    dc = batch_server._prepare_deployment_config(None, 2, "explicit")
+    dc = batch_server._prepare_deployment_config(None, 2)
 
     assert dc.ray_actor_options["num_gpus"] == 2
 
@@ -496,7 +496,7 @@ def test_prepare_deployment_config_honors_explicit_num_gpus():
 def test_prepare_deployment_config_does_not_override_pinned_num_gpus():
     """An explicit ray_actor_options value always wins over the default."""
     dc = batch_server._prepare_deployment_config(
-        {"ray_actor_options": {"num_gpus": 0}}, 1, "inferred"
+        {"ray_actor_options": {"num_gpus": 0}}, 1
     )
 
     assert dc.ray_actor_options["num_gpus"] == 0

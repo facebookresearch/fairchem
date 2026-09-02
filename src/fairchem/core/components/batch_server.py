@@ -829,7 +829,6 @@ def _effective_replicas(deployment_config: dict) -> int:
 def _prepare_deployment_config(
     deployment_config: DeploymentConfig | dict | None,
     default_num_gpus: float,
-    default_basis: str,
 ) -> DeploymentConfig:
     """
     Normalize ``deployment_config`` and settle the replica's GPU allocation.
@@ -838,9 +837,6 @@ def _prepare_deployment_config(
         deployment_config: Caller-supplied config, or ``None``.
         default_num_gpus: GPUs per replica to use when the caller did not pin
             ``ray_actor_options["num_gpus"]``.
-        default_basis: Human-readable description of where ``default_num_gpus``
-            came from, used in the log line so an unexpected allocation is
-            traceable rather than silent.
 
     Returns:
         A :class:`DeploymentConfig` with ``ray_actor_options`` populated.
@@ -851,10 +847,9 @@ def _prepare_deployment_config(
     if "num_gpus" not in actor_opts:
         actor_opts["num_gpus"] = default_num_gpus
         logging.info(
-            "Replicas will request num_gpus=%s (%s). Pass num_gpus=... or set "
+            "Replicas will request num_gpus=%s. Pass num_gpus=... or set "
             "ray_actor_options['num_gpus'] to override.",
             default_num_gpus,
-            default_basis,
         )
     deployment_config.ray_actor_options = actor_opts
     return deployment_config
@@ -1085,11 +1080,8 @@ def setup_batch_predict_server(
         # Safe to infer here: the predict unit is a local object whose device is
         # ground truth for this deployment, unlike a driver-side CUDA probe.
         num_gpus = 1 if torch.device(predict_unit.device).type == "cuda" else 0
-        basis = f"inferred from predict_unit.device={predict_unit.device!r}"
-    else:
-        basis = "explicit num_gpus argument"
 
-    dc = _prepare_deployment_config(deployment_config, num_gpus, basis)
+    dc = _prepare_deployment_config(deployment_config, num_gpus)
     if not isinstance(batch_config, BatchConfig):
         batch_config = BatchConfig(**(batch_config or {}))
 
@@ -1150,7 +1142,6 @@ def setup_multiplexed_batch_predict_server(
         # login node to a GPU cluster). Warn loudly rather than silently
         # deploying a GPU model onto CPU replicas.
         num_gpus = 1 if torch.cuda.is_available() else 0
-        basis = f"guessed from the driver's torch.cuda.is_available()={num_gpus > 0}"
         if num_gpus == 0:
             logging.warning(
                 "No num_gpus was given and this driver sees no CUDA device, so "
@@ -1159,10 +1150,8 @@ def setup_multiplexed_batch_predict_server(
                 "num_gpus=1 explicitly when deploying from a CPU-only host to a "
                 "GPU cluster."
             )
-    else:
-        basis = "explicit num_gpus argument"
 
-    dc = _prepare_deployment_config(deployment_config, num_gpus, basis)
+    dc = _prepare_deployment_config(deployment_config, num_gpus)
     if not isinstance(batch_config, BatchConfig):
         batch_config = BatchConfig(**(batch_config or {}))
 
