@@ -175,6 +175,9 @@ class InferenceSettings:
     # Set to "general" for the default execution mode that works across all models and hardware.
     # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
+    # Set to "umas_flash" for the fully fused triton backbone, which additionally avoids
+    # materializing wigner matrices, radial embeddings and rotated edge messages in HBM,
+    # cutting peak memory as well as time. Requires merge_mole=True.
     # If None, the predictor will decide the best execution mode based on the model and hardware capabilities (e.g., will choose "umas_fast_gpu" for uma-s if running on compatible Nvidia GPU).
     execution_mode: str | None = None
 
