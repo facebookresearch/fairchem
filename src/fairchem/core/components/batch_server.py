@@ -1159,6 +1159,8 @@ def setup_multiplexed_batch_predict_server(
                 "num_gpus=1 explicitly when deploying from a CPU-only host to a "
                 "GPU cluster."
             )
+    else:
+        basis = "explicit num_gpus argument"
 
     dc = _prepare_deployment_config(deployment_config, num_gpus, basis)
     if not isinstance(batch_config, BatchConfig):
