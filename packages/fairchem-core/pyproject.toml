@@ -9,7 +9,7 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.11, <3.15"
 dependencies = [
-    "torch~=2.13.0",
+    "torch==2.13.0",
     "ray[serve]>=2.53.0",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",
@@ -40,6 +40,12 @@ adsorbml = ["dscribe", "x3dase", "scikit-image"]
 torchsim = ["torch-sim-atomistic>=0.6.0; python_version >= '3.12'"]
 extras = ["pymatgen>=2025.1.9", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops>=0.3.0", "pyarrow"]
 
+[dependency-groups]
+cpu = ["torch==2.13.0"]
+cu126 = ["torch==2.13.0"]
+cu130 = ["torch==2.13.0"]
+cu132 = ["torch==2.13.0"]
+
 [project.scripts]
 fairchem = "fairchem.core._cli:main"
 
@@ -47,6 +53,43 @@ fairchem = "fairchem.core._cli:main"
 repository = "https://github.com/facebookresearch/fairchem"
 home = "https://opencatalystproject.org/"
 documentation = "https://fair-chem.github.io/"
+
+[tool.uv]
+default-groups = ["cu130"]
+conflicts = [[
+    { group = "cpu" },
+    { group = "cu126" },
+    { group = "cu130" },
+    { group = "cu132" },
+]]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu126", group = "cu126" },
+    { index = "pytorch-cu130", group = "cu130" },
+    { index = "pytorch-cu132", group = "cu132" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true
 
 [tool.hatch.version]
 source = "vcs"
