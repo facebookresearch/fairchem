@@ -20,38 +20,24 @@ import ray
 import torch
 from ray import serve
 
-from fairchem.core.components.serve_utils import (
-    get_app_handle_with_retry,
-    get_ray_connection_info,
-    wait_for_serve_ready,
-)
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.model_spec import (
     ModelSpec,
     ModelSpecNotRegisteredError,
 )
 
-# ``ModelSpec`` and the Ray Serve lifecycle helpers live in leaf modules so that
-# ``units.mlip_unit.predict`` can import them without importing this module (a
-# cycle: batch_server -> units.mlip_unit -> predict -> batch_server). They are
-# re-exported here because this module was their original home.
 __all__ = [
     "AutobatchConfig",
     "AutobatchResult",
     "BatchConfig",
     "BatchPredictServer",
     "DeploymentConfig",
-    "ModelSpec",
-    "ModelSpecNotRegisteredError",
     "MultiplexedBatchPredictServer",
-    "get_app_handle_with_retry",
-    "get_ray_connection_info",
     "probe_optimal_batch_size",
     "setup_batch_predict_server",
     "setup_multiplexed_batch_predict_server",
     "update_batch_config",
     "update_served_predict_unit",
-    "wait_for_serve_ready",
 ]
 
 if TYPE_CHECKING:

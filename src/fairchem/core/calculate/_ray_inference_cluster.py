@@ -33,8 +33,8 @@ from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
-    wait_for_serve_ready,
 )
+from fairchem.core.components.serve_utils import wait_for_serve_ready
 from fairchem.core.launchers.cluster.ray_cluster import (
     DEFAULT_HEAD_FILE_DIR,
     RayCluster,

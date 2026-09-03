@@ -42,16 +42,18 @@ from fairchem.core.components.batch_server import (
     MODEL_SPEC_CACHE_CAPACITY,
     BatchConfig,
     BatchPredictServer,
-    ModelSpec,
     MultiplexedBatchPredictServer,
-    get_ray_connection_info,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
+)
+from fairchem.core.components.serve_utils import (
+    get_ray_connection_info,
     wait_for_serve_ready,
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 from tests.conftest import sweep_model, uma_models
 

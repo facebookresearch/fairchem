@@ -17,11 +17,11 @@ from fairchem.core.calculate.ase_calculator import (
     FormationEnergyCalculator,
 )
 from fairchem.core.components.batch_server import (
-    ModelSpec,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
 )
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 
 __all__ = [
     "FAIRChemCalculator",
