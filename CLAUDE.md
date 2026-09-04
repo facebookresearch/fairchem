@@ -244,6 +244,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Testing Gotchas
 
+- The canonical Ray Serve batching implementation is
+  `src/fairchem/core/components/batch_server.py`. During rebases, do not
+  resurrect the legacy `units/mlip_unit/_batch_serve.py`,
+  `units/mlip_unit/batch_server.py`, or `calculate/_batch_server.py` paths;
+  port their functional changes into the component instead.
 - Tests that download registered checkpoints must declare their models with a
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
@@ -305,6 +310,9 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Core test collection imports benchmark and calculation modules through the
   shared conftest. Validation environments need the `extras` dependencies,
   including `pandas`, `pyarrow`, and `pymatgen`, even for focused test subsets.
+- Importing the benchmark package during core test collection can cause
+  `matbench_discovery` to download its WBM summary data. Cache that data before
+  running without Figshare access, or collection can fail before tests start.
 - Some GPU assertions are stochastic or tolerance-sensitive, and the complete
   GPU matrix is expensive. Reproduce failures with the exact test node (and
   repeat it when appropriate) before rerunning a full GPU shard.
