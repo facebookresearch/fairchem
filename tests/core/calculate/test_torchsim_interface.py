@@ -28,17 +28,24 @@ from fairchem.core.calculate.torchsim_interface import (  # noqa: E402
     FairChemModel,
     _simstate_to_atomicdata_batch,
 )
+from fairchem.core.common import device_utils  # noqa: E402
 from fairchem.core.datasets.atomic_data import (  # noqa: E402
     AtomicData,
     atomicdata_list_to_batch,
 )
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
 DTYPE = torch.float32
-DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+DEVICE = torch.device(ACCELERATOR) if torch.cuda.is_available() else torch.device("cpu")
 CHARGE_SPIN_EXTRAS_MAP: dict[SystemExtras, str] = {
     SystemExtras.CHARGE: "charge",
     SystemExtras.SPIN: "spin",

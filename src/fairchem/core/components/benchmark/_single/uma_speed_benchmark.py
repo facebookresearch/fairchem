@@ -24,6 +24,13 @@ from ase.io import read
 from torch.profiler import ProfilerActivity, profile, record_function
 
 from fairchem.core.common import distutils
+from fairchem.core.common.device_utils import (
+    empty_cache,
+    get_available_accelerator,
+    manual_seed_all,
+    memory_allocated,
+    resolve_device_type,
+)
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -44,18 +51,18 @@ def seed_everywhere(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    manual_seed_all(seed)
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5):
     def timefunc():
         predictor.predict(data)
-        # torch.cuda.synchronize()
+        # synchronize(get_available_accelerator())
         torch.distributed.barrier()
 
     for _ in range(warmups):
         timefunc()
-        logging.info(f"memory allocated: {torch.cuda.memory_allocated()/(1024**3)}")
+        logging.info(f"memory allocated: {memory_allocated()/(1024**3)}")
 
     result = timeit.repeat(timefunc, number=timeiters, repeat=repeats)
     logging.info(
@@ -210,7 +217,7 @@ class InferenceBenchRunner(Runner):
         timeiters: int = 10,
         repeats: int = 5,
         seed: int = 1,
-        device="cuda",
+        device: str = "auto",
         overrides: dict | None = None,
         inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
         generate_traces: bool = False,  # takes additional memory and time
@@ -223,7 +230,7 @@ class InferenceBenchRunner(Runner):
         assert (natoms_list is None) ^ (
             input_system is None
         ), "input must be either list of natoms or dict names: input system files"
-        self.device = device
+        self.device = resolve_device_type(device)
         self.seed = seed
         self.timeiters = timeiters
         self.model_checkpoints = model_checkpoints
@@ -272,7 +279,7 @@ class InferenceBenchRunner(Runner):
                     radius=cutoff,
                 )
                 del predictor
-                torch.cuda.empty_cache()
+                empty_cache(get_available_accelerator() or "cpu")
             else:
                 from_ase_kwargs = dict(task_name=self.dataset_name)
                 del predictor
@@ -322,9 +329,9 @@ class InferenceBenchRunner(Runner):
                     logging.info(
                         f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
                     )
-                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                except (torch.OutOfMemoryError, RuntimeError) as e:
                     # Check if it's an OOM error
-                    if isinstance(e, torch.cuda.OutOfMemoryError) or (
+                    if isinstance(e, torch.OutOfMemoryError) or (
                         isinstance(e, RuntimeError)
                         and "out of memory" in str(e).lower()
                     ):
@@ -338,7 +345,7 @@ class InferenceBenchRunner(Runner):
                     raise
                 finally:
                     # Free GPU memory after each input
-                    torch.cuda.empty_cache()
+                    empty_cache(get_available_accelerator() or "cpu")
 
         # Save results to file
         if distutils.is_master():

@@ -21,6 +21,11 @@ import torch
 from ray import serve
 from ray.serve.schema import ApplicationStatus
 
+from fairchem.core.common.device_utils import (
+    empty_cache,
+    get_available_accelerator,
+    is_accelerator,
+)
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 
 if TYPE_CHECKING:
@@ -212,7 +217,7 @@ class BatchPredictServerMixin:
                     "Caught out of memory error. Splitting batch and retrying."
                 )
                 oom = True
-                torch.cuda.empty_cache()
+                empty_cache(get_available_accelerator() or "cpu")
             if oom:
                 mid = len(current) // 2
                 data_deque.appendleft(current[mid:])
@@ -468,7 +473,7 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
         checkpoint = parts[0]
         settings_name = parts[1] if len(parts) > 1 and parts[1] else "default"
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = get_available_accelerator() or "cpu"
 
         if os.path.isfile(checkpoint):
             from fairchem.core.units.mlip_unit import load_predict_unit
@@ -666,7 +671,7 @@ def setup_batch_predict_server(
     """
     dc = _prepare_deployment_config(
         deployment_config,
-        default_num_gpus_when_cuda="cuda" in predict_unit.device,
+        default_num_gpus_when_cuda=is_accelerator(predict_unit.device),
     )
     if not isinstance(batch_config, BatchConfig):
         batch_config = BatchConfig(**(batch_config or {}))
@@ -712,7 +717,7 @@ def setup_multiplexed_batch_predict_server(
     """
     dc = _prepare_deployment_config(
         deployment_config,
-        default_num_gpus_when_cuda=torch.cuda.is_available(),
+        default_num_gpus_when_cuda=get_available_accelerator() is not None,
     )
     if not isinstance(batch_config, BatchConfig):
         batch_config = BatchConfig(**(batch_config or {}))

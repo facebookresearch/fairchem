@@ -28,8 +28,15 @@ from ase.build import bulk, make_supercell, molecule
 from scipy.spatial.transform import Rotation
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.common import device_utils
 from fairchem.core.units.mlip_unit import InferenceSettings
 from tests.conftest import get_predict_unit_for_test, sweep_refs_from
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # Extensivity is a property of the UMA-S architecture, not of any particular
 # head: every task head should satisfy E(N replicas) = N * E(1 replica) when
@@ -115,7 +122,7 @@ _PREDICTOR_CACHE: dict = {}
 def _predictor_for(pretrained_checkpoint, dtype, refs_from):
     key = (pretrained_checkpoint, dtype)
     if key not in _PREDICTOR_CACHE:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = ACCELERATOR if torch.cuda.is_available() else "cpu"
         settings = InferenceSettings(
             activation_checkpointing=False, base_precision_dtype=dtype
         )

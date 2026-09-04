@@ -24,6 +24,7 @@ from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
 
 from fairchem.core.calculate import pretrained_mlip
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
 from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
@@ -257,7 +258,7 @@ def dummy_binary_db_dataset(dummy_binary_dataset_path):
 @pytest.fixture(autouse=True)
 def run_around_tests():
     yield
-    torch.cuda.empty_cache()
+    device_utils.empty_cache(device_utils.get_available_accelerator() or "cpu")
 
 
 @pytest.fixture(scope="session")
@@ -422,7 +423,7 @@ def uma_predict_unit(request):
       models) does not silently load an excluded model — which would
       both violate the partition contract and double-run that model.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device_utils.get_available_accelerator() or "cpu"
     sweep = sweep_model(request.config)
     if sweep:
         return get_predict_unit_for_test(
@@ -463,7 +464,7 @@ def uma_predict_unit_alt(request):
     )
     if not candidates:
         pytest.skip("No UMA model available that differs from sweep model")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device_utils.get_available_accelerator() or "cpu"
     return pretrained_mlip.get_predict_unit(candidates[0], device=device)
 
 

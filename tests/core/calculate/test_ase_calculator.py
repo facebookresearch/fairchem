@@ -46,7 +46,14 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATa
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
+from fairchem.core.common import device_utils
 from tests.conftest import get_predict_unit_for_test, models_to_test
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # All tests use a GPU and a pretrained model. Tests that iterate over all
 # registered models inherit the bare @pretrained (no model args) from here;
@@ -513,7 +520,7 @@ def test_random_seed_final_energy(declared_predict_unit):
 def test_external_graph_generation_molecular_system(pretrained_checkpoint):
     inference_settings = InferenceSettings(external_graph_gen=True)
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=inference_settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=inference_settings
     )
 
     calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
@@ -542,14 +549,14 @@ def test_external_graph_gen_vs_internal(pretrained_checkpoint):
     inference_settings_external = InferenceSettings(external_graph_gen=True)
     predict_unit_external = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=inference_settings_external,
     )
 
     inference_settings_internal = InferenceSettings(external_graph_gen=False)
     predict_unit_internal = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=inference_settings_internal,
     )
 

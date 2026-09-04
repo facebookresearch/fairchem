@@ -22,8 +22,15 @@ from ase.build import molecule
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
+from fairchem.core.common import device_utils
 from fairchem.core.models.allscaip.AllScAIP import AllScAIPBackbone
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"
 
@@ -35,7 +42,7 @@ pytestmark = [pytest.mark.gpu, pytest.mark.pretrained(ALLSCAIP_MODEL)]
 
 @pytest.fixture(scope="module")
 def allscaip_predict_unit():
-    return pretrained_mlip.get_predict_unit(ALLSCAIP_MODEL, device="cuda")
+    return pretrained_mlip.get_predict_unit(ALLSCAIP_MODEL, device=ACCELERATOR)
 
 
 def test_calculator_inference(allscaip_predict_unit):
@@ -66,7 +73,7 @@ def test_calculator_inference_with_max_atoms():
     max_atoms = 30
     inference_settings = InferenceSettings(compile=True, max_atoms=max_atoms)
     predict_unit = pretrained_mlip.get_predict_unit(
-        ALLSCAIP_MODEL, device="cuda", inference_settings=inference_settings
+        ALLSCAIP_MODEL, device=ACCELERATOR, inference_settings=inference_settings
     )
 
     # Verify that inference settings are applied to the backbone

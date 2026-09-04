@@ -21,6 +21,17 @@ from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.device_utils import (
+    ACCELERATOR_DEVICE_TYPES,
+    accelerator_is_available,
+    current_device_str,
+    get_available_accelerator,
+    resolve_device_type,
+    visible_devices_env,
+)
+from fairchem.core.common.device_utils import (
+    set_device as set_accelerator_device,
+)
 from fairchem.core.common.typing import none_throws
 
 T = TypeVar("T")
@@ -115,10 +126,12 @@ def setup(config) -> None:
 
                 # ensures GPU0 does not have extra context/higher peak memory
                 logging.info(
-                    f"local rank: {local_rank}, visible devices: {os.environ.get('CUDA_VISIBLE_DEVICES', 'None')}"
+                    f"local rank: {local_rank}, visible devices: {visible_devices_env()}"
                 )
 
-                assign_device_for_local_rank(config["cpu"], local_rank)
+                assign_device_for_local_rank(
+                    config["cpu"], local_rank, config.get("device_type")
+                )
 
                 dist.init_process_group(
                     backend=config["distributed_backend"],
@@ -133,7 +146,9 @@ def setup(config) -> None:
         if config.get("init_method") == "file":
             local_rank = int(os.environ.get("LOCAL_RANK", 0))
             rank = int(os.environ.get("RANK", 0))
-            assign_device_for_local_rank(config["cpu"], local_rank)
+            assign_device_for_local_rank(
+                config["cpu"], local_rank, config.get("device_type")
+            )
             assert os.path.isdir(config["shared_file_dir"])
             shared_filename = os.path.join(
                 config["shared_file_dir"],
@@ -155,7 +170,9 @@ def setup(config) -> None:
                 ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
                 setup_env_local()
             local_rank = int(os.environ["LOCAL_RANK"])
-            assign_device_for_local_rank(config["cpu"], local_rank)
+            assign_device_for_local_rank(
+                config["cpu"], local_rank, config.get("device_type")
+            )
 
             dist.init_process_group(
                 backend=config["distributed_backend"],
@@ -268,34 +285,64 @@ def gather_objects(data: T, group: dist.ProcessGroup = dist.group.WORLD) -> list
     return output
 
 
-def assign_device_for_local_rank(cpu: bool, local_rank: int) -> None:
+def assign_device_for_local_rank(
+    cpu: bool, local_rank: int, device_type: str | None = None
+) -> None:
+    """Bind this process to its accelerator for ``local_rank``.
+
+    Args:
+        cpu: Pin to CPU regardless of what hardware is present.
+        local_rank: Device index to bind within the node.
+        device_type: Accelerator to bind ("cuda"/"xpu"). ``None`` autodetects.
+            Passing the type the caller actually asked for matters when the
+            collective backend was chosen from that same request: autodetecting
+            here can bind a *different* accelerator than the backend expects,
+            which surfaces much later as "No backend type associated with
+            device type ..." from inside DDP rather than as a device error.
+    """
     if cpu:
         os.environ[CURRENT_DEVICE_TYPE_STR] = "cpu"
+        return
+
+    if device_type is None:
+        device_type = get_available_accelerator()
+        assert (
+            device_type is not None
+        ), "cannot set cpu=false and no accelerator (cuda/xpu) available!"
     else:
-        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
-        os.environ[CURRENT_DEVICE_TYPE_STR] = "cuda"
-        torch.cuda.set_device(local_rank)
+        # An explicit request is validated rather than quietly reinterpreted:
+        # asking for hardware this node lacks is a misconfiguration, and
+        # substituting whatever is present hides it.
+        device_type = resolve_device_type(device_type)
+        assert device_type != "cpu", "cpu=False conflicts with device_type='cpu'"
+
+    os.environ[CURRENT_DEVICE_TYPE_STR] = device_type
+    set_accelerator_device(device_type, local_rank)
 
 
 def get_device_for_local_rank() -> str:
     if os.environ.get(CURRENT_DEVICE_TYPE_STR) is None:
+        detected = get_available_accelerator()
         os.environ[CURRENT_DEVICE_TYPE_STR] = (
-            f"cuda:{torch.cuda.current_device()}"
-            if torch.cuda.is_available()
-            else "cpu"
+            current_device_str(detected) if detected is not None else "cpu"
         )
         logging.warning(
             f"WARNING: assign_device_for_local_rank was never called, automatically defaulting to using {os.environ[CURRENT_DEVICE_TYPE_STR]}"
         )
         return os.environ[CURRENT_DEVICE_TYPE_STR]
 
-    if "cuda" in os.environ[CURRENT_DEVICE_TYPE_STR]:
-        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
-        return f"cuda:{torch.cuda.current_device()}"
-    elif os.environ[CURRENT_DEVICE_TYPE_STR] == "cpu":
+    current = os.environ[CURRENT_DEVICE_TYPE_STR]
+    if current == "cpu":
         return "cpu"
-    else:
-        raise ValueError(f"unsupported device type: {CURRENT_DEVICE_TYPE_STR}")
+
+    device_type = torch.device(current).type
+    if device_type in ACCELERATOR_DEVICE_TYPES:
+        assert accelerator_is_available(
+            device_type
+        ), f"cannot set cpu=false and no {device_type} available!"
+        return current_device_str(device_type)
+
+    raise ValueError(f"unsupported device type: {current}")
 
 
 def setup_env_local():
