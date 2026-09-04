@@ -16,13 +16,21 @@ from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
     FormationEnergyCalculator,
 )
+from fairchem.core.components.batch_server import (
+    setup_batch_predict_server,
+    setup_multiplexed_batch_predict_server,
+)
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 
 __all__ = [
     "FAIRChemCalculator",
     "FormationEnergyCalculator",
     "InferenceBatcher",
     "InferenceSettings",
+    "ModelSpec",
     "get_local_inference_raycluster",
     "get_slurm_inference_raycluster",
+    "setup_batch_predict_server",
+    "setup_multiplexed_batch_predict_server",
 ]

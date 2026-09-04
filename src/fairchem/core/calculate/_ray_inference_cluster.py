@@ -23,14 +23,18 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
+import ray
+import torch
 import yaml
+from monty.dev import requires
+from ray import serve
 
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
-    wait_for_serve_ready,
 )
+from fairchem.core.components.serve_utils import wait_for_serve_ready
 from fairchem.core.launchers.cluster.ray_cluster import (
     DEFAULT_HEAD_FILE_DIR,
     RayCluster,
@@ -38,6 +42,13 @@ from fairchem.core.launchers.cluster.ray_cluster import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    import backoff
+
+    backoff_installed = True
+except ImportError:
+    backoff_installed = False
 
 
 def _find_free_localhost_port() -> int:
@@ -67,8 +78,6 @@ def _resolve_serve_configs(
       ``deployment_config.logging_config`` unless the caller already set
       ``logging_config`` explicitly.
     """
-    from ray import serve as _serve
-
     deployment_config = dict(cluster_config.get("deployment_config") or {})
     batch_config = dict(cluster_config.get("batch_config") or {})
 
@@ -103,7 +112,7 @@ def _resolve_serve_configs(
 
     serve_log_level = cluster_config.get("serve_log_level")
     if serve_log_level and "logging_config" not in deployment_config:
-        deployment_config["logging_config"] = _serve.schema.LoggingConfig(
+        deployment_config["logging_config"] = serve.schema.LoggingConfig(
             log_level=serve_log_level
         )
 
@@ -361,6 +370,7 @@ def start_ray_cluster(
     return str(head_file_path)
 
 
+@requires(backoff_installed, message="Requires `backoff` to be installed")
 @contextmanager
 def get_slurm_inference_raycluster(
     config: str | Path | None = None,
@@ -464,8 +474,6 @@ def get_slurm_inference_raycluster(
             )
 
             if cluster_config.get("start_inference_server", False):
-                import ray
-
                 client_address = (
                     f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
                 )
@@ -484,8 +492,6 @@ def get_slurm_inference_raycluster(
                         f"Connecting to Ray cluster at {client_address} "
                         "to start inference server..."
                     )
-                    import backoff
-
                     max_tries = int(
                         os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8")
                     )
@@ -598,8 +604,6 @@ def get_slurm_inference_raycluster(
         yield head_file
     finally:
         if ray_client_owned:
-            import ray
-
             try:
                 ray.shutdown()
                 logger.info("Released Ray client connection.")
@@ -664,20 +668,12 @@ def get_local_inference_raycluster(
     Yields:
         Path to head.json file.
     """
-    import ray
-    from ray import serve
-
     # Set defaults
     if num_cpus is None:
         num_cpus = 8
 
     if num_gpus is None:
-        try:
-            import torch
-
-            num_gpus = torch.cuda.device_count()
-        except ImportError:
-            num_gpus = 0
+        num_gpus = torch.cuda.device_count()
 
     if head_file is None:
         cluster_id = str(uuid.uuid4())
