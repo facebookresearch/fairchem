@@ -16,6 +16,7 @@ import random
 import sys
 from collections import defaultdict
 from contextlib import nullcontext
+from datetime import timedelta
 from functools import cached_property, wraps
 from typing import TYPE_CHECKING, ClassVar, Protocol
 
@@ -599,6 +600,27 @@ def move_tensors_to_cpu(data):
         return data
 
 
+def _parallel_mlip_process_group_timeout() -> timedelta | None:
+    """
+    Return the configured timeout for ParallelMLIP process groups.
+
+    PyTorch's backend-specific default is preserved when the environment
+    variable is unset.
+    """
+    raw_timeout = os.environ.get("FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS")
+    if raw_timeout is None:
+        return None
+    try:
+        timeout_seconds = float(raw_timeout)
+    except ValueError as error:
+        raise ValueError(
+            "FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS must be a number"
+        ) from error
+    if timeout_seconds <= 0:
+        raise ValueError("FAIRCHEM_PARALLEL_MLIP_TIMEOUT_SECONDS must be positive")
+    return timedelta(seconds=timeout_seconds)
+
+
 class MLIPWorkerLocal:
     def __init__(
         self,
@@ -637,10 +659,19 @@ class MLIPWorkerLocal:
         device = self.predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
+        process_group_timeout = _parallel_mlip_process_group_timeout()
+        process_group_kwargs = {}
+        if process_group_timeout is not None:
+            process_group_kwargs["timeout"] = process_group_timeout
+            logging.info(
+                "Using %.1fs ParallelMLIP process-group timeout",
+                process_group_timeout.total_seconds(),
+            )
         dist.init_process_group(
             backend=backend,
             rank=self.worker_id,
             world_size=self.world_size,
+            **process_group_kwargs,
         )
         if self.gp_config is not None:
             gp_utils.setup_graph_parallel_groups(self.world_size, backend)
@@ -760,24 +791,37 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             f"Creating placement groups with {num_workers_on_node_array} workers on {device}"
         )
 
-        # first create one placement group for each node
+        # Use one multi-bundle placement group so Ray must spread the bundles
+        # across distinct nodes. Independent STRICT_PACK placement groups can be
+        # co-located when the cluster reports more accelerators than are
+        # physically visible to a process, which gives multiple distributed
+        # ranks the same GPU.
         num_gpu_per_worker = 1 if device == "cuda" else 0
-        placement_groups = []
+        bundles = []
         for workers in num_workers_on_node_array:
             bundle = {"CPU": workers}
             if device == "cuda":
                 bundle["GPU"] = workers
-            pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
-            placement_groups.append(pg)
-        ray.get(pg.ready())  # Wait for each placement group to be scheduled
+            bundles.append(bundle)
+        if num_nodes > 1:
+            # Rank 0 executes in this driver process rather than in its Ray
+            # reservation actor. Pin bundle 0 to the driver's node so another
+            # bundle cannot consume the same physical GPU as rank 0.
+            head_node_resource = f"node:{ray.util.get_node_ip_address()}"
+            bundles[0][head_node_resource] = 0.001
+        placement_group = ray.util.placement_group(
+            bundles,
+            strategy="STRICT_SPREAD" if num_nodes > 1 else "STRICT_PACK",
+        )
+        ray.get(placement_group.ready())
 
         # Need to still place worker to occupy space, otherwise ray double books this GPU
         rank0_worker = MLIPWorker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
-                placement_group=placement_groups[0],
-                placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
-                placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+                placement_group=placement_group,
+                placement_group_bundle_index=0,
+                placement_group_capture_child_tasks=True,
             ),
         ).remote(0, num_workers, predict_unit_config, gp_config=gp_config)
 
@@ -797,8 +841,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         # next place all ranks in order and pack them on placement groups
         # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
         worker_id = 0
-        for pg_idx, pg in enumerate(placement_groups):
-            workers = num_workers_on_node_array[pg_idx]
+        for pg_idx, workers in enumerate(num_workers_on_node_array):
             logging.info(
                 f"Launching workers for placement group {pg_idx} (Node {pg_idx}), workers={workers}"
             )
@@ -812,9 +855,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 actor = MLIPWorker.options(
                     num_gpus=num_gpu_per_worker,
                     scheduling_strategy=PlacementGroupSchedulingStrategy(
-                        placement_group=pg,
-                        placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
-                        placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+                        placement_group=placement_group,
+                        placement_group_bundle_index=pg_idx,
+                        placement_group_capture_child_tasks=True,
                     ),
                 ).remote(
                     worker_id,

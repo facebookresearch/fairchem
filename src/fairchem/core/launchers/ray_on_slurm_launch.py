@@ -215,10 +215,12 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         "timeout_min": slurm_config.timeout_hr * 60,
         "mem_gb": slurm_config.mem_gb,
         "nodes": scheduler_config.num_nodes,
-        "slurm_gpus_per_task": scheduler_config.ranks_per_node,
+        "slurm_gpus_per_node": scheduler_config.ranks_per_node,
         "cpus_per_task": clusterscope.cpus(),  # need to request all the cpus on the node
         "tasks_per_node": 1,
     }
+    if slurm_config.partition is not None:
+        cluster_reqs["slurm_partition"] = slurm_config.partition
     cluster.start_head_and_workers(
         name=config.job.run_name,
         requirements=cluster_reqs,
