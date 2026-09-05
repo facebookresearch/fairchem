@@ -39,6 +39,7 @@ from fairchem.core.common import distutils
 from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.graph.padded_nvidia_graph import PaddedNvidiaGraphGenerator
 from fairchem.core.models.uma.compat import UMA_1P1_MODEL_ID
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
@@ -213,6 +214,79 @@ def test_single_dataset_predict(internal_graph_gen_version, pretrained_checkpoin
         0,
         atol=ATOL,
     )
+
+
+@pytest.mark.compile_gpu()
+@pytest.mark.pretrained("uma-s-1p2")
+def test_reduce_overhead_internal_graph_predict(pretrained_checkpoint, monkeypatch):
+    base_atoms = bulk("Cu", "fcc", a=3.6).repeat((2, 2, 2))
+    expanded_atoms = base_atoms.copy()
+    expanded_atoms.set_cell(expanded_atoms.cell * 1.8, scale_atoms=True)
+    frames = [base_atoms, expanded_atoms, base_atoms]
+    batches = [
+        atomicdata_list_to_batch([AtomicData.from_ase(atoms, task_name="omat")])
+        for atoms in frames
+    ]
+
+    common_settings = dict(
+        tf32=True,
+        activation_checkpointing=False,
+        merge_mole=True,
+        external_graph_gen=False,
+        internal_graph_gen_version=3,
+        execution_mode="umas_fast_gpu",
+    )
+    eager_predictor = get_predict_unit_for_test(
+        pretrained_checkpoint,
+        device="cuda",
+        inference_settings=InferenceSettings(**common_settings),
+    )
+    references = [
+        {
+            name: value.detach().cpu()
+            for name, value in eager_predictor.predict(batch).items()
+        }
+        for batch in batches
+    ]
+
+    edge_capacities = []
+    generate = PaddedNvidiaGraphGenerator.generate
+
+    def record_capacity(generator, data):
+        result = generate(generator, data)
+        edge_capacities.append(result.edge_index.shape[1])
+        return result
+
+    monkeypatch.setattr(PaddedNvidiaGraphGenerator, "generate", record_capacity)
+    compiled_predictor = get_predict_unit_for_test(
+        pretrained_checkpoint,
+        device="cuda",
+        inference_settings=InferenceSettings(
+            **common_settings,
+            compile=True,
+            compile_mode="reduce-overhead",
+            internal_graph_edge_bucket_size=64,
+        ),
+    )
+
+    predictions = []
+    first_prediction = None
+    for batch, reference in zip(batches, references, strict=True):
+        prediction = compiled_predictor.predict(batch)
+        predictions.append(prediction)
+        if first_prediction is None:
+            first_prediction = {
+                name: value.detach().clone() for name, value in prediction.items()
+            }
+        for name, expected in reference.items():
+            torch.testing.assert_close(
+                prediction[name].detach().cpu(), expected, rtol=5e-3, atol=ATOL
+            )
+
+    assert edge_capacities[0] != edge_capacities[1]
+    assert edge_capacities[0] == edge_capacities[2]
+    for name, expected in first_prediction.items():
+        torch.testing.assert_close(predictions[0][name], expected, rtol=0, atol=0)
 
 
 @pytest.mark.gpu()

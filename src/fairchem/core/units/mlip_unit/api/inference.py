@@ -201,7 +201,30 @@ class InferenceSettings:
     # VRAM but allow bigger systems; reduce if you run into OOM errors.
     max_atoms: int | None = None
 
+    # Optional torch.compile mode. "reduce-overhead" enables Inductor CUDA graphs.
+    compile_mode: str | None = None
+
+    # Edge bucket used by padded NVIDIA internal graph generation.
+    internal_graph_edge_bucket_size: int = 1024
+
     def __post_init__(self):
+        if self.compile_mode not in (None, "reduce-overhead"):
+            raise ValueError("compile_mode must be None or 'reduce-overhead'")
+        if self.compile_mode is not None and not self.compile:
+            raise ValueError("compile_mode requires compile=True")
+        if (
+            type(self.internal_graph_edge_bucket_size) is not int
+            or self.internal_graph_edge_bucket_size < 1
+        ):
+            raise ValueError("internal_graph_edge_bucket_size must be positive")
+        if (
+            self.compile_mode == "reduce-overhead"
+            and not self.external_graph_gen
+            and self.internal_graph_gen_version != 3
+        ):
+            raise ValueError(
+                "internal reduce-overhead requires internal_graph_gen_version=3"
+            )
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
             assert (

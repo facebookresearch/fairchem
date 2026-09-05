@@ -92,8 +92,10 @@ The advanced user might quickly see that **default**, **batch**, and **turbo** m
 | activation_checkpointing | this uses a custom chunked activation checkpointing algorithm and allows significant savings in memory for a small inference speed penalty. If you are predicting on systems >1000 atoms, we recommend keeping this on. However, if you want the absolute fastest inference possible for small systems, you can turn this off |
 | merge_mole | This is useful in long rollout applications where the system composition stays constant. By pre-merge the MoLE weights, we can save both memory and compute. |
 | compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
+| compile_mode | Set to `"reduce-overhead"` to use compiler-managed CUDA graphs. With internal graph generation this requires version 3, a CUDA device, and no graph parallelism. It is intended for repeated evaluations of similarly sized systems. |
 | external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
 | internal_graph_gen_version | currently we support v2[default], an internal implementation that is better suited for parallelism and v3 the neighborlist from Nvidia Alchemi library which is faster for single gpu operations. |
+| internal_graph_edge_bucket_size | Number of edges per padded bucket when `compile_mode="reduce-overhead"` uses internal graph version 3. Larger buckets reduce shape changes but perform more work on masked edges. Default 1024. |
 | edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
 | use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
 | base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
@@ -109,8 +111,9 @@ settings = InferenceSettings(
     activation_checkpointing=False,
     merge_mole=True,
     compile=True,
+    compile_mode="reduce-overhead",
     external_graph_gen=False,
-    internal_graph_gen_version=2,
+    internal_graph_gen_version=3,
 )
 
 predictor = pretrained_mlip.get_predict_unit(
