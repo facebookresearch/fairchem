@@ -5,11 +5,13 @@ and in-place ``model_id`` back-fill.
 from __future__ import annotations
 
 import pytest
+from omegaconf import OmegaConf
 
 from fairchem.core.models.uma.compat import (
     UMA_1P1_MODEL_ID,
     apply_uma_compat_fixups,
     get_uma_version,
+    is_uma_moe_backbone_config,
 )
 from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
@@ -38,6 +40,25 @@ def uma_cfg(
     if model_id is not None:
         cfg["model_id"] = model_id
     return cfg
+
+
+@pytest.mark.parametrize("backbone_model", [UMA_BACKBONE_FQN, UMA_BACKBONE_SHORT])
+def test_uma_moe_backbone_config(backbone_model):
+    assert is_uma_moe_backbone_config({"model": backbone_model, "num_experts": 8})
+
+
+def test_uma_moe_dict_config():
+    config = OmegaConf.create(uma_cfg(model_id="UMA-S-1.2"))
+
+    assert get_uma_version(config) == "tagged"
+    assert is_uma_moe_backbone_config(config.backbone)
+
+
+@pytest.mark.parametrize("num_experts", [0, -1, None])
+def test_uma_non_moe_backbone_config(num_experts):
+    assert not is_uma_moe_backbone_config(
+        {"model": UMA_BACKBONE_FQN, "num_experts": num_experts}
+    )
 
 
 # ---------------------------------------------------------------------------
