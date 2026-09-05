@@ -244,6 +244,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Testing Gotchas
 
+- SciPy's `sph_harm_y` reverses both the degree/order arguments and angle
+  semantics relative to deprecated `sph_harm`: migrate
+  `sph_harm(m, n, azimuth, polar)` as
+  `sph_harm_y(n, m, polar, azimuth)`. Convention tests must cover
+  angle-dependent harmonics rather than only angle-independent `Y_0^0`.
 - Tests that download registered checkpoints must declare their models with a
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
