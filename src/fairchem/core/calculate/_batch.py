@@ -9,16 +9,27 @@ from __future__ import annotations
 
 import contextlib
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import cached_property
 from multiprocessing import cpu_count
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
-from fairchem.core.components.batch_server import setup_batch_predict_server
+from fairchem.core.components.batch_server import (
+    AutobatchConfig,
+    AutobatchResult,
+    probe_optimal_batch_size,
+    setup_batch_predict_server,
+)
 from fairchem.core.units.mlip_unit.predict import (
     BatchServerPredictUnit,
     MLIPPredictUnit,
 )
+
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+
+
+DEFAULT_EXECUTOR_WORKER_CAP = 16
 
 
 class ExecutorProtocol(Protocol):
@@ -28,24 +39,62 @@ class ExecutorProtocol(Protocol):
 
 
 def _get_concurrency_backend(
-    backend: Literal["threads"], options: dict
+    backend: Literal["threads", "processes"], options: dict
 ) -> ExecutorProtocol:
-    """Get a backend to run ASE calculations concurrently."""
+    """Get a backend to run ASE calculations concurrently.
+
+    Args:
+        backend: The concurrency backend type:
+            - "threads": ThreadPoolExecutor for I/O-bound tasks (default).
+            - "processes": ProcessPoolExecutor for CPU-bound tasks.
+                Note: Tasks must be picklable; not suitable for GPU operations.
+        options: Backend-specific options dictionary.
+
+    Returns:
+        An executor implementing ExecutorProtocol.
+
+    Raises:
+        ValueError: If an invalid backend is specified.
+    """
     if backend == "threads":
         return ThreadPoolExecutor(**options)
+    elif backend == "processes":
+        return ProcessPoolExecutor(**options)
     raise ValueError(f"Invalid concurrency backend: {backend}")
 
 
 class InferenceBatcher:
-    """Batches incoming inference requests."""
+    """
+    Batches incoming inference requests.
+
+    This class provides a high-level API for running concurrent simulations
+    with batched inference calls to an AI model. It supports multiple
+    concurrency backends for different use cases.
+
+    Example:
+        >>> predict_unit = MLIPPredictUnit(model_path, device="cuda")
+        >>> with InferenceBatcher(predict_unit, max_batch_size=1024) as batcher:
+        ...     # Run concurrent simulations using batcher.executor
+        ...     futures = [batcher.executor.submit(run_sim, atoms) for atoms in systems]
+
+    Example with autobatching:
+        >>> predict_unit = MLIPPredictUnit(model_path, device="cuda")
+        >>> data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
+        >>> with InferenceBatcher(predict_unit) as batcher:
+        ...     # Probe for optimal batch size using representative data
+        ...     batcher.auto_configure_batching(data)
+        ...     # Now run simulations with optimal batch size
+        ...     futures = [batcher.executor.submit(run_sim, atoms) for atoms in systems]
+    """
 
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
         max_batch_size: int = 512,
         batch_wait_timeout_s: float = 0.1,
+        split_oom_batch: bool = False,
         num_replicas: int = 1,
-        concurrency_backend: Literal["threads"] = "threads",
+        concurrency_backend: Literal["threads", "processes"] = "threads",
         concurrency_backend_options: dict | None = None,
         ray_actor_options: dict | None = None,
         deployment_name: str | None = None,
@@ -58,12 +107,21 @@ class InferenceBatcher:
                 The actual number of atoms will likely be larger than this as batches
                 are split when num atoms exceeds this value.
             batch_wait_timeout_s: The maximum time to wait for a batch to be ready.
-            num_replicas: The number of replicas to use for inference. Ignored if autoscaling_config is provided.
-            concurrency_backend: The concurrency backend to use for inference.
+            split_oom_batch: If True, split and retry on OOM errors.
+            num_replicas: The number of replicas to use for inference. Ignored if
+                autoscaling_config is provided.
+            concurrency_backend: The concurrency backend to use for running simulations:
+                - "threads": ThreadPoolExecutor (default). Best for I/O-bound tasks.
+                    Options: max_workers (int).
+                - "processes": ProcessPoolExecutor. Best for CPU-bound tasks.
+                    Note: Tasks must be picklable; not suitable for GPU operations.
+                    Options: max_workers (int).
             concurrency_backend_options: Options to pass to the concurrency backend.
+                See backend descriptions above for available options.
             ray_actor_options: Options to pass to the Ray actor running the batch server.
-            deployment_name: Name for the Ray Serve deployment. If None, generates a unique name.
-                This allows multiple InferenceBatchers to coexist on the same Ray cluster.
+            deployment_name: Name for the Ray Serve deployment. If None, generates a
+                unique name. This allows multiple InferenceBatchers to coexist on the
+                same Ray cluster.
             autoscaling_config: Optional autoscaling configuration. If provided, enables
                 autoscaling and num_replicas is ignored. Example:
                 {
@@ -98,6 +156,7 @@ class InferenceBatcher:
             batch_config={
                 "max_batch_size": self.max_batch_size,
                 "batch_wait_timeout_s": self.batch_wait_timeout_s,
+                "split_oom_batch": split_oom_batch,
             },
             deployment_name=self.deployment_name,
             route_prefix=f"/{self.deployment_name}",
@@ -106,11 +165,14 @@ class InferenceBatcher:
         if concurrency_backend_options is None:
             concurrency_backend_options = {}
 
+        # Set default max_workers for thread and process backends.
         if (
-            concurrency_backend == "threads"
+            concurrency_backend in ("threads", "processes")
             and "max_workers" not in concurrency_backend_options
         ):
-            concurrency_backend_options["max_workers"] = min(cpu_count(), 16)
+            concurrency_backend_options["max_workers"] = min(
+                cpu_count(), DEFAULT_EXECUTOR_WORKER_CAP
+            )
 
         self.executor: ExecutorProtocol = _get_concurrency_backend(
             concurrency_backend, concurrency_backend_options
@@ -127,6 +189,31 @@ class InferenceBatcher:
         return BatchServerPredictUnit(
             server_handle=self.predict_server_handle,
         )
+
+    def auto_configure_batching(
+        self,
+        data: list[AtomicData],
+        config: AutobatchConfig | None = None,
+    ) -> AutobatchResult:
+        """
+        Probe for optimal batch size and timeout using representative data.
+
+        Args:
+            data: List of AtomicData objects to use for probing.
+            config: Autobatch configuration. Uses defaults if None.
+
+        Returns:
+            AutobatchResult with the determined optimal parameters.
+        """
+        result = probe_optimal_batch_size(
+            predict_unit=self.predict_unit,
+            probe_data=data,
+            config=config,
+        )
+        self.predict_server_handle.configure_batching.remote(
+            result.max_batch_size, result.batch_wait_timeout_s
+        )
+        return result
 
     def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:
         """Update the checkpoint being served without shutting down the deployment.
