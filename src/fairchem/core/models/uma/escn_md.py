@@ -663,10 +663,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Compute shifts from cell offsets
             if len(data_dict["natoms"]) == 1:
-                # Single system: use matmul (compile-friendly, no data-dependent ops)
-                shifts = data_dict["cell_offsets"].to(
-                    data_dict["cell"].dtype
-                ) @ data_dict["cell"].squeeze(0)
+                offsets = data_dict["cell_offsets"].to(data_dict["cell"].dtype)
+                if torch.compiler.is_compiling():
+                    cell = data_dict["cell"][0]
+                    shifts = (
+                        offsets[:, 0:1] * cell[0]
+                        + offsets[:, 1:2] * cell[1]
+                        + offsets[:, 2:3] * cell[2]
+                    )
+                else:
+                    shifts = offsets @ data_dict["cell"].squeeze(0)
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
