@@ -34,13 +34,6 @@ chg_spin_emb_type: "rand_emb"
 cs_emb_grad: True
 dataset_list: ${dataset_list}
 
-# Solvent conditioning. This widens mix_csd; the layer can be trained from
-# scratch, or grafted onto a pretrained UMA checkpoint when finetuning — the
-# pretrained mix_csd weight is zero-padded into the new solvent block at load
-# time (see configs/uma/finetune/uma_sm_solvent_finetune.yaml), giving an
-# identity warm-start. Datasets should set `solvent` in a2g_args.r_data_keys
-# (with a per-structure atoms.info["solvent"]); structures without one get the
-# vacuum vector.
 use_solvent_embedding: True
 solvent_emb_grad: True
 solvent_emb_hidden: 16

@@ -41,7 +41,6 @@ def test_expand_mix_csd_state_dict_pads_trailing_solvent_block():
     pretrained = _make_backbone(use_solvent_embedding=False)
     solvent_model = _make_backbone(use_solvent_embedding=True)
 
-    # pretrained mix_csd is [C, 2C]; solvent model's is [C, 3C]
     assert pretrained.mix_csd.in_features == 2 * SPHERE_CHANNELS
     assert solvent_model.mix_csd.in_features == 3 * SPHERE_CHANNELS
 
@@ -50,7 +49,6 @@ def test_expand_mix_csd_state_dict_pads_trailing_solvent_block():
 
     pretrained_w = pretrained.mix_csd.weight
     grafted_w = solvent_model.mix_csd.weight
-    # leading 2C columns copied verbatim, trailing C (solvent) columns zeroed
     assert torch.allclose(grafted_w[:, : 2 * SPHERE_CHANNELS], pretrained_w)
     assert torch.count_nonzero(grafted_w[:, 2 * SPHERE_CHANNELS :]) == 0
     # bias has unchanged shape and is copied as-is
@@ -85,12 +83,10 @@ def test_strict_load_allows_missing_solvent_embedding_only():
     solvent_model = _make_backbone(use_solvent_embedding=True)
 
     expanded = expand_mix_csd_state_dict(solvent_model, pretrained.state_dict())
-    # only solvent_embedding.* should be reported missing -> filtered, no raise
     missing, unexpected = load_state_dict(solvent_model, expanded, strict=True)
     assert missing == []
     assert unexpected == []
 
-    # dropping a genuine pretrained key must still fail strict loading
     broken = dict(expanded)
     a_real_key = next(k for k in broken if k.startswith("sphere_embedding"))
     del broken[a_real_key]
