@@ -129,6 +129,18 @@ def get_escaip_full(
     return model
 
 
+@pytest.mark.parametrize("precision", ["highest", "high"])
+def test_backbone_does_not_own_or_mutate_float32_matmul_precision(precision):
+    original_precision = torch.get_float32_matmul_precision()
+    try:
+        torch.set_float32_matmul_precision(precision)
+        backbone = get_escaip_backbone(cutoff=6.0, use_compile=False, device="cpu")
+        assert not hasattr(backbone, "float32_matmul_precision")
+        assert torch.get_float32_matmul_precision() == precision
+    finally:
+        torch.set_float32_matmul_precision(original_precision)
+
+
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
 def test_compile_full_gpu(compile_reset_state):

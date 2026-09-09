@@ -1,7 +1,11 @@
 defaults:
   - cluster: h100
   - checkpoint: uma_sm
+  - calculator: uma
   - _self_
+
+calculator:
+  task_name: omol
 
 benchmark_name: nve-md-omol-100ps
 
@@ -28,10 +32,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.calculate.NVEMDRunner
-  calculator:
-    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
-    name_or_path: ${checkpoint.ckpt_path}
-    task_name: omol
+  calculator: ${calculator}
   input_data:
     _target_: fairchem.core.components.calculate.get_nve_md_data
     dataset_root: ${cluster.data_root_dir}/md

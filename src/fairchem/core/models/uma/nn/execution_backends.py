@@ -16,6 +16,7 @@ import torch
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
+    from fairchem.core.models.uma.nn.activation import GateActivation
     from fairchem.core.units.mlip_unit.api.inference import (
         InferenceSettings,
     )
@@ -31,6 +32,21 @@ __all__ = [
 
 # Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
 _M0_COL_INDICES_L_ORDER = [0, 2, 6]
+
+
+def _dense_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    if wigner.ndim == 3:
+        if wigner.shape[1:] != (9, 9):
+            raise ValueError("wigner must have shape [E, 35] or [E, 9, 9]")
+        return wigner
+    if wigner.ndim != 2 or wigner.shape[1] != 35:
+        raise ValueError("wigner must have shape [E, 35] or [E, 9, 9]")
+    num_edges = wigner.shape[0]
+    return (
+        torch.nn.functional.pad(wigner[:, :1].view(num_edges, 1, 1), (0, 8, 0, 8))
+        + torch.nn.functional.pad(wigner[:, 1:10].view(num_edges, 3, 3), (1, 5, 1, 5))
+        + torch.nn.functional.pad(wigner[:, 10:].view(num_edges, 5, 5), (4, 0, 4, 0))
+    )
 
 
 class ExecutionMode(str, Enum):
@@ -59,6 +75,10 @@ class ExecutionBackend:
         - edge_degree_scatter: Rotate radial and scatter to nodes
         - prepare_model_for_inference: Apply backend-specific model transforms
     """
+
+    # Whether this backend exposes the fused edgewise SO2 path (producer conv1
+    # pack + consumer conv2 inv fusion).
+    supports_fused_edgewise: bool = False
 
     @staticmethod
     def validate(
@@ -181,9 +201,8 @@ class ExecutionBackend:
     def permute_wigner_inv_edge_to_node(
         x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         num_nodes: int,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         """
         Rotate M->L and scatter edge messages to nodes.
@@ -193,9 +212,9 @@ class ExecutionBackend:
         Args:
             x_message: Edge message features [E, M, C]
             wigner_inv: Inverse Wigner matrices [E, L, M]
-            edge_index: Edge indices [2, E]
+            scatter_target: Pre-computed local target indices [E]
+                for scattering into node output tensor.
             num_nodes: Total number of nodes (output size)
-            node_offset: Offset for node indices (for chunking)
 
         Returns:
             Node embeddings [N, L, C] accumulated from edge messages
@@ -208,7 +227,7 @@ class ExecutionBackend:
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        new_embedding.index_add_(0, scatter_target, x_rotated)
         return new_embedding
 
     @staticmethod
@@ -216,11 +235,10 @@ class ExecutionBackend:
         x: torch.Tensor,
         radial_output: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         m_0_num_coefficients: int,
         sphere_channels: int,
         rescale_factor: float,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         """
         Edge degree embedding: rotate radial and scatter to nodes.
@@ -232,12 +250,12 @@ class ExecutionBackend:
             radial_output: RadialMLP output [E, m0 * C]
             wigner_inv: Wigner inverse with envelope pre-fused
                 [E, L, m0] or [E, L, L]
-            edge_index: Edge indices [2, E]
+            scatter_target: Pre-computed local target indices [E]
+                for scattering into node output tensor.
             m_0_num_coefficients: Number of m=0 coefficients
                 (3 for lmax=2)
             sphere_channels: Number of channels C
             rescale_factor: Aggregation rescale factor
-            node_offset: Node offset for graph parallelism
 
         Returns:
             Updated node features [N, L, C]
@@ -256,7 +274,7 @@ class ExecutionBackend:
         # Scatter to destination nodes with rescaling
         return x.index_add(
             0,
-            edge_index[1] - node_offset,
+            scatter_target,
             x_edge_embedding / rescale_factor,
         )
 
@@ -337,6 +355,9 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     Smaller values work but with reduced efficiency.
     """
 
+    # Expose the fused edgewise path: producer conv1 pack + consumer conv2 inv.
+    supports_fused_edgewise: bool = True
+
     @staticmethod
     def validate(
         lmax: int,
@@ -350,6 +371,11 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
+        if settings.predict_untrained_hessian and settings.hessian_vmap:
+            raise ValueError(
+                "umas_fast_gpu does not support hessian_vmap=True; "
+                "set hessian_vmap=False"
+            )
 
     @staticmethod
     def prepare_wigner(
@@ -358,8 +384,20 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         mappingReduced,
         coefficient_index: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        # Passthrough — Triton kernels handle L-to-M internally
-        return wigner, wigner_inv
+        if wigner.shape[-1] == 35:
+            return wigner, wigner_inv
+
+        def pack_blocks(value: torch.Tensor) -> torch.Tensor:
+            return torch.cat(
+                (
+                    value[:, :1, :1].flatten(1),
+                    value[:, 1:4, 1:4].flatten(1),
+                    value[:, 4:9, 4:9].flatten(1),
+                ),
+                dim=1,
+            )
+
+        return pack_blocks(wigner), pack_blocks(wigner_inv)
 
     @staticmethod
     def node_to_edge_wigner_permute(
@@ -371,29 +409,32 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             UMASFastGPUNodeToEdgeWignerPermute,
         )
 
-        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
+        return UMASFastGPUNodeToEdgeWignerPermute.apply(
+            x_full, edge_index, _dense_l2_wigner(wigner)
+        )
 
     @staticmethod
     def permute_wigner_inv_edge_to_node(
         x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         num_nodes: int,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         from fairchem.core.models.uma.triton import (
             UMASFastGPUPermuteWignerInvEdgeToNode,
         )
 
         # Rotate M->L using Triton kernel
-        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
+        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(
+            x_message, _dense_l2_wigner(wigner_inv)
+        )
         # Scatter to nodes
         new_embedding = torch.zeros(
             (num_nodes,) + x_rotated.shape[1:],
             dtype=x_rotated.dtype,
             device=x_rotated.device,
         )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        new_embedding.index_add_(0, scatter_target, x_rotated)
         return new_embedding
 
     @staticmethod
@@ -401,13 +442,28 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         x: torch.Tensor,
         radial_output: torch.Tensor,
         wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
+        scatter_target: torch.Tensor,
         m_0_num_coefficients: int,
         sphere_channels: int,
         rescale_factor: float,
-        node_offset: int = 0,
     ) -> torch.Tensor:
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
+
+        if wigner_inv.shape[-1] == 35:
+            wigner = wigner_inv.reshape(-1, 35)
+            x_edge_embedding = torch.cat(
+                (
+                    wigner[:, 0:1, None] * radial[:, 0:1],
+                    wigner[:, (2, 5, 8), None] * radial[:, 1:2],
+                    wigner[:, (12, 17, 22, 27, 32), None] * radial[:, 2:3],
+                ),
+                dim=1,
+            )
+            return x.index_add(
+                0,
+                scatter_target,
+                x_edge_embedding.to(x.dtype) / rescale_factor,
+            )
 
         # Select m=0 columns from L-ordered wigner_inv
         wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
@@ -417,8 +473,106 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
 
         return x.index_add(
             0,
-            edge_index[1] - node_offset,
+            scatter_target,
             x_edge_embedding / rescale_factor,
+        )
+
+    @staticmethod
+    def fused_node_to_edge_conv1_pack(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+        radial: torch.Tensor,
+        sphere_channels: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Producer-side fusion: emit conv1's scaled + GEMM-packed buffers directly.
+
+        Fuses the node_to_edge gather, block-diagonal Wigner rotation, L->M
+        permute, and conv1 per-m radial scale/pack into one op. The [E,9,2C]
+        x_message intermediate never materializes.
+
+        Args:
+            x_full: Node features [N, 9, C] (L-major).
+            edge_index: Edge indices [2, E].
+            wigner: Compact Wigner rotation blocks [E, 35].
+            radial: Per-layer conv1 radial embedding [E, 6*2C] (rad_func applied).
+            sphere_channels: Number of channels C.
+
+        Returns:
+            (m0, m1, m2) GEMM-ready packed buffers for conv1.
+        """
+        from fairchem.core.models.uma.triton import wigner_conv1_fused_op
+
+        return wigner_conv1_fused_op(
+            x_full, edge_index, wigner, radial, sphere_channels
+        )
+
+    @staticmethod
+    def gate_activation(
+        x0_full: torch.Tensor,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        channels: int,
+        activation: GateActivation,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if (
+            channels > 0
+            and channels & (channels - 1) == 0
+            and x0_full.dtype == torch.float32
+            and x1.dtype == torch.float32
+            and x2.dtype == torch.float32
+        ):
+            from fairchem.core.models.uma.triton import packed_gate_op
+
+            return packed_gate_op(x0_full, x1, x2, channels)
+
+        gating, x0 = x0_full.split((2 * channels, 3 * channels), dim=-1)
+        return activation.forward_m_blocks(gating, (x0, x1, x2))
+
+    @staticmethod
+    def fused_conv2_inv_edge_to_node(
+        g0: torch.Tensor,
+        g1: torch.Tensor,
+        g2: torch.Tensor,
+        wigner_inv_envelope: torch.Tensor,
+        scatter_target: torch.Tensor,
+        num_nodes: int,
+        sphere_channels: int,
+    ) -> torch.Tensor:
+        """
+        Consumer-side fusion: unpack conv2 GEMM buffers + inv-rotate + scatter.
+
+        Fuses the M->L unpack, inverse-Wigner rotation, and node scatter of the
+        three conv2 block-GEMM outputs (g0,g1,g2) without materializing an
+        [E,9,C] intermediate.
+
+        Args:
+            g0: conv2 fc_m0 output [E, 3C].
+            g1: conv2 m=1 block-GEMM output [E, 4C].
+            g2: conv2 m=2 block-GEMM output [E, 2C].
+            wigner_inv_envelope: Compact inverse Wigner blocks with the
+                envelope pre-fused [E, 35].
+            scatter_target: Pre-computed local target indices [E] for
+                scattering into the node output tensor. In the non-GP case
+                this is ``edge_index[1]``; under GP it is the caller's
+                local-partition remap (see Edgewise.forward).
+            num_nodes: Total number of nodes (output size).
+            sphere_channels: Number of channels C.
+
+        Returns:
+            Node embeddings [N, 9, C] accumulated from edge messages.
+        """
+        from fairchem.core.models.uma.triton import wigner_inv_conv2_scatter_op
+
+        return wigner_inv_conv2_scatter_op(
+            g0,
+            g1,
+            g2,
+            wigner_inv_envelope,
+            scatter_target,
+            num_nodes,
+            sphere_channels,
         )
 
 

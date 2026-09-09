@@ -146,11 +146,15 @@ def get_neighbors_nvidia(
     )
     num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=device)
 
+    # nvalchemi wants cell=None and pbc=None for non-periodic systems
+    neighbor_cell = None if not bool(pbc.any().item()) else cell
+    neighbor_pbc = None if neighbor_cell is None else pbc
+
     neighbor_list(
         positions=positions,
         cutoff=nvidia_cutoff,
-        cell=cell,
-        pbc=pbc,
+        cell=neighbor_cell,
+        pbc=neighbor_pbc,
         batch_idx=batch.int(),
         method=f"batch_{method}",
         neighbor_matrix=neighbor_matrix,

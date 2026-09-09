@@ -19,13 +19,14 @@ The workflow stages are:
 1. generate: Generate crystal structures using Genarris
 2. process_generated: Process and deduplicate raw structures
 3. relax: ML-based structure relaxation using UMA
-4. filter: Energy filtering and final deduplication
-5. evaluate: Compare against experimental data (optional)
+4. compute_conformer_corrections (optional): Per-conformer fragment energy corrections
+5. filter: Energy filtering and final deduplication
+6. evaluate: Compare against experimental data (optional)
+7. compute_free_energy (optional): Quasi-harmonic vibrational free energies
 """
 
 from __future__ import annotations
 
-import argparse
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -39,10 +40,10 @@ from fairchem.applications.fastcsp.core.utils.configuration import (
 from fairchem.applications.fastcsp.core.utils.slurm import wait_for_jobs
 
 if TYPE_CHECKING:
-    import argparse
+    from argparse import Namespace
 
 
-def load_config(args: argparse.Namespace) -> dict[str, Any]:
+def load_config(args: Namespace) -> dict[str, Any]:
     """
     Load and validate FastCSP workflow configuration from YAML file.
 
@@ -63,7 +64,7 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
     return config
 
 
-def main(args: argparse.Namespace) -> None:
+def main(args: Namespace) -> None:
     """
     Main orchestration function for the FastCSP crystal structure prediction workflow.
 
@@ -71,8 +72,10 @@ def main(args: argparse.Namespace) -> None:
     1. generate: Crystal structure generation using Genarris
     2. process_generated: Structure processing and initial deduplication
     3. relax: ML-based structure relaxation using Universal Model for Atoms
-    4. filter: Energy filtering and final structure deduplication
-    5. evaluate: Experimental structure comparison (optional)
+    4. compute_conformer_corrections: Per-conformer fragment energy corrections (optional)
+    5. filter: Energy filtering and final structure deduplication
+    6. evaluate: Experimental structure comparison (optional)
+    7. compute_free_energy: Quasi-harmonic vibrational free energies (optional)
 
     Args:
         args: Command line arguments containing:
@@ -162,6 +165,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_problematic=pre_relax_config["remove_problematic"],
             remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
@@ -193,13 +197,37 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
             relax_config=relax_config,
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
             logger, "ML-relaxation of processed structures", len(jobs)
         )
 
-    # 4. Filter, deduplicate, and rank structures
+    # 4. (Optional) Apply per-conformer fragment energy corrections.
+    if "compute_conformer_corrections" in args.stages:
+        logging.log_stage_start(
+            logger, "conformer-corrections on ML-relaxed structures"
+        )
+        from fairchem.applications.fastcsp.core.workflow.conformer_correction import (
+            get_conformer_corrections_config_and_dirs,
+            run_conformer_corrections_jobs,
+        )
+
+        cc_config, cc_input_dir, cc_output_dir = (
+            get_conformer_corrections_config_and_dirs(config, verbose=True)
+        )
+        jobs = run_conformer_corrections_jobs(
+            input_dir=cc_input_dir,
+            output_dir=cc_output_dir,
+            cc_config=cc_config,
+        )
+        wait_for_jobs(jobs)
+        logging.log_stage_complete(
+            logger, "conformer-corrections on ML-relaxed structures", len(jobs)
+        )
+
+    # 5. Filter, deduplicate, and rank structures
     if "filter" in args.stages:
         logging.log_stage_start(logger, "filtering of ML-relaxed structures")
         from fairchem.applications.fastcsp.core.workflow.filter import (
@@ -233,13 +261,14 @@ def main(args: argparse.Namespace) -> None:
             density_tol=post_relax_config["density_tol"],
             energy_tol=post_relax_config["energy_tol"],
             apply_niggli_filter=post_relax_config["apply_niggli_filter"],
+            generated_structures_dir=root / "generated_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(
             logger, "filtering of ML-relaxed structures", len(jobs)
         )
 
-    # 5. (Optional) Compare predicted structures to experimental
+    # 6. (Optional) Compare predicted structures to experimental
     # using either CSD API or pymatgen StructureMatcher
     if "evaluate" in args.stages:
         logging.log_stage_start(
@@ -266,7 +295,7 @@ def main(args: argparse.Namespace) -> None:
             wait_for_jobs(jobs)
         logging.log_stage_complete(logger, "evaluation against experimental structures")
 
-    # 6. (Optional) Calculate vibrational free energies for structures
+    # 7. (Optional) Calculate vibrational free energies for structures
     if "compute_free_energy" in args.stages:
         logging.log_stage_start(logger, "vibrational free energy calculations")
         from fairchem.applications.fastcsp.core.workflow.free_energy import (

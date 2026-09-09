@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import tempfile
 from typing import TYPE_CHECKING
 
 import hydra
@@ -69,8 +70,22 @@ def get_hydra_config_from_yaml(
     os.environ["HYDRA_FULL_ERROR"] = "1"
     config_directory = os.path.dirname(os.path.abspath(config_yml))
     config_name = os.path.basename(config_yml)
-    hydra.initialize_config_dir(config_directory, version_base="1.1")
-    cfg = hydra.compose(config_name=config_name, overrides=overrides_args)
+
+    if config_name.endswith(".yml"):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_config_name = f"{os.path.splitext(config_name)[0]}.yaml"
+            temp_config_path = os.path.join(temp_dir, temp_config_name)
+            with open(config_yml) as source, open(temp_config_path, "w") as target:
+                target.write(source.read())
+
+            with hydra.initialize_config_dir(temp_dir, version_base="1.3"):
+                cfg = hydra.compose(
+                    config_name=temp_config_name,
+                    overrides=overrides_args,
+                )
+    else:
+        with hydra.initialize_config_dir(config_directory, version_base="1.3"):
+            cfg = hydra.compose(config_name=config_name, overrides=overrides_args)
     # merge default structured config with initialized job object
     cfg = OmegaConf.merge({"job": OmegaConf.structured(JobConfig)}, cfg)
     # canonicalize config (remove top level keys that just used replacing variables)

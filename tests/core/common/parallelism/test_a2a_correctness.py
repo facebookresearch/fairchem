@@ -88,10 +88,8 @@ def _correctness_test_inner(
     x_global = atomic_numbers.unsqueeze(1).float()
     x_local = x_global[node_partition]
 
-    send_indices = gp_ctx.send_indices
-
     # Test collect function
-    x_recv_autograd = all_to_all_collect(x_local, gp_ctx, send_indices)
+    x_recv_autograd = all_to_all_collect(x_local, gp_ctx)
 
     # Verify edge_index_local is valid
     x_full = torch.cat([x_local, x_recv_autograd], dim=0)
@@ -259,9 +257,8 @@ def _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy):
     )
 
     x_local = x_global[node_partition]
-    send_indices = gp_ctx.send_indices
 
-    x_recv = all_to_all_collect(x_local, gp_ctx, send_indices)
+    x_recv = all_to_all_collect(x_local, gp_ctx)
 
     # Verify message passing produces the same result as non-distributed.
     x_full = torch.cat([x_local, x_recv], dim=0)

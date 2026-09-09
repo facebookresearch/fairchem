@@ -213,10 +213,6 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         remaining_steps = self.steps - self._start_step
         stopped_by_stopfair = False
 
-        # On job restart, let's also save the resume-step frame.
-        if self._start_step > 0:
-            self._dyn.call_observers()
-
         try:
             self._dyn.run(remaining_steps)
         except StopfairDetected:

@@ -27,7 +27,9 @@ Filtering Process:
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from functools import partial
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
@@ -37,14 +39,14 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
-    check_no_changes_in_covalent_matrix,
+    check_connectivity_unchanged,
+    check_correct_z,
+    check_molecule_matches_reference,
     cif_to_atoms,
     cif_to_structure,
+    load_reference_graph,
 )
 from p_tqdm import p_map
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -124,6 +126,7 @@ def filter_and_deduplicate_structures_single(
     density_tol: float | None = None,
     energy_tol: float | None = None,
     apply_niggli_filter: bool = False,
+    generated_structures_dir: Path | None = None,
 ):
     """
     Apply filtering and deduplication to a single parquet dataset.
@@ -154,10 +157,15 @@ def filter_and_deduplicate_structures_single(
         apply_niggli_filter: When True, apply the Niggli (a,b,c,alpha,beta,gamma)
             prefilter before ``StructureMatcher.fit``. Default False
             (skip the Niggli reduction + check entirely).
+        generated_structures_dir: Optional path to the workspace's
+            ``generated_structures/`` directory. Required (alongside
+            ``root_unrelaxed``) when the ``molecule_matches_reference``
+            recompute needs to load the per-conformer reference XYZ.
 
     Filtering Workflow:
         1. Validate connectivity preservation during relaxation
-        2. Deal with problematic structures (non-converged or connectivity changed)
+        2. Deal with problematic structures (non-converged, wrong Z, fragments not
+           isomorphic to reference molecule, or connectivity changed)
         3. Apply density cutoffs to remove unphysical structures
         4. Energy-based filtering relative to global minimum
         5. Deduplication with pymatgen StructureMatcher
@@ -189,13 +197,24 @@ def filter_and_deduplicate_structures_single(
         structures_df_unrelaxed = pd.read_parquet(
             root_unrelaxed, engine="pyarrow", columns=["structure_id", "cif_generated"]
         )
-        # Merge with unrelaxed data if requested for comparison studies
+        # Merge so cif_generated is available even if the relaxed parquet
+        # dropped it. Suffix prevents collisions when both sides carry it.
         structures_df = structures_df.merge(
             structures_df_unrelaxed,
             on="structure_id",
             how="left",
             suffixes=("", "_unrelaxed"),
         )
+
+        # Build the per-conformer reference graph once (one mol/conf per parquet).
+        mol_id = str(structures_df["mol_id"].iloc[0])
+        conf_id = str(structures_df["conf_id"].iloc[0])
+        generated_conf_dir = (
+            Path(generated_structures_dir) / mol_id / conf_id
+            if generated_structures_dir is not None
+            else None
+        )
+        reference_graph = load_reference_graph(generated_conf_dir, conf_id)
 
         # Convert CIF strings to atomic structures for connectivity analysis
         # (parallelized: cif parsing is CPU-bound and embarrassingly parallel)
@@ -213,15 +232,31 @@ def filter_and_deduplicate_structures_single(
             desc="cif_generated -> atoms",
         )
 
+        z_ints = [int(z) for z in structures_df["z"]]
+        structures_df["validity.crystal_relaxed.correct_z"] = p_map(
+            check_correct_z,
+            final_atoms,
+            z_ints,
+            num_cpus=num_cpus,
+            desc="correct_z",
+        )
+        structures_df["validity.crystal_relaxed.molecule_matches_reference"] = p_map(
+            partial(check_molecule_matches_reference, reference_graph=reference_graph),
+            final_atoms,
+            num_cpus=num_cpus,
+            desc="molecule_matches_reference",
+        )
+
         # Validate bonding network preservation during relaxation
-        structures_df["validity.connectivity_unchanged"] = p_map(
-            check_no_changes_in_covalent_matrix,
+        structures_df["validity.crystal_relaxed.connectivity_unchanged"] = p_map(
+            check_connectivity_unchanged,
             initial_atoms,
             final_atoms,
             num_cpus=num_cpus,
+            desc="connectivity_unchanged",
         )
 
-        # Save intermediate results with connectivity validation flags
+        # Save intermediate results with the recomputed validity columns
         structures_df.to_parquet(
             input_filename.parent.with_suffix(".updated") / input_filename.name,
             engine="pyarrow",
@@ -323,9 +358,9 @@ def filter_and_deduplicate_structures_single(
             keep="min" if remove_duplicates else None,
             keep_col="energy_relaxed_per_molecule",
         )
-        problematic_structures_df[
-            "group_index"
-        ] = -1  # Mark problematic structures with group -1
+        problematic_structures_df["group_index"] = (
+            "-1"  # Mark problematic structures with group -1
+        )
 
     structures_df_filtered = structures_df_filtered.drop(columns=["structure"])
 
@@ -366,6 +401,7 @@ def filter_and_deduplicate_structures(
     density_tol: float | None = None,
     energy_tol: float | None = None,
     apply_niggli_filter: bool = False,
+    generated_structures_dir: Path | None = None,
 ):
     """
     Submit parallel filtering jobs for multiple datasets.
@@ -388,6 +424,10 @@ def filter_and_deduplicate_structures(
         energy_tol: Optional cheap |ΔE| prefilter (kJ/mol). None = off.
         apply_niggli_filter: When True, apply Niggli (a,b,c,alpha,beta,gamma) prefilter
             before ``StructureMatcher.fit``. Default False (skip it).
+        generated_structures_dir: Optional path to the workspace's
+            ``generated_structures/`` directory. Required (alongside
+            ``root_unrelaxed``) so each worker can locate the per-conformer
+            reference XYZ for the molecule-matches-reference recompute.
 
     Returns:
         List of submitit job objects.
@@ -439,6 +479,7 @@ def filter_and_deduplicate_structures(
                     density_tol,
                     energy_tol,
                     apply_niggli_filter,
+                    generated_structures_dir,
                 ),
                 {},
             )

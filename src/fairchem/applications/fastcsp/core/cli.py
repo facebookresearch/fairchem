@@ -26,9 +26,10 @@ Available Workflow Stages:
   generate                      Generate crystal structures using Genarris
   process_generated             Process and deduplicate Genarris outputs
   relax                         Perform UMA-based structure relaxations
+  compute_conformer_corrections Apply per-conformer fragment energy corrections
   filter                        Filtering and duplicate removal for ranking
   evaluate                      Compare against experimental structures
-  calculate_free_energy          Compute free energy corrections
+  compute_free_energy           Compute vibrational free energy corrections
 
 Usage:
   fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
@@ -53,6 +54,7 @@ Example:
             "generate",  # need Genarris installed
             "process_generated",
             "relax",
+            "compute_conformer_corrections",  # optional
             "filter",
             "evaluate",  # optional, can require CSD API License
             "compute_free_energy",  # optional

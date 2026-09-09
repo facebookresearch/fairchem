@@ -75,6 +75,10 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
             "keys": ["post_relaxation_filter"],
             "nested": {"post_relaxation_filter": []},
         },
+        "compute_conformer_corrections": {
+            "keys": ["conformer_corrections"],
+            "nested": {"conformer_corrections": ["corrector_calculator"]},
+        },
         "evaluate": {
             "keys": ["evaluate"],
             "nested": {"evaluate": ["target_xtals_dir", "method"]},
@@ -192,6 +196,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "generate",
         "process_generated",
         "relax",
+        "compute_conformer_corrections",
         "filter",
         "evaluate",
         "compute_free_energy",

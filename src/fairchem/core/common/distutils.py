@@ -121,7 +121,7 @@ def setup(config) -> None:
                 assign_device_for_local_rank(config["cpu"], local_rank)
 
                 dist.init_process_group(
-                    backend="nccl",
+                    backend=config["distributed_backend"],
                     init_method=init_method,
                     timeout=timeout,
                 )

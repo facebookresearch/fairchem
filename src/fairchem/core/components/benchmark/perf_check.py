@@ -28,7 +28,10 @@ from fairchem.core.units.mlip_unit.api.inference import (
 )
 
 if TYPE_CHECKING:
-    from fairchem.core.components.benchmark.systems import BenchmarkSystem
+    from fairchem.core.components.benchmark.systems import (
+        BenchmarkSystem,
+        SystemPool,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,9 @@ BASELINE_SETTINGS = InferenceSettings(
 )
 
 BASELINE_CACHE_FILE = "baseline_cache.json"
+MIXED_BASELINE_CACHE_FILE = "mixed_baseline_cache.json"
+MIXED_REPORT_FILE = "mixed_benchmark_report.json"
+DEFAULT_BATCH_SIZES: tuple[int, ...] = (4, 8, 16, 32, 64, 128, 256)
 
 
 def _baseline_cache_key(
@@ -453,6 +459,512 @@ class PerfCheckRunner(Runner):
         logger.info("Report saved to %s", report_path)
 
         return full_report
+
+    def save_state(self, _):
+        return
+
+    def load_state(self, _):
+        return
+
+
+def build_batch_schedule(
+    pool_size: int,
+    batch_sizes: list[int] | tuple[int, ...],
+    num_steps: int,
+    seed: int = 42,
+    max_reroll: int = 32,
+) -> list[tuple[int, tuple[int, ...]]]:
+    """
+    Build a deterministic schedule of (batch_size, system_indices) pairs.
+
+    Round-robins through ``batch_sizes`` and samples ``batch_size`` pool indices
+    (with replacement) per step. Guarantees no two adjacent steps share the same
+    (batch_size, sorted_indices) multiset, by rerolling up to ``max_reroll``
+    times. If the pool is degenerate (single system, batch_size==1), reroll
+    cannot succeed; this is intentional and the caller should diversify the
+    pool.
+
+    Args:
+        pool_size: Number of systems available in the SystemPool.
+        batch_sizes: Batch sizes to cycle through.
+        num_steps: Total number of (warmup + timed) steps to produce.
+        seed: Seed for the deterministic RNG.
+        max_reroll: Max attempts before accepting a duplicate adjacent batch.
+
+    Returns:
+        List of (batch_size, indices_tuple) entries of length ``num_steps``.
+    """
+    if pool_size <= 0:
+        raise ValueError("pool_size must be positive")
+    if not batch_sizes:
+        raise ValueError("batch_sizes must be non-empty")
+    if num_steps <= 0:
+        return []
+
+    rng = np.random.default_rng(seed)
+    sizes = list(batch_sizes)
+    schedule: list[tuple[int, tuple[int, ...]]] = []
+    last_key: tuple[int, tuple[int, ...]] | None = None
+
+    for step in range(num_steps):
+        bsz = sizes[step % len(sizes)]
+        for _ in range(max_reroll):
+            indices = tuple(int(i) for i in rng.integers(0, pool_size, size=bsz))
+            key = (bsz, tuple(sorted(indices)))
+            if key != last_key:
+                break
+        else:
+            # Reroll budget exhausted; accept duplicate (pool too narrow).
+            pass
+        schedule.append((bsz, indices))
+        last_key = (bsz, tuple(sorted(indices)))
+
+    return schedule
+
+
+@dataclass
+class BatchTiming:
+    """
+    Aggregated timing for one batch size across the timed phase.
+    """
+
+    batch_size: int
+    n_steps: int
+    total_seconds: float
+    samples_per_sec: float
+    atoms_per_sec: float
+    peak_gpu_memory_mb: float | None = None
+
+
+@dataclass
+class MixedInferenceResult:
+    """
+    Output of ``run_mixed_inference``: per-system predictions plus per-batch-size
+    timings. Per-system predictions are populated only from the timed phase.
+    """
+
+    per_system: dict[str, InferenceResult]
+    per_batch_size: dict[int, BatchTiming]
+    warmup_seconds: float
+    total_timed_seconds: float
+    peak_gpu_memory_mb: float | None = None
+    oom_batch_sizes: list[int] = None  # populated by runner if oom_policy=skip
+
+
+def _split_batched_predictions(
+    preds: dict[str, torch.Tensor],
+    natoms_per_system: list[int],
+) -> list[dict[str, torch.Tensor]]:
+    """
+    Split outputs from ``MLIPPredictUnit.predict`` (collate_predictions returns
+    concatenated atom-level / per-system tensors) back into per-system dicts.
+    """
+    n_systems = len(natoms_per_system)
+    splits: list[dict[str, torch.Tensor]] = [{} for _ in range(n_systems)]
+    total_atoms = int(sum(natoms_per_system))
+
+    for prop, tensor in preds.items():
+        t = tensor.detach()
+        if t.dim() == 0 or t.shape[0] == n_systems:
+            # system-level (energy, stress per-system): one row per system
+            for i in range(n_systems):
+                splits[i][prop] = t[i] if t.dim() > 0 else t
+        elif t.shape[0] == total_atoms:
+            # atom-level (forces): split by natoms
+            offsets = np.cumsum([0, *natoms_per_system]).tolist()
+            for i in range(n_systems):
+                splits[i][prop] = t[offsets[i] : offsets[i + 1]]
+        else:
+            # Unknown layout - give every system the full tensor; caller decides.
+            for i in range(n_systems):
+                splits[i][prop] = t
+    return splits
+
+
+def _to_inference_result(pred: dict[str, torch.Tensor]) -> InferenceResult:
+    """
+    Convert a per-system prediction dict to an InferenceResult (fp64 numpy).
+    """
+    energy_t = pred["energy"].detach().cpu().to(torch.float64)
+    energy = float(
+        energy_t.item() if energy_t.dim() == 0 else energy_t.reshape(()).item()
+    )
+    forces = pred["forces"].detach().cpu().to(torch.float64).numpy()
+    stress = None
+    if "stress" in pred:
+        stress = pred["stress"].detach().cpu().to(torch.float64).numpy()
+    return InferenceResult(energy=energy, forces=forces, stress=stress)
+
+
+def run_mixed_inference(
+    predict_unit: MLIPPredictUnit,
+    pool: SystemPool,
+    schedule: list[tuple[int, tuple[int, ...]]],
+    warmup_steps: int,
+    device: str = "cuda",
+    oom_policy: str = "abort",
+) -> MixedInferenceResult:
+    """
+    Run a mixed-batch benchmark using a pre-built predict unit and pre-materialized
+    schedule.
+
+    Walks ``schedule[:warmup_steps]`` untimed, then walks the remainder while
+    measuring per-batch-size throughput. Per-system predictions are taken from
+    the last time each system appears in the timed phase.
+
+    Args:
+        predict_unit: A ready ``MLIPPredictUnit``.
+        pool: The ``SystemPool`` referenced by schedule indices.
+        schedule: Output of ``build_batch_schedule``.
+        warmup_steps: First ``warmup_steps`` entries are warmup (untimed).
+        device: "cuda" or "cpu".
+        oom_policy: "abort" (re-raise) or "skip" (record batch size as OOM and
+            continue with the rest of the schedule).
+
+    Returns:
+        MixedInferenceResult.
+    """
+    from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+
+    if oom_policy not in {"abort", "skip"}:
+        raise ValueError(f"oom_policy must be 'abort' or 'skip', got {oom_policy!r}")
+
+    is_cuda = device == "cuda" and torch.cuda.is_available()
+
+    # Pre-build AtomicData once per pool entry; collation is cheap relative to fwd.
+    atomic_data = [
+        AtomicData.from_ase(s.atoms, task_name=s.task_name) for s in pool.systems
+    ]
+
+    if is_cuda:
+        torch.cuda.reset_peak_memory_stats()
+
+    def _step(indices: tuple[int, ...]) -> dict[str, torch.Tensor]:
+        batch = atomicdata_list_to_batch([atomic_data[i] for i in indices])
+        out = predict_unit.predict(batch)
+        if is_cuda:
+            torch.cuda.synchronize()
+        return out
+
+    # Warmup
+    warmup_start = time.perf_counter()
+    for bsz, indices in schedule[:warmup_steps]:
+        try:
+            _step(indices)
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            if _is_oom(e) and oom_policy == "skip":
+                logger.warning("OOM during warmup at batch_size=%d", bsz)
+                continue
+            raise
+    warmup_seconds = time.perf_counter() - warmup_start
+
+    # Timed phase
+    per_batch_steps: dict[int, list[float]] = {}
+    per_batch_atoms: dict[int, int] = {}
+    per_system_pred: dict[str, InferenceResult] = {}
+    oom_sizes: set[int] = set()
+
+    timed_phase_start = time.perf_counter()
+    for bsz, indices in schedule[warmup_steps:]:
+        if bsz in oom_sizes:
+            continue
+        natoms = [int(atomic_data[i].natoms.item()) for i in indices]
+        try:
+            t0 = time.perf_counter()
+            preds = _step(indices)
+            dt = time.perf_counter() - t0
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            if _is_oom(e) and oom_policy == "skip":
+                logger.warning(
+                    "OOM at batch_size=%d; skipping remaining %d-batches", bsz, bsz
+                )
+                oom_sizes.add(bsz)
+                if is_cuda:
+                    torch.cuda.empty_cache()
+                continue
+            raise
+
+        per_batch_steps.setdefault(bsz, []).append(dt)
+        per_batch_atoms[bsz] = per_batch_atoms.get(bsz, 0) + sum(natoms)
+
+        # Capture per-system predictions; later steps overwrite earlier ones,
+        # which is fine - we just need *some* prediction per system to compare.
+        split = _split_batched_predictions(preds, natoms)
+        for slot, i in enumerate(indices):
+            per_system_pred[pool.systems[i].name] = _to_inference_result(split[slot])
+
+    total_timed = time.perf_counter() - timed_phase_start
+
+    per_batch_size: dict[int, BatchTiming] = {}
+    for bsz, durations in per_batch_steps.items():
+        total = float(sum(durations))
+        n = len(durations)
+        per_batch_size[bsz] = BatchTiming(
+            batch_size=bsz,
+            n_steps=n,
+            total_seconds=total,
+            samples_per_sec=(n * bsz) / total if total > 0 else 0.0,
+            atoms_per_sec=per_batch_atoms[bsz] / total if total > 0 else 0.0,
+        )
+
+    peak_mem = torch.cuda.max_memory_allocated() / (1024**2) if is_cuda else None
+
+    return MixedInferenceResult(
+        per_system=per_system_pred,
+        per_batch_size=per_batch_size,
+        warmup_seconds=warmup_seconds,
+        total_timed_seconds=total_timed,
+        peak_gpu_memory_mb=peak_mem,
+        oom_batch_sizes=sorted(oom_sizes),
+    )
+
+
+def _is_oom(err: BaseException) -> bool:
+    return isinstance(err, torch.cuda.OutOfMemoryError) or (
+        isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
+    )
+
+
+def _mixed_baseline_cache_key(
+    checkpoint: str,
+    pool: SystemPool,
+    device: str,
+    seed: int,
+    batch_sizes: tuple[int, ...],
+) -> str:
+    """
+    Cache key for the per-system fp64 baselines used by the mixed runner.
+
+    Independent from ``_baseline_cache_key`` so the two runners never alias
+    each other's cache files. ``batch_sizes`` is included because changing them
+    can change which OOM-skipped systems were probed (does not affect baseline
+    correctness but keeps the cache scoped to a single benchmark config).
+    """
+    key_data = {
+        "checkpoint": checkpoint,
+        "pool": pool.signature(),
+        "device": device,
+        "seed": seed,
+        "batch_sizes": list(batch_sizes),
+        "baseline_settings": str(BASELINE_SETTINGS),
+    }
+    return hashlib.sha256(json.dumps(key_data, sort_keys=True).encode()).hexdigest()
+
+
+def format_mixed_report_table(
+    per_batch_size: dict[int, BatchTiming],
+    per_system_errors: dict[str, dict[str, Any]],
+) -> str:
+    """
+    Format the mixed-batch report as two stacked tables: per-batch-size throughput
+    and per-system accuracy errors.
+    """
+    lines: list[str] = []
+
+    perf_header = (
+        f"{'Batch':>6} {'Steps':>6} {'Total(s)':>10} " f"{'samp/s':>10} {'atoms/s':>12}"
+    )
+    lines.append("Throughput by batch size:")
+    lines.append(perf_header)
+    lines.append("-" * len(perf_header))
+    for bsz in sorted(per_batch_size):
+        t = per_batch_size[bsz]
+        lines.append(
+            f"{t.batch_size:>6d} {t.n_steps:>6d} {t.total_seconds:>10.3f} "
+            f"{t.samples_per_sec:>10.2f} {t.atoms_per_sec:>12.2f}"
+        )
+
+    lines.append("")
+    acc_header = f"{'System':<28} {'E err(eV)':>12} {'F MAE':>12} {'F max':>12}"
+    lines.append("Per-system error vs fp64 baseline:")
+    lines.append(acc_header)
+    lines.append("-" * len(acc_header))
+    for name in sorted(per_system_errors):
+        m = per_system_errors[name]
+        if "error" in m:
+            lines.append(f"{name:<28} {m['error']:>12}")
+            continue
+        lines.append(
+            f"{name:<28} {m.get('energy_abs_error', float('nan')):>12.6f} "
+            f"{m.get('force_mae', float('nan')):>12.6f} "
+            f"{m.get('force_max_error', float('nan')):>12.6f}"
+        )
+
+    return "\n".join(lines)
+
+
+class MixedPerfCheckRunner(Runner):
+    """
+    Benchmark mixed-size batched inference against per-system fp64 baselines.
+
+    Builds a ``SystemPool`` of diverse systems (multiple UMA tasks, multiple
+    size buckets), then runs a deterministic schedule of batches drawn from
+    {4, 8, 16, 32, 64, 128, 256}-size buckets. Ground-truth predictions are
+    computed once per pool entry at fp64 (re-using ``run_inference`` with
+    ``BASELINE_SETTINGS``) and cached on disk, so subsequent runs only pay the
+    benchmark cost.
+
+    Usage:
+        fairchem -c configs/uma/benchmark/perf_check/mixed_benchmark.yaml
+    """
+
+    def __init__(
+        self,
+        checkpoint: str,
+        device: str = "cuda",
+        batch_sizes: list[int] | tuple[int, ...] = DEFAULT_BATCH_SIZES,
+        warmup_steps: int = 20,
+        timed_steps: int = 200,
+        seed: int = 42,
+        pool_size_buckets: tuple[int, ...] = (20, 100, 500),
+        pool_n_per_bucket: int = 2,
+        pool_tasks: tuple[str, ...] = ("oc20", "omat", "omol", "odac", "omc"),
+        oom_policy: str = "skip",
+        inference_settings: InferenceSettings = inference_settings_default(),  # noqa: B008
+    ):
+        from fairchem.core.components.benchmark.systems import (
+            get_diverse_benchmark_pool,
+        )
+
+        self.checkpoint = checkpoint
+        self.device = device
+        self.batch_sizes = tuple(int(b) for b in batch_sizes)
+        self.warmup_steps = int(warmup_steps)
+        self.timed_steps = int(timed_steps)
+        self.seed = int(seed)
+        self.oom_policy = oom_policy
+        self.inference_settings = inference_settings
+        self.pool = get_diverse_benchmark_pool(
+            seed=self.seed,
+            size_buckets=tuple(pool_size_buckets),
+            n_per_bucket=int(pool_n_per_bucket),
+            tasks=tuple(pool_tasks),
+        )
+
+    def _baselines(self, cache_dir: str) -> dict[str, InferenceResult]:
+        cache_path = os.path.join(cache_dir, MIXED_BASELINE_CACHE_FILE)
+        cache_key = _mixed_baseline_cache_key(
+            self.checkpoint, self.pool, self.device, self.seed, self.batch_sizes
+        )
+        cached = _load_baseline_cache(cache_path, cache_key)
+        if cached is not None:
+            logger.warning(
+                "Using cached mixed baseline results from %s. "
+                "Delete this file to force recomputation.",
+                cache_path,
+            )
+            return cached
+
+        logger.info(
+            "Running per-system fp64 baselines for %d pool entries...",
+            len(self.pool),
+        )
+        baselines: dict[str, InferenceResult] = {}
+        for system in self.pool.systems:
+            logger.info("  Baseline: %s (%d atoms)", system.name, len(system.atoms))
+            baselines[system.name] = run_inference(
+                checkpoint=self.checkpoint,
+                system=system,
+                inference_settings=BASELINE_SETTINGS,
+                device=self.device,
+                seed=self.seed,
+            )
+        _save_baseline_cache(cache_path, cache_key, baselines)
+        return baselines
+
+    def _build_predict_unit(self) -> MLIPPredictUnit:
+        checkpoint = self.checkpoint
+        if not os.path.exists(checkpoint):
+            from fairchem.core.calculate.pretrained_mlip import (
+                pretrained_checkpoint_path_from_name,
+            )
+
+            checkpoint = pretrained_checkpoint_path_from_name(checkpoint)
+        return MLIPPredictUnit(
+            checkpoint, self.device, inference_settings=self.inference_settings
+        )
+
+    def run(self) -> dict:
+        output_dir = self.job_config.metadata.results_dir
+        os.makedirs(output_dir, exist_ok=True)
+        cache_dir = self.job_config.run_dir
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # Step 1: per-system fp64 baselines (cached).
+        baselines = self._baselines(cache_dir)
+
+        # Step 2: deterministic schedule (warmup + timed).
+        total_steps = self.warmup_steps + self.timed_steps
+        schedule = build_batch_schedule(
+            pool_size=len(self.pool),
+            batch_sizes=self.batch_sizes,
+            num_steps=total_steps,
+            seed=self.seed,
+        )
+
+        # Step 3: benchmark.
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed)
+
+        predict_unit = self._build_predict_unit()
+        try:
+            mixed = run_mixed_inference(
+                predict_unit=predict_unit,
+                pool=self.pool,
+                schedule=schedule,
+                warmup_steps=self.warmup_steps,
+                device=self.device,
+                oom_policy=self.oom_policy,
+            )
+        finally:
+            del predict_unit
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        # Step 4: per-system error vs cached baseline.
+        per_system_errors: dict[str, dict[str, Any]] = {}
+        for name, baseline in baselines.items():
+            candidate = mixed.per_system.get(name)
+            if candidate is None:
+                per_system_errors[name] = {"error": "not benchmarked"}
+                continue
+            per_system_errors[name] = compare_results(baseline, candidate)
+
+        # Step 5: report.
+        table = format_mixed_report_table(mixed.per_batch_size, per_system_errors)
+        logger.info("Mixed benchmark results:\n%s", table)
+
+        report = {
+            "baseline": {
+                name: {"energy": r.energy, "num_atoms": r.forces.shape[0]}
+                for name, r in baselines.items()
+            },
+            "inference_settings": str(self.inference_settings),
+            "batch_sizes": list(self.batch_sizes),
+            "warmup_steps": self.warmup_steps,
+            "timed_steps": self.timed_steps,
+            "warmup_seconds": mixed.warmup_seconds,
+            "total_timed_seconds": mixed.total_timed_seconds,
+            "peak_gpu_memory_mb": mixed.peak_gpu_memory_mb,
+            "oom_batch_sizes": mixed.oom_batch_sizes,
+            "per_batch_size": {
+                bsz: {
+                    "n_steps": t.n_steps,
+                    "total_seconds": t.total_seconds,
+                    "samples_per_sec": t.samples_per_sec,
+                    "atoms_per_sec": t.atoms_per_sec,
+                }
+                for bsz, t in mixed.per_batch_size.items()
+            },
+            "per_system": per_system_errors,
+        }
+        report_path = os.path.join(output_dir, MIXED_REPORT_FILE)
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+        logger.info("Mixed report saved to %s", report_path)
+        return report
 
     def save_state(self, _):
         return

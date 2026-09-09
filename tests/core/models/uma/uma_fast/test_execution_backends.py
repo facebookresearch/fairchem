@@ -4,10 +4,14 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Validation tests for execution backends.
-
-Tests that backend validation correctly accepts/rejects model configurations.
-E2E accuracy tests are done via run_benchmarks.sh and compare_forces.py scripts.
+Tests:  Validation that the UMA-S fast-GPU execution backend correctly
+        accepts/rejects model configurations, plus unit tests for the
+        triton kernels (M_TO_L_GATHER_IDX, node-to-edge / edge-to-node
+        Wigner permutations). E2E accuracy tests live in
+        run_benchmarks.sh + compare_forces.py, not here.
+Models: uma-s-1p1, uma-s-1p2 on the @pretrained-locked load test
+        (resolves a registered name to a checkpoint path).
+CI:     test_gpu_sweep (units shard).
 """
 
 from __future__ import annotations
@@ -18,9 +22,11 @@ import pytest
 import torch
 from ase.build import bulk
 
+from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.models.uma.nn.activation import GateActivation
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
 from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
@@ -40,6 +46,18 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
 L_TO_M_GATHER_IDX = [0] * 9
 for i, val in enumerate(M_TO_L_GATHER_IDX):
     L_TO_M_GATHER_IDX[val] = i
+
+
+def _compact_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    return torch.cat(
+        (
+            wigner[:, :1, :1].flatten(1),
+            wigner[:, 1:4, 1:4].flatten(1),
+            wigner[:, 4:9, 4:9].flatten(1),
+        ),
+        dim=1,
+    )
+
 
 # =============================================================================
 # Tests: Validation Errors
@@ -99,6 +117,139 @@ def test_umas_fast_gpu_validation_requires_merge_mole():
 
     with pytest.raises(ValueError, match="merge_mole=True"):
         UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_validation_rejects_hessian_vmap():
+    """
+    Verify that umas_fast_gpu rejects vectorized Hessian computation.
+    """
+    settings = _mock_settings()
+    settings.predict_untrained_hessian = {"omol"}
+
+    with pytest.raises(ValueError, match="set hessian_vmap=False"):
+        UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_validation_accepts_hessian_loop():
+    """
+    Verify that umas_fast_gpu accepts sequential Hessian computation.
+    """
+    settings = _mock_settings()
+    settings.predict_untrained_hessian = {"omol"}
+    settings.hessian_vmap = False
+
+    UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    ("channels", "dtype"),
+    [(96, torch.float32), (128, torch.bfloat16)],
+)
+def test_umas_fast_gpu_gate_activation_fallback(channels, dtype):
+    torch.manual_seed(42)
+    num_edges = 16
+    inputs = (
+        torch.randn(num_edges, 5 * channels, device="cuda", dtype=dtype),
+        torch.randn(num_edges, 4 * channels, device="cuda", dtype=dtype),
+        torch.randn(num_edges, 2 * channels, device="cuda", dtype=dtype),
+    )
+    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+    gating, x0 = inputs[0].split((2 * channels, 3 * channels), dim=-1)
+    expected = activation.forward_m_blocks(gating, (x0, inputs[1], inputs[2]))
+    actual = UMASFastGPUBackend.gate_activation(*inputs, channels, activation)
+
+    for actual_block, expected_block in zip(actual, expected, strict=True):
+        torch.testing.assert_close(actual_block, expected_block, rtol=0, atol=0)
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
+    compile_reset_state,
+):
+    torch.manual_seed(42)
+    channels = 96
+    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+
+    def fn(x0_full, x1, x2):
+        return UMASFastGPUBackend.gate_activation(x0_full, x1, x2, channels, activation)
+
+    compiled = torch.compile(fn, fullgraph=True, dynamic=True)
+    for num_edges in (17, 31):
+        inputs = (
+            torch.randn(num_edges, 5 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
+            torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+        )
+        reference_inputs = tuple(
+            value.detach().clone().requires_grad_() for value in inputs
+        )
+        actual = compiled(*inputs)
+        expected = fn(*reference_inputs)
+        grad_outputs = tuple(torch.randn_like(value) for value in actual)
+        actual_grads = torch.autograd.grad(actual, inputs, grad_outputs)
+        expected_grads = torch.autograd.grad(expected, reference_inputs, grad_outputs)
+
+        for actual_block, expected_block in zip(actual, expected, strict=True):
+            torch.testing.assert_close(
+                actual_block, expected_block, rtol=1e-6, atol=1e-6
+            )
+        for actual_grad, expected_grad in zip(
+            actual_grads, expected_grads, strict=True
+        ):
+            torch.testing.assert_close(actual_grad, expected_grad, rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.gpu()
+def test_compact_edge_degree_matches_dense():
+    torch.manual_seed(42)
+    num_edges, channels = 16, 8
+    scatter_target = torch.arange(num_edges, device="cuda")
+    x = torch.randn(
+        num_edges, 9, channels, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    radial = torch.randn(
+        num_edges, 3 * channels, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    dense = torch.zeros(
+        num_edges, 9, 9, device="cuda", dtype=torch.float64, requires_grad=True
+    )
+    with torch.no_grad():
+        dense[:, 0, 0] = torch.randn(num_edges, device="cuda", dtype=torch.float64)
+        dense[:, 1:4, 1:4] = torch.randn(
+            num_edges, 3, 3, device="cuda", dtype=torch.float64
+        )
+        dense[:, 4:9, 4:9] = torch.randn(
+            num_edges, 5, 5, device="cuda", dtype=torch.float64
+        )
+    compact = _compact_l2_wigner(dense.detach()).requires_grad_()
+    dense_inputs = (x, radial, dense)
+    compact_inputs = tuple(
+        value.detach().clone().requires_grad_() for value in (x, radial)
+    ) + (compact,)
+
+    def run(inputs):
+        return UMASFastGPUBackend.edge_degree_scatter(
+            inputs[0], inputs[1], inputs[2], scatter_target, 3, channels, 4.0
+        )
+
+    dense_out = run(dense_inputs)
+    compact_out = run(compact_inputs)
+    grad_out = torch.randn_like(dense_out)
+    dense_grads = torch.autograd.grad(dense_out, dense_inputs, grad_out)
+    compact_grads = torch.autograd.grad(compact_out, compact_inputs, grad_out)
+
+    torch.testing.assert_close(compact_out, dense_out, rtol=0, atol=0)
+    torch.testing.assert_close(compact_grads[0], dense_grads[0], rtol=0, atol=0)
+    torch.testing.assert_close(compact_grads[1], dense_grads[1], rtol=2e-15, atol=3e-16)
+    torch.testing.assert_close(
+        compact_grads[2],
+        _compact_l2_wigner(dense_grads[2]),
+        rtol=1e-14,
+        atol=5e-16,
+    )
 
 
 # =============================================================================
@@ -435,6 +586,34 @@ def test_permute_wigner_inv_matches_pytorch(sphere_channels):
 
 
 @pytest.mark.gpu()
+def test_legacy_backend_rotations_accept_compact_wigner():
+    torch.manual_seed(42)
+    num_nodes, num_edges, channels = 16, 32, 128
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
+    dense = _create_block_diagonal_wigner(num_edges, "cuda")
+    compact = _compact_l2_wigner(dense)
+    nodes = torch.randn(num_nodes, 9, channels, device="cuda")
+    edges = torch.randn(num_edges, 9, channels, device="cuda")
+    scatter_target = torch.arange(num_edges, device="cuda")
+
+    dense_node_to_edge = UMASFastGPUBackend.node_to_edge_wigner_permute(
+        nodes, edge_index, dense
+    )
+    compact_node_to_edge = UMASFastGPUBackend.node_to_edge_wigner_permute(
+        nodes, edge_index, compact
+    )
+    dense_edge_to_node = UMASFastGPUBackend.permute_wigner_inv_edge_to_node(
+        edges, dense, scatter_target, num_edges
+    )
+    compact_edge_to_node = UMASFastGPUBackend.permute_wigner_inv_edge_to_node(
+        edges, compact, scatter_target, num_edges
+    )
+
+    torch.testing.assert_close(compact_node_to_edge, dense_node_to_edge)
+    torch.testing.assert_close(compact_edge_to_node, dense_edge_to_node)
+
+
+@pytest.mark.gpu()
 @pytest.mark.parametrize("sphere_channels", [128, 256, 512])
 def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
     """
@@ -542,6 +721,9 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
     assert torch.allclose(
         baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
+    assert torch.allclose(
+        baseline_out["stress"], test_out["stress"], rtol=5e-4, atol=5e-5
+    ), f"Stress mismatch: max diff = {(baseline_out['stress'] - test_out['stress']).abs().max()}"
 
 
 @pytest.mark.gpu()
@@ -613,8 +795,8 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
-def test_compiled_backends_match_baseline(request, model_name, compile_reset_state):
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_state):
     """
     Test compiled execution modes produce same results as non-compiled baseline.
 
@@ -622,11 +804,15 @@ def test_compiled_backends_match_baseline(request, model_name, compile_reset_sta
     - general compiled vs general non-compiled
     - umas_fast_gpu compiled vs general non-compiled
 
-    Uses pretrained checkpoints (cached by HuggingFace Hub).
+    Uses pretrained checkpoints (cached by HuggingFace Hub) — or a direct
+    filesystem path if --sweep-model is set to one.
     """
-    # Get checkpoint from fixture
-    fixture_name = model_name.replace("-", "_").replace(".", "p") + "_checkpoint"
-    checkpoint_pt = request.getfixturevalue(fixture_name)
+    # Resolve to a checkpoint file: accept either a registered model name
+    # or an already-on-disk path.
+    if os.path.exists(pretrained_model_name):
+        checkpoint_pt = pretrained_model_name
+    else:
+        checkpoint_pt = pretrained_checkpoint_path_from_name(pretrained_model_name)
 
     # Create test system (32-atom Cu FCC)
     atoms = bulk("Cu", "fcc", a=3.6) * (2, 2, 2)
@@ -669,13 +855,13 @@ def test_compiled_backends_match_baseline(request, model_name, compile_reset_sta
         assert torch.allclose(
             baseline_out["forces"], test_out["forces"], rtol=5e-4, atol=5e-5
         ), (
-            f"{model_name} {test_mode} compile={test_compile}: "
+            f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
         )
         # Energy comparison
         assert torch.allclose(
             baseline_out["energy"], test_out["energy"], rtol=5e-4, atol=5e-5
         ), (
-            f"{model_name} {test_mode} compile={test_compile}: "
+            f"{pretrained_model_name} {test_mode} compile={test_compile}: "
             f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"
         )

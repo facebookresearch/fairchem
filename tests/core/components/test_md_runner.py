@@ -160,10 +160,19 @@ class TestMDRunner:
         ],
         ids=["VelocityVerlet", "NoseHoover", "Bussi", "Langevin", "BerendsenNPT"],
     )
-    def test_checkpoint_resume(self, cu_atoms, results_dir, thermostat):
+    @pytest.mark.parametrize(
+        "interrupt_at_step",
+        [36, 40],
+        ids=["non-aligned", "aligned"],
+    )
+    def test_checkpoint_resume(
+        self, cu_atoms, results_dir, thermostat, interrupt_at_step
+    ):
         """
-        Interrupt at a non-aligned step, checkpoint, resume, and verify
-        trajectory alignment across runs.
+        Checkpoint at both a non-aligned and an interval-aligned step, resume,
+        and verify the concatenated trajectory stays on a uniform grid with no
+        duplicated frames across the restart boundary (regardless of where
+        preemption lands relative to trajectory_interval).
         """
         results_dir1 = results_dir / "results1"
         results_dir2 = results_dir / "results2"
@@ -172,7 +181,6 @@ class TestMDRunner:
         results_dir2.mkdir()
 
         trajectory_interval = 10
-        interrupt_at_step = 36
         total_steps = 100
 
         runner1 = MDRunner(
@@ -221,7 +229,10 @@ class TestMDRunner:
 
         df1 = pd.read_parquet(parquet_file1)
         steps1 = list(df1["step"])
-        assert steps1 == [0, 10, 20, 30]
+        # Run 1 writes every interval-aligned step up to (and including) the
+        # interrupt step if that step is itself aligned.
+        expected_steps1 = list(range(0, interrupt_at_step + 1, trajectory_interval))
+        assert steps1 == expected_steps1
 
         # Verify checkpoint files
         assert (checkpoint_dir / "checkpoint.extxyz").exists()
@@ -254,7 +265,14 @@ class TestMDRunner:
         df2 = pd.read_parquet(results2["trajectory_file"])
         steps2 = list(df2["step"])
 
+        # No frame is written at the resume step, so the concatenated
+        # trajectory stays on a uniform grid with no duplicates, whether or not
+        # the checkpoint step was interval-aligned.
+        assert len(steps2) == len(set(steps2))
         all_steps = sorted(steps1 + steps2)
+        assert len(all_steps) == len(
+            set(all_steps)
+        ), f"Duplicate frame(s) across restart boundary: {all_steps}"
         expected = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         assert all_steps == expected, f"Expected {expected}, got {all_steps}"
 

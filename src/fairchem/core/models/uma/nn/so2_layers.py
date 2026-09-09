@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import Linear
 
+from .matmul import linear_with_folded_batch
 from .radial import RadialMLP
 
 if TYPE_CHECKING:
@@ -64,7 +65,10 @@ class SO2_m_Conv(torch.nn.Module):
         self.fc.weight.data.mul_(1 / math.sqrt(2))
 
     def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x_m = self.fc(x_m)
+        if type(self.fc) is Linear:
+            x_m = linear_with_folded_batch(x_m, self.fc.weight, self.fc.bias)
+        else:
+            x_m = self.fc(x_m)
         x_r_0, x_i_0, x_r_1, x_i_1 = x_m.reshape(
             x_m.shape[0], -1, self.out_channels_half
         ).split(1, dim=1)
@@ -274,6 +278,72 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
 
         return torch.cat(out, dim=1), x_0_extra
 
+    def gemm_outputs_from_packed(
+        self,
+        m0_buf: torch.Tensor,
+        m1_buf: torch.Tensor,
+        m2_buf: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Run conv1's cuBLAS GEMMs on pre-packed buffers.
+
+        Consumes the three scaled + GEMM-packed buffers emitted by the fused
+        producer op (wigner_conv1_fused_op), skipping the radial-scale/pack step
+        that forward() does. Mirrors forward() from the fc_m0 GEMM onward.
+
+        Args:
+            m0_buf: Packed m=0 buffer [E, 3*2C].
+            m1_buf: Packed m=1 buffer [E, 4*2C].
+            m2_buf: Packed m=2 buffer [E, 2*2C].
+        Returns:
+            M-major GEMM outputs kept in packed blocks. The first output
+            contains both the gate scalars and m=0 values.
+        """
+        if self.mmax != 2:
+            raise ValueError("packed conv1 GEMMs require mmax=2")
+        conv_m1, conv_m2 = self.so2_m_conv
+        if conv_m1._w_block is None:
+            conv_m1._build_w_block()
+        if conv_m2._w_block is None:
+            conv_m2._build_w_block()
+        return (
+            self.fc_m0(m0_buf),
+            m1_buf @ conv_m1._w_block.T,
+            m2_buf @ conv_m2._w_block.T,
+        )
+
+    def gemm_blocks_from_packed(
+        self,
+        m0_buf: torch.Tensor,
+        m1_buf: torch.Tensor,
+        m2_buf: torch.Tensor,
+    ) -> tuple[tuple[torch.Tensor, ...], torch.Tensor]:
+        x0_full, x1, x2 = self.gemm_outputs_from_packed(m0_buf, m1_buf, m2_buf)
+        gating, x0 = x0_full.split(
+            (
+                self.extra_m0_output_channels,
+                self.fc_m0.out_features - self.extra_m0_output_channels,
+            ),
+            -1,
+        )
+        return (x0, x1, x2), gating
+
+    def gemms_from_packed(
+        self,
+        m0_buf: torch.Tensor,
+        m1_buf: torch.Tensor,
+        m2_buf: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        output_blocks, gating = self.gemm_blocks_from_packed(m0_buf, m1_buf, m2_buf)
+        output = [output_blocks[0].view(m0_buf.shape[0], -1, self.m_output_channels)]
+        for m, block in enumerate(output_blocks[1:], start=1):
+            conv = self.so2_m_conv[m - 1]
+            real, imag = block.view(
+                m0_buf.shape[0], 2, conv.num_l, conv.m_output_channels
+            ).unbind(1)
+            output.extend((real, imag))
+        return torch.cat(output, dim=1), gating
+
 
 class SO2_Conv2_InternalBlock(torch.nn.Module):
     """
@@ -356,6 +426,50 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
             out.extend(x_m)
 
         return torch.cat(out, dim=1)
+
+    def gemms_from_blocks(
+        self,
+        input_blocks: tuple[torch.Tensor, ...],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Run conv2's block-diagonal GEMMs, returning the three raw buffers.
+
+        Returns (g0 [E,3C], g1 [E,4C], g2 [E,2C]) WITHOUT the view/unbind/cat
+        repack that forward() does. These feed the fused inv op
+        (wigner_inv_conv2_fused_op) directly. Mirrors forward() up to (but not
+        including) the torch.cat that materializes the M-major x_message.
+
+        Args:
+            input_blocks: Activated M-major features, flattened by order.
+
+        Returns:
+            (g0, g1, g2) raw conv2 GEMM outputs.
+        """
+        # m=0: linear
+        g0 = self.fc_m0(input_blocks[0])  # [E, 3C]
+
+        # m=1: block GEMM
+        conv_m1 = self.so2_m_conv[0]
+        if conv_m1._w_block is None:
+            conv_m1._build_w_block()
+        g1 = input_blocks[1] @ conv_m1._w_block.T  # [E, 4C]
+
+        # m=2: block GEMM
+        conv_m2 = self.so2_m_conv[1]
+        if conv_m2._w_block is None:
+            conv_m2._build_w_block()
+        g2 = input_blocks[2] @ conv_m2._w_block.T  # [E, 2C]
+
+        return g0, g1, g2
+
+    def gemms_to_buffers(
+        self,
+        x_message: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        input_blocks = tuple(
+            block.flatten(1) for block in x_message.split(self.m_split_sizes, dim=1)
+        )
+        return self.gemms_from_blocks(input_blocks)
 
 
 def convert_so2_conv1(

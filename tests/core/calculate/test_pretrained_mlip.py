@@ -1,0 +1,148 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
+Tests:  Name-vs-path checkpoint dispatch — pretrained_mlip.get_predict_unit
+        (registry lookup + YAML auto-fetch) versus load_predict_unit (path
+        only, no auto-fetch). Verifies forward-pass agreement between the
+        two branches, unknown-name KeyError, symlink handling, and
+        FAIRChemCalculator.from_model_checkpoint path-mode behavior.
+Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Every test in
+        this file is skipped by the autouse _skip_under_path_sweep
+        fixture under path-style --sweep-model (the registry-name
+        branch is the thing being tested).
+CI:     test_gpu_sweep (models shard).
+"""
+
+from __future__ import annotations
+
+import os
+
+import numpy.testing as npt
+import pytest
+from ase.build import bulk
+
+from fairchem.core import FAIRChemCalculator
+from fairchem.core.calculate import pretrained_mlip
+from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
+from tests.conftest import get_predict_unit_for_test
+
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+
+
+# Every test in this file exercises the name-vs-path dispatch infrastructure
+# (registry lookup, YAML auto-fetch, FAIRChemCalculator.from_model_checkpoint
+# behavior). They assume `pretrained_checkpoint` is a REGISTERED name they can
+# also resolve to a file path. Under path-style --sweep-model the fixture
+# value IS already a path, the registry lookup will KeyError, and these
+# tests have nothing meaningful to assert about the candidate's behavior —
+# skip them.
+@pytest.fixture(autouse=True)
+def _skip_under_path_sweep(pretrained_checkpoint):
+    if os.path.isfile(pretrained_checkpoint):
+        pytest.skip(
+            "test exercises the registry-name dispatch path; "
+            "not applicable to path-style --sweep-model"
+        )
+
+
+def test_get_predict_unit_by_name(pretrained_checkpoint):
+    """Registered name → predictor with populated external refs."""
+    predictor = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
+    assert isinstance(predictor, MLIPPredictUnit)
+    assert predictor.atom_refs, "atom_refs should be populated by the name branch"
+    assert (
+        predictor.form_elem_refs
+    ), "form_elem_refs should be populated by the name branch"
+
+
+def test_get_predict_unit_for_test_by_path(pretrained_checkpoint):
+    """
+    Filesystem path via get_predict_unit_for_test → predictor loads
+    successfully but external refs are empty (path goes through
+    load_predict_unit which does not auto-fetch YAMLs).
+    """
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+    predictor = get_predict_unit_for_test(checkpoint_path, device="cpu")
+    assert isinstance(predictor, MLIPPredictUnit)
+    assert predictor.atom_refs == {}, "path-load should leave atom_refs empty"
+    assert predictor.form_elem_refs == {}, "path-load should leave form_elem_refs empty"
+
+
+def test_name_and_path_forward_match(pretrained_checkpoint):
+    """
+    Forward pass on a multi-atom system must agree between name-load and
+    path-load — the in-checkpoint normalizer and element_references buffers
+    travel with the .pt, so external refs don't affect ordinary energies.
+    """
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+    pu_by_name = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
+    pu_by_path = get_predict_unit_for_test(checkpoint_path, device="cpu")
+
+    atoms = bulk("Cu", "fcc", a=3.6).repeat((2, 1, 1))  # 2-atom system
+    calc_name = FAIRChemCalculator(pu_by_name, task_name="omat")
+    calc_path = FAIRChemCalculator(pu_by_path, task_name="omat")
+
+    a_name = atoms.copy()
+    a_name.calc = calc_name
+    a_path = atoms.copy()
+    a_path.calc = calc_path
+
+    npt.assert_allclose(
+        a_name.get_potential_energy(), a_path.get_potential_energy(), atol=1e-6
+    )
+    npt.assert_allclose(a_name.get_forces(), a_path.get_forces(), atol=1e-6)
+
+
+def test_get_predict_unit_unknown_name_raises_keyerror():
+    """Bare string that's not a file and not a registered name → KeyError."""
+    with pytest.raises(KeyError, match="not found"):
+        pretrained_mlip.get_predict_unit("definitely-not-a-real-model", device="cpu")
+
+
+def test_get_predict_unit_for_test_dispatches_on_path(pretrained_checkpoint):
+    """
+    get_predict_unit_for_test dispatches path-vs-name: a real filesystem
+    path goes through load_predict_unit (empty refs), a registered name
+    goes through pretrained_mlip.get_predict_unit (populated refs).
+    """
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+
+    # Path branch
+    pu_path = get_predict_unit_for_test(checkpoint_path, device="cpu")
+    assert pu_path.atom_refs == {}
+
+    # Name branch
+    pu_name = get_predict_unit_for_test(pretrained_checkpoint, device="cpu")
+    assert pu_name.atom_refs != {}
+
+
+def test_get_predict_unit_for_test_symlink(tmp_path, pretrained_checkpoint):
+    """
+    A symlink to a checkpoint is still recognized as a file path,
+    so get_predict_unit_for_test takes the path branch (empty refs).
+    """
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+    link = tmp_path / "uma-link"
+    os.symlink(checkpoint_path, link)
+
+    predictor = get_predict_unit_for_test(str(link), device="cpu")
+    assert isinstance(predictor, MLIPPredictUnit)
+    assert predictor.atom_refs == {}
+    assert predictor.form_elem_refs == {}
+
+
+def test_from_model_checkpoint_path_behavior_unchanged(pretrained_checkpoint):
+    """
+    Regression guard: FAIRChemCalculator.from_model_checkpoint with a path
+    drops external refs. get_predict_unit_for_test matches this behavior.
+    """
+    checkpoint_path = pretrained_checkpoint_path_from_name(pretrained_checkpoint)
+    calc = FAIRChemCalculator.from_model_checkpoint(
+        checkpoint_path, task_name="omat", device="cpu"
+    )
+    assert calc.predictor.atom_refs == {}
+    assert calc.predictor.form_elem_refs == {}
