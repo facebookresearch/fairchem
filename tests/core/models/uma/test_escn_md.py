@@ -18,6 +18,46 @@ from e3nn.o3 import matrix_to_angles, spherical_harmonics, wigner_D
 
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
+from fairchem.core.models.uma.escn_md_block import SpectralAtomwise
+
+
+@pytest.mark.parametrize(
+    "num_atoms, sphere_channels, hidden_channels, lmax",
+    [(1, 8, 12, 1), (7, 16, 20, 2), (7, 128, 256, 2)],
+)
+def test_spectral_atomwise_scalar_projection_is_rank_two(
+    num_atoms: int, sphere_channels: int, hidden_channels: int, lmax: int
+) -> None:
+    torch.manual_seed(0)
+    module = SpectralAtomwise(
+        sphere_channels=sphere_channels,
+        hidden_channels=hidden_channels,
+        lmax=lmax,
+        mmax=lmax,
+        SO3_grid=None,
+    )
+    baseline_input = torch.randn(
+        num_atoms, (lmax + 1) ** 2, sphere_channels, requires_grad=True
+    )
+    candidate_input = baseline_input.detach().clone().requires_grad_(True)
+
+    gating_scalars = module.scalar_mlp(baseline_input.narrow(1, 0, 1))
+    baseline = module.so3_linear_1(baseline_input)
+    baseline = module.act(gating_scalars, baseline)
+    baseline = module.so3_linear_2(baseline)
+    baseline_grad = torch.autograd.grad(baseline.sum(), baseline_input)[0]
+
+    linear_input_shapes = []
+    hook = module.scalar_mlp[0].register_forward_pre_hook(
+        lambda _module, args: linear_input_shapes.append(args[0].shape)
+    )
+    candidate = module(candidate_input)
+    hook.remove()
+    candidate_grad = torch.autograd.grad(candidate.sum(), candidate_input)[0]
+
+    assert linear_input_shapes == [(num_atoms, sphere_channels)]
+    torch.testing.assert_close(candidate, baseline, rtol=0, atol=0)
+    torch.testing.assert_close(candidate_grad, baseline_grad, rtol=0, atol=0)
 
 
 @pytest.mark.parametrize(
