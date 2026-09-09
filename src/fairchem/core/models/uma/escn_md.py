@@ -400,8 +400,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.use_solvent_embedding = use_solvent_embedding
         self.solvent_emb_grad = solvent_emb_grad
         self.solvent_emb_hidden = solvent_emb_hidden
-        # Multiply predicted energy (and hence autograd forces) by the
-        # solvent-present mask, so vacuum input -> exactly zero delta.
         self.solvent_output_gate = solvent_output_gate
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
@@ -444,8 +442,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             grad=self.cs_emb_grad,
         )
 
-        # mix charge + spin, plus the dataset and solvent embeddings when
-        # enabled
         csd_factors = 2
 
         # dataset embedding
@@ -615,9 +611,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def csd_embedding(self, charge, spin, dataset, solvent=None):
         with record_function("charge spin dataset embeddings"):
-            # Mix charge, spin, and (optionally) dataset + solvent embeddings.
-            # Solvent is concatenated last so enabling it never shifts the
-            # weight columns of the existing terms.
             embs = [self.charge_embedding(charge), self.spin_embedding(spin)]
             if self.use_dataset_embedding:
                 assert dataset is not None
@@ -1150,10 +1143,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         )
 
         if self.solvent_output_gate:
-            # Gate the per-graph energy by the solvent-present mask (last channel
-            # of the solvent vector) BEFORE the autograd force computation, so
-            # vacuum systems get exactly zero energy AND forces while keeping
-            # F = -dE/dr consistent (the mask is constant w.r.t. positions).
             mask = data["solvent"][:, -1].to(energy.dtype)
             energy = energy * mask
             energy_part = energy_part * mask

@@ -295,9 +295,6 @@ def _report_incompat_keys(
     # filter out the missing scale factor keys for the new scaling factor module
     missing_keys: list[str] = []
     for full_key_name in keys.missing_keys:
-        # solvent embedding params are injected when grafting solvent conditioning
-        # onto a pretrained checkpoint; they are expected to be missing/freshly
-        # initialized, so do not treat them as a load error under strict loading
         if ".solvent_embedding." in f".{full_key_name}":
             continue
         parent_module_name, _ = full_key_name.rsplit(".", 1)

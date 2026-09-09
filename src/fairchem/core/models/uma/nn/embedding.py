@@ -283,8 +283,6 @@ class SolventEmbedding(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden_size, embedding_size),
         )
-        # Small init on the final layer so the solvent contribution starts near
-        # zero and does not destabilize early training.
         nn.init.uniform_(self.net[-1].weight, -0.001, 0.001)
         nn.init.zeros_(self.net[-1].bias)
         if not grad:

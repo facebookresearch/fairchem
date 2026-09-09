@@ -1,19 +1,5 @@
 # Finetune a pretrained UMA-S checkpoint with solvent conditioning grafted on.
-#
-# Enabling `use_solvent_embedding` widens the backbone's mix_csd layer; the
-# pretrained mix_csd weight is zero-padded into the new solvent block at load
-# time (see expand_mix_csd_state_dict), so the model reproduces the base UMA-S
-# model at step 0 (identity warm-start) and learns the solvent term during
-# finetuning.
-#
-# Pick a `data` config that requests the `solvent` field in its
-# a2g_args.r_data_keys (otherwise every structure gets the vacuum vector and the
-# finetune is solvent-blind). `uma_solvent_data_task_energy_force` is a molecular
-# (non-periodic) energy+forces template — fill in its `??` fields. Run with:
-#   fairchem -c configs/uma/finetune/uma_sm_solvent_finetune.yaml \
-#       data=uma_solvent_data_task_energy_force \
-#       data.dataset_name=... data.elem_refs=... data.normalizer_rmsd=... \
-#       data.train_dataset.splits.train.src=... data.val_dataset.splits.val.src=...
+
 defaults:
   - data: uma_solvent_data_task_energy_force
   - _self_
@@ -47,7 +33,6 @@ weight_decay: 1e-3
 evaluate_every_n_steps: 100
 checkpoint_every_n_steps: 1000
 
-# solvent embedding hyperparameters (grafted onto the pretrained backbone)
 solvent_emb_hidden: 16
 
 

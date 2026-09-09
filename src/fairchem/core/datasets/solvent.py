@@ -20,9 +20,6 @@ import torch
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# The seven solvent descriptors used as model conditioning, in the order
-# expected by ``SolventEmbedding``. ``n25`` is intentionally excluded: it is
-# ~0.999 collinear with ``n`` and is null for 11 of the 179 solvents.
 SOLVENT_DESCRIPTOR_ORDER = [
     "n",
     "alpha",
@@ -33,36 +30,18 @@ SOLVENT_DESCRIPTOR_ORDER = [
     "en-halogen",
 ]
 
-# Length of the solvent conditioning vector: 7 descriptors + 1 solvent-present
-# mask.
 SOLVENT_DIM = len(SOLVENT_DESCRIPTOR_ORDER) + 1
 
-# Per-descriptor vacuum-anchored normalization: ``transform(raw) / scale``, with
-# no mean subtraction, so the physical gas phase maps to exactly 0 in every
-# channel (the vacuum vector IS the descriptor-space origin, continuously
-# connected to the solvent manifold as eps -> 1 etc.). Transforms: ``epsilon``
-# is logged (solvation response saturates Born-like in eps; log(1) = 0 anchors
-# vacuum), ``n`` is shifted by its vacuum value of 1, everything else is linear
-# (raw vacuum values are already 0). Scales are the population std of the
-# transformed values over all 179 solvents in ``solvent_descriptors.json``. The
-# regression test ``test_solvent`` recomputes these from the JSON via
-# ``_recompute_stats`` and asserts they match, guarding against drift.
 _SOLVENT_STATS = {
     "n": {"transform": "shift1", "scale": 0.068400},
     "alpha": {"transform": "linear", "scale": 0.181746},
     "beta": {"transform": "linear", "scale": 0.234892},
     "gamma": {"transform": "linear", "scale": 11.688257},
-    "epsilon": {"transform": "log", "scale": 0.960804},
+    "epsilon": {"transform": "born", "scale": 0.165059},
     "aromaticity": {"transform": "linear", "scale": 0.322355},
     "en-halogen": {"transform": "linear", "scale": 0.174984},
 }
 
-# Experimental override: FAIRCHEM_SOLVENT_EPS_TRANSFORM=born switches the epsilon
-# channel to the Born factor (1 - 1/eps), the dielectric scaling that the Born /
-# generalized-Born / ALPB polarization energies and the C-PCM f(eps) all carry.
-# Also vacuum-anchored (1 - 1/1 = 0). The scale is the population std of
-# (1 - 1/eps) over the same 179 solvents. Default ("log") is bit-identical to the
-# historical behavior; every shipped checkpoint was trained with "log".
 _EPS_TRANSFORM_ENV = os.environ.get("FAIRCHEM_SOLVENT_EPS_TRANSFORM", "log")
 if _EPS_TRANSFORM_ENV == "born":
     _SOLVENT_STATS["epsilon"] = {"transform": "born", "scale": 0.165059}

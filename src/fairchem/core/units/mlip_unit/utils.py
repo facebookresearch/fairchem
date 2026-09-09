@@ -114,8 +114,6 @@ def load_inference_model(
 
         load_state_dict(model, matched_dict, strict=strict)
     else:
-        # zero-pad a narrower (pre-solvent) mix_csd when grafting the solvent
-        # embedding onto a pretrained checkpoint; no-op when shapes already match
         state_dict = expand_mix_csd_state_dict(model, checkpoint.model_state_dict)
         load_state_dict(model, state_dict, strict=strict)
 
