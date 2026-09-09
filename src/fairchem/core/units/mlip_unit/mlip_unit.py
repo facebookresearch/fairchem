@@ -12,12 +12,12 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import torch
 import torch.distributed.checkpoint as dcp
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from torch.distributed.checkpoint.format_utils import dcp_to_torch_save
 from torch.distributed.checkpoint.state_dict import (
     get_model_state_dict,
@@ -62,11 +62,44 @@ from fairchem.core.units.mlip_unit.utils import (
     tf32_context_manager,
 )
 
-if TYPE_CHECKING:
-    from omegaconf import DictConfig
-
 # this is a config generated on the fly and can be used to resume a run for a given checkpoint
 UNIT_RESUME_CONFIG = "resume.yaml"
+
+
+def _get_train_eval_unit_config(config: dict | DictConfig):
+    """
+    Return the train/eval unit config from direct or Ray-wrapped runner config.
+
+    Args:
+        config: Canonical job configuration.
+
+    Returns:
+        The train/eval unit configuration.
+    """
+    runner_config = config["runner"]
+    if "train_eval_unit" not in runner_config:
+        runner_config = runner_config["runner_config"]
+    return runner_config["train_eval_unit"]
+
+
+def _set_model_id_in_config(config: dict | DictConfig, model_id: str | None) -> None:
+    """
+    Persist a resolved model ID in a canonical training configuration.
+
+    Args:
+        config: Canonical job configuration to update.
+        model_id: Resolved model ID, or ``None`` for models without one.
+    """
+    if model_id is None:
+        return
+
+    model_config = _get_train_eval_unit_config(config)["model"]
+    if isinstance(model_config, DictConfig):
+        with open_dict(model_config):
+            model_config["model_id"] = model_id
+    else:
+        model_config["model_id"] = model_id
+
 
 # this represents the inference only checkpoint generated at each checkpoint
 UNIT_INFERENCE_CHECKPOINT = "inference_ckpt.pt"
@@ -126,7 +159,7 @@ def convert_train_checkpoint_to_inference_checkpoint(
     inference_ckpt = torch.load(
         checkpoint_loc, map_location="cpu", weights_only=False
     )  # DCP model config
-    train_eval_unit_state = inference_ckpt["config"]["runner"]["train_eval_unit"]
+    train_eval_unit_state = _get_train_eval_unit_config(inference_ckpt["config"])
     unit_state = inference_ckpt["unit_state"]
     torch.save(
         MLIPInferenceCheckpoint(
@@ -535,6 +568,7 @@ class MLIPTrainEvalUnit(
         self.finetune_model_full_config = getattr(
             model, "finetune_model_full_config", None
         )
+        self.model_id = getattr(model, "model_id", None)
         # call optimizer function between wrapping in DDP
         # this is required for models that have a no_weight_decay function
         self.optimizer = _get_optimizer_wd(optimizer_fn, model)
@@ -888,7 +922,10 @@ class MLIPTrainEvalUnit(
 
         finetune_model_full_config = self.get_finetune_model_config()
         if finetune_model_full_config is not None:
-            config.runner.train_eval_unit.model = finetune_model_full_config
+            train_eval_unit_config = _get_train_eval_unit_config(config)
+            train_eval_unit_config["model"] = finetune_model_full_config
+
+        _set_model_id_in_config(config, self.model_id)
 
         OmegaConf.save(config, os.path.join(checkpoint_location, UNIT_RESUME_CONFIG))
 
