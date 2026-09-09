@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.base import HydraModelV2
@@ -23,6 +24,12 @@ from fairchem.core.models.escaip.EScAIP import (
     EScAIPBackbone,
     EScAIPGradientEnergyForceStressHead,
 )
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 MAX_ELEMENTS = 100
 
@@ -95,7 +102,7 @@ def get_escaip_backbone(
     cutoff: float,
     use_compile: bool,
     otf_graph=False,
-    device="cuda",
+    device=ACCELERATOR,
     autograd: bool = True,
 ):
     backbone_config = get_backbone_config(
@@ -111,7 +118,7 @@ def get_escaip_full(
     cutoff: float,
     use_compile: bool,
     otf_graph=False,
-    device="cuda",
+    device=ACCELERATOR,
     autograd: bool = True,
 ):
     backbone = get_escaip_backbone(
@@ -145,7 +152,7 @@ def test_backbone_does_not_own_or_mutate_float32_matmul_precision(precision):
 @pytest.mark.compile_gpu()
 def test_compile_full_gpu(compile_reset_state):
     # make_deterministic()
-    device = "cuda"
+    device = ACCELERATOR
     cutoff = 6.0
     model_compile = get_escaip_full(cutoff=cutoff, use_compile=True, device=device)
     model_no_compile = get_escaip_full(cutoff=cutoff, use_compile=False, device=device)
@@ -168,7 +175,7 @@ def test_compile_full_gpu(compile_reset_state):
 @pytest.mark.gpu()
 def test_fixed_forward_full_gpu(compile_reset_state):
     # make_deterministic()
-    device = "cuda"
+    device = ACCELERATOR
     cutoff = 6.0
     seed_everywhere()
     # get model
@@ -198,7 +205,7 @@ def test_fixed_forward_full_gpu(compile_reset_state):
     results_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "fixed_results.pt"
     )
-    fixed_results = torch.load(results_path)
+    fixed_results = torch.load(results_path, map_location=ACCELERATOR)
     # compare fixed_results with output
     model_output = output
     assert torch.allclose(

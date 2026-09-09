@@ -70,7 +70,7 @@ def get_predict_unit(
     model_name: str,
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
-    device: Literal["cuda", "cpu"] | None = None,
+    device: Literal["cuda", "xpu", "cpu"] | None = None,
     cache_dir: str = CACHE_DIR,
     workers: int = 1,
     seed: int = 41,

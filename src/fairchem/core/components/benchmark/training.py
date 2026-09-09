@@ -21,6 +21,11 @@ from typing import Any
 import torch
 from torchtnt.framework.callback import Callback
 
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+    max_memory_allocated,
+    reset_peak_memory_stats,
+)
 from fairchem.core.components.runner import Runner
 
 logger = logging.getLogger(__name__)
@@ -61,8 +66,8 @@ class BenchmarkTrainCallback(Callback):
         self._step_start_time: float | None = None
 
     def on_train_start(self, state, unit) -> None:
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
+        if get_available_accelerator() is not None:
+            reset_peak_memory_stats()
 
     def on_train_step_start(self, state, unit) -> None:
         self._step_start_time = time.perf_counter()
@@ -75,8 +80,8 @@ class BenchmarkTrainCallback(Callback):
         self.grad_norms.append(
             unit.last_grad_norm if hasattr(unit, "last_grad_norm") else None
         )
-        if torch.cuda.is_available():
-            self.peak_memory_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+        if get_available_accelerator() is not None:
+            self.peak_memory_mb = max_memory_allocated() / (1024 * 1024)
 
     def on_train_end(self, state, unit) -> None:
         results = {
@@ -152,7 +157,7 @@ def run_training_benchmark(
         training_config: Path to the training YAML config.
         data_root_dir: Path to the dataset root directory.
             If None, generates fake benchmark datasets automatically.
-        device: Device to run on ("cpu" or "cuda").
+        device: Device to run on ("cpu", "cuda", "xpu", or "auto").
         bf16: Whether to enable bf16 for the candidate run.
         throughput_steps: Number of training steps for each run.
         seed: Random seed for reproducibility.
@@ -331,7 +336,7 @@ class TrainingBenchmarkRunner(Runner):
     def __init__(
         self,
         training_config: str,
-        device: str = "cuda",
+        device: str = "auto",
         bf16: bool = True,
         throughput_steps: int = 10,
         seed: int = 42,

@@ -11,6 +11,7 @@ import torch
 from torch import Tensor
 from torch.library import triton_op, wrap_triton
 
+from fairchem.core.common.device_utils import is_accelerator
 from fairchem.core.models.uma.triton.kernels import (
     packed_gate_bwd_kernel,
     packed_gate_fwd_kernel,
@@ -73,10 +74,12 @@ def _validate_inputs(x0_full: Tensor, x1: Tensor, x2: Tensor, channels: int) -> 
         or x2.dtype != torch.float32
     ):
         raise ValueError("packed gate requires float32 inputs")
-    if not x0_full.is_cuda or not x1.is_cuda or not x2.is_cuda:
-        raise ValueError("packed gate requires CUDA inputs")
+    # Triton drives NVIDIA and Intel GPUs alike, so the requirement is "an
+    # accelerator", not "CUDA specifically".
+    if not all(is_accelerator(t.device) for t in (x0_full, x1, x2)):
+        raise ValueError("packed gate requires GPU inputs (cuda or xpu)")
     if x1.device != x0_full.device or x2.device != x0_full.device:
-        raise ValueError("packed gate inputs must use the same CUDA device")
+        raise ValueError("packed gate inputs must use the same device")
 
 
 @triton_op("fairchem::_packed_gate_fwd", mutates_args=("y0", "y1", "y2"))

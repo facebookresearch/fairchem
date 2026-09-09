@@ -23,9 +23,16 @@ import torch
 from ase.build import molecule
 from numpy import testing as npt
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit import InferenceSettings
 from tests.conftest import get_predict_unit_for_test
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
@@ -113,7 +120,7 @@ def test_hessian(vmap, pretrained_checkpoint):
     """Test Hessian calculation using MLIPPredictUnit directly."""
     predict_unit = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=vmap
         ),
@@ -144,14 +151,14 @@ def test_hessian_vs_numerical(pretrained_checkpoint):
     """Test that analytical and numerical Hessians are close."""
     hessian_unit = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True
         ),
     )
     forces_unit = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
     )
 
     atoms = molecule("H2O")
@@ -169,7 +176,7 @@ def test_hessian_vs_numerical(pretrained_checkpoint):
     hessian_analytical = preds["hessian"].detach().cpu().numpy()
 
     hessian_numerical = (
-        get_numerical_hessian(data, forces_unit, eps=1e-4, device="cuda")
+        get_numerical_hessian(data, forces_unit, eps=1e-4, device=ACCELERATOR)
         .detach()
         .cpu()
         .numpy()
@@ -189,7 +196,7 @@ def test_hessian_symmetry(pretrained_checkpoint):
     """Test that the Hessian matrix is symmetric."""
     predict_unit = get_predict_unit_for_test(
         pretrained_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=InferenceSettings(
             predict_untrained_hessian={"omol"}, hessian_vmap=True
         ),

@@ -40,6 +40,7 @@ class SchedulerType(StrEnum):
 class DeviceType(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
+    XPU = "xpu"
 
 
 class RunType(StrEnum):

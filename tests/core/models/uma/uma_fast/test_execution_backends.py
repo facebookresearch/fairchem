@@ -23,6 +23,7 @@ import torch
 from ase.build import bulk
 
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
@@ -41,6 +42,12 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     node_to_edge_wigner_permute_launcher,
     permute_wigner_inv_edge_to_node_launcher,
 )
+
+# Accelerator these Triton tests run on. Triton itself is portable -- Intel
+# ships triton-xpu and the kernels compile and execute there -- so the
+# device follows the hardware rather than being pinned to NVIDIA. Numerical
+# agreement with the PyTorch reference is what these tests assert.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX - used only in test reference implementations
 L_TO_M_GATHER_IDX = [0] * 9
@@ -152,11 +159,11 @@ def test_umas_fast_gpu_gate_activation_fallback(channels, dtype):
     torch.manual_seed(42)
     num_edges = 16
     inputs = (
-        torch.randn(num_edges, 5 * channels, device="cuda", dtype=dtype),
-        torch.randn(num_edges, 4 * channels, device="cuda", dtype=dtype),
-        torch.randn(num_edges, 2 * channels, device="cuda", dtype=dtype),
+        torch.randn(num_edges, 5 * channels, device=ACCELERATOR, dtype=dtype),
+        torch.randn(num_edges, 4 * channels, device=ACCELERATOR, dtype=dtype),
+        torch.randn(num_edges, 2 * channels, device=ACCELERATOR, dtype=dtype),
     )
-    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+    activation = GateActivation(2, 2, channels, m_prime=True).to(ACCELERATOR)
     gating, x0 = inputs[0].split((2 * channels, 3 * channels), dim=-1)
     expected = activation.forward_m_blocks(gating, (x0, inputs[1], inputs[2]))
     actual = UMASFastGPUBackend.gate_activation(*inputs, channels, activation)
@@ -171,7 +178,7 @@ def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
 ):
     torch.manual_seed(42)
     channels = 96
-    activation = GateActivation(2, 2, channels, m_prime=True).cuda()
+    activation = GateActivation(2, 2, channels, m_prime=True).to(ACCELERATOR)
 
     def fn(x0_full, x1, x2):
         return UMASFastGPUBackend.gate_activation(x0_full, x1, x2, channels, activation)
@@ -179,9 +186,15 @@ def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
     compiled = torch.compile(fn, fullgraph=True, dynamic=True)
     for num_edges in (17, 31):
         inputs = (
-            torch.randn(num_edges, 5 * channels, device="cuda", requires_grad=True),
-            torch.randn(num_edges, 4 * channels, device="cuda", requires_grad=True),
-            torch.randn(num_edges, 2 * channels, device="cuda", requires_grad=True),
+            torch.randn(
+                num_edges, 5 * channels, device=ACCELERATOR, requires_grad=True
+            ),
+            torch.randn(
+                num_edges, 4 * channels, device=ACCELERATOR, requires_grad=True
+            ),
+            torch.randn(
+                num_edges, 2 * channels, device=ACCELERATOR, requires_grad=True
+            ),
         )
         reference_inputs = tuple(
             value.detach().clone().requires_grad_() for value in inputs
@@ -206,23 +219,32 @@ def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
 def test_compact_edge_degree_matches_dense():
     torch.manual_seed(42)
     num_edges, channels = 16, 8
-    scatter_target = torch.arange(num_edges, device="cuda")
+    scatter_target = torch.arange(num_edges, device=ACCELERATOR)
     x = torch.randn(
-        num_edges, 9, channels, device="cuda", dtype=torch.float64, requires_grad=True
+        num_edges,
+        9,
+        channels,
+        device=ACCELERATOR,
+        dtype=torch.float64,
+        requires_grad=True,
     )
     radial = torch.randn(
-        num_edges, 3 * channels, device="cuda", dtype=torch.float64, requires_grad=True
+        num_edges,
+        3 * channels,
+        device=ACCELERATOR,
+        dtype=torch.float64,
+        requires_grad=True,
     )
     dense = torch.zeros(
-        num_edges, 9, 9, device="cuda", dtype=torch.float64, requires_grad=True
+        num_edges, 9, 9, device=ACCELERATOR, dtype=torch.float64, requires_grad=True
     )
     with torch.no_grad():
-        dense[:, 0, 0] = torch.randn(num_edges, device="cuda", dtype=torch.float64)
+        dense[:, 0, 0] = torch.randn(num_edges, device=ACCELERATOR, dtype=torch.float64)
         dense[:, 1:4, 1:4] = torch.randn(
-            num_edges, 3, 3, device="cuda", dtype=torch.float64
+            num_edges, 3, 3, device=ACCELERATOR, dtype=torch.float64
         )
         dense[:, 4:9, 4:9] = torch.randn(
-            num_edges, 5, 5, device="cuda", dtype=torch.float64
+            num_edges, 5, 5, device=ACCELERATOR, dtype=torch.float64
         )
     compact = _compact_l2_wigner(dense.detach()).requires_grad_()
     dense_inputs = (x, radial, dense)
@@ -291,7 +313,7 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_pytorch backend)
@@ -302,7 +324,7 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
         execution_mode="umas_fast_pytorch",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -353,7 +375,7 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_pytorch backend)
@@ -364,7 +386,7 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
         execution_mode="umas_fast_pytorch",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -395,7 +417,7 @@ def test_node_to_edge_wigner_permute_gradcheck(sphere_channels):
     instead of full Jacobian computation to avoid OOM.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 8
     num_edges = 16
 
@@ -433,7 +455,7 @@ def test_permute_wigner_inv_edge_to_node_gradcheck(sphere_channels):
     instead of full Jacobian computation to avoid OOM.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 16
 
     # Create test inputs
@@ -536,7 +558,7 @@ def test_node_to_edge_wigner_permute_matches_pytorch(sphere_channels):
     Verify Triton kernel output matches PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_nodes = 16
     num_edges = 32
 
@@ -566,7 +588,7 @@ def test_permute_wigner_inv_matches_pytorch(sphere_channels):
     Verify Triton kernel output matches PyTorch reference.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 32
 
     # Create inputs
@@ -589,12 +611,12 @@ def test_permute_wigner_inv_matches_pytorch(sphere_channels):
 def test_legacy_backend_rotations_accept_compact_wigner():
     torch.manual_seed(42)
     num_nodes, num_edges, channels = 16, 32, 128
-    edge_index = torch.randint(0, num_nodes, (2, num_edges), device="cuda")
-    dense = _create_block_diagonal_wigner(num_edges, "cuda")
+    edge_index = torch.randint(0, num_nodes, (2, num_edges), device=ACCELERATOR)
+    dense = _create_block_diagonal_wigner(num_edges, ACCELERATOR)
     compact = _compact_l2_wigner(dense)
-    nodes = torch.randn(num_nodes, 9, channels, device="cuda")
-    edges = torch.randn(num_edges, 9, channels, device="cuda")
-    scatter_target = torch.arange(num_edges, device="cuda")
+    nodes = torch.randn(num_nodes, 9, channels, device=ACCELERATOR)
+    edges = torch.randn(num_edges, 9, channels, device=ACCELERATOR)
+    scatter_target = torch.arange(num_edges, device=ACCELERATOR)
 
     dense_node_to_edge = UMASFastGPUBackend.node_to_edge_wigner_permute(
         nodes, edge_index, dense
@@ -623,7 +645,7 @@ def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
     Regression test for a bug where channels > 128 were silently dropped.
     """
     torch.manual_seed(42)
-    device = "cuda"
+    device = ACCELERATOR
     num_edges = 32
 
     # Create inputs (L-major for grad_out, L-major for x_l)
@@ -696,7 +718,7 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_gpu backend)
@@ -707,7 +729,7 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
         execution_mode="umas_fast_gpu",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -761,7 +783,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
         execution_mode="general",
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
 
     # Test (umas_fast_gpu backend)
@@ -772,7 +794,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
         execution_mode="umas_fast_gpu",
     )
     test_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=test_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=test_settings
     )
 
     # Compare
@@ -828,7 +850,7 @@ def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_s
         compile=False,
     )
     baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
+        checkpoint_pt, ACCELERATOR, inference_settings=baseline_settings
     )
     baseline_out = baseline_predictor.predict(batch.clone())
 
@@ -847,7 +869,7 @@ def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_s
             compile=test_compile,
         )
         test_predictor = MLIPPredictUnit(
-            checkpoint_pt, "cuda", inference_settings=test_settings
+            checkpoint_pt, ACCELERATOR, inference_settings=test_settings
         )
         test_out = test_predictor.predict(batch.clone())
 

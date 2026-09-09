@@ -35,7 +35,7 @@ from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 from ase.data import chemical_symbols
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.common import distutils
+from fairchem.core.common import device_utils, distutils
 from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
@@ -51,6 +51,12 @@ from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
 from tests.conftest import get_predict_unit_for_test, seed_everywhere
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 def _resolve_checkpoint_path(name_or_path: str) -> str:
@@ -153,13 +159,13 @@ def test_predict_uses_inference_tf32_and_restores_caller(tf32):
 @pytest.fixture(scope="module")
 def uma_predict_unit_cuda(pretrained_checkpoint):
     """Module-scoped predict unit using the UMA checkpoint under test, device=cuda."""
-    return get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
+    return get_predict_unit_for_test(pretrained_checkpoint, device=ACCELERATOR)
 
 
 @pytest.fixture(scope="module")
 def uma_predict_unit(uma_predict_unit_cuda, pretrained_checkpoint):
     """Module-scoped predict unit - uses cuda version if available, otherwise cpu."""
-    if torch.cuda.is_available():
+    if device_utils.get_available_accelerator() is not None:
         return uma_predict_unit_cuda
     return get_predict_unit_for_test(pretrained_checkpoint)
 
@@ -169,7 +175,7 @@ def uma_merge_mole_predict_unit(pretrained_checkpoint):
     """Module-scoped predict unit with merge_mole=True for MgO tests."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     return get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
 
 
@@ -397,7 +403,7 @@ def test_parallel_predict_unit_gpu(
 ):
     _test_parallel_predict_unit_impl(
         workers,
-        "cuda",
+        ACCELERATOR,
         checkpointing,
         graph_gen_version,
         pretrained_checkpoint,
@@ -450,7 +456,7 @@ def test_full_model_gp_correctness(num_atoms, workers, gp_mode, pretrained_check
     seed_everywhere(seed)
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
-        device="cuda",
+        device=ACCELERATOR,
         inference_settings=ifsets,
         num_workers=workers,
         gp_config=gp_mode,
@@ -460,7 +466,7 @@ def test_full_model_gp_correctness(num_atoms, workers, gp_mode, pretrained_check
 
     seed_everywhere(seed)
     ref_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=ifsets
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=ifsets
     )
     ref_results = ref_unit.predict(atomic_data)
 
@@ -601,7 +607,7 @@ def test_parallel_predict_unit_batch_gpu(
     workers, checkpointing, gp_mode, pretrained_checkpoint
 ):
     _test_parallel_predict_unit_batch_impl(
-        workers, "cuda", checkpointing, pretrained_checkpoint, gp_mode
+        workers, ACCELERATOR, checkpointing, pretrained_checkpoint, gp_mode
     )
 
 
@@ -628,7 +634,7 @@ def test_batching_consistency(padding, pretrained_checkpoint):
         edge_chunk_size=padding,
     )
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=ifsets
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=ifsets
     )
 
     # Create H2O molecule
@@ -775,7 +781,7 @@ def _get_predict_unit_with_wigner_mode(
         use_quaternion_wigner=use_quaternion,
     )
     return get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
 
 
@@ -926,7 +932,7 @@ def test_merge_mole_composition_change_falls_back(pretrained_checkpoint, caplog)
 
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
 
@@ -952,7 +958,7 @@ def test_merge_mole_vs_non_merged_consistency(pretrained_model_name):
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit_merged = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings=settings_merged
+        pretrained_model_name, device=ACCELERATOR, inference_settings=settings_merged
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
 
@@ -968,7 +974,9 @@ def test_merge_mole_vs_non_merged_consistency(pretrained_model_name):
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
     predict_unit_non_merged = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings=settings_non_merged
+        pretrained_model_name,
+        device=ACCELERATOR,
+        inference_settings=settings_non_merged,
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
 
@@ -1034,7 +1042,7 @@ def test_merge_mole_consistent_batch(pretrained_checkpoint):
     n_systems = 3
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
 
     atomic_data_list = [
@@ -1055,7 +1063,7 @@ def test_merge_mole_inconsistent_batch_falls_back(pretrained_checkpoint, caplog)
     """A mixed-composition first batch permanently disables the fast path."""
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
 
     atomic_data_list = [
@@ -1085,7 +1093,7 @@ def test_merge_mole_batch_predict_matches_single(pretrained_checkpoint):
     atoms_supercell = make_supercell(atoms, 2 * np.eye(3))
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = get_predict_unit_for_test(
-        pretrained_checkpoint, device="cuda", inference_settings=settings
+        pretrained_checkpoint, device=ACCELERATOR, inference_settings=settings
     )
 
     batch_of_two = atomicdata_list_to_batch(
@@ -1142,7 +1150,7 @@ def batch_server_handle(uma_predict_unit):
     ray.init(
         ignore_reinit_error=True,
         num_cpus=10,
-        num_gpus=1 if torch.cuda.is_available() else 0,
+        num_gpus=1 if device_utils.get_available_accelerator() else 0,
         logging_level="ERROR",  # Reduce noise in test output
     )
 
@@ -1152,7 +1160,7 @@ def batch_server_handle(uma_predict_unit):
         deployment_config={
             "num_replicas": 1,
             "ray_actor_options": {
-                "num_gpus": 1 if torch.cuda.is_available() else 0,
+                "num_gpus": 1 if device_utils.get_available_accelerator() else 0,
                 "num_cpus": 2,
             },
         },
@@ -1552,7 +1560,7 @@ def test_single_atom_predict_1p2(task_name, declared_predict_unit):
 
 
 @pytest.mark.gpu()
-def test_untrained_forces(conserving_mole_checkpoint, device="cuda"):
+def test_untrained_forces(conserving_mole_checkpoint, device=ACCELERATOR):
     """
     Test that untrained forces can be computed for energy-only checkpoint.
     """
@@ -1603,7 +1611,7 @@ def test_untrained_forces(conserving_mole_checkpoint, device="cuda"):
 @pytest.mark.gpu()
 def test_untrained_stress_selective_gpu(conserving_mole_checkpoint):
     """Test selective stress computation on GPU."""
-    _test_untrained_stress_selective(conserving_mole_checkpoint[0], "cuda")
+    _test_untrained_stress_selective(conserving_mole_checkpoint[0], ACCELERATOR)
 
 
 def test_untrained_stress_selective_cpu(conserving_mole_checkpoint):
@@ -1663,7 +1671,7 @@ def _test_untrained_stress_selective(checkpoint_path, device):
 
 
 @pytest.mark.gpu()
-def test_untrained_hessian(conserving_mole_checkpoint, device="cuda"):
+def test_untrained_hessian(conserving_mole_checkpoint, device=ACCELERATOR):
     """
     Test that hessian can be computed for energy-only checkpoint.
     """
@@ -1813,7 +1821,7 @@ def test_auto_add_disabled(conserving_mole_checkpoint):
 @pytest.mark.gpu()
 def test_untrained_forces_gpu(conserving_mole_checkpoint):
     """Test computing forces for energy-only checkpoint on GPU."""
-    _test_untrained_forces(conserving_mole_checkpoint[0], "cuda")
+    _test_untrained_forces(conserving_mole_checkpoint[0], ACCELERATOR)
 
 
 def test_untrained_forces_cpu(conserving_mole_checkpoint):
@@ -1872,7 +1880,7 @@ def _test_untrained_forces(checkpoint_path, device):
 @pytest.mark.gpu()
 def test_untrained_hessian_gpu(conserving_mole_checkpoint):
     """Test hessian computation on GPU."""
-    _test_untrained_hessian(conserving_mole_checkpoint[0], "cuda")
+    _test_untrained_hessian(conserving_mole_checkpoint[0], ACCELERATOR)
 
 
 def test_untrained_hessian_cpu(conserving_mole_checkpoint):
@@ -1966,11 +1974,11 @@ def _test_frozen_parameters_preserve_input_derivatives(
 
     seed_everywhere(42)
     frozen_predictor = MLIPPredictUnit(
-        checkpoint_path, device="cuda", inference_settings=settings
+        checkpoint_path, device=ACCELERATOR, inference_settings=settings
     )
     seed_everywhere(42)
     unfrozen_predictor = MLIPPredictUnit(
-        checkpoint_path, device="cuda", inference_settings=settings
+        checkpoint_path, device=ACCELERATOR, inference_settings=settings
     )
     monkeypatch.setattr(
         unfrozen_predictor.model,
@@ -2032,7 +2040,7 @@ def test_hessian_activation_checkpointing(conserving_mole_checkpoint):
     results = {}
     for ac in (False, True):
         torch.manual_seed(42)
-        torch.cuda.manual_seed_all(42)
+        device_utils.manual_seed_all(42)
         settings = InferenceSettings(
             predict_untrained_forces={"omol"},
             predict_untrained_hessian={"omol"},
@@ -2041,7 +2049,7 @@ def test_hessian_activation_checkpointing(conserving_mole_checkpoint):
         )
         predictor = MLIPPredictUnit(
             conserving_mole_checkpoint[0],
-            device="cuda",
+            device=ACCELERATOR,
             inference_settings=settings,
         )
         preds = predictor.predict(batch)
@@ -2132,7 +2140,7 @@ def test_execution_mode_auto_set_umas_fast_gpu(pretrained_model_name):
     """
 
     predict_unit = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings="turbo"
+        pretrained_model_name, device=ACCELERATOR, inference_settings="turbo"
     )
 
     # Verify that actual module backend is UMASFastGPUBackend when set to turbo mode
@@ -2157,7 +2165,7 @@ def test_execution_mode_not_overridden_when_explicit(pretrained_model_name):
     )
 
     predict_unit = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings=settings
+        pretrained_model_name, device=ACCELERATOR, inference_settings=settings
     )
 
     # Verify that execution_mode was NOT changed
@@ -2174,7 +2182,7 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 
     predict_unit = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings="turbo"
+        pretrained_model_name, device=ACCELERATOR, inference_settings="turbo"
     )
 
     # execution_mode should remain None (not auto-set to umas_fast_gpu)

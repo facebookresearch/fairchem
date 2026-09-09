@@ -17,10 +17,17 @@ import pytest
 import torch
 from ase import build
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import MLP_EFS_Head, eSCNMDBackbone
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 MAX_ELEMENTS = 100
 DATASET_LIST = ["oc20", "omol", "osc", "omat", "odac"]
@@ -106,7 +113,7 @@ def get_backbone_config(cutoff: float, otf_graph=False, autograd: bool = True):
 
 
 def get_escn_md_backbone(
-    cutoff: float, otf_graph=False, device="cuda", autograd: bool = True
+    cutoff: float, otf_graph=False, device=ACCELERATOR, autograd: bool = True
 ):
     backbone_config = get_backbone_config(
         cutoff=cutoff, otf_graph=otf_graph, autograd=autograd
@@ -118,7 +125,7 @@ def get_escn_md_backbone(
 
 
 def get_escn_md_full(
-    cutoff: float, otf_graph=False, device="cuda", autograd: bool = True
+    cutoff: float, otf_graph=False, device=ACCELERATOR, autograd: bool = True
 ):
     backbone = get_escn_md_backbone(
         cutoff=cutoff, otf_graph=otf_graph, device=device, autograd=autograd
@@ -132,12 +139,12 @@ def get_escn_md_full(
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
 def test_compile_batched_external_graph(compile_reset_state):
-    model = get_escn_md_backbone(cutoff=6.0, otf_graph=False, device="cuda")
+    model = get_escn_md_backbone(cutoff=6.0, otf_graph=False, device=ACCELERATOR)
     compiled = torch.compile(model._generate_graph, fullgraph=True, dynamic=True)
 
     for index, sizes in enumerate(((1, 2), (2, 3))):
         data = get_batched_tg_data(
-            neighbors=300, cutoff=6.0, device="cuda", sizes=sizes
+            neighbors=300, cutoff=6.0, device=ACCELERATOR, sizes=sizes
         )
         expected = model._generate_graph(data.clone())
         context = (
@@ -158,7 +165,7 @@ def test_compile_batched_external_graph(compile_reset_state):
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
 def test_compile_backbone_gpu(compile_reset_state):
-    device = "cuda"
+    device = ACCELERATOR
     cutoff = 6.0
     model = get_escn_md_backbone(cutoff=cutoff, device=device)
     compiled = torch.compile(model, dynamic=True)
@@ -179,7 +186,7 @@ def test_compile_backbone_gpu(compile_reset_state):
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
 def test_compile_full_gpu(compile_reset_state):
-    device = "cuda"
+    device = ACCELERATOR
     cutoff = 6.0
     model = get_escn_md_full(cutoff=cutoff, device=device)
     compiled = torch.compile(model, dynamic=True)

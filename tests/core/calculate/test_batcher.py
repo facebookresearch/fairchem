@@ -24,12 +24,12 @@ from functools import partial
 import numpy.testing as npt
 import pytest
 import ray
-import torch
 from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate._batch import InferenceBatcher
+from fairchem.core.common import device_utils
 
 # mark all tests in this module as serial (Ray needs serial execution due to
 # large number of subprocesses) and pretrained (sweep-eligible).
@@ -62,7 +62,7 @@ def setup_ray():
         ignore_reinit_error=True,
         namespace=namespace,
         num_cpus=16,  # Increased to support default ray_actor_options num_cpus=8
-        num_gpus=1 if torch.cuda.is_available() else 0,
+        num_gpus=1 if device_utils.get_available_accelerator() else 0,
         logging_level="ERROR",
         _temp_dir="/tmp/ray",  # Use larger /tmp instead of default /var/tmp (512 MB tmpfs)
         _system_config={"local_fs_capacity_threshold": 0.99},

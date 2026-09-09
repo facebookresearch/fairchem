@@ -17,7 +17,7 @@ import ray
 import torch
 
 import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core.common import distutils
+from fairchem.core.common import device_utils, distutils
 
 
 @pytest.fixture()
@@ -101,7 +101,16 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
-    config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
+    config.addinivalue_line(
+        "markers",
+        "gpu: mark test to run only on GPU workers (any accelerator: cuda or xpu)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "cuda_only: test depends on CUDA specifically -- NVIDIA-tuned Triton "
+        "kernels, CUDA-only torch APIs, or hard-coded reference values from "
+        "NVIDIA hardware. Skipped on other accelerators rather than failing.",
+    )
     config.addinivalue_line(
         "markers",
         "compile_gpu: GPU test that uses torch.compile — run in a separate pytest "
@@ -273,10 +282,13 @@ def pytest_generate_tests(metafunc):
 
 def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
-    if "gpu" in item.keywords and not torch.cuda.is_available():
-        pytest.skip("CUDA not available, skipping GPU test")
-    if "compile_gpu" in item.keywords and not torch.cuda.is_available():
-        pytest.skip("CUDA not available, skipping compile_gpu test")
+    accelerator = device_utils.get_available_accelerator()
+    if "gpu" in item.keywords and accelerator is None:
+        pytest.skip("no accelerator (cuda/xpu) available, skipping GPU test")
+    if "compile_gpu" in item.keywords and accelerator is None:
+        pytest.skip("no accelerator (cuda/xpu) available, skipping compile_gpu test")
+    if "cuda_only" in item.keywords and not torch.cuda.is_available():
+        pytest.skip("test requires CUDA specifically, not just any accelerator")
     if "dgl" in item.keywords:
         # check dgl is installed
         fairchem_cpp_found = False
@@ -417,6 +429,20 @@ def pytest_runtest_logreport(report):
             f"\n[mem] [{current}/{total} {pct:3d}%] {report.nodeid}: {summary}",
             flush=True,
         )
+
+
+@pytest.fixture()
+def accelerator_device() -> str:
+    """The accelerator this run should use ("cuda" / "xpu").
+
+    Use instead of a literal "cuda" in any @pytest.mark.gpu test, so the suite
+    follows whatever hardware is present. Tests that genuinely require NVIDIA
+    should be marked @pytest.mark.cuda_only and may keep "cuda".
+    """
+    accelerator = device_utils.get_available_accelerator()
+    if accelerator is None:
+        pytest.skip("no accelerator (cuda/xpu) available")
+    return accelerator
 
 
 @pytest.fixture()

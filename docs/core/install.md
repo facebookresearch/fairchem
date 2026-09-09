@@ -41,6 +41,40 @@ pip install -e src/packages/fairchem-core[dev]
 In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!
 :::
 
+## Hardware support
+
+FAIRChem runs on CPU, NVIDIA GPUs (`cuda`), and Intel GPUs (`xpu`, e.g. Data
+Center GPU Max). The accelerator is detected automatically, so `device="auto"`
+(or leaving `device` unset) picks whatever is present:
+
+```python
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="auto")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
+```
+
+Passing an explicit `device="cuda"` or `device="xpu"` is validated against the
+hardware and raises if that accelerator is absent, rather than silently
+falling back to CPU.
+
+:::{admonition} Intel GPU (XPU) notes
+:class: dropdown
+
+* Requires an XPU-enabled PyTorch build (`torch.xpu.is_available()` is `True`).
+* Distributed runs use oneCCL through PyTorch's native `xccl` backend. The
+  legacy out-of-tree `oneccl_bindings_for_pytorch` package is used as a
+  fallback if `xccl` is unavailable.
+* `FAIRCHEM_DEVICE_TYPE=cpu|cuda|xpu` forces a device type, which is useful on
+  nodes exposing more than one accelerator or for debugging on CPU.
+* UMA-S's fused Triton execution backend (`umas_fast_gpu`) is available on
+  Intel GPUs exactly as on NVIDIA — Triton supports both, and the kernels are
+  selected the same way on each. No extra opt-in is required.
+* CI does not cover XPU: GitHub-hosted runners have no Intel GPUs, so the
+  `gpu`-marked suite still gates on CUDA. XPU support is validated manually
+  on Intel GPU hardware.
+:::
+
 ## Subpackages
 
 In addition to `fairchem-core`, there are related packages for specialized tasks or applications. Each can be installed with `pip` or `uv` just like `fairchem-core`:

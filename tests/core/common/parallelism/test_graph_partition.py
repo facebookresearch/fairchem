@@ -10,11 +10,18 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.common.parallelism.graph_partition import (
     PartitionStrategy,
     partition_atoms_index_split,
     partition_atoms_spatial,
 )
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 class TestPartitionStrategy:
@@ -158,7 +165,7 @@ class TestPartitionAtomsSpatial:
         """
         Spatial partitioning should work on GPU.
         """
-        pos = torch.randn(200, 3, device="cuda")
+        pos = torch.randn(200, 3, device=ACCELERATOR)
         assignments = partition_atoms_spatial(pos, 8)
         assert assignments.device == pos.device
         assert assignments.shape == (200,)

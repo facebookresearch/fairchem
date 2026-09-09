@@ -20,10 +20,17 @@ import pytest
 import torch
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 @pytest.mark.inference_check()
@@ -77,8 +84,8 @@ def test_inference_checkpoint_direct(
         (True, False, True, True, True),  # test compile and merge
         # with acvitation checkpointing
         (True, True, True, True, True),  # test external model graph gen + compile
-        (True, True, True, False,  True),  # test merge but no compile
-        (True, True, False, False,  True),  # test no merge or compile
+        (True, True, True, False, True),  # test merge but no compile
+        (True, True, False, False, True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes_gpu(
@@ -101,7 +108,7 @@ def test_conserving_mole_inference_modes_gpu(
 
     calc = FAIRChemCalculator(
         checkpoint_path=command_line_inference_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         task_name=task,
         inference_settings=InferenceSettings(
             tf32=tf32,

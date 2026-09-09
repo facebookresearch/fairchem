@@ -16,6 +16,7 @@ import pytest
 import torch
 from ase import build
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
@@ -24,6 +25,12 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
 )
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 @pytest.mark.parametrize(
@@ -142,7 +149,7 @@ def test_conserving_mole_inference_modes_gpu(
         ),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
-        device="cuda",
+        device=ACCELERATOR,
         forces_rtol=forces_rtol,
         forces_atol=forces_atol,
         energy_rtol=energy_rtol,
@@ -217,7 +224,7 @@ def test_conserving_mole_inference_mode_default_gpu(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
-        device="cuda",
+        device=ACCELERATOR,
         energy_rtol=1e-4,
         forces_rtol=2e-4,
     )
@@ -233,7 +240,7 @@ def test_conserving_mole_inference_mode_md_gpu(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
-        device="cuda",
+        device=ACCELERATOR,
         energy_rtol=1e-4,
         forces_rtol=2e-4,
     )
@@ -346,7 +353,7 @@ def test_mole_merge_inference_falls_back(
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
-    device = "cuda"
+    device = ACCELERATOR
     predictor = MLIPPredictUnit(
         conserving_inference_checkpoint_pt,
         device=device,
@@ -533,7 +540,7 @@ def test_ac_with_chunking_and_batching(
     )
     reset_seeds(0)
     batch = get_batched_system(natoms, nsystems)
-    device = "cuda"
+    device = ACCELERATOR
     predictor_noac = MLIPPredictUnit(
         conserving_mole_checkpoint_pt,
         device=device,
