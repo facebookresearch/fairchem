@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,7 +32,7 @@ def setup_vasp_calc_mof(atoms: ase.Atoms, path: Path):
         sigma=0.2,
         ispin=2,
         prec="Accurate",
-        nelm=60,
+        nelm=120,
         nelmin=2,
         ediff=1e-5,
         ediffg=-0.05,
@@ -79,7 +80,7 @@ def setup_vasp_mof_and_ads(atoms: ase.Atoms, path: Path):
         sigma=0.2,
         ispin=2,
         prec="Accurate",
-        nelm=60,
+        nelm=120,
         nelmin=2,
         ediff=1e-5,
         ediffg=-0.05,
