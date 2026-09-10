@@ -25,6 +25,7 @@ from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_map
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEGlobals,
+    set_padded_segments,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
     MOLEInterface,
@@ -184,7 +185,11 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 device=batch_full[edge_index[1]].device,
             ).scatter_(0, batch_full[edge_index[1]], 1, reduce="add")
 
-            self.global_mole_tensors.mole_sizes = mole_sizes.cpu()
+            mole_sizes = mole_sizes.cpu()
+            self.global_mole_tensors.mole_sizes = mole_sizes
+            set_padded_segments(
+                self.global_mole_tensors, mole_sizes.tolist(), batch_full.device
+            )
 
     def log_MOLE_stats(self):
         if not self.training or self.num_experts == 0:
@@ -561,6 +566,10 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.global_mole_tensors.mole_sizes = torch.zeros(
             data.natoms.shape[0], dtype=torch.int, device=emb["batch"].device
         ).scatter(0, emb["batch"], 1, reduce="add")  # data.natoms.cpu()
+        # sizes changed under the MOLE layers: drop the batched index maps
+        self.global_mole_tensors.pad_index = None
+        self.global_mole_tensors.unpad_index = None
+        self.global_mole_tensors.pad_shape = None
         self.global_mole_tensors.natoms = emb["batch"].shape[0]
         data_batch_full = data.batch_full.cpu()
 

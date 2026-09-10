@@ -69,6 +69,43 @@ class MOLEGlobals:
     # the MolE interface to maintain functional equivalence to the Linear layer interface, this extra info
     # needs to be added here instead. (TODO: is there a cleaner way to do this?)
     ac_start_idx: int = 0
+    # Index maps for the batched MOLE path, built once per batch by
+    # set_padded_segments. None means the per-system loop is used.
+    pad_index: torch.Tensor | None = None
+    unpad_index: torch.Tensor | None = None
+    pad_shape: tuple[int, int] | None = None
+
+
+def set_padded_segments(
+    globals_obj: MOLEGlobals, sizes: list[int], device: torch.device
+) -> None:
+    """
+    Build the index maps that turn the per-system loop into one bmm.
+
+    Rows of the MOLE input are contiguous per system, system b owning
+    sizes[b] rows. pad_index gathers them into a [B, Smax] padded layout
+    (padding slots point at row 0 and are never read back), and unpad_index
+    maps every real row back to its padded slot.
+    """
+    num_systems = len(sizes)
+    if num_systems < 2:
+        globals_obj.pad_index = None
+        globals_obj.unpad_index = None
+        globals_obj.pad_shape = None
+        return
+    max_size = max(sizes)
+    sizes_t = torch.tensor(sizes, device=device)
+    starts = torch.cumsum(sizes_t, 0) - sizes_t
+    system_of_row = torch.repeat_interleave(
+        torch.arange(num_systems, device=device), sizes_t, output_size=sum(sizes)
+    )
+    rows = torch.arange(sum(sizes), device=device)
+    unpad_index = system_of_row * max_size + rows - starts[system_of_row]
+    pad_index = torch.zeros(num_systems * max_size, dtype=torch.long, device=device)
+    pad_index[unpad_index] = rows
+    globals_obj.pad_index = pad_index
+    globals_obj.unpad_index = unpad_index
+    globals_obj.pad_shape = (num_systems, max_size)
 
 
 def init_linear(num_experts, use_bias, out_features, in_features):
@@ -175,9 +212,17 @@ class MOLE(torch.nn.Module):
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
 
-        out = []
         ac_start_idx = self.global_mole_tensors.ac_start_idx
         assert len(self.global_mole_tensors.mole_sizes) > 0
+        pad_index = self.global_mole_tensors.pad_index
+        if (
+            pad_index is not None
+            and ac_start_idx == 0
+            and x.shape[0] == self.global_mole_tensors.unpad_index.shape[0]
+        ):
+            return self._forward_batched(x, weights, pad_index)
+
+        out = []
         # TODO: precompute these if needed but they should be small and on cpu
         start_idxs = [0] + torch.cumsum(
             self.global_mole_tensors.mole_sizes, dim=0
@@ -207,3 +252,21 @@ class MOLE(torch.nn.Module):
             result.shape[0] == x.shape[0]
         ), f"result shape {result.shape}, does not match input shape {x.shape} at dim 0"
         return result
+
+    def _forward_batched(self, x, weights, pad_index):
+        """
+        All systems in one bmm over a padded [B, Smax, ...] layout.
+
+        Padded slots hold a copy of row 0; their outputs are never gathered
+        back, so their gradient is zero and they contribute nothing to the
+        weight gradient.
+        """
+        num_systems, max_size = self.global_mole_tensors.pad_shape
+        x_pad = x.index_select(0, pad_index)
+        x_pad = x_pad.reshape(num_systems, -1, self.in_features)
+        out = torch.bmm(x_pad, weights.transpose(1, 2))
+        out = out.reshape(num_systems * max_size, *x.shape[1:-1], self.out_features)
+        out = out.index_select(0, self.global_mole_tensors.unpad_index)
+        if self.bias is not None:
+            out = out + self.bias
+        return out
