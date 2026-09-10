@@ -80,6 +80,7 @@ def get_pbc_distances(
     neighbors,
     return_offsets: bool = False,
     return_distance_vec: bool = False,
+    filter_zero_distances: bool = True,
 ):
     row, col = edge_index
 
@@ -94,15 +95,19 @@ def get_pbc_distances(
     # compute distances
     distances = distance_vectors.norm(dim=-1)
 
+    out = {"edge_index": edge_index, "distances": distances}
+    if not filter_zero_distances:
+        # the graph builder already excluded zero-length edges
+        if return_distance_vec:
+            out["distance_vec"] = distance_vectors
+        if return_offsets:
+            out["offsets"] = offsets
+        return out
+
     # redundancy: remove zero distances
     nonzero_idx = torch.arange(len(distances), device=distances.device)[distances != 0]
-    edge_index = edge_index[:, nonzero_idx]
-    distances = distances[nonzero_idx]
-
-    out = {
-        "edge_index": edge_index,
-        "distances": distances,
-    }
+    out["edge_index"] = edge_index[:, nonzero_idx]
+    out["distances"] = distances[nonzero_idx]
 
     if return_distance_vec:
         out["distance_vec"] = distance_vectors[nonzero_idx]
@@ -185,6 +190,8 @@ def generate_graph(
         neighbors,
         return_offsets=True,
         return_distance_vec=True,
+        # v2 drops zero-length edges itself (atom_distance_sqr.ne(0))
+        filter_zero_distances=radius_pbc_version != 2,
     )
 
     edge_index = out["edge_index"]
