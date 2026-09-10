@@ -78,10 +78,12 @@ def get_max_neighbors_mask(
     max_num_neighbors_threshold,
     degeneracy_tolerance: float = 0.01,
     enforce_max_strictly: bool = False,
+    num_atoms: int | None = None,
 ):
     """
     Give a mask that filters out edges so that each atom has at most
-    `max_num_neighbors_threshold` neighbors.
+    `max_num_neighbors_threshold` neighbors. Pass num_atoms when the caller
+    knows it, so that no device scalar has to be read back for a size.
     Assumes that `index` is sorted.
 
     Enforcing the max strictly can force the arbitrary choice between
@@ -95,7 +97,8 @@ def get_max_neighbors_mask(
     """
 
     device = natoms.device
-    num_atoms = natoms.sum()
+    if num_atoms is None:
+        num_atoms = natoms.sum()
 
     # Get number of neighbors
     num_neighbors = get_counts(index, num_atoms)
@@ -134,7 +137,7 @@ def get_max_neighbors_mask(
     # index_sort_map assumes index to be sorted
     index_neighbor_offset = torch.cumsum(num_neighbors, dim=0) - num_neighbors
     index_neighbor_offset_expand = torch.repeat_interleave(
-        index_neighbor_offset, num_neighbors
+        index_neighbor_offset, num_neighbors, output_size=index.shape[0]
     )
     index_sort_map = (
         index * max_num_neighbors
@@ -475,33 +478,37 @@ def radius_graph_pbc_v2(
     )
 
     rep = torch.cat([rep_a1.view(-1, 1), rep_a2.view(-1, 1), rep_a3.view(-1, 1)], dim=1)
-    cells_per_image = (
-        (rep[:, 0] * 2 + 1.0) * (rep[:, 1] * 2 + 1.0) * (rep[:, 2] * 2 + 1.0)
-    ).long()
+
+    # The per-image repetition counts and atom counts are read back once and
+    # every per-image table below is built on the host from them, instead of
+    # one Python loop per image over device scalars (several host
+    # synchronizations per image).
+    rep_host = rep.to(torch.long).tolist()
+    natoms_host = num_atoms_per_image.tolist()
+    cells_host = [(2 * r[0] + 1) * (2 * r[1] + 1) * (2 * r[2] + 1) for r in rep_host]
+    cells_per_image = torch.tensor(cells_host, device=device, dtype=torch.long)
+    num_cells_total = sum(cells_host)
+    num_source_atoms_host = [c * n for c, n in zip(cells_host, natoms_host)]
+    num_source_atoms_total = sum(num_source_atoms_host)
 
     # Create a tensor of unit cells for each image
-    unit_cell = torch.zeros(
-        torch.sum(cells_per_image), 3, device=device, dtype=data.cell.dtype
-    )
-    offset = 0
-    for i in range(batch_size):
-        cells_x = torch.arange(
-            -rep[i][0], rep[i][0] + 1, device=device, dtype=data.cell.dtype
-        )
-        cells_y = torch.arange(
-            -rep[i][1], rep[i][1] + 1, device=device, dtype=data.cell.dtype
-        )
-        cells_z = torch.arange(
-            -rep[i][2], rep[i][2] + 1, device=device, dtype=data.cell.dtype
-        )
-        unit_cell[offset : cells_per_image[i] + offset] = torch.cartesian_prod(
-            cells_x, cells_y, cells_z
-        )
-        offset = offset + cells_per_image[i]
+    unit_cell = torch.cat(
+        [
+            torch.cartesian_prod(
+                torch.arange(-r[0], r[0] + 1, dtype=data.cell.dtype),
+                torch.arange(-r[1], r[1] + 1, dtype=data.cell.dtype),
+                torch.arange(-r[2], r[2] + 1, dtype=data.cell.dtype),
+            )
+            for r in rep_host
+        ],
+        dim=0,
+    ).to(device)
 
     # Compute the x, y, z positional offsets for each cell in each image
     cell_matrix = torch.transpose(data.cell, 1, 2)
-    cell_matrix = torch.repeat_interleave(cell_matrix, cells_per_image, dim=0)
+    cell_matrix = torch.repeat_interleave(
+        cell_matrix, cells_per_image, dim=0, output_size=num_cells_total
+    )
     pbc_cell_offsets = torch.bmm(cell_matrix, unit_cell.view(-1, 3, 1)).squeeze(-1)
 
     # If node_partition exists, this means we want to generate only a partial graph
@@ -517,24 +524,26 @@ def radius_graph_pbc_v2(
     # Compute the position of the source atoms for the edges. There are
     # more source atoms than target atoms, since the source atoms are
     # tiled by the PBC cells.
-    num_cells_per_atom = torch.repeat_interleave(cells_per_image, num_atoms_per_image)
+    num_cells_per_atom = torch.repeat_interleave(
+        cells_per_image, num_atoms_per_image, output_size=num_atoms
+    )
     source_atom_index = torch.repeat_interleave(
-        torch.arange(num_atoms, device=device).long(), num_cells_per_atom
+        torch.arange(num_atoms, device=device).long(),
+        num_cells_per_atom,
+        output_size=num_source_atoms_total,
     )
     source_atom_image = data_batch_idxs[source_atom_index]
     source_atom_pos = atom_pos[source_atom_index]
 
     # For each atom the index of the PBC cell
-    pbc_cell_index = torch.tensor([], device=device).long()
+    cell_index_pieces = []
     offset = 0
-    for i in range(batch_size):
-        cell_indices = (
-            torch.arange(offset, offset + cells_per_image[i], device=device)
-            .repeat(num_atoms_per_image[i])
-            .long()
+    for cells_i, natoms_i in zip(cells_host, natoms_host):
+        cell_index_pieces.append(
+            torch.arange(offset, offset + cells_i, dtype=torch.long).repeat(natoms_i)
         )
-        pbc_cell_index = torch.cat([pbc_cell_index, cell_indices], dim=0)
-        offset = offset + cells_per_image[i]
+        offset += cells_i
+    pbc_cell_index = torch.cat(cell_index_pieces, dim=0).to(device)
 
     # Remember the source cell for later use
     source_cell = unit_cell[pbc_cell_index]
@@ -562,11 +571,14 @@ def radius_graph_pbc_v2(
     source_atom_grid = torch.floor(source_atom_pos / grid_resolution).long()
     target_atom_grid = torch.floor(target_atom_pos / grid_resolution).long()
 
-    # Find the min and max grid index for each image
-    unique_atom_image, num_source_atoms_per_image = torch.unique(
-        source_atom_image, return_counts=True
+    # Find the min and max grid index for each image. Every image has at
+    # least one atom and one cell, so the images present are 0..batch_size-1
+    # and their source atom counts are cells * atoms, both known on the host.
+    unique_atom_image = torch.arange(batch_size, device=device, dtype=torch.long)
+    num_source_atoms_per_image = torch.tensor(
+        num_source_atoms_host, device=device, dtype=torch.long
     )
-    max_num_source_atoms = torch.max(num_source_atoms_per_image)
+    max_num_source_atoms = max(num_source_atoms_host)
     # Create a new array with size [batch_size, max_num_source_atoms] to hold
     # the grid indices for each atom. We can then perform max/min on each
     # image separately.
@@ -576,7 +588,10 @@ def radius_graph_pbc_v2(
     )
     source_atom_offset_per_image[0] = 0
     source_atom_offset_per_image = torch.repeat_interleave(
-        source_atom_offset_per_image, num_source_atoms_per_image, 0
+        source_atom_offset_per_image,
+        num_source_atoms_per_image,
+        0,
+        output_size=num_source_atoms_total,
     )
     source_atom_mapping = (
         torch.arange(len(source_atom_offset_per_image), device=device, dtype=torch.long)
@@ -584,7 +599,12 @@ def radius_graph_pbc_v2(
     )
     source_atom_mapping = (
         source_atom_mapping
-        + torch.repeat_interleave(unique_atom_image, num_source_atoms_per_image, 0)
+        + torch.repeat_interleave(
+            unique_atom_image,
+            num_source_atoms_per_image,
+            0,
+            output_size=num_source_atoms_total,
+        )
         * max_num_source_atoms
     )
 
@@ -659,13 +679,19 @@ def radius_graph_pbc_v2(
     cum_sum_grid_cell_atom_count = torch.roll(cum_sum_grid_cell_atom_count, 1, 0)
     cum_sum_grid_cell_atom_count[0] = 0
     cum_sum_grid_cell_offset = torch.repeat_interleave(
-        cum_sum_grid_cell_atom_count, grid_cell_atom_count, dim=0
+        cum_sum_grid_cell_atom_count,
+        grid_cell_atom_count,
+        dim=0,
+        output_size=num_source_atoms_total,
     )
     grid_cell_offset = (  # If this OOMs it could be because boxsize is large and PBC is on
         torch.arange(num_grid_cells, device=device) * max_atoms_per_grid_cell
     )
     grid_cell_offset = torch.repeat_interleave(
-        grid_cell_offset, grid_cell_atom_count, dim=0
+        grid_cell_offset,
+        grid_cell_atom_count,
+        dim=0,
+        output_size=num_source_atoms_total,
     )
     grid_atom_map = (
         torch.arange(len(grid_cell_offset), device=device)
@@ -771,10 +797,7 @@ def radius_graph_pbc_v2(
     target_idx = target_atom_edge_index
     # The cell for each source atom
     source_cell = source_cell[source_atom_edge_index]
-    # The number of edge per image
-    no_op, num_neighbors_image = torch.unique(
-        source_atom_image[source_atom_edge_index], return_counts=True
-    )
+    # (the number of edges per image is computed by get_max_neighbors_mask)
 
     # Reduce the number of neighbors for each atom to the
     # desired threshold max_num_neighbors_threshold
@@ -793,6 +816,7 @@ def radius_graph_pbc_v2(
         atom_distance=atom_distance_sqr,
         max_num_neighbors_threshold=max_num_neighbors_threshold,
         enforce_max_strictly=enforce_max_neighbors_strictly,
+        num_atoms=num_atoms,
     )
 
     if not torch.all(mask_num_neighbors):
