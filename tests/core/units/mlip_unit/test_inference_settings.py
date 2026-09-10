@@ -71,6 +71,46 @@ def test_invalid_string_raises():
         InferenceSettings(base_precision_dtype="int8")
 
 
+def test_compile_mode_validation():
+    with pytest.raises(ValueError, match="compile_mode must be"):
+        InferenceSettings(compile=True, compile_mode="max-autotune")
+    with pytest.raises(ValueError, match="requires compile=True"):
+        InferenceSettings(compile_mode="reduce-overhead")
+
+    settings = InferenceSettings(
+        compile=True, compile_mode="reduce-overhead", external_graph_gen=True
+    )
+    assert settings.compile_mode == "reduce-overhead"
+
+
+def test_internal_reduce_overhead_requires_graph_v3():
+    with pytest.raises(ValueError, match="internal_graph_gen_version=3"):
+        InferenceSettings(compile=True, compile_mode="reduce-overhead")
+
+
+def test_reduce_overhead_settings_accept_valid_internal_graph_configuration():
+    settings = InferenceSettings(
+        compile=True,
+        compile_mode="reduce-overhead",
+        external_graph_gen=False,
+        internal_graph_gen_version=3,
+    )
+    assert settings.internal_graph_edge_bucket_size == 1024
+
+
+def test_reduce_overhead_fields_preserve_existing_positional_arguments():
+    settings = InferenceSettings(False, True, False, False, True)
+
+    assert settings.wigner_cuda is True
+    assert settings.compile_mode is None
+
+
+@pytest.mark.parametrize("bucket_size", [0, -1, 1.5, True])
+def test_internal_graph_edge_bucket_size_must_be_positive_integer(bucket_size):
+    with pytest.raises(ValueError, match="must be positive"):
+        InferenceSettings(internal_graph_edge_bucket_size=bucket_size)
+
+
 # --- to_omegaconf ---
 
 
