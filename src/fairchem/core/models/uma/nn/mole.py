@@ -206,10 +206,19 @@ class MOLE(torch.nn.Module):
 
     def forward(self, x):
         with torch.autocast(device_type=self.weights.device.type, enabled=False):
-            weights = torch.einsum(
-                "eoi, be->boi",
-                self.weights,
-                self.global_mole_tensors.expert_mixing_coefficients,
+            # coefficients [B, E] @ weights [E, O*I] -> [B, O, I]. Written as a
+            # plain matmul so that the weight gradient comes back as the
+            # contiguous [E, O*I] product and matches the parameter layout,
+            # which lets DDP use it in place instead of copying it into the
+            # bucket view every step.
+            coefficients = self.global_mole_tensors.expert_mixing_coefficients
+            flat_weights = self.weights.flatten(1)
+            if flat_weights.shape[0] == 1 and coefficients.shape[1] != 1:
+                # a single expert bank against wider coefficients: the einsum
+                # this replaces broadcast the expert dim, i.e. summed them
+                coefficients = coefficients.sum(dim=1, keepdim=True)
+            weights = torch.mm(coefficients, flat_weights).view(
+                -1, self.out_features, self.in_features
             )
 
         ac_start_idx = self.global_mole_tensors.ac_start_idx
