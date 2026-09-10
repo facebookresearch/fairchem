@@ -319,6 +319,13 @@ def start_ray_cluster(
         Path to head.json file, or (head_file, RayCluster) if
         return_cluster=True.
     """
+    total_jobs = int(config["num_workers"])
+    if total_jobs < 1:
+        raise ValueError(
+            "num_workers must be at least 1 because it counts the Ray head "
+            "job as part of the total cluster capacity"
+        )
+
     log_dir = Path(
         os.environ.get("RAY_PREFECT_LOG_DIR", Path.home() / "ray_prefect_logs")
     )
@@ -340,9 +347,13 @@ def start_ray_cluster(
         enable_client_server=True,
     )
 
-    if config["num_workers"] > 1:
+    # The head job participates in the Ray cluster and contributes its
+    # requested CPUs/GPUs. ``num_workers`` is the total requested capacity,
+    # so only submit the remaining jobs here.
+    additional_worker_jobs = total_jobs - 1
+    if additional_worker_jobs:
         cluster.start_workers(
-            num_workers=config["num_workers"],
+            num_workers=additional_worker_jobs,
             requirements=requirements,
             name="ray_cluster",
         )
