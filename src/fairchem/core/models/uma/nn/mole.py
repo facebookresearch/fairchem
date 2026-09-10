@@ -77,7 +77,10 @@ class MOLEGlobals:
 
 
 def set_padded_segments(
-    globals_obj: MOLEGlobals, sizes: list[int], device: torch.device
+    globals_obj: MOLEGlobals,
+    sizes: list[int],
+    device: torch.device,
+    max_pad_ratio: float = 1.25,
 ) -> None:
     """
     Build the index maps that turn the per-system loop into one bmm.
@@ -85,10 +88,18 @@ def set_padded_segments(
     Rows of the MOLE input are contiguous per system, system b owning
     sizes[b] rows. pad_index gathers them into a [B, Smax] padded layout
     (padding slots point at row 0 and are never read back), and unpad_index
-    maps every real row back to its padded slot.
+    maps every real row back to its padded slot. The padded layout copies
+    the input and multiplies the GEMM work by B * Smax / sum(sizes), so it is
+    only built when that ratio is at most max_pad_ratio; otherwise the loop
+    over split views is used.
     """
     num_systems = len(sizes)
-    if num_systems < 2:
+    total = sum(sizes)
+    if (
+        num_systems < 2
+        or total == 0
+        or num_systems * max(sizes) > max_pad_ratio * total
+    ):
         globals_obj.pad_index = None
         globals_obj.unpad_index = None
         globals_obj.pad_shape = None
@@ -231,11 +242,24 @@ class MOLE(torch.nn.Module):
         ):
             return self._forward_batched(x, weights, pad_index)
 
+        mole_sizes = self.global_mole_tensors.mole_sizes
+        if (
+            ac_start_idx == 0
+            and mole_sizes.device.type == "cpu"
+            and x.shape[0] == int(mole_sizes.sum())
+        ):
+            # Whole input: split into per-system views. One op forward and one
+            # cat backward, instead of B slices whose backward each zero-fills
+            # a full-size tensor.
+            out = [
+                linear_with_folded_batch(segment, weights[n], bias=self.bias)
+                for n, segment in enumerate(x.split(mole_sizes.tolist(), dim=0))
+            ]
+            return torch.concatenate(out, dim=0)
+
         out = []
         # TODO: precompute these if needed but they should be small and on cpu
-        start_idxs = [0] + torch.cumsum(
-            self.global_mole_tensors.mole_sizes, dim=0
-        ).tolist()
+        start_idxs = [0] + torch.cumsum(mole_sizes, dim=0).tolist()
         mole_intervals = list(zip(start_idxs, start_idxs[1:]))
 
         # Because activation checkpointing can chunk the inputs, we need to only compute

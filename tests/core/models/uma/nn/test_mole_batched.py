@@ -18,7 +18,7 @@ from fairchem.core.models.uma.nn.mole import (
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-@pytest.mark.parametrize("sizes", [[7, 3, 12], [5, 5], [1, 9, 2, 4]])
+@pytest.mark.parametrize("sizes", [[7, 6, 8], [5, 5], [3, 4, 4, 4]])
 def test_batched_matches_loop(ndim, sizes):
     """
     The padded bmm path must match the per-system loop, values and gradients.
@@ -46,6 +46,45 @@ def test_batched_matches_loop(ndim, sizes):
     got = run(batched=True)
     for a, b in zip(ref, got):
         assert torch.allclose(a, b, atol=1e-6, rtol=1e-5)
+
+
+def test_uneven_sizes_skip_padding():
+    g = MOLEGlobals(
+        expert_mixing_coefficients=None, mole_sizes=torch.tensor([1, 9, 2, 4])
+    )
+    set_padded_segments(g, [1, 9, 2, 4], torch.device("cpu"))
+    assert g.pad_index is None
+    set_padded_segments(g, [1, 9, 2, 4], torch.device("cpu"), max_pad_ratio=10.0)
+    assert g.pad_index is not None
+
+
+@pytest.mark.parametrize("sizes", [[7, 3, 12], [1, 9, 2, 4], [6]])
+def test_split_loop_matches_slice_loop(sizes):
+    """
+    The split-view loop (no index maps) must match the original slice loop,
+    exercised here through the activation-checkpoint chunk path.
+    """
+    torch.manual_seed(0)
+    coeffs = torch.softmax(torch.randn(len(sizes), 3), dim=1)
+    g = MOLEGlobals(expert_mixing_coefficients=coeffs, mole_sizes=torch.tensor(sizes))
+    layer = MOLE(3, 5, 4, g, bias=True)
+    x = torch.randn(sum(sizes), 5, requires_grad=True)
+    out = layer(x)
+    (out**2).sum().backward()
+    x_grad = x.grad.clone()
+    x.grad = None
+    layer.weights.grad = None
+    # chunk path == original slice loop, two chunks
+    k = sizes[0]
+    g.ac_start_idx = 0
+    part0 = layer(x[:k])
+    g.ac_start_idx = k
+    part1 = layer(x[k:])
+    g.ac_start_idx = 0
+    ref = torch.cat([part0, part1], dim=0)
+    (ref**2).sum().backward()
+    assert torch.allclose(out, ref, atol=1e-6)
+    assert torch.allclose(x_grad, x.grad, atol=1e-6)
 
 
 def test_single_system_keeps_loop():
