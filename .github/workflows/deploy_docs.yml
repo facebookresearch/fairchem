@@ -28,11 +28,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs-html
-
-      - name: Deploy to fair-chem.github.io
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
-          external_repository: FAIR-Chem/fair-chem.github.io
-          publish_branch: gh-pages
-          publish_dir: docs-html
