@@ -573,6 +573,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 pred_output[task_name] = task.element_references.undo_refs(
                     data, pred_output[task_name]
                 )
+        # Conservative-force inference needs autograd to derive forces from energy,
+        # but callers must not retain that forward graph with the predictions.
+        if (
+            not self.model.training
+            and not self.model.module.backbone.regress_config.direct_forces
+        ):
+            pred_output = {name: value.detach() for name, value in pred_output.items()}
         return pred_output
 
 

@@ -150,6 +150,59 @@ def test_predict_uses_inference_tf32_and_restores_caller(tf32):
         torch.backends.cudnn.allow_tf32 = original_cudnn_tf32
 
 
+def _make_omol_water_batch():
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    return atomicdata_list_to_batch([data])
+
+
+def test_conservative_predict_outputs_are_detached(conserving_mole_checkpoint):
+    """Conservative UMA inference must release its energy/stress autograd graph."""
+    predictor = MLIPPredictUnit(conserving_mole_checkpoint[0], device="cpu")
+    assert not predictor.model.module.backbone.regress_config.direct_forces
+
+    predictions = predictor.predict(_make_omol_water_batch())
+
+    assert predictions
+    for name, value in predictions.items():
+        assert value.grad_fn is None, f"{name} retains an autograd graph"
+        assert not value.requires_grad, f"{name} requires gradients"
+
+
+def test_direct_force_predict_output_path_is_unchanged(direct_mole_checkpoint):
+    """Direct-force inference continues to run under no_grad without output changes."""
+    predictor = MLIPPredictUnit(direct_mole_checkpoint[0], device="cpu")
+    assert predictor.model.module.backbone.regress_config.direct_forces
+
+    predictions = predictor.predict(_make_omol_water_batch())
+
+    assert predictions
+    for value in predictions.values():
+        assert value.grad_fn is None
+        assert not value.requires_grad
+
+
+def test_conservative_training_outputs_retain_energy_graph(conserving_mole_checkpoint):
+    """Conservative UMA training retains the energy graph needed for backward."""
+    model = initialize_finetuning_model(conserving_mole_checkpoint[0])
+    model.train()
+    assert not model.backbone.regress_config.direct_forces
+
+    outputs = model(_make_omol_water_batch())
+    energy = outputs["omol_energy"]["energy"]
+
+    assert energy.requires_grad
+    assert energy.grad_fn is not None
+    energy.sum().backward()
+    assert any(parameter.grad is not None for parameter in model.parameters())
+
+
 @pytest.fixture(scope="module")
 def uma_predict_unit_cuda(pretrained_checkpoint):
     """Module-scoped predict unit using the UMA checkpoint under test, device=cuda."""
