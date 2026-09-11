@@ -23,6 +23,7 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.26.0",
     "ase-db-backends>=0.10.0",
+    "backoff",
     "monty>=2026.2.18",
     "clusterscope==0.0.18",
     "setuptools<81.0.0",
