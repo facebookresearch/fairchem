@@ -642,7 +642,7 @@ def worker_script(
                 "--max-worker-port=0",
             ],
             env=worker_env,
-            check=False,
+            check=True,
         )
     except Exception as ex:
         logger.error(f"Worker failed to start: {ex}")

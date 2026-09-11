@@ -8,11 +8,16 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from fairchem.core.calculate._ray_inference_cluster import start_ray_cluster
+from fairchem.core.calculate._ray_inference_cluster import (
+    RayClusterStartupError,
+    RayWorkerStartupError,
+    _wait_for_expected_gpu_capacity,
+    start_ray_cluster,
+)
 
 
 def _cluster_config(num_workers: int) -> dict:
@@ -75,3 +80,62 @@ def test_start_ray_cluster_rejects_zero_total_jobs(ray_cluster_cls):
         start_ray_cluster(_cluster_config(0))
 
     ray_cluster_cls.assert_not_called()
+
+
+def test_wait_for_expected_gpu_capacity_waits_before_returning():
+    ray_module = MagicMock()
+    ray_module.cluster_resources.side_effect = [{"GPU": 1.0}, {"GPU": 2.0}]
+    worker = MagicMock(job_id="worker-1")
+    worker.done.return_value = False
+    cluster = SimpleNamespace(jobs=[MagicMock(job_id="head"), worker])
+
+    with patch("fairchem.core.calculate._ray_inference_cluster.time.sleep") as sleep:
+        _wait_for_expected_gpu_capacity(
+            ray_module=ray_module,
+            cluster=cluster,
+            expected_gpus=2,
+            timeout_seconds=30,
+        )
+
+    sleep.assert_called_once_with(5.0)
+    worker.done.assert_called_once_with(force_check=True)
+
+
+def test_wait_for_expected_gpu_capacity_reports_exited_worker():
+    ray_module = MagicMock()
+    ray_module.cluster_resources.return_value = {"GPU": 31.0}
+    worker = MagicMock(job_id="worker-31")
+    worker.done.return_value = True
+    worker.state = "FAILED"
+    worker.stderr.return_value = "OSError: [Errno 28] No space left on device"
+    cluster = SimpleNamespace(jobs=[MagicMock(job_id="head"), worker])
+
+    with pytest.raises(RayWorkerStartupError) as exc_info:
+        _wait_for_expected_gpu_capacity(
+            ray_module=ray_module,
+            cluster=cluster,
+            expected_gpus=32,
+            timeout_seconds=300,
+        )
+
+    message = str(exc_info.value)
+    assert "31/32" in message
+    assert "worker-31 [FAILED]" in message
+    assert "No space left on device" in message
+
+
+def test_wait_for_expected_gpu_capacity_has_bounded_wait():
+    ray_module = MagicMock()
+    ray_module.cluster_resources.return_value = {"GPU": 31.0}
+    worker = MagicMock(job_id="worker-31")
+    worker.done.return_value = False
+    worker.state = "PENDING"
+    cluster = SimpleNamespace(jobs=[MagicMock(job_id="head"), worker])
+
+    with pytest.raises(RayClusterStartupError, match="31/32"):
+        _wait_for_expected_gpu_capacity(
+            ray_module=ray_module,
+            cluster=cluster,
+            expected_gpus=32,
+            timeout_seconds=0,
+        )

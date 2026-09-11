@@ -40,6 +40,14 @@ from fairchem.core.launchers.cluster.ray_cluster import (
 logger = logging.getLogger(__name__)
 
 
+class RayClusterStartupError(RuntimeError):
+    """Raised when a managed Ray cluster cannot reach its requested capacity."""
+
+
+class RayWorkerStartupError(RayClusterStartupError):
+    """Raised when a managed SLURM worker exits before joining the Ray cluster."""
+
+
 def _find_free_localhost_port() -> int:
     """Find an available port bound to localhost only.
 
@@ -48,6 +56,113 @@ def _find_free_localhost_port() -> int:
     network interfaces).
     """
     return find_free_port(bind_address="127.0.0.1")
+
+
+def _job_state(job: Any) -> str:
+    """Return a best-effort human-readable submitit job state."""
+    try:
+        state = job.state
+        return str(state() if callable(state) else state)
+    except Exception:
+        return "UNKNOWN"
+
+
+def _job_stderr_tail(job: Any, max_lines: int = 20) -> str:
+    """Return a short stderr tail without hiding the primary startup error."""
+    try:
+        stderr = job.stderr()
+    except Exception:
+        stderr = None
+    if stderr:
+        return "\n".join(stderr.rstrip().splitlines()[-max_lines:])
+    stderr_path = getattr(getattr(job, "paths", None), "stderr", None)
+    return f"stderr: {stderr_path}" if stderr_path else "stderr unavailable"
+
+
+def _wait_for_expected_gpu_capacity(
+    *,
+    ray_module: Any,
+    cluster: RayCluster,
+    expected_gpus: int,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 5.0,
+) -> None:
+    """Wait for every requested managed GPU to join Ray before deploying Serve.
+
+    A submitted worker that exits while capacity is incomplete is a hard startup
+    failure, not a reason to let Ray Serve wait for impossible resources. Check
+    submitit job state on every poll so node-local failures (for example an
+    unusable scratch directory) are surfaced with the worker log immediately.
+    """
+    if expected_gpus <= 0:
+        return
+
+    timeout_seconds = max(0.0, float(timeout_seconds))
+    deadline = time.monotonic() + timeout_seconds
+    logger.info(
+        "Waiting up to %.1fs for %d Ray GPU(s) before deploying inference server",
+        timeout_seconds,
+        expected_gpus,
+    )
+
+    while True:
+        resources = ray_module.cluster_resources()
+        observed_gpus = float(resources.get("GPU", 0.0))
+        if observed_gpus >= expected_gpus:
+            logger.info(
+                "Ray cluster reached requested GPU capacity: %.0f/%d",
+                observed_gpus,
+                expected_gpus,
+            )
+            return
+
+        # ``start_ray_cluster`` always records the head first. Remaining jobs
+        # are the individual workers submitted by ``start_workers``.
+        worker_jobs = list(getattr(cluster, "jobs", ()))[1:]
+        exited_workers = []
+        for index, job in enumerate(worker_jobs):
+            try:
+                # All Slurm jobs share submitit's watcher. One forced refresh
+                # updates the array; the remaining lookups use that cache.
+                is_done = job.done(force_check=index == 0)
+            except Exception as exc:
+                logger.warning(
+                    "Could not inspect Ray worker job %s while waiting for "
+                    "cluster capacity: %s",
+                    getattr(job, "job_id", "unknown"),
+                    exc,
+                )
+                continue
+            if is_done:
+                exited_workers.append(job)
+
+        if exited_workers:
+            details = [
+                (
+                    f"job {getattr(job, 'job_id', 'unknown')} "
+                    f"[{_job_state(job)}]:\n{_job_stderr_tail(job)}"
+                )
+                for job in exited_workers
+            ]
+            raise RayWorkerStartupError(
+                "Ray worker SLURM job exited before the cluster reached "
+                f"requested GPU capacity ({observed_gpus:g}/{expected_gpus}). "
+                "Worker failure details:\n" + "\n\n".join(details)
+            )
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            states = ", ".join(
+                f"{getattr(job, 'job_id', 'unknown')}={_job_state(job)}"
+                for job in worker_jobs
+            )
+            raise RayClusterStartupError(
+                "Timed out waiting for the managed Ray cluster to reach "
+                f"requested GPU capacity ({observed_gpus:g}/{expected_gpus}) "
+                f"after {timeout_seconds:g}s. Worker states: {states or 'none'}"
+            )
+
+        time.sleep(min(poll_interval_seconds, remaining))
 
 
 def _resolve_serve_configs(
@@ -528,6 +643,17 @@ def get_slurm_inference_raycluster(
                     # connection from the prior cluster lingers.
                     ray_client_owned = True
                     _skip_serve_setup = False
+
+                if not _skip_serve_setup:
+                    expected_gpus = int(cluster_config["num_workers"]) * int(
+                        cluster_config.get("gpus_per_node", 0) or 0
+                    )
+                    _wait_for_expected_gpu_capacity(
+                        ray_module=ray,
+                        cluster=cluster,
+                        expected_gpus=expected_gpus,
+                        timeout_seconds=cluster.worker_wait_timeout_seconds,
+                    )
 
                 deployment_config, batch_config = _resolve_serve_configs(cluster_config)
 

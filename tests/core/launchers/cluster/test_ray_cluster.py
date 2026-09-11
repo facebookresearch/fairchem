@@ -10,6 +10,7 @@ Test RayCluster functionality by mocking out submitit to avoid actual SLURM job 
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,7 @@ from fairchem.core.launchers.cluster.ray_cluster import (
     RayCluster,
     RayClusterState,
     mk_symlinks,
+    worker_script,
 )
 from fairchem.core.launchers.cluster.ray_prometheus_metrics import (
     _metrics_env_updates,
@@ -408,6 +410,25 @@ class TestCheckpointableRayJob:
 
             # Should return DelayedSubmission with new job
             assert isinstance(delayed_submission, submitit.core.utils.DelayedSubmission)
+
+
+class TestWorkerScript:
+    @patch("fairchem.core.launchers.cluster.ray_cluster.time.sleep")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.run")
+    def test_ray_start_failure_is_not_silenced(self, run, sleep, tmp_path):
+        state = RayClusterState(rdv_dir=tmp_path, cluster_id="test")
+        state.save_head_info(HeadInfo(hostname="head", port=6379))
+        run.side_effect = subprocess.CalledProcessError(1, ["ray", "start"])
+
+        with pytest.raises(subprocess.CalledProcessError):
+            worker_script(
+                cluster_state=state,
+                worker_wait_timeout_seconds=60,
+                temp_dir_template=str(tmp_path),
+            )
+
+        assert run.call_args.kwargs["check"] is True
+        sleep.assert_called_once()
 
 
 class TestUtilityFunctions:
