@@ -32,6 +32,7 @@ def load_predict_unit(
     workers: int = 1,
     seed: int = 41,
     gp_config=None,
+    num_workers_per_node: int = 8,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -50,6 +51,7 @@ def load_predict_unit(
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
         seed: Optional random seed for reproducibility. If provided, will set the random seed for
             Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
+        num_workers_per_node: Number of prediction workers to place on each node.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -71,6 +73,7 @@ def load_predict_unit(
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
             num_workers=workers,
+            num_workers_per_node=num_workers_per_node,
             seed=seed,
             gp_config=gp_config,
         )

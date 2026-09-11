@@ -19,6 +19,7 @@ from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
+    from fairchem.core.common.gp_utils import GraphParallelConfig
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
@@ -36,6 +37,8 @@ class ASELangevinUMARunner(Runner):
         steps_total: int = 1000,
         warmup_steps: int = 10,
         workers: int = 0,
+        workers_per_node: int = 8,
+        gp_config: GraphParallelConfig | dict | None = None,
     ):
         self.atoms_list = atoms_list
         self.timestep_fs = timestep_fs
@@ -46,6 +49,8 @@ class ASELangevinUMARunner(Runner):
         self.settings = settings
         self.model_name = model_name
         self.workers = workers
+        self.workers_per_node = workers_per_node
+        self.gp_config = gp_config
         self.task_name = task_name
 
     def run(self):
@@ -61,6 +66,8 @@ class ASELangevinUMARunner(Runner):
                 inference_settings=self.settings,
                 device="cuda",
                 workers=self.workers,
+                gp_config=self.gp_config,
+                num_workers_per_node=self.workers_per_node,
             )
             calc = FAIRChemCalculator(predictor, task_name=self.task_name)
             natoms = len(atoms)
