@@ -49,6 +49,18 @@ DEFAULT_MAX_BATCH_SIZE = 512
 DEFAULT_BATCH_WAIT_TIMEOUT_S = 0.1
 
 
+class RayServeInfrastructureError(RuntimeError):
+    """Base class for retryable failures of the shared Ray Serve service."""
+
+
+class RayServeHandleUnavailableError(RayServeInfrastructureError):
+    """Raised when a Serve application handle stays unavailable."""
+
+
+class RayServeRequestTimeoutError(RayServeInfrastructureError):
+    """Raised when a bounded request to a Serve deployment times out."""
+
+
 @dataclass
 class DeploymentConfig:
     """Typed mirror of the most common ``@serve.deployment`` / ``.options()`` kwargs.
@@ -760,12 +772,18 @@ def get_app_handle_with_retry(
         except Exception as exc:
             msg = str(exc)
             transient = (
-                "SERVE_CONTROLLER_ACTOR" in msg
+                type(exc).__name__ == "DeploymentUnavailableError"
+                or "SERVE_CONTROLLER_ACTOR" in msg
                 or "There is no Serve instance" in msg
                 or "Failed to look up actor" in msg
             )
-            if not transient or time.monotonic() > deadline:
+            if not transient:
                 raise
+            if time.monotonic() > deadline:
+                raise RayServeHandleUnavailableError(
+                    f"Ray Serve application {deployment_name!r} remained "
+                    f"unavailable for {timeout_seconds:g}s"
+                ) from exc
             logging.debug("Serve controller not visible yet (%s); retrying.", msg)
             time.sleep(poll_interval_seconds)
 

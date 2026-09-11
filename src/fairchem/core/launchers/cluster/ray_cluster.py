@@ -108,7 +108,12 @@ DEFAULT_HEAD_FILE_DIR = Path.home() / ".fairray"
 RAY_CLUSTER_INFO_FILENAME = "ray_cluster_info.json"
 
 
-def scancel(job_ids: list[str]):
+def _root_slurm_job_ids(job_ids: list[str]) -> list[str]:
+    """Return deterministic root job IDs for jobs and array elements."""
+    return sorted({job_id.split("_", maxsplit=1)[0] for job_id in job_ids})
+
+
+def scancel(job_ids: list[str], timeout_seconds: float | None = None):
     """
     Cancel the SLURM jobs with the given job IDs.
 
@@ -117,8 +122,43 @@ def scancel(job_ids: list[str]):
     Args:
         job_ids (List[str]): A list of job IDs to cancel.
     """
-    root_ids = list(set([i.split("_", maxsplit=2)[0] for i in job_ids]))
-    subprocess.check_call(["scancel"] + root_ids)
+    root_ids = _root_slurm_job_ids(job_ids)
+    if not root_ids:
+        return
+    subprocess.run(
+        ["scancel", "--quiet", *root_ids],
+        check=True,
+        timeout=timeout_seconds,
+    )
+
+
+def _active_slurm_job_ids(
+    job_ids: list[str], timeout_seconds: float | None = None
+) -> list[str]:
+    """Return requested root job IDs still visible in Slurm's live queue."""
+    root_ids = _root_slurm_job_ids(job_ids)
+    if not root_ids:
+        return []
+    result = subprocess.run(
+        [
+            "squeue",
+            "--noheader",
+            "--me",
+            "--format=%A",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+    requested = set(root_ids)
+    return sorted(
+        requested.intersection(line.strip() for line in result.stdout.splitlines())
+    )
+
+
+class RayClusterCleanupError(RuntimeError):
+    """Raised when managed SLURM jobs cannot be confirmed stopped safely."""
 
 
 start_ip_pattern = r"ray start --address='([0-9\.]+):([0-9]+)'"
@@ -309,7 +349,10 @@ class RayClusterState:
 
     def clean(self):
         """Removes the rendezvous directory and all its contents."""
-        shutil.rmtree(self.rendezvous_dir)
+        try:
+            shutil.rmtree(self.rendezvous_dir)
+        except FileNotFoundError:
+            pass
 
     def add_job(self, job: submitit.Job):
         """
@@ -689,6 +732,7 @@ class RayCluster:
         worker_wait_timeout_seconds: int = 60,
         temp_dir_template: Optional[str] = None,
         cancel_on_exit: bool = False,
+        shutdown_wait_timeout_seconds: float = 60.0,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id, log_dir=log_dir)
         logger.info(f"cluster {self.state.cluster_id}")
@@ -698,6 +742,10 @@ class RayCluster:
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.temp_dir_template = temp_dir_template
         self.is_shutdown = False
+        self._cancel_requested = False
+        self.shutdown_wait_timeout_seconds = max(
+            0.0, float(shutdown_wait_timeout_seconds)
+        )
         self.num_worker_groups = 0
         self.num_drivers = 0
         self.head_started = False
@@ -739,8 +787,8 @@ class RayCluster:
             **kwargs,
         )
         slurm_job = s_executor.submit(ray_job)
-        self.state.add_job(slurm_job)
         self.jobs.append(slurm_job)
+        self.state.add_job(slurm_job)
         mk_symlinks(self.log_dir, "job", slurm_job.paths)
         logger.info(f"slurm job id: {slurm_job.job_id}")
         return slurm_job.job_id
@@ -775,8 +823,8 @@ class RayCluster:
             temp_dir_template=self.temp_dir_template,
             **kwargs,
         )
-        self.state.add_job(head_job)
         self.jobs.append(head_job)
+        self.state.add_job(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         logger.info(f"head slurm job id: {head_job.job_id}")
         return head_job.job_id
@@ -812,14 +860,37 @@ class RayCluster:
                     )
                 )
 
+        for j in jobs:
+            self.jobs.append(j)
+            self.state.add_job(j)
         for idx, j in enumerate(jobs):
             mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
         logger.info(f"workers slurm job ids: {[job.job_id for job in jobs]}")
-        for j in jobs:
-            self.state.add_job(j)
-            self.jobs.append(j)
         self.num_worker_groups += 1
         return [job.job_id for job in jobs]
+
+    def _wait_for_jobs_terminal(self, job_ids: list[str], *, deadline: float) -> None:
+        """Wait boundedly until no managed allocation remains in Slurm."""
+        root_ids = _root_slurm_job_ids(job_ids)
+        if not root_ids:
+            return
+
+        while True:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise RayClusterCleanupError(
+                    "Timed out waiting for cancelled Ray SLURM job(s) to "
+                    f"terminate after {self.shutdown_wait_timeout_seconds:g}s: "
+                    f"{', '.join(root_ids)}"
+                )
+            active_ids = _active_slurm_job_ids(
+                root_ids,
+                timeout_seconds=max(0.001, remaining_seconds),
+            )
+            if not active_ids:
+                return
+            time.sleep(min(1.0, remaining_seconds))
+            root_ids = active_ids
 
     def shutdown(self):
         """
@@ -827,14 +898,47 @@ class RayCluster:
         """
         if self.is_shutdown:
             return
+        try:
+            memory_job_ids = [
+                str(job.job_id)
+                for job in self.jobs
+                if getattr(job, "job_id", None) is not None
+            ]
+            state_error = None
+            try:
+                state_job_ids = self.state.list_job_ids()
+            except Exception as exc:
+                # Still cancel every in-memory job before surfacing that the
+                # rendezvous state could not be trusted or fully enumerated.
+                state_job_ids = []
+                state_error = exc
+            job_ids = sorted(set(state_job_ids).union(memory_job_ids))
+            deadline = time.monotonic() + self.shutdown_wait_timeout_seconds
+            if job_ids and not self._cancel_requested:
+                remaining_seconds = max(0.001, deadline - time.monotonic())
+                scancel(job_ids, timeout_seconds=remaining_seconds)
+                self._cancel_requested = True
+            self._wait_for_jobs_terminal(job_ids, deadline=deadline)
+            if state_error is not None:
+                raise RayClusterCleanupError(
+                    "Known Ray SLURM jobs were stopped, but rendezvous job "
+                    "state could not be enumerated safely"
+                ) from state_error
+            kill_proc_tree(
+                os.getpid(), including_parent=False
+            )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
+            self.state.clean()
+        except RayClusterCleanupError:
+            raise
+        except Exception as exc:
+            raise RayClusterCleanupError(
+                f"Failed to shut down Ray cluster {self.state.cluster_id}"
+            ) from exc
+
         self.is_shutdown = True
-        scancel(self.state.list_job_ids())
-        kill_proc_tree(
-            os.getpid(), including_parent=False
-        )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
-        self.state.clean()
         logger.info(f"cluster {self.state.cluster_id} shutdown")
-        atexit.unregister(self._atexit_cancel)
+        with suppress(Exception):
+            atexit.unregister(self._atexit_cancel)
 
     def _atexit_cancel(self):
         """
@@ -844,7 +948,16 @@ class RayCluster:
         if self.is_shutdown:
             return
         with suppress(Exception):
-            scancel(self.state.list_job_ids())
+            state_job_ids = self.state.list_job_ids()
+            memory_job_ids = [
+                str(job.job_id)
+                for job in self.jobs
+                if getattr(job, "job_id", None) is not None
+            ]
+            scancel(
+                sorted(set(state_job_ids).union(memory_job_ids)),
+                timeout_seconds=10.0,
+            )
 
     def __enter__(self):
         # only use as a context if you have something blocking waiting on the driver

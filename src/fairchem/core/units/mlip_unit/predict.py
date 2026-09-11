@@ -17,7 +17,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import cached_property, wraps
-from typing import TYPE_CHECKING, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 import hydra
 import numpy as np
@@ -36,7 +36,11 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.components.batch_server import get_app_handle_with_retry
+from fairchem.core.components.batch_server import (
+    RayServeHandleUnavailableError,
+    RayServeRequestTimeoutError,
+    get_app_handle_with_retry,
+)
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.nn.execution_backends import (
     ExecutionMode,
@@ -934,8 +938,14 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
                 ``multiplexed_model_id`` so that all calls are routed to
                 the correct model on the server.
         """
+        # Set the bound before the first metadata request.  Multiplexed client
+        # construction is itself a Serve round-trip and must not hang forever.
+        self._request_timeout_s = _resolve_batch_server_timeout()
         if multiplexed_model_id is not None:
-            if not server_handle.is_multiplexed.remote().result():
+            if not self._serve_result(
+                server_handle.is_multiplexed,
+                operation="multiplexed deployment validation",
+            ):
                 raise ValueError(
                     f"multiplexed_model_id={multiplexed_model_id!r} was "
                     "provided but the deployment is not a multiplexed "
@@ -957,13 +967,27 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         # since this unit holds no reference to the dict itself, this
         # is purely a fast-path skip and cannot extend its lifetime.
         self._validated_info_keys: set[tuple[int, str]] = set()
-        # Per-call ``.result()`` timeout (seconds). Sourced from
-        # ``FAIRCHEM_BATCH_SERVER_TIMEOUT_S`` so callers can override
-        # without code changes (tests can shrink it to fail fast;
-        # users on slow CPUs can lengthen it). ``None`` disables the
-        # bound entirely so behavior matches the pre-timeout default
-        # if someone needs it.
-        self._request_timeout_s = _resolve_batch_server_timeout()
+
+    def _serve_result(
+        self,
+        remote_method: Any,
+        *args: Any,
+        operation: str,
+    ) -> Any:
+        """Invoke one Serve method and normalize retryable transport failures."""
+        try:
+            return remote_method.remote(*args).result(timeout_s=self._request_timeout_s)
+        except TimeoutError as exc:
+            raise RayServeRequestTimeoutError(
+                f"Ray Serve {operation} timed out after "
+                f"{self._request_timeout_s!r}s"
+            ) from exc
+        except Exception as exc:
+            if type(exc).__name__ == "DeploymentUnavailableError":
+                raise RayServeHandleUnavailableError(
+                    f"Ray Serve deployment unavailable during {operation}"
+                ) from exc
+            raise
 
     @property
     def multiplexed_model_id(self) -> str | None:
@@ -1027,8 +1051,11 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-        result = self.server_handle.remote(data, undo_element_references).result(
-            timeout_s=self._request_timeout_s
+        result = self._serve_result(
+            self.server_handle,
+            data,
+            undo_element_references,
+            operation="prediction",
         )
         return result
 
@@ -1052,32 +1079,43 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         key = (id(atoms.info), task_name)
         if key in self._validated_info_keys:
             return
-        updated_info = self.server_handle.validate_atoms_data.remote(
-            dict(atoms.info), task_name
-        ).result(timeout_s=self._request_timeout_s)
+        updated_info = self._serve_result(
+            self.server_handle.validate_atoms_data,
+            dict(atoms.info),
+            task_name,
+            operation="atom-data validation",
+        )
         atoms.info.update(updated_info)
         self._validated_info_keys.add(key)
 
     @cached_property
     def dataset_to_tasks(self) -> dict:
-        return self.server_handle.get_predict_unit_attribute.remote(
-            "dataset_to_tasks"
-        ).result(timeout_s=self._request_timeout_s)
+        return self._serve_result(
+            self.server_handle.get_predict_unit_attribute,
+            "dataset_to_tasks",
+            operation="dataset-to-task metadata lookup",
+        )
 
     @cached_property
     def atom_refs(self) -> dict | None:
-        return self.server_handle.get_predict_unit_attribute.remote("atom_refs").result(
-            timeout_s=self._request_timeout_s
+        return self._serve_result(
+            self.server_handle.get_predict_unit_attribute,
+            "atom_refs",
+            operation="atom-reference metadata lookup",
         )
 
     @cached_property
     def inference_settings(self) -> InferenceSettings:
-        return self.server_handle.get_predict_unit_attribute.remote(
-            "inference_settings"
-        ).result(timeout_s=self._request_timeout_s)
+        return self._serve_result(
+            self.server_handle.get_predict_unit_attribute,
+            "inference_settings",
+            operation="inference-settings metadata lookup",
+        )
 
     @cached_property
     def form_elem_refs(self) -> dict:
-        return self.server_handle.get_predict_unit_attribute.remote(
-            "form_elem_refs"
-        ).result(timeout_s=self._request_timeout_s)
+        return self._serve_result(
+            self.server_handle.get_predict_unit_attribute,
+            "form_elem_refs",
+            operation="formation-reference metadata lookup",
+        )

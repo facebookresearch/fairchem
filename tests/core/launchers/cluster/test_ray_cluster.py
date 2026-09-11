@@ -24,7 +24,9 @@ from fairchem.core.launchers.cluster.ray_cluster import (
     CheckpointableRayJob,
     HeadInfo,
     RayCluster,
+    RayClusterCleanupError,
     RayClusterState,
+    _active_slurm_job_ids,
     mk_symlinks,
     worker_script,
 )
@@ -166,6 +168,30 @@ class TestRayCluster:
         """Reset mock state before each test"""
         MockAutoExecutor._job_counter = 0
 
+    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.run")
+    def test_active_job_query_handles_vanished_ids(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="123\n999\n"
+        )
+
+        active = _active_slurm_job_ids(["123_7", "456"], timeout_seconds=5)
+
+        assert active == ["123"]
+        command = run.call_args.args[0]
+        assert "--me" in command
+        assert "--jobs" not in command
+        assert run.call_args.kwargs["timeout"] == 5
+
+    @patch("fairchem.core.launchers.cluster.ray_cluster.subprocess.run")
+    def test_scancel_is_quiet_for_already_completed_jobs(self, run):
+        from fairchem.core.launchers.cluster.ray_cluster import scancel
+
+        scancel(["123", "456_7"], timeout_seconds=5)
+
+        command = run.call_args.args[0]
+        assert command == ["scancel", "--quiet", "123", "456"]
+        assert run.call_args.kwargs["timeout"] == 5
+
     @patch(
         "fairchem.core.launchers.cluster.ray_cluster.submitit.AutoExecutor",
         MockAutoExecutor,
@@ -254,9 +280,13 @@ class TestRayCluster:
             # Check symlinks were created for all jobs
             assert mock_mk_symlinks.call_count == 5
 
+    @patch(
+        "fairchem.core.launchers.cluster.ray_cluster._active_slurm_job_ids",
+        return_value=[],
+    )
     @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
     @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
-    def test_shutdown(self, mock_kill_proc, mock_scancel):
+    def test_shutdown(self, mock_kill_proc, mock_scancel, mock_active_jobs):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_dir = Path(temp_dir) / "logs"
 
@@ -289,6 +319,145 @@ class TestRayCluster:
             # Check that rendezvous dir was cleaned up
             assert not cluster.state.rendezvous_dir.exists()
             assert cluster.is_shutdown
+            mock_active_jobs.assert_called_once()
+
+    @patch(
+        "fairchem.core.launchers.cluster.ray_cluster._active_slurm_job_ids",
+        return_value=[],
+    )
+    @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
+    def test_shutdown_can_retry_after_cancel_failure(
+        self, mock_kill_proc, mock_scancel, mock_active_jobs
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cluster = RayCluster(
+                log_dir=Path(temp_dir) / "logs",
+                rdv_dir=Path(temp_dir) / "rdv",
+                cluster_id="retry-cleanup",
+            )
+            cluster.state.add_job(MockJob("job_1"))
+            mock_scancel.side_effect = [
+                subprocess.CalledProcessError(1, "scancel"),
+                None,
+            ]
+
+            with pytest.raises(RayClusterCleanupError):
+                cluster.shutdown()
+            assert not cluster.is_shutdown
+            assert cluster.state.rendezvous_dir.exists()
+
+            cluster.shutdown()
+            assert cluster.is_shutdown
+            assert mock_scancel.call_count == 2
+            mock_active_jobs.assert_called_once()
+            mock_kill_proc.assert_called_once()
+
+    @patch(
+        "fairchem.core.launchers.cluster.ray_cluster._active_slurm_job_ids",
+        side_effect=[["job_1"], []],
+    )
+    @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
+    def test_shutdown_waits_for_submitted_jobs(
+        self, mock_kill_proc, mock_scancel, mock_active_jobs
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cluster = RayCluster(
+                log_dir=Path(temp_dir) / "logs",
+                rdv_dir=Path(temp_dir) / "rdv",
+                cluster_id="wait-cleanup",
+                shutdown_wait_timeout_seconds=5,
+            )
+            job = MockJob("job_1")
+            cluster.jobs.append(job)
+            cluster.state.add_job(job)
+
+            with patch(
+                "fairchem.core.launchers.cluster.ray_cluster.time.sleep"
+            ) as sleep:
+                cluster.shutdown()
+
+            assert mock_active_jobs.call_count == 2
+            sleep.assert_called_once()
+            assert cluster.is_shutdown
+            mock_kill_proc.assert_called_once()
+
+    @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
+    def test_shutdown_timeout_preserves_retryable_state(
+        self, mock_kill_proc, mock_scancel
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cluster = RayCluster(
+                log_dir=Path(temp_dir) / "logs",
+                rdv_dir=Path(temp_dir) / "rdv",
+                cluster_id="timeout-cleanup",
+                shutdown_wait_timeout_seconds=0,
+            )
+            job = MockJob("123_1")
+            cluster.jobs.append(job)
+            cluster.state.add_job(job)
+
+            with pytest.raises(RayClusterCleanupError, match="123"):
+                cluster.shutdown()
+
+            assert not cluster.is_shutdown
+            assert cluster._cancel_requested
+            assert cluster.state.rendezvous_dir.exists()
+            mock_kill_proc.assert_not_called()
+
+    @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
+    def test_shutdown_with_no_jobs_skips_slurm_commands(
+        self, mock_kill_proc, mock_scancel
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cluster = RayCluster(
+                log_dir=Path(temp_dir) / "logs",
+                rdv_dir=Path(temp_dir) / "rdv",
+                cluster_id="empty-cleanup",
+            )
+
+            cluster.shutdown()
+
+            mock_scancel.assert_not_called()
+            mock_kill_proc.assert_called_once()
+            assert cluster.is_shutdown
+
+    @patch(
+        "fairchem.core.launchers.cluster.ray_cluster._active_slurm_job_ids",
+        return_value=[],
+    )
+    @patch("fairchem.core.launchers.cluster.ray_cluster.scancel")
+    @patch("fairchem.core.launchers.cluster.ray_cluster.kill_proc_tree")
+    def test_shutdown_cancels_memory_jobs_when_state_read_fails(
+        self, mock_kill_proc, mock_scancel, mock_active_jobs
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cluster = RayCluster(
+                log_dir=Path(temp_dir) / "logs",
+                rdv_dir=Path(temp_dir) / "rdv",
+                cluster_id="broken-state",
+            )
+            cluster.jobs.append(MockJob("123_7"))
+
+            with (
+                patch.object(
+                    cluster.state,
+                    "list_job_ids",
+                    side_effect=OSError("rendezvous unreadable"),
+                ),
+                pytest.raises(RayClusterCleanupError, match="enumerated safely"),
+            ):
+                cluster.shutdown()
+
+            mock_scancel.assert_called_once()
+            assert mock_scancel.call_args.args[0] == ["123_7"]
+            mock_active_jobs.assert_called_once()
+            mock_kill_proc.assert_not_called()
+            assert not cluster.is_shutdown
+            assert cluster.state.rendezvous_dir.exists()
 
     def test_context_manager(self):
         with tempfile.TemporaryDirectory() as temp_dir:

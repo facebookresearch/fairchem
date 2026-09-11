@@ -96,6 +96,45 @@ def test_prepare_inference_gradients(forces, stress, pos_grad, cell_grad):
     _prepare_inference_gradients(SimpleNamespace(), data)
 
 
+def test_batch_server_predict_timeout_has_typed_infrastructure_boundary(
+    monkeypatch,
+):
+    from fairchem.core.components.batch_server import RayServeRequestTimeoutError
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+
+    class _Response:
+        def result(self, *, timeout_s):
+            raise TimeoutError("Timed out waiting for result.")
+
+    class _RemoteMethod:
+        def remote(self, *_args):
+            return _Response()
+
+    monkeypatch.setenv("FAIRCHEM_BATCH_SERVER_TIMEOUT_S", "0.01")
+    unit = BatchServerPredictUnit(server_handle=_RemoteMethod())
+
+    with pytest.raises(RayServeRequestTimeoutError, match="prediction") as exc:
+        unit.predict(object())
+
+    assert isinstance(exc.value.__cause__, TimeoutError)
+
+
+def test_batch_server_deployment_unavailable_has_typed_boundary():
+    from fairchem.core.components.batch_server import RayServeHandleUnavailableError
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+
+    DeploymentUnavailableError = type("DeploymentUnavailableError", (RuntimeError,), {})
+
+    class _RemoteMethod:
+        def remote(self, *_args):
+            raise DeploymentUnavailableError("application unavailable")
+
+    unit = BatchServerPredictUnit(server_handle=_RemoteMethod())
+
+    with pytest.raises(RayServeHandleUnavailableError, match="prediction"):
+        unit.predict(object())
+
+
 _REPRESENTATIVE_ELEMENTS = [
     (1, 0, 2),  # H:  charge=0, spin=2
     (6, 0, 3),  # C:  charge=0, spin=3

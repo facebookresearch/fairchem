@@ -21,12 +21,13 @@ import time
 import uuid
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
+    RayServeInfrastructureError,
     setup_batch_predict_server,
     setup_multiplexed_batch_predict_server,
     wait_for_serve_ready,
@@ -34,6 +35,7 @@ from fairchem.core.components.batch_server import (
 from fairchem.core.launchers.cluster.ray_cluster import (
     DEFAULT_HEAD_FILE_DIR,
     RayCluster,
+    RayClusterCleanupError,
     find_free_port,
 )
 
@@ -46,6 +48,45 @@ class RayClusterStartupError(RuntimeError):
 
 class RayWorkerStartupError(RayClusterStartupError):
     """Raised when a managed SLURM worker exits before joining the Ray cluster."""
+
+
+class RayServeStartupError(RayClusterStartupError, RayServeInfrastructureError):
+    """Raised when a managed Ray Serve application cannot become ready."""
+
+
+_DETERMINISTIC_SETUP_ERROR_TYPES = (
+    AssertionError,
+    AttributeError,
+    ImportError,
+    KeyError,
+    TypeError,
+    ValueError,
+)
+
+
+def _exception_chain(exc: BaseException) -> list[BaseException]:
+    """Return wrapped causes, including RayTaskError's public ``cause``."""
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(current)
+        ray_cause = getattr(current, "cause", None)
+        current = (
+            ray_cause
+            if isinstance(ray_cause, BaseException)
+            else current.__cause__ or current.__context__
+        )
+    return chain
+
+
+def _has_deterministic_setup_cause(exc: BaseException) -> bool:
+    """Return whether retrying the same cluster setup cannot repair ``exc``."""
+    return any(
+        isinstance(cause, _DETERMINISTIC_SETUP_ERROR_TYPES)
+        for cause in _exception_chain(exc)
+    )
 
 
 def _find_free_localhost_port() -> int:
@@ -211,6 +252,28 @@ def _wait_for_expected_gpu_capacity(
             )
 
         time.sleep(min(poll_interval_seconds, remaining))
+
+
+def _get_serve_setup_result(
+    *,
+    ray_module: Any,
+    submit: Callable[[], Any],
+    deployment_name: str,
+    operation: str,
+    timeout_seconds: float,
+) -> Any:
+    """Resolve one Serve setup operation behind a typed retry boundary."""
+    if timeout_seconds <= 0:
+        raise ValueError("Serve setup timeout_seconds must be positive")
+    try:
+        object_ref = submit()
+        return ray_module.get(object_ref, timeout=timeout_seconds)
+    except Exception as exc:
+        if _has_deterministic_setup_cause(exc):
+            raise
+        raise RayServeStartupError(
+            f"Ray Serve application {deployment_name!r} failed during {operation}"
+        ) from exc
 
 
 def _resolve_serve_configs(
@@ -502,6 +565,7 @@ def start_ray_cluster(
         cluster_id=config.get("cluster_id"),
         worker_wait_timeout_seconds=config.get("worker_wait_timeout_seconds", 300),
         temp_dir_template=config.get("temp_dir_template"),
+        shutdown_wait_timeout_seconds=config.get("shutdown_wait_timeout_seconds", 60),
     )
 
     try:
@@ -536,13 +600,28 @@ def start_ray_cluster(
             )
         logger.info(f"Ray cluster ready at {head_info.hostname}:{head_info.port}")
         logger.info(f"Head file: {head_file_path}")
-    except BaseException:
+    except BaseException as startup_exc:
         # Construction failed before the context manager received ``cluster``;
         # this function therefore owns cleanup for every submitted job.
         try:
             cluster.shutdown()
-        except Exception as exc:
-            logger.warning("Failed to clean up partially started Ray cluster: %s", exc)
+        except Exception as cleanup_exc:
+            logger.error(
+                "Failed to clean up partially started Ray cluster: %s",
+                cleanup_exc,
+            )
+            # Preserve the cleanup exception's own cause (for example the
+            # failing scancel/squeue command). The startup error remains its
+            # implicit context and must not replace that diagnostic.
+            raise
+        if _has_deterministic_setup_cause(startup_exc):
+            raise
+        if isinstance(startup_exc, RayClusterStartupError):
+            raise
+        if isinstance(startup_exc, Exception):
+            raise RayClusterStartupError(
+                "Failed while submitting or starting the managed Ray cluster"
+            ) from startup_exc
         raise
 
     if return_cluster:
@@ -576,9 +655,9 @@ def get_slurm_inference_raycluster(
     Starts a shared cluster that multiple jobs can connect to, and ensures
     clean shutdown when the context exits.
 
-    If RAY_HEAD_FILE environment variable is set and the file exists,
-    connects to that cluster instead of starting a new one (and does not
-    shut it down on exit since we didn't create it).
+    If ``RAY_HEAD_FILE`` is set, it explicitly selects an external cluster.
+    The file must exist; a stale path fails closed before any SLURM submission
+    rather than silently allocating a replacement cluster.
 
     Usage::
 
@@ -619,7 +698,12 @@ def get_slurm_inference_raycluster(
 
     try:
         env_head_file = os.environ.get("RAY_HEAD_FILE")
-        if env_head_file and Path(env_head_file).exists():
+        if env_head_file:
+            if not Path(env_head_file).is_file():
+                raise FileNotFoundError(
+                    "RAY_HEAD_FILE explicitly selects an external cluster, "
+                    f"but the file does not exist: {env_head_file}"
+                )
             logger.info(
                 f"Using existing Ray cluster from RAY_HEAD_FILE: {env_head_file}"
             )
@@ -698,13 +782,20 @@ def get_slurm_inference_raycluster(
                             namespace=namespace_serve_fairchem,
                         )
 
-                    _do_init()
                     # Remember that we own this connection so the finally
-                    # block can release it; otherwise a subsequent
+                    # block can release even a partially initialized client;
+                    # otherwise a subsequent
                     # get_slurm_inference_raycluster() call in the same process would
                     # fail with "client has already connected" when the dead
                     # connection from the prior cluster lingers.
                     ray_client_owned = True
+                    try:
+                        _do_init()
+                    except Exception as exc:
+                        raise RayClusterStartupError(
+                            f"Failed to connect to managed Ray cluster at "
+                            f"{client_address}"
+                        ) from exc
                     _skip_serve_setup = False
 
                 if not _skip_serve_setup:
@@ -719,6 +810,9 @@ def get_slurm_inference_raycluster(
                     )
 
                 deployment_config, batch_config = _resolve_serve_configs(cluster_config)
+                serve_startup_timeout_seconds = float(
+                    cluster_config.get("serve_startup_timeout_seconds", 660.0)
+                )
 
                 # Single-model and multiplexed deployments use distinct app
                 # names so a consumer can target the right one and the
@@ -748,12 +842,16 @@ def get_slurm_inference_raycluster(
                         "Initializing multiplexed FAIRChem inference server "
                         "deployment (no predict_unit provided)..."
                     )
-                    ray.get(
-                        _setup_multiplexed_serve_remote.remote(
+                    _get_serve_setup_result(
+                        ray_module=ray,
+                        submit=lambda: _setup_multiplexed_serve_remote.remote(
                             resolved_deployment_name,
                             deployment_config,
                             batch_config,
-                        )
+                        ),
+                        deployment_name=resolved_deployment_name,
+                        operation="deployment",
+                        timeout_seconds=serve_startup_timeout_seconds,
                     )
                 else:
 
@@ -772,13 +870,17 @@ def get_slurm_inference_raycluster(
 
                     predict_unit_ref = ray.put(predict_unit)
                     logger.info("Initializing FAIRChem inference server deployment...")
-                    ray.get(
-                        _setup_serve_remote.remote(
+                    _get_serve_setup_result(
+                        ray_module=ray,
+                        submit=lambda: _setup_serve_remote.remote(
                             predict_unit_ref,
                             resolved_deployment_name,
                             deployment_config,
                             batch_config,
-                        )
+                        ),
+                        deployment_name=resolved_deployment_name,
+                        operation="deployment",
+                        timeout_seconds=serve_startup_timeout_seconds,
                     )
 
                 @ray.remote
@@ -790,13 +892,20 @@ def get_slurm_inference_raycluster(
                         "Inference server deployment complete, "
                         "verifying readiness..."
                     )
-                    ray.get(
-                        _wait_for_serve_ready_remote.remote(resolved_deployment_name)
+                    _get_serve_setup_result(
+                        ray_module=ray,
+                        submit=lambda: _wait_for_serve_ready_remote.remote(
+                            resolved_deployment_name
+                        ),
+                        deployment_name=resolved_deployment_name,
+                        operation="readiness check",
+                        timeout_seconds=serve_startup_timeout_seconds,
                     )
                     logger.info("Inference server ready and accepting requests")
 
         yield head_file
     finally:
+        cleanup_errors: list[Exception] = []
         if ray_client_owned:
             import ray
 
@@ -804,14 +913,28 @@ def get_slurm_inference_raycluster(
                 ray.shutdown()
                 logger.info("Released Ray client connection.")
             except Exception as e:
-                logger.warning(f"Error releasing Ray client connection: {e}")
+                logger.error("Error releasing Ray client connection: %s", e)
+                cleanup_errors.append(e)
         if cluster is not None and manage_cluster:
             logger.info("Shutting down Ray cluster...")
             try:
                 cluster.shutdown()
                 logger.info("Ray cluster shut down successfully")
             except Exception as e:
-                logger.warning(f"Error during Ray cluster shutdown: {e}")
+                logger.error("Error during Ray cluster shutdown: %s", e)
+                cleanup_errors.append(e)
+        if cleanup_errors:
+            if len(cleanup_errors) == 1 and isinstance(
+                cleanup_errors[0], RayClusterCleanupError
+            ):
+                raise cleanup_errors[0]
+            details = "; ".join(
+                f"{type(error).__name__}: {error}" for error in cleanup_errors
+            )
+            raise RayClusterCleanupError(
+                "Managed Ray cleanup did not complete; refusing to replace "
+                f"the cluster while resources may still be live. Failures: {details}"
+            ) from cleanup_errors[0]
 
 
 @contextmanager
