@@ -137,7 +137,7 @@ class ConcatDataset(Dataset[T_co]):
                 dataset_mask = dataset_idxs == dataset_idx
                 metadata[dataset_mask] = self.datasets[dataset_idx].get_metadata(
                     "natoms", list(dataset_internal_sample_idx[dataset_mask])
-                )[0]
+                )
             return metadata
         dataset_idx, sample_idx = self._get_dataset_and_sample_index(
             sample_idxs_to_get_metadata_for
