@@ -79,6 +79,54 @@ def _job_stderr_tail(job: Any, max_lines: int = 20) -> str:
     return f"stderr: {stderr_path}" if stderr_path else "stderr unavailable"
 
 
+def _wait_for_head_ready(
+    *,
+    cluster: RayCluster,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 10.0,
+) -> None:
+    """Wait boundedly for ``head.json`` and surface an early head-job exit."""
+    timeout_seconds = max(0.0, float(timeout_seconds))
+    deadline = time.monotonic() + timeout_seconds
+    head_jobs = list(getattr(cluster, "jobs", ()))
+    head_job = head_jobs[0] if head_jobs else None
+
+    while not cluster.state.is_head_ready():
+        if head_job is not None:
+            try:
+                head_done = head_job.done(force_check=True)
+            except Exception as exc:
+                logger.warning(
+                    "Could not inspect Ray head job %s while waiting for "
+                    "cluster rendezvous: %s",
+                    getattr(head_job, "job_id", "unknown"),
+                    exc,
+                )
+            else:
+                if head_done:
+                    raise RayClusterStartupError(
+                        "Ray head SLURM job exited before publishing cluster "
+                        f"rendezvous: job {getattr(head_job, 'job_id', 'unknown')} "
+                        f"[{_job_state(head_job)}]:\n{_job_stderr_tail(head_job)}"
+                    )
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            head_description = (
+                f"job {getattr(head_job, 'job_id', 'unknown')} "
+                f"[{_job_state(head_job)}]"
+                if head_job is not None
+                else "head job unavailable"
+            )
+            raise RayClusterStartupError(
+                "Timed out waiting for the managed Ray head to publish "
+                f"cluster rendezvous after {timeout_seconds:g}s: "
+                f"{head_description}"
+            )
+
+        time.sleep(min(poll_interval_seconds, remaining))
+
+
 def _wait_for_expected_gpu_capacity(
     *,
     ray_module: Any,
@@ -456,31 +504,46 @@ def start_ray_cluster(
         temp_dir_template=config.get("temp_dir_template"),
     )
 
-    cluster.start_head(
-        requirements=requirements,
-        name="ray_cluster",
-        enable_client_server=True,
-    )
-
-    # The head job participates in the Ray cluster and contributes its
-    # requested CPUs/GPUs. ``num_workers`` is the total requested capacity,
-    # so only submit the remaining jobs here.
-    additional_worker_jobs = total_jobs - 1
-    if additional_worker_jobs:
-        cluster.start_workers(
-            num_workers=additional_worker_jobs,
+    try:
+        cluster.start_head(
             requirements=requirements,
             name="ray_cluster",
+            enable_client_server=True,
         )
 
-    head_file_path = cluster.state._head_json
-    logger.info(f"Waiting for Ray cluster (head file: {head_file_path})...")
-    while not cluster.state.is_head_ready():
-        time.sleep(10)
+        # The head job participates in the Ray cluster and contributes its
+        # requested CPUs/GPUs. ``num_workers`` is the total requested capacity,
+        # so only submit the remaining jobs here.
+        additional_worker_jobs = total_jobs - 1
+        if additional_worker_jobs:
+            cluster.start_workers(
+                num_workers=additional_worker_jobs,
+                requirements=requirements,
+                name="ray_cluster",
+            )
 
-    head_info = cluster.state.head_info()
-    logger.info(f"Ray cluster ready at {head_info.hostname}:{head_info.port}")
-    logger.info(f"Head file: {head_file_path}")
+        head_file_path = cluster.state._head_json
+        logger.info(f"Waiting for Ray cluster (head file: {head_file_path})...")
+        _wait_for_head_ready(
+            cluster=cluster,
+            timeout_seconds=cluster.worker_wait_timeout_seconds,
+        )
+
+        head_info = cluster.state.head_info()
+        if head_info is None:
+            raise RayClusterStartupError(
+                "Ray head rendezvous was marked ready but contained no head info"
+            )
+        logger.info(f"Ray cluster ready at {head_info.hostname}:{head_info.port}")
+        logger.info(f"Head file: {head_file_path}")
+    except BaseException:
+        # Construction failed before the context manager received ``cluster``;
+        # this function therefore owns cleanup for every submitted job.
+        try:
+            cluster.shutdown()
+        except Exception as exc:
+            logger.warning("Failed to clean up partially started Ray cluster: %s", exc)
+        raise
 
     if return_cluster:
         return str(head_file_path), cluster

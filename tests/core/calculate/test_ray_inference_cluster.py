@@ -82,6 +82,46 @@ def test_start_ray_cluster_rejects_zero_total_jobs(ray_cluster_cls):
     ray_cluster_cls.assert_not_called()
 
 
+@patch("fairchem.core.calculate._ray_inference_cluster.RayCluster")
+def test_start_ray_cluster_reports_failed_head_and_cleans_up(ray_cluster_cls, tmp_path):
+    cluster = ray_cluster_cls.return_value
+    cluster.state._head_json = tmp_path / "head.json"
+    cluster.state.is_head_ready.return_value = False
+    head = MagicMock(job_id="head-1")
+    head.done.return_value = True
+    head.state = "FAILED"
+    head.stderr.return_value = "head scratch unavailable"
+    cluster.jobs = [head]
+
+    with pytest.raises(RayClusterStartupError) as exc_info:
+        start_ray_cluster(_cluster_config(1), return_cluster=True)
+
+    message = str(exc_info.value)
+    assert "head-1 [FAILED]" in message
+    assert "head scratch unavailable" in message
+    cluster.shutdown.assert_called_once_with()
+
+
+@patch("fairchem.core.calculate._ray_inference_cluster.RayCluster")
+def test_start_ray_cluster_head_wait_is_bounded_and_cleans_up(
+    ray_cluster_cls, tmp_path
+):
+    cluster = ray_cluster_cls.return_value
+    cluster.state._head_json = tmp_path / "head.json"
+    cluster.state.is_head_ready.return_value = False
+    head = MagicMock(job_id="head-1")
+    head.done.return_value = False
+    head.state = "PENDING"
+    cluster.jobs = [head]
+    config = _cluster_config(1)
+    config["worker_wait_timeout_seconds"] = 0
+
+    with pytest.raises(RayClusterStartupError, match="Timed out.*head-1"):
+        start_ray_cluster(config, return_cluster=True)
+
+    cluster.shutdown.assert_called_once_with()
+
+
 def test_wait_for_expected_gpu_capacity_waits_before_returning():
     ray_module = MagicMock()
     ray_module.cluster_resources.side_effect = [{"GPU": 1.0}, {"GPU": 2.0}]
