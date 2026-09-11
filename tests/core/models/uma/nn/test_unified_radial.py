@@ -165,3 +165,79 @@ class TestUnifiedRadialMLP:
         # Input should have gradients
         assert x_edge.grad is not None
         assert x_edge.grad.abs().sum() > 0
+
+    def test_fp16_fc2_cache_lifecycle(self, radial_mlp_list):
+        from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
+
+        unified = UnifiedRadialMLP(radial_mlp_list)
+        original_keys = set(unified.state_dict())
+        unified.configure_fp16_fc2((0, 2))
+        assert set(unified.state_dict()) == original_keys
+        assert unified.fp16_fc2_blocks == (0, 2)
+        assert unified._fc2_weight_fp16.dtype is torch.float16
+        assert unified._fc2_weight_fp16.stride() == unified.fc2_weight.stride()
+        pointer = unified._fc2_weight_fp16.data_ptr()
+        state = {key: value.clone() for key, value in unified.state_dict().items()}
+        state["fc2_weight"].add_(1)
+        unified.load_state_dict(state)
+        assert unified._fc2_weight_fp16.data_ptr() == pointer
+        torch.testing.assert_close(unified._fc2_weight_fp16, state["fc2_weight"].half())
+
+        with pytest.raises(ValueError, match="outside model.blocks"):
+            unified.configure_fp16_fc2((len(radial_mlp_list),))
+        with pytest.raises(ValueError, match="unique indices"):
+            unified.configure_fp16_fc2((0, 0))
+        for blocks in ((-1,), (True,)):
+            with pytest.raises(ValueError, match="non-negative integers"):
+                unified.configure_fp16_fc2(blocks)
+
+    @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
+    def test_fp16_fc2_forward_and_vjp(self):
+        from fairchem.core.models.uma.nn.radial import RadialMLP
+        from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
+
+        torch.manual_seed(42)
+        radial_mlps = [RadialMLP([64, 128, 128, 1536]) for _ in range(4)]
+        unified = UnifiedRadialMLP(radial_mlps).cuda()
+        unified.configure_fp16_fc2((0,))
+        h = torch.randn(17, 128, device="cuda", requires_grad=True)
+        grad_output = torch.randn_like(h)
+        expected = (
+            torch.mm(h.half(), unified.fc2_weight[0].half().T, out_dtype=torch.float32)
+            + unified.fc2_bias[0]
+        )
+        actual = unified.forward_fp16_fc2(h, 0)
+        expected_grad = torch.mm(
+            grad_output.half(),
+            unified.fc2_weight[0].half(),
+            out_dtype=torch.float32,
+        )
+        actual_grad = torch.autograd.grad(actual, h, grad_output)[0]
+        torch.testing.assert_close(actual, expected)
+        torch.testing.assert_close(actual_grad, expected_grad)
+
+        compiled = torch.compile(unified.forward_fp16_fc2, fullgraph=True)
+        warm_h = h.detach().clone().requires_grad_()
+        warm = compiled(warm_h, 0)
+        torch.autograd.grad(warm, warm_h, grad_output)
+
+        static_h = h.detach().clone().requires_grad_()
+        graph = torch.cuda.CUDAGraph()
+        torch.autograd.graph.set_override_stale_capture_stream(True)
+        try:
+            with torch.cuda.graph(graph):
+                captured = compiled(static_h, 0)
+                captured_grad = torch.autograd.grad(captured, static_h, grad_output)[0]
+        finally:
+            torch.autograd.graph.set_override_stale_capture_stream(False)
+        before = (captured.clone(), captured_grad.clone())
+        with torch.no_grad():
+            static_h.add_(0.125)
+        expected = unified.forward_fp16_fc2(static_h, 0)
+        expected_grad = torch.autograd.grad(expected, static_h, grad_output)[0]
+        graph.replay()
+        assert not torch.equal(captured, before[0])
+        assert not torch.equal(captured_grad, before[1])
+        torch.testing.assert_close(captured, expected)
+        torch.testing.assert_close(captured_grad, expected_grad)

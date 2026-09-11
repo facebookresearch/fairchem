@@ -71,6 +71,33 @@ def test_invalid_string_raises():
         InferenceSettings(base_precision_dtype="int8")
 
 
+def test_fp16_radial_fc2_blocks_validation():
+    with pytest.raises(ValueError, match="unique indices"):
+        InferenceSettings(fp16_radial_fc2_blocks=(0, 0))
+    with pytest.raises(ValueError, match="non-negative integers"):
+        InferenceSettings(fp16_radial_fc2_blocks=(-1,))
+    with pytest.raises(ValueError, match="execution_mode='umas_fast_gpu'"):
+        InferenceSettings(fp16_radial_fc2_blocks=(0,))
+    with pytest.raises(ValueError, match="base_precision_dtype=torch.float32"):
+        InferenceSettings(
+            base_precision_dtype=torch.float64,
+            execution_mode="umas_fast_gpu",
+            fp16_radial_fc2_blocks=(0,),
+        )
+    with pytest.raises(ValueError, match="does not support Hessians"):
+        InferenceSettings(
+            execution_mode="umas_fast_gpu",
+            fp16_radial_fc2_blocks=(0,),
+            predict_untrained_hessian={"omat"},
+        )
+
+    settings = InferenceSettings(
+        execution_mode="umas_fast_gpu",
+        fp16_radial_fc2_blocks=[0, 1, 2, 3],
+    )
+    assert settings.fp16_radial_fc2_blocks == (0, 1, 2, 3)
+
+
 # --- to_omegaconf ---
 
 
@@ -104,3 +131,14 @@ def test_to_omegaconf_roundtrip():
     assert isinstance(restored, InferenceSettings)
     assert restored.base_precision_dtype is torch.float64
     assert restored.tf32 is True
+
+
+def test_fp16_radial_fc2_blocks_omegaconf_roundtrip():
+    import hydra
+
+    original = InferenceSettings(
+        execution_mode="umas_fast_gpu",
+        fp16_radial_fc2_blocks=(0, 1, 2, 3),
+    )
+    restored = hydra.utils.instantiate(original.to_omegaconf())
+    assert restored.fp16_radial_fc2_blocks == (0, 1, 2, 3)
