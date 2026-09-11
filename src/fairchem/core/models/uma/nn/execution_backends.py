@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -26,6 +27,7 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFlashBackend",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
@@ -57,6 +59,7 @@ class ExecutionMode(str, Enum):
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
     UMAS_FAST_GPU = "umas_fast_gpu"
+    UMAS_FLASH = "umas_flash"
 
 
 class ExecutionBackend:
@@ -74,11 +77,49 @@ class ExecutionBackend:
         - permute_wigner_inv_edge_to_node: Rotate M->L and scatter to nodes
         - edge_degree_scatter: Rotate radial and scatter to nodes
         - prepare_model_for_inference: Apply backend-specific model transforms
+        - backbone_features: Replace the whole feature-extraction body
     """
 
     # Whether this backend exposes the fused edgewise SO2 path (producer conv1
     # pack + consumer conv2 inv fusion).
     supports_fused_edgewise: bool = False
+
+    # Set by backends whose fusion crosses the per-op boundaries above, i.e.
+    # ones that implement backbone_features instead of the individual hooks.
+    fused_backbone_features: bool = False
+
+    @staticmethod
+    def backbone_features(
+        model: torch.nn.Module,
+        data_dict,
+        graph_dict: dict,
+        csd_mixed_emb: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Produce node embeddings for the whole backbone body.
+
+        Only called when ``fused_backbone_features`` is set. It replaces
+        everything between graph generation and the final norm: Wigner
+        construction, the edge embedding, the edge-degree embedding, the
+        message passing blocks and the channel balancing. A backend takes this
+        route when its kernels fuse across the per-op hooks (for example
+        deriving the Wigner entries inside the geometry kernel), which the
+        finer-grained hooks cannot express.
+
+        Args:
+            model: The backbone, already prepared for inference.
+            data_dict: The AtomicData batch. Node entries (``atomic_numbers``,
+                ``batch``) are this rank's partition, ``*_full`` entries and
+                edge indices are global, and ``scatter_target`` gives the local
+                row each edge writes into.
+            graph_dict: Graph as returned by ``_generate_graph``.
+            csd_mixed_emb: Charge/spin/dataset embedding per system.
+
+        Returns:
+            Node embeddings [N_local, sph_feature_size, sphere_channels],
+            already passed through the backbone's final norm.
+        """
+        raise NotImplementedError
 
     @staticmethod
     def validate(
@@ -576,10 +617,202 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         )
 
 
+class UMASFlashBackend(ExecutionBackend):
+    """
+    Fully fused GPU backend: one Triton path for the entire backbone body.
+
+    Where umas_fast_gpu accelerates individual steps, this backend replaces the
+    body wholesale (see ``fairchem.core.models.uma.flash``). Wigner-D entries,
+    the radial basis and the rotated edge messages are computed inside kernels
+    and never written to HBM, which cuts peak memory as well as time.
+
+    The fused path is only valid for the shape and parameterisation it was
+    written against, so the constraints are checked rather than assumed.
+    ``validate`` sees only lmax/mmax and the settings; the rest are checked in
+    ``prepare_model_for_inference``, which sees the built model:
+
+    ==========================  =========================================
+    CUDA available              Triton kernels
+    lmax == mmax == 2           hardcoded 9-coefficient / 34-entry layout
+    hidden == sphere_channels   the packed SO(2) blocks are square
+    act_type == "gate"          the gating kernel implements only gate
+    Gaussian basis, envelope    both inlined into the geometry kernel
+      with exponent 5
+    merge_mole=True             the repacking reads plain Linear weights
+    float32 throughout          the kernels accumulate in fp32 regardless
+    eval mode                   see below
+    no hessians                 see below
+    ==========================  =========================================
+
+    ``activation_checkpointing`` is honoured, but by a different mechanism than
+    the eager backbone uses. Upstream chunks the edge dimension, which these
+    kernels cannot do; here each fused layer is wrapped in
+    ``torch.utils.checkpoint`` instead. The trade is the usual one -- one extra
+    forward pass, and one layer's activations held rather than every layer's.
+
+    Inference only, in a stronger sense than "we did not test training": the
+    kernels recompute intermediates in their backward instead of staging them,
+    and that backward is hand written and not itself differentiable. First
+    derivatives are exact, so energies, forces and stress all work -- stress
+    included, because the kernels return only d/d(edge_vec) and autograd
+    carries it to ``pos`` and ``cell``. Second derivatives are refused.
+
+    ``use_quaternion_wigner`` has no effect here. The backend never calls
+    ``_get_rotmat_and_wigner``; the 34 Wigner entries come out of the geometry
+    kernel, which fixes its own frame. Output is unchanged either way -- the
+    SO(2) convolution is equivariant about the edge axis, so the choice of
+    frame cancels -- which is why this is a note and not an error.
+
+    Graph parallelism is supported in the allgather/index_split configuration:
+    each layer all-gathers node features before the edge gather, and the
+    scatter kernels take upstream's per-edge local target rows. The all-to-all
+    collective and spatial partitions are rejected in ``FlashFeatures.forward``.
+    """
+
+    fused_backbone_features = True
+
+    @staticmethod
+    def validate(
+        lmax: int,
+        mmax: int,
+        settings: InferenceSettings,
+    ) -> None:
+        if not torch.cuda.is_available():
+            raise ValueError("umas_flash requires CUDA")
+        if lmax != 2 or mmax != 2:
+            raise ValueError("umas_flash requires lmax==2 and mmax==2")
+        if settings is None:
+            return
+        if not settings.merge_mole:
+            raise ValueError("umas_flash requires merge_mole=True")
+        if settings.predict_untrained_hessian:
+            raise ValueError(
+                "umas_flash cannot compute hessians: the kernel backward passes "
+                "are hand written and do not support double backward"
+            )
+        # The kernels accumulate in fp32 registers regardless of the input
+        # dtype, so float64 would be silently demoted to float32 accuracy --
+        # worse than refusing, because the caller asked for extra precision
+        # and would get none.
+        if settings.base_precision_dtype != torch.float32:
+            raise ValueError(
+                "umas_flash runs in float32 only; the kernels accumulate in "
+                "fp32 and would silently discard the extra precision. Got "
+                f"base_precision_dtype={settings.base_precision_dtype}."
+            )
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        """
+        Repack the SO(2) and radial weights for the fused kernels.
+
+        Runs after any MOLE merge, so it sees plain Linear layers, and runs in
+        every process that builds a predict unit.
+        """
+        settings = getattr(model, "_inference_settings", None)
+        checkpointing = bool(settings is not None and settings.activation_checkpointing)
+        from fairchem.core.models.uma.flash import FlashFeatures
+        from fairchem.core.models.uma.nn.radial import GaussianSmearing
+
+        # Model-level constraints that validate() cannot see: it only gets
+        # lmax/mmax and the inference settings.
+        if model.training:
+            raise ValueError(
+                "umas_flash is an inference-only backend: the kernels fuse "
+                "away the activations a training backward would need, and "
+                "their hand written backward is not double differentiable. "
+                "Call model.eval() first."
+            )
+        if (model.lmax, model.mmax) != (2, 2):
+            raise ValueError(
+                "umas_flash hardcodes the lmax=2, mmax=2 coefficient layout, "
+                f"got lmax={model.lmax}, mmax={model.mmax}"
+            )
+        if model.hidden_channels != model.sphere_channels:
+            raise ValueError(
+                "umas_flash requires hidden_channels == sphere_channels, got "
+                f"{model.hidden_channels} != {model.sphere_channels}"
+            )
+        act_types = {block.edge_wise.act_type for block in model.blocks}
+        if act_types != {"gate"}:
+            raise ValueError(
+                f"umas_flash implements the gate activation; got {act_types}"
+            )
+        if model.regress_config.hessian:
+            raise ValueError(
+                "umas_flash cannot compute hessians: the kernel backward passes "
+                "are hand written and do not support double backward"
+            )
+        # The geometry kernel inlines the p=5 polynomial envelope and the
+        # Gaussian basis rather than calling these modules, so a different
+        # radial parameterisation would be ignored instead of applied.
+        if not isinstance(model.distance_expansion, GaussianSmearing):
+            raise ValueError(
+                "umas_flash inlines the Gaussian radial basis; got "
+                f"{type(model.distance_expansion).__name__}"
+            )
+        if float(model.envelope.p) != 5.0:
+            raise ValueError(
+                "umas_flash inlines the exponent-5 polynomial envelope, got "
+                f"exponent {model.envelope.p}"
+            )
+        # merge_mole is already required, but a MOLE layer that was not merged
+        # exposes no .weight and would fail deep inside the repacking with an
+        # AttributeError instead of a usable message.
+        for name, layer in (
+            ("so2_conv_1.fc_m0", model.blocks[0].edge_wise.so2_conv_1.fc_m0),
+            ("so2_conv_2.fc_m0", model.blocks[0].edge_wise.so2_conv_2.fc_m0),
+        ):
+            if not isinstance(layer, torch.nn.Linear):
+                raise ValueError(
+                    "umas_flash repacks plain Linear weights; "
+                    f"{name} is a {type(layer).__name__}. This usually means "
+                    "the MOLE experts were not merged."
+                )
+        param_dtypes = {p.dtype for p in model.parameters()}
+        if param_dtypes != {torch.float32}:
+            raise ValueError(
+                f"umas_flash runs in float32 only, got parameters in {param_dtypes}"
+            )
+        # The gather kernel reads the radial output as twelve C-wide slices
+        # (6C + 4C + 2C across the three m-orders) with unchecked pointer
+        # arithmetic. Every constraint above should already force this width,
+        # so a mismatch means an assumption has moved -- and an out-of-bounds
+        # read is a far worse way to find that out.
+        rad_width = model.blocks[0].edge_wise.so2_conv_1.rad_func.net[-1].out_features
+        if rad_width != 12 * model.sphere_channels:
+            raise ValueError(
+                "umas_flash expects a radial output of 12 * sphere_channels = "
+                f"{12 * model.sphere_channels}, got {rad_width}"
+            )
+
+        logging.warning(
+            "umas_flash autotunes its Triton kernels on first use, which takes "
+            "minutes. Results are written to the Triton cache, so set "
+            "TRITON_CACHE_DIR to somewhere persistent to pay it only once."
+        )
+        model._flash_features = FlashFeatures(model, checkpointing=checkpointing)
+
+    @staticmethod
+    def backbone_features(
+        model: torch.nn.Module,
+        data_dict,
+        graph_dict: dict,
+        csd_mixed_emb: torch.Tensor,
+    ) -> torch.Tensor:
+        if not hasattr(model, "_flash_features"):
+            raise RuntimeError(
+                "umas_flash requires prepare_for_inference to have run; the "
+                "packed weights are built there."
+            )
+        return model._flash_features(model, data_dict, graph_dict, csd_mixed_emb)
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
     ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
+    ExecutionMode.UMAS_FLASH: UMASFlashBackend,
 }
 
 
