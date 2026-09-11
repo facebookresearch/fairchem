@@ -100,3 +100,26 @@ def test_spherical_smearing_edge_cases():
 
     assert output_random.shape == (5, smearing.out_dim)
     assert torch.isfinite(output_random).all()
+
+
+def test_spherical_smearing_degree_one_values():
+    """
+    Test angle-dependent degree-one spherical harmonics.
+    """
+    smearing = SphericalSmearing(max_n=2, option="all")
+    xyz = torch.tensor(
+        [
+            [1.0, 2.0, 3.0],
+            [-2.0, 1.0, -1.0],
+        ],
+        dtype=torch.float32,
+    )
+    normalized_xyz = xyz / xyz.norm(dim=-1, keepdim=True)
+
+    y00 = torch.full_like(normalized_xyz[:, 0], 1.0 / np.sqrt(4.0 * np.pi))
+    y10 = np.sqrt(3.0 / (4.0 * np.pi)) * normalized_xyz[:, 2]
+    y11_real = -np.sqrt(3.0 / (8.0 * np.pi)) * normalized_xyz[:, 0]
+    y11_imag = -np.sqrt(3.0 / (8.0 * np.pi)) * normalized_xyz[:, 1]
+    expected = torch.stack([y00, y10, y11_real, y11_imag], dim=1)
+
+    assert torch.allclose(smearing(xyz), expected, atol=1e-6)
