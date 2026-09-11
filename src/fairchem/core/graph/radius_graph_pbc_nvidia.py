@@ -146,8 +146,21 @@ def get_neighbors_nvidia(
     )
     num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=device)
 
-    # nvalchemi wants cell=None and pbc=None for non-periodic systems
-    neighbor_cell = None if not bool(pbc.any().item()) else cell
+    # nvalchemi wants cell=None and pbc=None for non-periodic systems and only
+    # accepts right-handed cells. A reflected basis represents the same lattice
+    # after negating the corresponding integer cell-offset component.
+    cell_basis_signs = None
+    neighbor_cell = None
+    if bool(pbc.any().item()):
+        cell_basis_signs = torch.ones(
+            (cell.shape[0], 3), dtype=torch.int32, device=device
+        )
+        cell_basis_signs[:, 0] = torch.where(
+            torch.linalg.det(cell) < 0,
+            -1,
+            1,
+        )
+        neighbor_cell = cell * cell_basis_signs.unsqueeze(-1)
     neighbor_pbc = None if neighbor_cell is None else pbc
 
     neighbor_list(
@@ -171,6 +184,8 @@ def get_neighbors_nvidia(
     c_index = atom_indices.expand(-1, buffer_max_neigh)[valid_mask]
     n_index = neighbor_matrix[valid_mask]
     offsets = neighbor_matrix_shifts[valid_mask]
+    if cell_basis_signs is not None:
+        offsets = offsets * cell_basis_signs[batch[c_index]]
 
     # We used to sort the edges here but the ordering of the edges is no longer required, leaving this comment here for reference
 
