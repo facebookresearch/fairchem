@@ -1,8 +1,8 @@
 name: contributor check
 
-on: 
+on:
   pull_request:
-    branches: [main]
+    branches: [main, uma_dev]
 
 permissions: {}
 
@@ -12,4 +12,3 @@ jobs:
     steps:
       - name: pass
         run: echo "passed"
-
