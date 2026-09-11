@@ -139,6 +139,9 @@ class InferenceSettings:
     # MLIPPredictUnit falls back to an unmerged model.
     merge_mole: bool = False
 
+    # Restrict input gradients of the two radial first layers to distance features.
+    radial_first_linear_prefix_grad: bool = False
+
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
@@ -202,6 +205,16 @@ class InferenceSettings:
     max_atoms: int | None = None
 
     def __post_init__(self):
+        if self.radial_first_linear_prefix_grad:
+            if self.execution_mode != "umas_fast_gpu":
+                raise ValueError(
+                    "radial_first_linear_prefix_grad requires "
+                    "execution_mode='umas_fast_gpu'"
+                )
+            if self.predict_untrained_hessian:
+                raise ValueError(
+                    "radial_first_linear_prefix_grad does not support Hessians"
+                )
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
             assert (

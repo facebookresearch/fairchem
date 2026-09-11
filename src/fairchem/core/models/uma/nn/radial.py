@@ -13,6 +13,26 @@ import torch
 import torch.nn as nn
 
 
+class _FrozenLinearInputPrefixFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, detached_inputs, input_prefix, weight, bias):
+        ctx.save_for_backward(weight)
+        ctx.prefix = input_prefix.shape[1]
+        return torch.nn.functional.linear(detached_inputs, weight, bias)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (weight,) = ctx.saved_tensors
+        grad_prefix = torch.mm(grad_output, weight[:, : ctx.prefix])
+        return None, grad_prefix, None, None
+
+
+def _frozen_linear_input_prefix(inputs, weight, bias, prefix):
+    return _FrozenLinearInputPrefixFunction.apply(
+        inputs.detach(), inputs[:, :prefix], weight, bias
+    )
+
+
 @torch.jit.script
 def gaussian(x: torch.Tensor, mean, std) -> torch.Tensor:
     a = (2 * math.pi) ** 0.5
@@ -81,6 +101,30 @@ class RadialMLP(nn.Module):
             modules.append(torch.nn.SiLU())
 
         self.net = nn.Sequential(*modules)
+        self.first_linear_grad_prefix: int | None = None
+
+    def configure_first_linear_grad_prefix(
+        self, prefix: int, expected_input_features: int
+    ) -> None:
+        first_linear = self.net[0]
+        if not isinstance(first_linear, nn.Linear):
+            raise TypeError("radial first layer must be Linear")
+        if first_linear.in_features != expected_input_features:
+            raise ValueError("radial first-linear input width does not match x_edge")
+        if not 0 < prefix < expected_input_features:
+            raise ValueError("prefix must be between zero and the input width")
+        self.first_linear_grad_prefix = prefix
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.net(inputs)
+        if self.first_linear_grad_prefix is None:
+            return self.net(inputs)
+        first_linear = self.net[0]
+        hidden = _frozen_linear_input_prefix(
+            inputs,
+            first_linear.weight,
+            first_linear.bias,
+            self.first_linear_grad_prefix,
+        )
+        for index in range(1, len(self.net)):
+            hidden = self.net[index](hidden)
+        return hidden

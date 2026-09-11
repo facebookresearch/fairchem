@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 import torch
 import torch.nn as nn
 
+from .radial import _frozen_linear_input_prefix
+
 if TYPE_CHECKING:
     from .radial import RadialMLP
 
@@ -146,6 +148,18 @@ class UnifiedRadialMLP(nn.Module):
             "fc3_bias",
             torch.stack([mlp.net[6].bias.data for mlp in radial_mlps], dim=0),
         )
+        self.first_linear_grad_prefix: int | None = None
+
+    def configure_first_linear_grad_prefix(
+        self, prefix: int, expected_input_features: int
+    ) -> None:
+        if self.W1_cat.shape[1] != expected_input_features:
+            raise ValueError(
+                "UnifiedRadialMLP first-linear input width does not match x_edge"
+            )
+        if not 0 < prefix < expected_input_features:
+            raise ValueError("prefix must be between zero and the input width")
+        self.first_linear_grad_prefix = prefix
 
     def umas_radial_mlp(self, h: torch.Tensor, i: int) -> torch.Tensor:
         """Apply layers 2+ (LN -> SiLU -> Linear -> LN -> SiLU -> Linear)."""
@@ -172,7 +186,12 @@ class UnifiedRadialMLP(nn.Module):
             List of N tensors, each of shape [E, out_features]
         """
         # Single batched GEMM for first layer, then split into per-layer chunks
-        h_all = torch.nn.functional.linear(x, self.W1_cat, self.b1_cat)
+        if self.first_linear_grad_prefix is None:
+            h_all = torch.nn.functional.linear(x, self.W1_cat, self.b1_cat)
+        else:
+            h_all = _frozen_linear_input_prefix(
+                x, self.W1_cat, self.b1_cat, self.first_linear_grad_prefix
+            )
         h_per_layer = h_all.split(self.hidden_features, dim=1)
         return [self.umas_radial_mlp(h_per_layer[i], i) for i in range(self.num_layers)]
 
