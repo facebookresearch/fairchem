@@ -13,7 +13,7 @@ Tests:  Ray Serve inference server in three modes:
 Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). Locked to
         UMA-S only because the base GPU runner OOMs with uma-m-1p1's
         Ray Serve replicas.
-CI:     test_gpu_sweep (units shard).
+CI:     test_gpu_sweep (models shard).
 """
 
 from __future__ import annotations
