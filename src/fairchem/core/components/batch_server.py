@@ -196,11 +196,9 @@ class BatchPredictServerMixin:
             self.split_oom_batch = bool(split_oom_batch)
 
         logging.info(
-            "Reconfigured batching: max_batch_size=%s batch_wait_timeout_s=%s "
-            "split_oom_batch=%s",
-            max_batch_size,
-            batch_wait_timeout_s,
-            split_oom_batch,
+            f"Reconfigured batching: max_batch_size={max_batch_size} "
+            f"batch_wait_timeout_s={batch_wait_timeout_s} "
+            f"split_oom_batch={split_oom_batch}"
         )
 
     def get_predict_unit_attribute(self, attribute_name: str, **kwargs) -> Any:
@@ -699,9 +697,8 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             )
 
         logging.info(
-            "MultiplexedBatchPredictServer loaded model_id=%r spec=%s",
-            model_id,
-            json.dumps(spec.canonical_dict(), sort_keys=True),
+            f"MultiplexedBatchPredictServer loaded model_id={model_id!r} "
+            f"spec={json.dumps(spec.canonical_dict(), sort_keys=True)}"
         )
         return predict_unit
 
@@ -851,10 +848,9 @@ def _prepare_deployment_config(
     if "num_gpus" not in actor_opts:
         actor_opts["num_gpus"] = default_num_gpus
         logging.info(
-            "Replicas will request num_gpus=%s (%s). Pass num_gpus=... or set "
-            "ray_actor_options['num_gpus'] to override.",
-            default_num_gpus,
-            default_basis,
+            f"Replicas will request num_gpus={default_num_gpus} "
+            f"({default_basis}). Pass num_gpus or set "
+            "ray_actor_options['num_gpus'] to override."
         )
     deployment_config.ray_actor_options = actor_opts
     return deployment_config
@@ -1001,9 +997,8 @@ def update_batch_config(
         route_prefix=record.route_prefix,
     )
     logging.info(
-        "Broadcast batch config to all replicas of %r: %s",
-        deployment_name,
-        batch_config,
+        f"Broadcast batch config to all replicas of {deployment_name!r}: "
+        f"{batch_config}"
     )
     return batch_config
 
@@ -1045,7 +1040,7 @@ def update_served_predict_unit(
         deployment_name=deployment_name,
         route_prefix=record.route_prefix,
     )
-    logging.info("Rolled new predict unit out to all replicas of %r", deployment_name)
+    logging.info(f"Rolled new predict unit out to all replicas of {deployment_name!r}")
 
 
 def setup_batch_predict_server(
