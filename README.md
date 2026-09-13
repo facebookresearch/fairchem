@@ -27,19 +27,17 @@
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
-> :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.**
-> If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
-> as detailed [here](#looking-for-fairchem-v1-models-and-code).
+## Runtime benchmark
 
-> [!CAUTION]
-> UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
-> These are not compatible with Materials Project calculations. If you are using UMA or models trained on OMat24 only
-> for such calculations, you can find a OMat24 specific calculations of reference unary compounds and MP2020-style
-> anion and GGA/GGA+U mixing corrections in the [OMat24 Hugging Face repo](https://huggingface.co/datasets/facebook/OMAT24).
-> Do not use MP2020 corrections or use the MP references compounds when using OMat24 trained models. Additional care
-> must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
-> in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
+[![OMol force MAE versus ASE NVE runtime](benchmarks/omol/omol_force_mae_vs_speed.png)](benchmarks/omol/README.md)
 
+**UMA is now fast!**
+
+The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
+horizontal axis is mean runtime (ms/step) for an ASE NVE step on a water system
+using an NVIDIA H200. See the
+[benchmark details and reproduction scripts](benchmarks/omol/README.md)
+for the full setup.
 
 ## Latest news
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
@@ -56,6 +54,20 @@ If you want to explore model capabilities check out our
 [educational demo](https://facebook-fairchem-uma-demo.hf.space/)
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
+
+## Legacy models
+FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.
+If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
+as detailed [here](#looking-for-fairchem-v1-models-and-code).
+
+## Materials Project and OMat24 DFT settings
+UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
+These are not compatible with Materials Project calculations. If you are using UMA or models trained on OMat24 only
+for such calculations, you can find a OMat24 specific calculations of reference unary compounds and MP2020-style
+anion and GGA/GGA+U mixing corrections in the [OMat24 Hugging Face repo](https://huggingface.co/datasets/facebook/OMAT24).
+Do not use MP2020 corrections or use the MP references compounds when using OMat24-trained models. Additional care
+must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
+in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
 
 ## Installation
 Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
