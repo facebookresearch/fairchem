@@ -27,11 +27,13 @@
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
-## Runtime benchmark
+## UMA is now fast!
 
-[![OMol force MAE versus ASE NVE runtime](benchmarks/omol/omol_force_mae_vs_speed.png)](benchmarks/omol/README.md)
-
-**UMA is now fast!**
+<p align="center">
+  <a href="benchmarks/omol/README.md">
+    <img src="benchmarks/omol/omol_force_mae_vs_speed.png" width="700" alt="OMol force MAE versus ASE NVE runtime">
+  </a>
+</p>
 
 The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
 horizontal axis is mean runtime (ms/step) for an ASE NVE step on a water system
