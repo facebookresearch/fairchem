@@ -31,7 +31,7 @@ demos, and application efforts for materials science and quantum chemistry.
 
 <p align="center">
   <a href="benchmarks/omol/README.md">
-    <img src="benchmarks/omol/omol_force_mae_vs_speed.png" width="700" alt="OMol force MAE versus ASE NVE runtime">
+    <img src="benchmarks/omol/omol_force_mae_vs_speed.png" width="650" alt="OMol force MAE versus ASE NVE runtime">
   </a>
 </p>
 
