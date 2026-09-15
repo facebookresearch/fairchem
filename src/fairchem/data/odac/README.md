@@ -1,8 +1,8 @@
 # ODAC23 Dataset
 
-To download the ODAC23 dataset, please see the links [here](https://facebookresearch.github.io/fairchem//core/datasets/odac.html).
+To download the ODAC23 dataset, please see the links [here](https://facebookresearch.github.io/fairchem/core/datasets/odac.html).
 
-Pre-trained ML models and configs are available [here](https://facebookresearch.github.io/fairchem//core/model_checkpoints.html#open-direct-air-capture-2023-odac23).
+Pre-trained ML models and configs are available [here](https://facebookresearch.github.io/fairchem/core/model_checkpoints.html#open-direct-air-capture-2023-odac23).
 
 Large ODAC files can be downloaded by running the command `python src/fairchem/core/scripts/download_large_files.py odac` from the root of the fairchem repo.
 

@@ -18,7 +18,7 @@ lmp_fc = "fairchem.lammps.lammps_fc:main"
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem"
 home = "https://opencatalystproject.org/"
-documentation = "https://facebookresearch.github.io/fairchem//"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.version]
 source = "vcs"

@@ -21,7 +21,7 @@ conformers from another source.
    and write per-conformer geometry files that feed into Stage 1 below.
 1. **Structure Generation**: [`Genarris 3.0`](https://github.com/Yi5817/Genarris) generates putative crystal structures.
 2. **Process Generated Structures**: Pymatgen's StructureMatcher deduplicates generated structures.
-3. **MLIP Relaxation**: Structures are fully relaxed using the Universal Model for Atoms (UMA) from [`fairchem`](https://facebookresearch.github.io/fairchem//).
+3. **MLIP Relaxation**: Structures are fully relaxed using the Universal Model for Atoms (UMA) from [`fairchem`](https://facebookresearch.github.io/fairchem/).
 4. **Conformer Energy Corrections** (Optional): Each relaxed crystal is split into its ``z``molecules and re-scored with a second ("corrector") UMA calculator.
 5. **Filtering**: Property filtering and structure deduplication using pymatgen's StructureMatcher. This generates the energy landscape at 0 K.
 6. **Experimental Validation** (Optional): Evaluation through comparison against experimental crystal structures using PackingSimilarity from CSD Python API [requires [CCDC license](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html)] or pymatgen's StructureMatcher.

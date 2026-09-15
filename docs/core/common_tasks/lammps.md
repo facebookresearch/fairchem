@@ -25,7 +25,7 @@ The main advantage is that we can optimize UMA for distributed parallel inferenc
 
 There is some Python overhead, but for very fast empirical force fields where Python would be a limiting factor, this is negligible at the speeds of current MLIPs (10s - 100s of ms per step). This is the same reason nearly all modern LLM inference uses Python engines. Additionally, to easily scale to multi-node parallelism regimes, we designed the architecture using a client-server interface so LAMMPS would only see the client and the server code running inference can be optimized completely independently later.
 
-Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](https://facebookresearch.github.io/fairchem//core/common_tasks/ase_calculator.html).
+Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
 
 ## Usage Notes
 

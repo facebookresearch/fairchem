@@ -4,4 +4,4 @@ This directory provides an interface to use FAIR Chemistry models in conjuction 
 
 The source under sub-repository (src/fairchem/lammps) is licensed under the GPL-2.0 License, the same as in the LAMMPs software package. Please refer to the LICENSE file in this same directory. ***It is NOT the same as the license for rest of this repository, which is licensed under the MIT license.***
 
-Refer to the [docs](https://facebookresearch.github.io/fairchem//core/common_tasks/lammps.html) more details.
+Refer to the [docs](https://facebookresearch.github.io/fairchem/core/common_tasks/lammps.html) more details.
