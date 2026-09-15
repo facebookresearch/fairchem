@@ -1,1 +1,1 @@
-import{a}from"/build/_shared/chunk-3NSVY56Z.js";import"/build/_shared/chunk-OZE3FFNP.js";export default a();
+import{a}from"/fairchem/build/_shared/chunk-3NSVY56Z.js";import"/fairchem/build/_shared/chunk-OZE3FFNP.js";export default a();

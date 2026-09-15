@@ -1,1 +1,1 @@
-import{a,b,c,d,e}from"/build/_shared/chunk-EMLRI2JG.js";import"/build/_shared/chunk-6FEZWRIS.js";import"/build/_shared/chunk-OZE3FFNP.js";e();export{d as css,b as cssCompletionSource,c as cssLanguage,a as defineCSSCompletionSource};
+import{a,b,c,d,e}from"/fairchem/build/_shared/chunk-EMLRI2JG.js";import"/fairchem/build/_shared/chunk-6FEZWRIS.js";import"/fairchem/build/_shared/chunk-OZE3FFNP.js";e();export{d as css,b as cssCompletionSource,c as cssLanguage,a as defineCSSCompletionSource};
