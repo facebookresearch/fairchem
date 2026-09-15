@@ -138,7 +138,7 @@ The models used here have >100 million free fitted parameters that are fit to th
 :::{admonition} Can I run these models on my own computer? How long would it take?
 :class: dropdown
 
-Yes! All of the models and pre-trained checkpoints are open source and freely available at [https://fair-chem.github.io/](https://fair-chem.github.io/); models/datasets have varying licenses. They can run on CPUs with ~16Gb of RAM, and CUDA-compatible GPUs with >16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.
+Yes! All of the models and pre-trained checkpoints are open source and freely available at [https://facebookresearch.github.io/fairchem//](https://facebookresearch.github.io/fairchem//); models/datasets have varying licenses. They can run on CPUs with ~16Gb of RAM, and CUDA-compatible GPUs with >16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.
 :::
 
 :::{admonition} What about the CO2 emissions associated with training and serving ML models?
@@ -155,7 +155,7 @@ Please let us know by posting as a [github issue](https://github.com/facebookres
 Alternatively, a few things to try:
 
 * First, try a couple of the ML models available on this website for the same surface/adsorbate and see if the results differ. This gives you an idea of whether it is specific to a model, or something about the surface/adsorbate that leads to problems.
-* Second, you can download the structures and try other ML models from [https://fair-chem.github.io/](https://fair-chem.github.io/) to see if the problems are consistent.
+* Second, you can download the structures and try other ML models from [https://facebookresearch.github.io/fairchem//](https://facebookresearch.github.io/fairchem//) to see if the problems are consistent.
 * Finally, if you have access to VASP you can try running the relaxations yourself to verify the results.
 :::
 

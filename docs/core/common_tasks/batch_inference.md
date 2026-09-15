@@ -33,7 +33,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 If your application requires predictions over many systems, you can run batch inference using UMA models to use compute more efficiently and improve GPU utilization.
 
 :::{tip}
-To learn more about the different inference settings supported, see the [Prediction interface documentation](https://fair-chem.github.io/core/common_tasks/ase_calculator.html).
+To learn more about the different inference settings supported, see the [Prediction interface documentation](https://facebookresearch.github.io/fairchem//core/common_tasks/ase_calculator.html).
 :::
 
 ## Generate Batches at Runtime

@@ -24,7 +24,7 @@ fastcsp-confgen = "fairchem.applications.fastcsp.confgen.main:main"
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/applications/fastcsp"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem//"
 
 [tool.hatch.version]
 source = "vcs"

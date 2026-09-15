@@ -52,7 +52,7 @@ fairchem = "fairchem.core._cli:main"
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem"
 home = "https://opencatalystproject.org/"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem//"
 
 [tool.uv]
 default-groups = ["cu130"]
