@@ -647,9 +647,11 @@ def get_local_inference_raycluster(
     Args:
         head_file: Path where head.json will be written. If None, creates
             a temp file.
-        num_cpus: Number of CPUs for Ray. Defaults to 8.
-        num_gpus: Number of GPUs for Ray. If None, auto-detects via
-            torch.cuda.
+        num_cpus: CPUs to give the single local node. Defaults to 8.
+        num_gpus: GPUs to give the single local node. The cluster started here
+            is always single-node, so this is a per-node count, not a
+            cluster-wide one. If None, defaults to every GPU visible to this
+            process (``torch.cuda.device_count()``).
         start_inference_server: If True (default), start FAIRChem Ray Serve
             inference server. Requires ``predict_unit`` to be provided.
         predict_unit: Predict unit to serve. Required when

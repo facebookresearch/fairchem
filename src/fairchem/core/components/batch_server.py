@@ -325,8 +325,8 @@ class BatchPredictServerMixin:
                     f"{len(undo_element_references)} but the batch contains "
                     f"{num_requests} request(s)."
                 )
-            return [bool(flag) for flag in undo_element_references]
-        return [bool(undo_element_references)] * num_requests
+            return list(undo_element_references)
+        return [undo_element_references] * num_requests
 
     def _run_grouped_inference(
         self,
@@ -860,14 +860,20 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
     """
     Reject a predict unit pinned to a CUDA ordinal the replica will not have.
 
-    Ray sets ``CUDA_VISIBLE_DEVICES`` per replica, so a replica granted GPUs
-    only ever sees them as ``cuda:0`` upward. A unit whose tensors were
-    serialized from, say, ``cuda:1`` fails to deserialize there with an opaque
-    "invalid device ordinal" error, so fail here with an actionable one.
+    Ray remaps ``CUDA_VISIBLE_DEVICES`` per replica, so a replica's ordinals
+    always start at ``cuda:0`` regardless of which physical GPUs it was given:
+    with the usual ``num_gpus=1`` it sees *only* ``cuda:0``, and with
+    ``num_gpus=n`` it sees ``cuda:0`` through ``cuda:n-1``.
+
+    The driver, on the other hand, sees every GPU on its node, so a predict
+    unit built here can legitimately sit on ``cuda:1``. Serializing that unit
+    into a ``num_gpus=1`` replica fails on deserialization with an opaque
+    "invalid device ordinal", so fail here with an actionable message instead.
 
     Args:
         predict_unit: The unit about to be placed in the object store.
-        num_gpus: GPUs granted to each replica.
+        num_gpus: GPUs granted to each replica. Fractional values still expose
+            a single (shared) device to the replica.
 
     Raises:
         ValueError: If the unit is pinned to a CUDA ordinal at or beyond the
@@ -877,16 +883,46 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
     if device.type != "cuda" or num_gpus <= 0:
         return
 
+    # A fractional allocation still yields one visible device.
+    visible = max(1, int(num_gpus))
     ordinal = device.index or 0
-    if ordinal >= num_gpus:
+    if ordinal >= visible:
         raise ValueError(
             f"predict_unit is on {predict_unit.device!r}, but each replica is "
             f"granted num_gpus={num_gpus} and Ray remaps CUDA_VISIBLE_DEVICES so "
-            f"the replica only sees ordinals 0..{int(num_gpus) - 1}. Deserializing "
+            f"the replica only sees ordinals 0..{visible - 1}. Deserializing "
             "the unit there would fail with 'invalid device ordinal'. Load the "
             "predict unit on 'cuda:0' (or 'cpu') before serving it, or raise "
             "num_gpus."
         )
+
+
+def _infer_num_gpus_per_replica() -> tuple[float, str]:
+    """
+    Pick a default ``num_gpus`` per replica when there is no local model.
+
+    The multiplexed server loads models lazily inside the replicas, so unlike
+    the single-model server there is no ``predict_unit.device`` to read. The
+    reliable source of truth is the Ray cluster the replicas will actually be
+    scheduled on, so use its GPU capacity whenever Ray is already connected.
+    Only when Ray has not been initialised yet -- i.e. the cluster is about to
+    be spun up locally -- does this fall back to the driver's own CUDA
+    visibility.
+
+    Returns:
+        A ``(num_gpus, basis)`` pair, where ``basis`` describes where the value
+        came from so an unexpected allocation is traceable in the logs.
+    """
+    if ray.is_initialized():
+        cluster_gpus = ray.cluster_resources().get("GPU", 0)
+        return (
+            1 if cluster_gpus > 0 else 0,
+            f"inferred from the Ray cluster's GPU capacity ({cluster_gpus:g})",
+        )
+    return (
+        1 if torch.cuda.is_available() else 0,
+        "guessed from the driver's CUDA visibility (Ray is not connected yet)",
+    )
 
 
 @dataclass
@@ -1129,31 +1165,28 @@ def setup_multiplexed_batch_predict_server(
             ``.bind(**batch_config)``.
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
-        num_gpus: GPUs to request per replica. **Set this explicitly when the
-            driver and the replicas may run on different hardware.** There is
-            no local model to infer from, so leaving it ``None`` falls back to
-            the driver's own CUDA visibility, which is wrong when deploying
-            from a CPU login node to a GPU cluster.
+        num_gpus: GPUs to request per replica. When ``None``, this is inferred
+            from the GPU capacity of the Ray cluster the replicas will run on
+            (or, if Ray is not connected yet, from the driver's own CUDA
+            visibility). Pass it explicitly to pin a value, to request more
+            than one GPU per replica, or when connecting to a cluster whose
+            GPU workers have not joined yet.
 
     Returns:
         Ray Serve deployment handle.
     """
     if num_gpus is None:
-        # There is no local model to consult, so this falls back to probing the
-        # *driver's* CUDA visibility -- which is wrong whenever the driver and
-        # the replicas are on different hardware (e.g. submitting from a CPU
-        # login node to a GPU cluster). Warn loudly rather than silently
-        # deploying a GPU model onto CPU replicas.
-        num_gpus = 1 if torch.cuda.is_available() else 0
-        basis = f"guessed from the driver's torch.cuda.is_available()={num_gpus > 0}"
+        num_gpus, basis = _infer_num_gpus_per_replica()
         if num_gpus == 0:
+            # Warn loudly rather than silently loading every model on CPU.
             logging.warning(
-                "No num_gpus was given and this driver sees no CUDA device, so "
+                f"No num_gpus was given and no GPU was found ({basis}), so "
                 "replicas will be scheduled with num_gpus=0 and every model will "
-                "load on CPU -- even if the cluster has idle GPUs. Pass "
-                "num_gpus=1 explicitly when deploying from a CPU-only host to a "
-                "GPU cluster."
+                "load on CPU. Pass num_gpus=1 explicitly if the cluster does have "
+                "GPUs (for example when its GPU workers have not joined yet)."
             )
+    else:
+        basis = "explicit num_gpus argument"
 
     dc = _prepare_deployment_config(deployment_config, num_gpus, basis)
     if not isinstance(batch_config, BatchConfig):

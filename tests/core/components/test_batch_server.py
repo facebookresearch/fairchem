@@ -524,6 +524,47 @@ def test_check_predict_unit_device_rejects_out_of_range_ordinal():
         batch_server._check_predict_unit_device(unit, 1)
 
 
+@pytest.mark.parametrize(
+    ("cluster_gpus", "expected"), [(4.0, 1), (0.0, 0)], ids=["gpu-cluster", "cpu-only"]
+)
+def test_infer_num_gpus_prefers_ray_cluster_capacity(
+    monkeypatch, cluster_gpus, expected
+):
+    """
+    The replicas run on the Ray cluster, not on the driver, so a CPU-only
+    driver submitting to a GPU cluster must still request a GPU.
+    """
+    monkeypatch.setattr(batch_server.ray, "is_initialized", lambda: True)
+    monkeypatch.setattr(
+        batch_server.ray, "cluster_resources", lambda: {"GPU": cluster_gpus}
+    )
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    num_gpus, basis = batch_server._infer_num_gpus_per_replica()
+
+    assert num_gpus == expected
+    assert "Ray cluster" in basis
+
+
+def test_infer_num_gpus_falls_back_to_driver_when_ray_is_not_connected(monkeypatch):
+    monkeypatch.setattr(batch_server.ray, "is_initialized", lambda: False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    num_gpus, basis = batch_server._infer_num_gpus_per_replica()
+
+    assert num_gpus == 1
+    assert "not connected" in basis
+
+
+@pytest.mark.parametrize("num_gpus", [0.5, 1], ids=["fractional", "whole"])
+def test_check_predict_unit_device_reports_visible_ordinals(num_gpus):
+    """A fractional allocation still exposes exactly one device, cuda:0."""
+    unit = SimpleNamespace(device="cuda:1")
+
+    with pytest.raises(ValueError, match=r"ordinals 0\.\.0"):
+        batch_server._check_predict_unit_device(unit, num_gpus)
+
+
 def test_resolve_device_returns_pinned_cpu_device():
     assert ModelSpec("x", device="cpu").resolve_device() == "cpu"
 
