@@ -53,7 +53,7 @@ September 2026 - Read our new paper on
 
 June 2026 - UMA playground released, try the interactive [educational demo](https://aidemos.atmeta.com/uma) here yourself!
 
-![UMA playground demo](https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/b1eb663498a75cb5e613bd838d565d2c15de8779/uma_playground_demo.gif)
+![UMA playground demo](https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/b3e15f221d888b370f479122ece8d4a268c2f23a/uma_playground_demo.gif)
 
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
