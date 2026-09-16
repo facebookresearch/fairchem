@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.models.uma.common.quaternion.quaternion_utils import (
     BLEND_START,
     BLEND_WIDTH,
@@ -51,6 +52,9 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
     wigner_D,
 )
+
+# Accelerator these tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # =============================================================================
 # Reference Implementation for Testing (Not Used at Runtime)
@@ -716,7 +720,7 @@ class TestTorchCompileCompatibility:
     @pytest.mark.gpu()
     def test_compact_l2_dynamic_compile(self, compile_reset_state):
         torch.manual_seed(42)
-        kernels = CustomKernelModule().to(device="cuda", dtype=torch.float32)
+        kernels = CustomKernelModule().to(device=ACCELERATOR, dtype=torch.float32)
 
         def fn(edges, gamma):
             return axis_angle_wigner_hybrid(
@@ -730,10 +734,14 @@ class TestTorchCompileCompatibility:
         compiled = torch.compile(fn, fullgraph=True, dynamic=True)
         for num_edges in (17, 31):
             edges = torch.randn(
-                num_edges, 3, device="cuda", dtype=torch.float32, requires_grad=True
+                num_edges,
+                3,
+                device=ACCELERATOR,
+                dtype=torch.float32,
+                requires_grad=True,
             )
             compiled_edges = edges.detach().clone().requires_grad_()
-            gamma = torch.randn(num_edges, device="cuda", dtype=torch.float32)
+            gamma = torch.randn(num_edges, device=ACCELERATOR, dtype=torch.float32)
             expected = fn(edges, gamma)
             actual = compiled(compiled_edges, gamma)
             grad_outputs = tuple(torch.randn_like(value) for value in expected)

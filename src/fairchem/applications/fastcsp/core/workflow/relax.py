@@ -47,6 +47,9 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
 from fairchem.core.units import mlip_unit
 
 # Suppress scipy logm numerical precision warnings during structure relaxation
@@ -89,11 +92,13 @@ def create_calculator(relax_config):
     """
     if CHECKPOINTS[relax_config["calculator"]]["checkpoint"] is not None:
         predictor = mlip_unit.load_predict_unit(
-            CHECKPOINTS[relax_config["calculator"]]["checkpoint"], device="cuda"
+            CHECKPOINTS[relax_config["calculator"]]["checkpoint"],
+            device=get_available_accelerator() or "cpu",
         )
     else:
         predictor = pretrained_mlip.get_predict_unit(
-            CHECKPOINTS[relax_config["calculator"]]["model"], device="cuda"
+            CHECKPOINTS[relax_config["calculator"]]["model"],
+            device=get_available_accelerator() or "cpu",
         )
     calc = FAIRChemCalculator(
         predictor,

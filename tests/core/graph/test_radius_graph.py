@@ -29,6 +29,7 @@ from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import (
@@ -47,6 +48,12 @@ from fairchem.core.graph.radius_graph_pbc import (
     sum_partitions,
 )
 from fairchem.core.graph.radius_graph_pbc_nvidia import nvalchemiops_installed
+
+# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# Resolved once at import so the suite follows the hardware present rather
+# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
+# @pytest.mark.cuda_only.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 class TestSumPartitions:
@@ -1241,8 +1248,8 @@ def test_pymatgen_vs_internal_graph(atoms):
         (20, 4, True, "cpu"),
         (30, 3, True, "cpu"),
         (101, 8, True, "cpu"),
-        (101, 2, False, "cuda"),
-        (105, 2, True, "cuda"),
+        (101, 2, False, ACCELERATOR),
+        (105, 2, True, ACCELERATOR),
     ],
 )
 def test_partitioned_radius_graph_pbc(
@@ -1356,8 +1363,8 @@ def test_generate_graph_h2o_partition(
         (10, 4, 4, 5, 20, "cpu"),
         (34, 2, 2, 6, 1, "cpu"),
         (100, 7, 3, 6, 300, "cpu"),
-        (100, 7, 1, 6, 300, "cuda"),
-        (100, 7, 2, 6, 300, "cuda"),
+        (100, 7, 1, 6, 300, ACCELERATOR),
+        (100, 7, 2, 6, 300, ACCELERATOR),
     ],
 )
 def test_generate_graph_batch_partition(

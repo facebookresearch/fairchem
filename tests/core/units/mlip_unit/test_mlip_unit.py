@@ -19,8 +19,14 @@ import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
+from fairchem.core.common import device_utils
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_RESUME_CONFIG
 from tests.core.testing_utils import launch_main
+
+# Accelerator these GPU tests run on, as the DeviceType config value
+# ("CUDA" on NVIDIA, "XPU" on Intel GPUs).
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
+ACCELERATOR_DEVICE_TYPE = ACCELERATOR.upper()
 
 if TYPE_CHECKING:
     from torchtnt.framework.state import State
@@ -173,7 +179,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "job.device_type=CUDA",
+        f"job.device_type={ACCELERATOR_DEVICE_TYPE}",
         # "+job.deterministic=True", # this doesnt work because it requires setting CUBLAS_WORKSPACE_CONFIG beforehand
         "+expected_loss=13.66177",
     ]

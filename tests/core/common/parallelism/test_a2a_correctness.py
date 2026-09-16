@@ -20,6 +20,7 @@ import os
 import pytest
 import torch
 
+from fairchem.core.common import device_utils as du
 from fairchem.core.common import gp_utils
 from fairchem.core.common.parallelism.graph_parallel_a2a import (
     all_to_all_collect,
@@ -339,32 +340,48 @@ def test_a2a_multidim_embeddings(strategy):
 # GPU tests (NCCL, 2 processes)
 # =========================================================================
 
+_ACCEL = du.get_available_accelerator()
+# NCCL on NVIDIA, oneCCL ("xccl") on Intel GPUs. Selecting by device type keeps
+# these tests meaningful on both instead of hard-failing wherever NCCL is absent.
+_GPU_BACKEND = du.distributed_backend(_ACCEL) if _ACCEL else "gloo"
+
 _skip_if_ci = pytest.mark.skipif(
     os.environ.get("CI") == "true",
     reason="Multi-GPU test, skipped in CI",
 )
 
+_skip_if_no_gpu = pytest.mark.skipif(
+    _ACCEL is None,
+    reason="Multi-GPU test requires a cuda/xpu accelerator",
+)
 
-def _to_cuda(*tensors):
-    device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
+
+def _to_accelerator(*tensors):
+    """Move tensors onto this GP rank's slice of whichever accelerator exists.
+
+    Was hard-coded to cuda:{rank}; now follows the detected backend so these
+    tests exercise Intel GPUs too instead of erroring out.
+    """
+    device = torch.device(f"{_ACCEL}:{gp_utils.get_gp_rank()}")
     return tuple(t.to(device) for t in tensors)
 
 
 def _correctness_test_inner_gpu(
     atomic_numbers, pos, edge_index, num_atoms, partition_strategy
 ):
-    (atomic_numbers, pos, edge_index) = _to_cuda(atomic_numbers, pos, edge_index)
+    (atomic_numbers, pos, edge_index) = _to_accelerator(atomic_numbers, pos, edge_index)
     return _correctness_test_inner(
         atomic_numbers, pos, edge_index, num_atoms, partition_strategy
     )
 
 
 def _multidim_test_inner_gpu(x_global, pos, edge_index, num_atoms, strategy):
-    (x_global, pos, edge_index) = _to_cuda(x_global, pos, edge_index)
+    (x_global, pos, edge_index) = _to_accelerator(x_global, pos, edge_index)
     return _multidim_test_inner(x_global, pos, edge_index, num_atoms, strategy)
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 @pytest.mark.parametrize(
     "strategy,num_atoms",
     [
@@ -385,7 +402,7 @@ def test_a2a_correctness_gpu(strategy, num_atoms):
     atomic_numbers = torch.arange(2, 2 + num_atoms, dtype=torch.float)
     pos = torch.randn(num_atoms, 3) * 10
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
     all_rank_results = spawn_multi_process(
         config,
         _correctness_test_inner_gpu,
@@ -411,6 +428,7 @@ def test_a2a_correctness_gpu(strategy, num_atoms):
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 @pytest.mark.parametrize("strategy", ["index_split", "spatial"])
 def test_a2a_consistency_across_graph_sizes_gpu(strategy):
     num_atoms = 16
@@ -426,7 +444,7 @@ def test_a2a_consistency_across_graph_sizes_gpu(strategy):
     pos = torch.zeros(num_atoms, 3)
     pos[:, 0] = torch.arange(num_atoms, dtype=torch.float)
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
     all_rank_results = spawn_multi_process(
         config,
         _correctness_test_inner_gpu,
@@ -446,6 +464,7 @@ def test_a2a_consistency_across_graph_sizes_gpu(strategy):
 
 
 @_skip_if_ci
+@_skip_if_no_gpu
 @pytest.mark.parametrize("strategy", ["index_split", "spatial"])
 def test_a2a_multidim_embeddings_gpu(strategy):
     num_atoms = 12
@@ -462,7 +481,7 @@ def test_a2a_multidim_embeddings_gpu(strategy):
     x_global = torch.randn(num_atoms, embed_dim)
     pos = torch.randn(num_atoms, 3) * 10
 
-    config = PGConfig(backend="nccl", world_size=2, gp_group_size=2, use_gp=True)
+    config = PGConfig(backend=_GPU_BACKEND, world_size=2, gp_group_size=2, use_gp=True)
 
     all_rank_results = spawn_multi_process(
         config,

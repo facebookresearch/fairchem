@@ -17,6 +17,9 @@ from ase import Atoms
 from ase.data import atomic_numbers, covalent_radii
 
 from fairchem.core import pretrained_mlip
+from fairchem.core.common.device_utils import (
+    get_available_accelerator,
+)
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
 # TODO these reference energies need to replaced if not using OMol25 or OMat24
@@ -66,10 +69,12 @@ def get_model(
     if not released:
         uma_pred = pretrained_mlip.load_predict_unit(
             model_name,
-            device="cuda",
+            device=get_available_accelerator() or "cpu",
         )
     else:
-        uma_pred = pretrained_mlip.get_predict_unit(model_name, device="cuda")
+        uma_pred = pretrained_mlip.get_predict_unit(
+            model_name, device=get_available_accelerator() or "cpu"
+        )
     return uma_pred
 
 
