@@ -51,15 +51,15 @@ September 2026 - Read our new paper on
 
 ![NDPK-catalyzed ATP-to-ADP reaction](https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/75fdb26063309f31514a6ddf3ba39fd87776a3e7/ndpk_atp_to_adp_3dmol_1200px.gif)
 
+June 2026 - UMA playground released, try the interactive [educational demo](https://aidemos.atmeta.com/uma) here yourself!
+
+![UMA playground demo](https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/b1eb663498a75cb5e613bd838d565d2c15de8779/uma_playground_demo.gif)
+
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
 
 June 2025 - UMA/Omol first released! Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
-
-## Try the demo!
-If you want to explore model capabilities check out our
-[educational demo](https://aidemos.atmeta.com/uma)
 
 ## Materials Project and OMat24 DFT settings
 UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
