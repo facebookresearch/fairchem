@@ -16,6 +16,10 @@ MACE-MH-1 only supports neutral singlets, so its accuracy point uses 1,071,880
 structures (39.4% of the validation set). Charge and spin multiplicity are
 passed to every calculator for every evaluated structure.
 
+Energy MAE benchmarks show similar results. When benchmarking energies, some
+care should be taken due to the fact that MACE-MH-1 (OMol head) uses different
+energy baselines compared to the other models.
+
 ## Reproducing the benchmark
 
 Preferably use a separate environment for each model family. The plotted runs
