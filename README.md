@@ -27,7 +27,7 @@
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
-## UMA is now fast!
+## UMA is now much faster!
 
 <p align="center">
   <a href="benchmarks/omol/README.md">
@@ -41,7 +41,15 @@ using an NVIDIA H200. See the
 [benchmark details and reproduction scripts](benchmarks/omol/README.md)
 for the full setup.
 
+For more OMol model accuracy benchmarks, you can also see the
+[FAIR Chemistry leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
+
 ## Latest news
+September 2026 - UMA inference is much faster with
+[`fairchem-core` 2.22.0](https://github.com/facebookresearch/fairchem/releases/tag/fairchem_core-2.22.0).
+Read our new paper on
+[quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293).
+
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
@@ -56,11 +64,6 @@ If you want to explore model capabilities check out our
 [educational demo](https://facebook-fairchem-uma-demo.hf.space/)
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
-
-## Legacy models
-FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.
-If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
-as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
 ## Materials Project and OMat24 DFT settings
 UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
