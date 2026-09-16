@@ -28,7 +28,7 @@ dependencies = [
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/demo/ocpapi"
 home = "https://open-catalyst.metademolab.com/"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [project.optional-dependencies]
 dev = [
