@@ -49,6 +49,8 @@ September 2026 - Read our new paper on
 [quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293). Also, UMA inference is now much faster with
 [`fairchem-core` 2.22.0](https://github.com/facebookresearch/fairchem/releases/tag/fairchem_core-2.22.0).
 
+![NDPK-catalyzed ATP-to-ADP reaction](https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/75fdb26063309f31514a6ddf3ba39fd87776a3e7/ndpk_atp_to_adp_3dmol_1200px.gif)
+
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
@@ -220,7 +222,11 @@ from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atom
 
 seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=8, seed=seed,
+    "uma-s-1p2",
+    inference_settings="turbo",
+    device="cuda",
+    workers=8,
+    seed=seed,
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
