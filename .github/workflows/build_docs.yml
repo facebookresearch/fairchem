@@ -89,6 +89,8 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # Set FAST_DOCS only if not a push to main
         FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
+        # Must match repo name: https://mystmd.org/guide/deployment#deploy-base-url
+        BASE_URL: "/fairchem"
       run: |
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
         jupytext --to ipynb ./docs/uma_tutorials/*.md
