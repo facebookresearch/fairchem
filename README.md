@@ -45,10 +45,9 @@ For more OMol model accuracy benchmarks, you can also see the
 [FAIR Chemistry leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
 
 ## Latest news
-September 2026 - UMA inference is much faster with
+September 2026 - Read our new paper on
+[quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293). Also, UMA inference is now much faster with
 [`fairchem-core` 2.22.0](https://github.com/facebookresearch/fairchem/releases/tag/fairchem_core-2.22.0).
-Read our new paper on
-[quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293).
 
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
