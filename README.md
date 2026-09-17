@@ -26,6 +26,14 @@ demos, and application efforts for materials science and quantum chemistry.
 ## UMA is now much faster!
 
 <p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/uma-diagram-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/uma-diagram-light-mode.png">
+    <img src="docs/assets/uma-diagram-light-mode.png" width="300" alt="UMA model application domains">
+  </picture>
+</p>
+
+<p align="center">
   <a href="benchmarks/omol/README.md">
     <img src="benchmarks/omol/omol_force_mae_vs_speed.png" width="650" alt="OMol force MAE versus ASE NVE runtime">
   </a>
