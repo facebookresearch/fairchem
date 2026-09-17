@@ -1,14 +1,10 @@
-[//]: # (<h1 align="center">)
-
-[//]: # ()
-[//]: # (<p align="center">)
-
-[//]: # (  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?)
-
-[//]: # (</p>)
-
-[//]: # ()
-[//]: # (</h1>)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/uma-diagram-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/uma-diagram-light-mode.png">
+    <img src="docs/assets/uma-diagram-dark-mode.png" width="650" alt="UMA by FAIR Chemistry">
+  </picture>
+</p>
 
 <h4 align="center">
 
