@@ -279,6 +279,18 @@ class ExecutionBackend:
         )
 
 
+def _configure_radial_first_linear_prefix_grad(model, unified_radial_mlp) -> None:
+    if model.regress_config.hessian:
+        raise ValueError("radial_first_linear_prefix_grad does not support Hessians")
+    expected_input_features = model.num_distance_basis + 2 * model.edge_channels
+    model.edge_degree_embedding.rad_func.configure_first_linear_grad_prefix(
+        model.num_distance_basis, expected_input_features
+    )
+    unified_radial_mlp.configure_first_linear_grad_prefix(
+        model.num_distance_basis, expected_input_features
+    )
+
+
 class UMASFastPytorchBackend(ExecutionBackend):
     """
     Optimized PyTorch backend using block-diagonal SO2 convolutions.
@@ -324,6 +336,9 @@ class UMASFastPytorchBackend(ExecutionBackend):
         # Create unified radial MLP for batched computation
         rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
         model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+        settings = getattr(model, "_inference_settings", None)
+        if getattr(settings, "radial_first_linear_prefix_grad", False):
+            _configure_radial_first_linear_prefix_grad(model, model._unified_radial_mlp)
 
     @staticmethod
     def get_layer_radial_emb(
