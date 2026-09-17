@@ -119,7 +119,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -141,7 +141,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -163,7 +163,7 @@ from fairchem.core import pretrained_mlip, FAIRChemCalculator
 seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
 # we recommend using turbo mode for MD to get the best speed
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", seed=seed, inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", seed=seed, inference_settings="turbo"
 )
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
@@ -186,7 +186,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
@@ -217,7 +217,7 @@ from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atom
 
 seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2",
+    "uma-s-1p2p1",
     inference_settings="turbo",
     device="cuda",
     workers=8,
