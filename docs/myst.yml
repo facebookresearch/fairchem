@@ -111,7 +111,8 @@ site:
   title: FAIR Chemistry Documentation
   options:
     folders: false
-    logo: assets/fair_chem_logo_v2.png
+    logo: assets/fair-chemistry-logo-light-mode.png
+    logo_dark: assets/fair-chemistry-logo-dark-mode.png
   template: book-theme
   nav:
     - title: Quickstart

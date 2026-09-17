@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/uma-diagram-dark-mode.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/uma-diagram-light-mode.png">
-    <img src="docs/assets/uma-diagram-dark-mode.png" width="650" alt="UMA by FAIR Chemistry">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fair-chemistry-logo-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/fair-chemistry-logo-light-mode.png">
+    <img src="docs/assets/fair-chemistry-logo-dark-mode.png" width="650" alt="FAIR Chemistry">
   </picture>
 </p>
 
