@@ -57,7 +57,7 @@ March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules
 
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
 
-June 2025 - UMA/Omol first released! Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
+June 2025 - UMA/OMol first released! Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
 ## Materials Project and OMat24 DFT settings
 UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
