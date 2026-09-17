@@ -17,6 +17,20 @@ The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu
 A single UMA model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.
 
+```{image} ../assets/uma-diagram-light-mode.png
+:alt: UMA model application domains
+:width: 650px
+:align: center
+:class: dark:hidden
+```
+
+```{image} ../assets/uma-diagram-dark-mode.png
+:alt: UMA model application domains
+:width: 650px
+:align: center
+:class: hidden dark:block
+```
+
 :::{tip}
 Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.

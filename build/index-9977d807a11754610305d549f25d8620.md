@@ -8,10 +8,18 @@ site:
 
 +++ {"class": "col-page-inset"}
 
-```{image} assets/fair_chem_logo_v2.png
-:alt: FAIRChem Logo
+```{image} assets/fair-chemistry-logo-light-mode.png
+:alt: FAIR Chemistry
 :width: 600px
 :align: center
+:class: dark:hidden
+```
+
+```{image} assets/fair-chemistry-logo-dark-mode.png
+:alt: FAIR Chemistry
+:width: 600px
+:align: center
+:class: hidden dark:block
 ```
 
 ::::::{grid} 1 2 2 2
