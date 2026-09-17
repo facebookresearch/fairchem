@@ -504,8 +504,8 @@ def test_prepare_deployment_config_does_not_override_pinned_num_gpus():
 
 @pytest.mark.parametrize(
     ("device", "num_gpus"),
-    [("cpu", 0), ("cpu", 1), ("cuda:0", 1), ("cuda:1", 0)],
-    ids=["cpu-no-gpu", "cpu-with-gpu", "cuda0-fits", "cuda1-unmapped"],
+    [("cpu", 0), ("cpu", 1), ("cuda:0", 1), ("cuda:1", 1.5)],
+    ids=["cpu-no-gpu", "cpu-with-gpu", "cuda0-fits", "cuda1-fractional"],
 )
 def test_check_predict_unit_device_accepts_valid_placements(device, num_gpus):
     unit = SimpleNamespace(device=device)
@@ -522,6 +522,13 @@ def test_check_predict_unit_device_rejects_out_of_range_ordinal():
 
     with pytest.raises(ValueError, match="invalid device ordinal"):
         batch_server._check_predict_unit_device(unit, 1)
+
+
+def test_check_predict_unit_device_rejects_cuda_without_gpu_allocation():
+    unit = SimpleNamespace(device="cuda:0")
+
+    with pytest.raises(ValueError, match="will not see a CUDA device"):
+        batch_server._check_predict_unit_device(unit, 0)
 
 
 @pytest.mark.parametrize(
@@ -558,11 +565,34 @@ def test_infer_num_gpus_falls_back_to_driver_when_ray_is_not_connected(monkeypat
 
 @pytest.mark.parametrize("num_gpus", [0.5, 1], ids=["fractional", "whole"])
 def test_check_predict_unit_device_reports_visible_ordinals(num_gpus):
-    """A fractional allocation still exposes exactly one device, cuda:0."""
+    """
+    A fractional allocation up to one GPU exposes exactly one device, cuda:0.
+    """
     unit = SimpleNamespace(device="cuda:1")
 
     with pytest.raises(ValueError, match=r"ordinals 0\.\.0"):
         batch_server._check_predict_unit_device(unit, num_gpus)
+
+
+def test_multiplexed_setup_uses_explicit_actor_gpu_config(monkeypatch, caplog):
+    """
+    An explicit actor allocation must bypass inference and CPU warnings.
+    """
+
+    def fail_inference():
+        pytest.fail("GPU allocation should not be inferred when actor config pins it")
+
+    monkeypatch.setattr(batch_server, "_infer_num_gpus_per_replica", fail_inference)
+    monkeypatch.setattr(batch_server, "_init_ray_and_serve", lambda *_: None)
+    monkeypatch.setattr(batch_server, "_deploy_app", lambda **_: "handle")
+
+    with caplog.at_level(logging.WARNING):
+        handle = setup_multiplexed_batch_predict_server(
+            deployment_config={"ray_actor_options": {"num_gpus": 1}}
+        )
+
+    assert handle == "handle"
+    assert "replicas will be scheduled with num_gpus=0" not in caplog.text
 
 
 def test_resolve_device_returns_pinned_cpu_device():

@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import math
 import time
 from collections import OrderedDict, defaultdict, deque
 from dataclasses import asdict, dataclass, field
@@ -872,19 +873,27 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
 
     Args:
         predict_unit: The unit about to be placed in the object store.
-        num_gpus: GPUs granted to each replica. Fractional values still expose
-            a single (shared) device to the replica.
+        num_gpus: GPUs granted to each replica. Ray exposes one visible device
+            for each whole or partial GPU allocation.
 
     Raises:
         ValueError: If the unit is pinned to a CUDA ordinal at or beyond the
             number of GPUs the replica will be able to see.
     """
     device = torch.device(predict_unit.device)
-    if device.type != "cuda" or num_gpus <= 0:
+    if device.type != "cuda":
         return
 
-    # A fractional allocation still yields one visible device.
-    visible = max(1, int(num_gpus))
+    if num_gpus <= 0:
+        raise ValueError(
+            f"predict_unit is on {predict_unit.device!r}, but each replica is "
+            f"granted num_gpus={num_gpus} and will not see a CUDA device. Grant "
+            "the replica a GPU or load the predict unit on 'cpu' before serving it."
+        )
+
+    # Each whole or partial allocation can contribute a visible device. For
+    # example, 0.5 exposes one shared device and 1.5 can expose two devices.
+    visible = math.ceil(num_gpus)
     ordinal = device.index or 0
     if ordinal >= visible:
         raise ValueError(
@@ -1175,7 +1184,14 @@ def setup_multiplexed_batch_predict_server(
     Returns:
         Ray Serve deployment handle.
     """
-    if num_gpus is None:
+    if not isinstance(deployment_config, DeploymentConfig):
+        deployment_config = DeploymentConfig(**(deployment_config or {}))
+    actor_opts = deployment_config.ray_actor_options or {}
+
+    if num_gpus is None and "num_gpus" in actor_opts:
+        num_gpus = actor_opts["num_gpus"]
+        basis = "explicit ray_actor_options['num_gpus']"
+    elif num_gpus is None:
         num_gpus, basis = _infer_num_gpus_per_replica()
         if num_gpus == 0:
             # Warn loudly rather than silently loading every model on CPU.
