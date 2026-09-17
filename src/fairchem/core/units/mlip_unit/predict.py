@@ -38,6 +38,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.components.batch_server import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
+from fairchem.core.graph.padded_nvidia_graph import PaddedNvidiaGraphGenerator
 from fairchem.core.models.uma.nn.execution_backends import (
     ExecutionMode,
     maybe_update_settings_backend,
@@ -150,6 +151,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.lazy_model_intialized = False
         self.assert_on_nans = assert_on_nans
         self._warned_upcast = False
+        self._padded_graph_generator = None
 
         if self.model.module.backbone.regress_config.direct_forces:
             logging.warning(
@@ -448,6 +450,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # 1. change flags
         self.inference_settings.merge_mole = False
         self.inference_settings.compile = False
+        self.inference_settings.compile_mode = None
+        self._padded_graph_generator = None
         if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
             self.inference_settings.execution_mode = ExecutionMode.GENERAL
         self.lazy_model_intialized = False
@@ -493,9 +497,17 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
+        if self.inference_settings.compile_mode == "reduce-overhead":
+            torch.compiler.cudagraph_mark_step_begin()
+
+        use_padded_internal_graph = (
+            self.inference_settings.compile_mode == "reduce-overhead"
+            and not self.inference_settings.external_graph_gen
+        )
+
         # Regular model prediction path
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
-        data_device = data.to(self.device).clone()
+        data_device = data.clone().to(self.device)
 
         dtype = self.inference_settings.base_precision_dtype
         if not self._warned_upcast:
@@ -505,6 +517,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 data_device[key] = val.to(dtype)
 
         backbone = self.model.module.backbone
+        if use_padded_internal_graph:
+            if self._padded_graph_generator is None:
+                self._padded_graph_generator = PaddedNvidiaGraphGenerator(
+                    self.inference_settings, backbone
+                )
+            data_device = self._padded_graph_generator.generate(data_device)
         _prepare_inference_gradients(backbone, data_device)
 
         # Model handles any per-prediction checks (e.g., MOLE consistency)
@@ -514,13 +532,28 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             self._fall_back_from_fast_path(error)
             self._lazy_init(data)
             self.model.module.on_predict_check(data_device)
-
         return self._run_inference(data_device, undo_element_references)
 
     def _lazy_init(self, data: AtomicData) -> None:
         """
         Lazy initialization on first predict call.
         """
+        if (
+            self.inference_settings.compile_mode == "reduce-overhead"
+            and not self.inference_settings.external_graph_gen
+        ):
+            if gp_utils.initialized():
+                raise ValueError(
+                    "internal reduce-overhead does not support graph parallelism"
+                )
+            if not getattr(self.model.module.backbone, "supports_padded_edges", False):
+                raise ValueError(
+                    "internal reduce-overhead is not supported by "
+                    f"{type(self.model.module.backbone).__name__}"
+                )
+            if torch.device(self._requested_device).type != "cuda":
+                raise ValueError("internal reduce-overhead requires CUDA")
+
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
         # Inference differentiates outputs with respect to inputs, not weights.
@@ -539,7 +572,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             # The model's scalars are fixed at inference, so this skips dynamo's
             # TensorifyScalarRestartAnalysis retrace during compile.
             torch._dynamo.config.specialize_float = True
-            self.model = torch.compile(self.model, dynamic=True)
+            self.model = torch.compile(
+                self.model,
+                dynamic=True,
+                mode=self.inference_settings.compile_mode,
+            )
 
         self.lazy_model_intialized = True
 
