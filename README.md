@@ -40,6 +40,8 @@ for the full setup.
 For more OMol model accuracy benchmarks, you can also see the
 [FAIR Chemistry leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
 
+Please use this logo for references to [UMA](docs/assets/uma-diagram-light-mode.png)!
+
 ## Latest news
 September 2026 - Read our new paper on
 [quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293). Also, UMA inference is now much faster with
