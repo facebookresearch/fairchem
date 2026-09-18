@@ -29,7 +29,11 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate._batch import AutobatchConfig, InferenceBatcher
+from fairchem.core.calculate._batch import (
+    AutobatchConfig,
+    InferenceBatcher,
+    _get_concurrency_backend,
+)
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to
@@ -141,20 +145,6 @@ def inference_batcher(ray_session, declared_predict_unit):
             lambda b: b.predict_server_handle is not None,
             id="ray_actor_options",
         ),
-        pytest.param(
-            {
-                "concurrency_backend": "processes",
-                "concurrency_backend_options": {"max_workers": 2},
-                "ray_actor_options": {"num_cpus": 2},
-            },
-            lambda b: isinstance(
-                b.executor,
-                __import__(
-                    "concurrent.futures", fromlist=["ProcessPoolExecutor"]
-                ).ProcessPoolExecutor,
-            ),
-            id="processes_concurrency",
-        ),
     ],
 )
 def test_initialization_options(ray_session, declared_predict_unit, kwargs, assert_fn):
@@ -167,6 +157,16 @@ def test_initialization_options(ray_session, declared_predict_unit, kwargs, asse
     )
     assert assert_fn(batcher)
     batcher.shutdown(shutdown_ray=False)
+
+
+@pytest.mark.parametrize("backend", ["processes", "ray", "nonsense"])
+def test_unsupported_concurrency_backend_is_rejected(backend):
+    """
+    Only threads are supported: submitted work holds a Ray DeploymentHandle,
+    which cannot cross a process boundary.
+    """
+    with pytest.raises(ValueError, match="Invalid concurrency backend"):
+        _get_concurrency_backend(backend, {})
 
 
 def test_context_manager_enter_exit(ray_session, declared_predict_unit):
