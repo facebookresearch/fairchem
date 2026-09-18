@@ -29,7 +29,8 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.calculate._batch import InferenceBatcher
+from fairchem.core.calculate._batch import AutobatchConfig, InferenceBatcher
+from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to
 # large number of subprocesses) and pretrained (sweep-eligible).
@@ -139,6 +140,20 @@ def inference_batcher(ray_session, declared_predict_unit):
             {"ray_actor_options": {"num_cpus": 2}},
             lambda b: b.predict_server_handle is not None,
             id="ray_actor_options",
+        ),
+        pytest.param(
+            {
+                "concurrency_backend": "processes",
+                "concurrency_backend_options": {"max_workers": 2},
+                "ray_actor_options": {"num_cpus": 2},
+            },
+            lambda b: isinstance(
+                b.executor,
+                __import__(
+                    "concurrent.futures", fromlist=["ProcessPoolExecutor"]
+                ).ProcessPoolExecutor,
+            ),
+            id="processes_concurrency",
         ),
     ],
 )
@@ -343,3 +358,45 @@ def test_multiple_batchers(
     npt.assert_allclose(energy2, atoms3.get_potential_energy(), atol=1e-4)
 
     batcher2.shutdown(shutdown_ray=False)
+
+
+def test_autobatch_config_initialization(ray_session, uma_predict_unit):
+    """Test initialization and auto_configure_batching method."""
+    autobatch_config = AutobatchConfig(
+        min_batch_size=64,
+        max_batch_size_cap=1024,
+        probe_steps=2,
+        warmup_steps=1,
+    )
+
+    batcher = InferenceBatcher(
+        predict_unit=uma_predict_unit,
+        split_oom_batch=True,
+        num_replicas=1,
+        ray_actor_options={"num_cpus": 2},
+    )
+
+    probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
+    result = batcher.auto_configure_batching(probe_data, config=autobatch_config)
+
+    assert result.max_batch_size >= autobatch_config.min_batch_size
+    assert result.batch_wait_timeout_s > 0
+    batcher.shutdown(shutdown_ray=False)
+
+
+def test_probe_optimal_batch_size_cpu():
+    """Test probing on CPU returns defaults."""
+    from fairchem.core.components.batch_server import probe_optimal_batch_size
+
+    class MockPredictUnit:
+        device = "cpu"
+
+        def predict(self, data, undo_element_references=True):
+            return {"energy": torch.tensor([0.0])}
+
+    config = AutobatchConfig()
+    probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
+    result = probe_optimal_batch_size(MockPredictUnit(), probe_data, config)
+
+    assert result.max_batch_size == config.min_batch_size
+    assert result.batch_wait_timeout_s == config.timeout_ceil_s
