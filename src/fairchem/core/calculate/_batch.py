@@ -9,16 +9,22 @@ from __future__ import annotations
 
 import contextlib
 import uuid
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Literal, Protocol
 
+import ray
+from ray import serve
+
 from fairchem.core.components.batch_server import (
     AutobatchConfig,
     AutobatchResult,
+    BatchConfig,
     probe_optimal_batch_size,
     setup_batch_predict_server,
+    update_batch_config,
+    update_served_predict_unit,
 )
 from fairchem.core.units.mlip_unit.predict import (
     BatchServerPredictUnit,
@@ -39,16 +45,15 @@ class ExecutorProtocol(Protocol):
 
 
 def _get_concurrency_backend(
-    backend: Literal["threads", "processes"], options: dict
+    backend: Literal["threads"], options: dict
 ) -> ExecutorProtocol:
     """Get a backend to run ASE calculations concurrently.
 
     Args:
-        backend: The concurrency backend type:
-            - "threads": ThreadPoolExecutor for I/O-bound tasks (default).
-            - "processes": ProcessPoolExecutor for CPU-bound tasks.
-                Note: Tasks must be picklable; not suitable for GPU operations.
-        options: Backend-specific options dictionary.
+        backend: The concurrency backend type. Only ``"threads"`` is supported:
+            simulations submitted here hold a Ray ``DeploymentHandle``, which
+            is not usable across a plain process boundary.
+        options: Backend-specific options dictionary (e.g. ``max_workers``).
 
     Returns:
         An executor implementing ExecutorProtocol.
@@ -58,8 +63,6 @@ def _get_concurrency_backend(
     """
     if backend == "threads":
         return ThreadPoolExecutor(**options)
-    elif backend == "processes":
-        return ProcessPoolExecutor(**options)
     raise ValueError(f"Invalid concurrency backend: {backend}")
 
 
@@ -94,7 +97,7 @@ class InferenceBatcher:
         batch_wait_timeout_s: float = 0.1,
         split_oom_batch: bool = False,
         num_replicas: int = 1,
-        concurrency_backend: Literal["threads", "processes"] = "threads",
+        concurrency_backend: Literal["threads"] = "threads",
         concurrency_backend_options: dict | None = None,
         ray_actor_options: dict | None = None,
         deployment_name: str | None = None,
@@ -110,14 +113,13 @@ class InferenceBatcher:
             split_oom_batch: If True, split and retry on OOM errors.
             num_replicas: The number of replicas to use for inference. Ignored if
                 autoscaling_config is provided.
-            concurrency_backend: The concurrency backend to use for running simulations:
-                - "threads": ThreadPoolExecutor (default). Best for I/O-bound tasks.
-                    Options: max_workers (int).
-                - "processes": ProcessPoolExecutor. Best for CPU-bound tasks.
-                    Note: Tasks must be picklable; not suitable for GPU operations.
-                    Options: max_workers (int).
-            concurrency_backend_options: Options to pass to the concurrency backend.
-                See backend descriptions above for available options.
+            concurrency_backend: The concurrency backend to use for running
+                simulations. Only "threads" (ThreadPoolExecutor) is supported;
+                simulations submitted to the executor hold a Ray
+                DeploymentHandle, which cannot cross a process boundary.
+                Requests block on the server, so threads are the right fit.
+            concurrency_backend_options: Options to pass to the concurrency
+                backend, e.g. max_workers (int).
             ray_actor_options: Options to pass to the Ray actor running the batch server.
             deployment_name: Name for the Ray Serve deployment. If None, generates a
                 unique name. This allows multiple InferenceBatchers to coexist on the
@@ -135,6 +137,7 @@ class InferenceBatcher:
         self.predict_unit = predict_unit
         self.max_batch_size = max_batch_size
         self.batch_wait_timeout_s = batch_wait_timeout_s
+        self.split_oom_batch = split_oom_batch
         self.num_replicas = num_replicas
         self.autoscaling_config = autoscaling_config
 
@@ -156,20 +159,17 @@ class InferenceBatcher:
             batch_config={
                 "max_batch_size": self.max_batch_size,
                 "batch_wait_timeout_s": self.batch_wait_timeout_s,
-                "split_oom_batch": split_oom_batch,
+                "split_oom_batch": self.split_oom_batch,
             },
             deployment_name=self.deployment_name,
             route_prefix=f"/{self.deployment_name}",
         )
 
-        if concurrency_backend_options is None:
-            concurrency_backend_options = {}
+        # Copy rather than mutate: the caller's dict should not gain a
+        # max_workers key as a side effect of constructing the batcher.
+        concurrency_backend_options = dict(concurrency_backend_options or {})
 
-        # Set default max_workers for thread and process backends.
-        if (
-            concurrency_backend in ("threads", "processes")
-            and "max_workers" not in concurrency_backend_options
-        ):
+        if "max_workers" not in concurrency_backend_options:
             concurrency_backend_options["max_workers"] = min(
                 cpu_count(), DEFAULT_EXECUTOR_WORKER_CAP
             )
@@ -210,24 +210,35 @@ class InferenceBatcher:
             probe_data=data,
             config=config,
         )
-        self.predict_server_handle.configure_batching.remote(
-            result.max_batch_size, result.batch_wait_timeout_s
+        # Broadcast through user_config rather than a handle call: a handle
+        # call reaches one replica and would leave the rest -- and any replica
+        # autoscaling adds later -- on the old batch size. This blocks until
+        # the update is applied, so a failure raises instead of being dropped.
+        update_batch_config(
+            self.deployment_name,
+            BatchConfig(
+                max_batch_size=result.max_batch_size,
+                batch_wait_timeout_s=result.batch_wait_timeout_s,
+                split_oom_batch=self.split_oom_batch,
+            ),
         )
+        # Keep the batcher's advertised settings in step with the server's.
+        self.max_batch_size = result.max_batch_size
+        self.batch_wait_timeout_s = result.batch_wait_timeout_s
         return result
 
     def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:
         """Update the checkpoint being served without shutting down the deployment.
 
+        The new checkpoint is rolled out to every replica. Replicas restart to
+        pick it up, so in-flight requests are drained by Ray Serve's rolling
+        update rather than being served a mix of old and new weights.
+
         Args:
             new_predict_unit: A new MLIPPredictUnit instance with the updated checkpoint
         """
-        import ray
-
-        # Put the model in the object store so only a lightweight reference
-        # travels through the Serve routing layer; Ray resolves it on the server.
-        predict_unit_ref = ray.put(new_predict_unit)
-        # Update all replicas with the new predict unit and wait for completion
-        self.predict_server_handle.update_predict_unit.remote(predict_unit_ref).result()
+        update_served_predict_unit(self.deployment_name, new_predict_unit)
+        self.predict_unit = new_predict_unit
 
     def delete(self) -> None:
         """Delete the Ray Serve deployment without shutting down Ray or the executor.
@@ -239,9 +250,6 @@ class InferenceBatcher:
             hasattr(self, "predict_server_handle")
             and self.predict_server_handle is not None
         ):
-            import ray
-            from ray import serve
-
             # Check if Ray is still initialized before trying to delete
             if ray.is_initialized():
                 with contextlib.suppress(Exception):
@@ -269,9 +277,6 @@ class InferenceBatcher:
         # Optionally shutdown Ray Serve and Ray completely
         # This should only be used when you're SURE no other batchers are running
         if shutdown_ray:
-            import ray
-            from ray import serve
-
             with contextlib.suppress(Exception):
                 serve.shutdown()
 

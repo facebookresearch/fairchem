@@ -9,11 +9,12 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.11, <3.15"
 dependencies = [
-    "torch==2.13.0",
-    "ray[serve]>=2.53.0",
-    # ray[serve]<=2.56 uses the removed FieldDescriptor.label API; protobuf>=7
-    # drops it, breaking serve.run. Cap below 7 (lower bound satisfies tensorboard).
-    "protobuf>=6.31.1,<7",
+    "torch~=2.13.0",
+    # 2.56.1 is the first release whose ray.serve._private.config handles
+    # protobuf>=7 removing FieldDescriptor.label; older ray breaks serve.run.
+    # Pinning the ray floor keeps that constraint where it belongs instead of
+    # capping protobuf for every downstream consumer of this library.
+    "ray[serve]>=2.56.1",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",
     "lmdb>=1.6.2,<=1.7.3",
@@ -22,6 +23,7 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.26.0",
     "ase-db-backends>=0.10.0",
+    "backoff",
     "monty>=2026.2.18",
     "clusterscope==0.0.18",
     "setuptools<81.0.0",
