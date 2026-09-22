@@ -31,6 +31,7 @@ dependencies = [
     "pyyaml",
     "wandb",
     "websockets",
+    "nvalchemi-toolkit>=0.3.0",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]

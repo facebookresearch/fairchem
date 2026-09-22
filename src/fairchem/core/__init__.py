@@ -26,6 +26,7 @@ from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
 )
+from fairchem.core.calculate.dftd3_calculator import DFTD3Calculator
 
 try:
     __version__ = version("fairchem.core")
@@ -34,6 +35,7 @@ except PackageNotFoundError:
 
 __all__ = [
     "FAIRChemCalculator",
+    "DFTD3Calculator",
     "pretrained_mlip",
     "clear_cache",
 ]
