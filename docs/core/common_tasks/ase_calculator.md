@@ -28,6 +28,51 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
+## Adding a DFT-D3(BJ) dispersion correction
+
+```{code-cell} python3
+:tags: [skip-execution]
+
+from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+)
+base_calc = FAIRChemCalculator(predictor, task_name="omat")
+
+# Use "pbe" for PBE-trained models such as UMA's OMat head, or "r2scan"
+# for models fine-tuned on r2SCAN data.
+calc = DFTD3Calculator(base_calc, functional="pbe", device="cuda")
+atoms.calc = calc
+```
+
+The wrapper adds the D3 energy, forces, and analytic stress to the base
+calculator. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
+cutoff, and C5 smoothing over the outer 20% of the cutoff.
+Pass `param_file` and `auto_download=False` to use a
+local D3 parameter table without network access.
+
+| `functional` | `a1` | `a2` (Bohr) | `s6` | `s8` |
+| --- | ---: | ---: | ---: | ---: |
+| `pbe` | 0.4289 | 4.4407 | 1.0 | 0.7875 |
+| `r2scan` | 0.49484001 | 5.73083694 | 1.0 | 0.78981345 |
+
+Both presets use `k1=16.0` and `k3=-4.0`.
+
+The PBE-D3(BJ) parameters are from:
+
+> S. Grimme, S. Ehrlich, and L. Goerigk, “Effect of the damping function in
+> dispersion corrected density functional theory,” *J. Comput. Chem.* **32**,
+> 1456–1465 (2011). [doi:10.1002/jcc.21759](https://doi.org/10.1002/jcc.21759)
+
+The r2SCAN-D3(BJ) parameters were reported and benchmarked alongside D4 in:
+
+> S. Ehlert, U. Huniar, J. Ning, J. W. Furness, J. Sun, A. D. Kaplan,
+> J. P. Perdew, and J. G. Brandenburg, “r²SCAN-D4: Dispersion corrected
+> meta-generalized gradient approximation for general chemical applications,”
+> *J. Chem. Phys.* **154**, 061101 (2021).
+> [doi:10.1063/5.0041008](https://doi.org/10.1063/5.0041008)
+
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
 

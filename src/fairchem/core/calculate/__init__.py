@@ -16,6 +16,7 @@ from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
     FormationEnergyCalculator,
 )
+from fairchem.core.calculate.dftd3_calculator import DFTD3Calculator
 from fairchem.core.components.batch_server import (
     ModelSpec,
     setup_batch_predict_server,
@@ -26,6 +27,7 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 __all__ = [
     "FAIRChemCalculator",
     "FormationEnergyCalculator",
+    "DFTD3Calculator",
     "InferenceBatcher",
     "InferenceSettings",
     "ModelSpec",
