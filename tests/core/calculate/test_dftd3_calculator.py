@@ -9,19 +9,21 @@ Tests for the ASE DFT-D3(BJ) calculator wrapper.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 import numpy.testing as npt
 import pytest
-from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.data.s22 import create_s22_system
 from dftd3.ase import DFTD3 as ReferenceDFTD3
 
 from fairchem.core import DFTD3Calculator
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ase import Atoms
 
 pytestmark = pytest.mark.serial
 

@@ -66,9 +66,7 @@ _DFTD3_BJ_PARAMETERS: dict[str, _DFTD3Parameters] = {
 _BOHR_TO_ANGSTROM = 0.529177210544
 _ANGSTROM_TO_BOHR = 1.0 / _BOHR_TO_ANGSTROM
 _HARTREE_TO_EV = 27.211386245981
-_DFTD3_TGZ_URL = (
-    "https://www.chemie.uni-bonn.de/grimme/de/software/dft-d3/dftd3.tgz"
-)
+_DFTD3_TGZ_URL = "https://www.chemie.uni-bonn.de/grimme/de/software/dft-d3/dftd3.tgz"
 _DFTD3_TGZ_MD5 = "a76c752e587422c239c99109547516d2"
 
 
@@ -131,11 +129,10 @@ def _parse_fortran_c6_table(content: str) -> np.ndarray:
             in_record = True
         if not in_record:
             continue
-        if "!" in line:
-            line = line[: line.index("!")]
+        data_line = line[: line.index("!")] if "!" in line else line
         values.extend(
             float(value.replace("D", "e").replace("d", "e"))
-            for value in re.findall(r"[-+]?\d+\.\d+[eEdD][-+]?\d+", line)
+            for value in re.findall(r"[-+]?\d+\.\d+[eEdD][-+]?\d+", data_line)
         )
         if "/)" in line:
             in_record = False
@@ -264,8 +261,7 @@ class _NValChemiDFTD3Calculator(Calculator):
             raise ValueError(f"cutoff must be positive, got {cutoff!r}")
         if not 0.0 <= smoothing_fraction < 1.0:
             raise ValueError(
-                "smoothing_fraction must be in [0, 1), got "
-                f"{smoothing_fraction!r}"
+                "smoothing_fraction must be in [0, 1), got " f"{smoothing_fraction!r}"
             )
 
         if device is None:
@@ -302,9 +298,7 @@ class _NValChemiDFTD3Calculator(Calculator):
             self._numbers = torch.as_tensor(
                 atoms.numbers, dtype=torch.int32, device=self.device
             )
-            self._pbc = torch.as_tensor(
-                atoms.pbc, dtype=torch.bool, device=self.device
-            )
+            self._pbc = torch.as_tensor(atoms.pbc, dtype=torch.bool, device=self.device)
             self._cell = torch.as_tensor(
                 atoms.cell.array, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
@@ -336,9 +330,7 @@ class _NValChemiDFTD3Calculator(Calculator):
                 "num_neighbors": self._num_neighbors,
             }
             if periodic:
-                neighbor_kwargs["neighbor_matrix_shifts"] = (
-                    self._neighbor_matrix_shifts
-                )
+                neighbor_kwargs["neighbor_matrix_shifts"] = self._neighbor_matrix_shifts
         neighbor_result = self._neighbor_list(
             positions=self._positions,
             cutoff=self.cutoff,
@@ -379,9 +371,7 @@ class _NValChemiDFTD3Calculator(Calculator):
                 k1=16.0,
                 k3=-4.0,
                 s5_smoothing_on=(
-                    self.cutoff
-                    * (1.0 - self.smoothing_fraction)
-                    * _ANGSTROM_TO_BOHR
+                    self.cutoff * (1.0 - self.smoothing_fraction) * _ANGSTROM_TO_BOHR
                 ),
                 s5_smoothing_off=self.cutoff * _ANGSTROM_TO_BOHR,
                 fill_value=len(self.atoms),
@@ -396,9 +386,8 @@ class _NValChemiDFTD3Calculator(Calculator):
             )
 
         energy = float(output[0].reshape(-1)[0].detach().cpu()) * _HARTREE_TO_EV
-        forces = (
-            output[1].detach().cpu().numpy().astype(np.float64, copy=False)
-            * (_HARTREE_TO_EV / _BOHR_TO_ANGSTROM)
+        forces = output[1].detach().cpu().numpy().astype(np.float64, copy=False) * (
+            _HARTREE_TO_EV / _BOHR_TO_ANGSTROM
         )
         if not (np.isfinite(energy) and np.isfinite(forces).all()):
             raise FloatingPointError("Non-finite DFT-D3 energy or force")
