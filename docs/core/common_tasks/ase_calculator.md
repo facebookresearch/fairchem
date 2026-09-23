@@ -47,9 +47,9 @@ atoms.calc = calc
 ```
 
 The wrapper adds the D3 energy, forces, and analytic stress to the base
-calculator. The `pbe` and `r2scan` presets use Becke-Johnson damping, a 15 Å
-cutoff, and C5 smoothing over the outer 20% of the cutoff. Pass `param_file` and
-`auto_download=False` to use a local nvalchemi D3 parameter table without network access.
+calculator. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
+cutoff, and C5 smoothing over the outer 20% of the cutoff. Pass `param_file` and `auto_download=False` to use a
+local D3 parameter table without network access.
 
 | `functional` | `a1` | `a2` (Bohr) | `s6` | `s8` |
 | --- | ---: | ---: | ---: | ---: |

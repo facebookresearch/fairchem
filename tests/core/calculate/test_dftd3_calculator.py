@@ -9,25 +9,26 @@ Tests for the ASE DFT-D3(BJ) calculator wrapper.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
 import numpy.testing as npt
 import pytest
-import torch
 from ase import Atoms
-from ase.calculators.calculator import (
-    Calculator,
-    PropertyNotImplementedError,
-    all_changes,
-)
+from ase.calculators.calculator import Calculator, all_changes
+from ase.data.s22 import create_s22_system
+from dftd3.ase import DFTD3 as ReferenceDFTD3
 
-import fairchem.core.calculate.dftd3_calculator as dftd3
 from fairchem.core import DFTD3Calculator
 
 
-class _ConstantCalculator(Calculator):
+pytestmark = pytest.mark.serial
+
+
+class _ZeroCalculator(Calculator):
+    """Base calculator that isolates the physical D3 contribution."""
+
     implemented_properties: ClassVar[list[str]] = [
         "energy",
         "free_energy",
@@ -38,165 +39,141 @@ class _ConstantCalculator(Calculator):
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
         super().calculate(atoms, properties, system_changes)
         self.results = {
-            "energy": 10.0,
-            "free_energy": 10.0,
-            "forces": np.full((len(self.atoms), 3), 2.0),
-            "stress": np.full(6, 0.5),
+            "energy": 0.0,
+            "free_energy": 0.0,
+            "forces": np.zeros((len(self.atoms), 3)),
+            "stress": np.zeros(6),
         }
 
 
-@pytest.fixture()
-def fake_nvalchemi(monkeypatch):
-    calls = SimpleNamespace(model_kwargs=None, neighbors=0)
+@pytest.fixture(scope="session")
+def dftd3_parameter_file(tmp_path_factory) -> Path:
+    """Exercise the public first-use download into a clean temporary cache."""
 
-    class FakeModel:
-        def __init__(self, **kwargs):
-            calls.model_kwargs = kwargs
-            self.model_config = SimpleNamespace(
-                neighbor_config=SimpleNamespace(cutoff=kwargs["cutoff"])
-            )
-
-        def to(self, device):
-            self.device = device
-            return self
-
-        def set_config(self, key, value):
-            assert key == "active_outputs"
-            self.active_outputs = value
-
-        def eval(self):
-            return self
-
-        def __call__(self, batch):
-            natoms = len(batch.data.atoms)
-            output = {
-                "energy": torch.tensor([[-1.0]]),
-                "forces": torch.full((natoms, 3), 0.25),
-            }
-            if "stress" in self.active_outputs:
-                output["stress"] = torch.tensor(
-                    [[[1.0, 0.1, 0.2], [0.3, 2.0, 0.4], [0.5, 0.6, 3.0]]]
-                )
-            return output
-
-    class FakeAtomicData:
-        @staticmethod
-        def from_atoms(atoms, *, device, dtype):
-            assert device == torch.device("cpu")
-            assert dtype == torch.float32
-            return SimpleNamespace(atoms=atoms)
-
-    class FakeBatch:
-        @staticmethod
-        def from_data_list(data, *, device, skip_validation):
-            assert device == torch.device("cpu")
-            assert skip_validation
-            return SimpleNamespace(data=data[0])
-
-    def compute_neighbors(batch, *, config):
-        calls.neighbors += 1
-        batch._neighbor_list_cutoff = config.cutoff
-
-    monkeypatch.setattr(
-        dftd3,
-        "_import_nvalchemi",
-        lambda: (FakeModel, FakeAtomicData, FakeBatch, compute_neighbors),
+    destination = tmp_path_factory.mktemp("dftd3") / "parameters.pt"
+    assert not destination.exists()
+    DFTD3Calculator(
+        _ZeroCalculator(),
+        functional="pbe",
+        device="cpu",
+        param_file=destination,
+        auto_download=True,
     )
-    return calls
+    assert destination.is_file()
+    return destination
 
 
-@pytest.mark.parametrize(
-    ("functional", "expected"),
-    [
-        (
-            "r2scan",
-            {"a1": 0.49484001, "a2": 5.73083694, "s6": 1.0, "s8": 0.78981345},
-        ),
-        ("pbe", {"a1": 0.4289, "a2": 4.4407, "s6": 1.0, "s8": 0.7875}),
-    ],
-)
-def test_named_parameters_and_nvalchemi_configuration(
-    fake_nvalchemi, functional, expected
-):
-    calc = DFTD3Calculator(
-        _ConstantCalculator(),
+def _reference_calculator(functional: str) -> ReferenceDFTD3:
+    # Loading the functional from dftd3's independent parameter database tests
+    # FairChem's damping parameters as well as the kernel outputs. dftd3 leaves
+    # ATM disabled by default, matching nvalchemiops' two-body implementation.
+    # Its cutoff widths use the same C5 switching window: 3 A is the outer 20%
+    # of FairChem's default 15 A cutoff.
+    return ReferenceDFTD3(
+        method=functional,
+        damping="d3bj",
+        realspace_cutoff={
+            "disp2": 15.0,
+            "disp3": 15.0,
+            "cn": 15.0,
+            "width2": 3.0,
+            "width3": 3.0,
+        },
+    )
+
+
+def _fairchem_calculator(functional: str, param_file: Path) -> DFTD3Calculator:
+    return DFTD3Calculator(
+        _ZeroCalculator(),
         functional=functional,
         device="cpu",
-        param_file="parameters.pt",
+        param_file=param_file,
         auto_download=False,
     )
 
-    assert calc.functional == functional
-    assert dftd3.asdict(calc.damping_parameters) == expected
-    assert fake_nvalchemi.model_kwargs == {
-        **expected,
-        "k1": 16.0,
-        "k3": -4.0,
-        "cutoff": 15.0,
-        "smoothing_fraction": 0.2,
-        "param_file": "parameters.pt",
-        "auto_download": False,
-    }
+
+def _s22_structure(name: str, periodic: bool) -> Atoms:
+    atoms = create_s22_system(name)
+    if periodic:
+        # A low-symmetry molecular cell exercises periodic images and all six
+        # independent components of the analytic virial/stress conversion.
+        atoms.cell = [[14.0, 0.4, 0.1], [0.0, 13.5, 0.5], [0.2, 0.0, 12.8]]
+        atoms.center()
+        atoms.pbc = True
+    return atoms
 
 
-def test_adds_energy_forces_and_symmetric_voigt_stress(fake_nvalchemi):
-    atoms = Atoms(
-        "H2",
-        positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]],
-        cell=[30.0, 30.0, 30.0],
-        pbc=True,
-    )
-    atoms.calc = DFTD3Calculator(_ConstantCalculator(), functional="pbe", device="cpu")
-
-    assert atoms.get_potential_energy() == pytest.approx(9.0)
-    assert atoms.calc.get_property("free_energy", atoms) == pytest.approx(9.0)
-    npt.assert_allclose(atoms.get_forces(), 2.25)
-    npt.assert_allclose(
-        atoms.get_stress(),
-        [1.5, 2.5, 3.5, 1.0, 0.85, 0.7],
-    )
-    assert fake_nvalchemi.neighbors == 1
-
-
-def test_rebuilds_neighbor_list_after_position_and_cell_changes(fake_nvalchemi):
-    atoms = Atoms(
-        "H2",
-        positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]],
-        cell=[5.0, 5.0, 5.0],
-        pbc=True,
-    )
-    atoms.calc = DFTD3Calculator(
-        _ConstantCalculator(), functional="r2scan", device="cpu"
-    )
-
-    atoms.get_potential_energy()
-    atoms.positions[1, 0] += 0.01
-    atoms.get_potential_energy()
-    atoms.cell[0, 0] += 0.01
-    atoms.get_potential_energy()
-
-    assert fake_nvalchemi.neighbors == 3
-
-
-def test_nonperiodic_system_provides_energy_and_forces_without_stress(
-    fake_nvalchemi,
+@pytest.mark.parametrize("functional", ["pbe", "r2scan"])
+@pytest.mark.parametrize(
+    ("structure_name", "periodic"),
+    [
+        ("Water_dimer", False),
+        ("Benzene_dimer_parallel_displaced", True),
+    ],
+)
+def test_matches_reference_dftd3_on_s22_structures(
+    dftd3_parameter_file, functional, structure_name, periodic
 ):
-    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]])
-    atoms.calc = DFTD3Calculator(_ConstantCalculator(), functional="pbe", device="cpu")
+    atoms = _s22_structure(structure_name, periodic)
+    actual_atoms = atoms.copy()
+    actual_atoms.calc = _fairchem_calculator(functional, dftd3_parameter_file)
+    reference_atoms = atoms.copy()
+    reference_atoms.calc = _reference_calculator(functional)
 
-    assert atoms.get_potential_energy() == pytest.approx(9.0)
-    npt.assert_allclose(atoms.get_forces(), 2.25)
-    with pytest.raises(PropertyNotImplementedError):
-        atoms.get_stress()
-
-    assert fake_nvalchemi.neighbors == 2
-
-
-def test_rejects_unknown_functional_before_import(monkeypatch):
-    monkeypatch.setattr(
-        dftd3,
-        "_import_nvalchemi",
-        lambda: pytest.fail("nvalchemi import should not be attempted"),
+    npt.assert_allclose(
+        actual_atoms.get_potential_energy(),
+        reference_atoms.get_potential_energy(),
+        rtol=1.0e-6,
+        atol=1.0e-7,
     )
-    with pytest.raises(ValueError, match="Unknown DFT-D3 functional"):
-        DFTD3Calculator(_ConstantCalculator(), functional="b3lyp", device="cpu")
+    npt.assert_allclose(
+        actual_atoms.get_forces(),
+        reference_atoms.get_forces(),
+        rtol=2.0e-5,
+        atol=1.0e-7,
+    )
+    if periodic:
+        npt.assert_allclose(
+            actual_atoms.get_stress(),
+            reference_atoms.get_stress(),
+            rtol=2.0e-5,
+            atol=1.0e-9,
+        )
+
+
+def test_matches_reference_after_position_and_cell_changes(dftd3_parameter_file):
+    """Catch stale positions, cells, or periodic-image shifts during NPT."""
+
+    actual_atoms = _s22_structure("Benzene_dimer_parallel_displaced", periodic=True)
+    reference_atoms = actual_atoms.copy()
+    actual_atoms.calc = _fairchem_calculator("r2scan", dftd3_parameter_file)
+    reference_atoms.calc = _reference_calculator("r2scan")
+
+    for displacement, cell_scale in [
+        (np.zeros(3), 1.0),
+        (np.array([0.03, -0.02, 0.01]), 1.0),
+        (np.zeros(3), 1.015),
+    ]:
+        actual_atoms.positions[0] += displacement
+        reference_atoms.positions[0] += displacement
+        actual_atoms.set_cell(actual_atoms.cell * cell_scale, scale_atoms=True)
+        reference_atoms.set_cell(reference_atoms.cell * cell_scale, scale_atoms=True)
+
+        npt.assert_allclose(
+            actual_atoms.get_potential_energy(),
+            reference_atoms.get_potential_energy(),
+            rtol=1.0e-6,
+            atol=1.0e-7,
+        )
+        npt.assert_allclose(
+            actual_atoms.get_forces(),
+            reference_atoms.get_forces(),
+            rtol=2.0e-5,
+            atol=1.0e-7,
+        )
+        npt.assert_allclose(
+            actual_atoms.get_stress(),
+            reference_atoms.get_stress(),
+            rtol=2.0e-5,
+            atol=1.0e-9,
+        )
