@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
@@ -365,8 +366,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         settings: InferenceSettings,
     ) -> None:
         UMASFastPytorchBackend.validate(lmax, mmax, settings)
-        if not torch.cuda.is_available():
-            raise ValueError("umas_fast_gpu requires CUDA")
+        if get_available_accelerator() is None:
+            raise ValueError("umas_fast_gpu requires a GPU (cuda or xpu)")
         if lmax != 2 or mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if not settings.merge_mole:

@@ -30,6 +30,13 @@ from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.device_utils import (
+    distributed_backend,
+    empty_cache,
+    is_accelerator,
+    manual_seed_all,
+    resolve_device_type,
+)
 from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     assign_device_for_local_rank,
@@ -123,6 +130,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         assert_on_nans: bool = False,
     ):
         super().__init__()
+        # Normalise ("auto" -> detected accelerator, "cuda:1" -> "cuda") and
+        # validate against the hardware up front.
+        device = resolve_device_type(device)
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.set_seed(seed)
@@ -167,8 +177,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         )
 
         # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
-        # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
-        if torch.device(self._requested_device).type == "cuda":
+        # only for accelerator predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
+        if is_accelerator(self._requested_device):
             self.inference_settings = maybe_update_settings_backend(
                 self.inference_settings, checkpoint.model_config
             )
@@ -248,7 +258,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        manual_seed_all(seed)
 
     def _setup_refs(self, atom_refs: dict | None, form_elem_refs: dict | None) -> None:
         """
@@ -273,8 +283,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         Setup inference device.
         """
-        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
-        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+        device_type = resolve_device_type(device)
+        self.device = get_device_for_local_rank() if device_type != "cpu" else "cpu"
 
     def _build_overrides_from_settings(
         self,
@@ -455,8 +465,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # 2. clear old model and relative memory
         del self.model
         gc.collect()
-        if torch.device(self._requested_device).type == "cuda":
-            torch.cuda.empty_cache()
+        if is_accelerator(self._requested_device):
+            empty_cache(self._requested_device)
         # 3. reload model with the new settings
         self._load_model()
 
@@ -636,8 +646,11 @@ class MLIPWorkerLocal:
         setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
 
         device = self.predictor_config.get("device", "cpu")
-        assign_device_for_local_rank(device == "cpu", 0)
-        backend = "gloo" if device == "cpu" else "nccl"
+        # Bind the requested device (not an autodetected one) to match the backend.
+        assign_device_for_local_rank(
+            device == "cpu", 0, None if device == "cpu" else device
+        )
+        backend = distributed_backend(device)
         dist.init_process_group(
             backend=backend,
             rank=self.worker_id,
@@ -655,7 +668,7 @@ class MLIPWorkerLocal:
         self.is_setup = True
 
     def predict(
-        self, data: AtomicData, use_nccl: bool = False
+        self, data: AtomicData, use_gpuccl: bool = False
     ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
             self._distributed_setup()
@@ -664,7 +677,7 @@ class MLIPWorkerLocal:
         if self.worker_id == 0:
             return move_tensors_to_cpu(out)
 
-        if self.worker_id != 0 and use_nccl:
+        if self.worker_id != 0 and use_gpuccl:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
@@ -762,11 +775,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         )
 
         # first create one placement group for each node
-        num_gpu_per_worker = 1 if device == "cuda" else 0
+        num_gpu_per_worker = 1 if is_accelerator(device) else 0
         placement_groups = []
         for workers in num_workers_on_node_array:
             bundle = {"CPU": workers}
-            if device == "cuda":
+            # Ray exposes every GPU vendor under the same "GPU" resource.
+            if is_accelerator(device):
                 bundle["GPU"] = workers
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
             placement_groups.append(pg)
@@ -834,7 +848,10 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             data_ref = ray.put(data)
             # this will put the ray works into an infinite loop listening for broadcasts
             _futures = [
-                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
+                w.predict.remote(
+                    data_ref,
+                    use_gpuccl=self.inference_settings.merge_mole,
+                )
                 for w in self.workers
             ]
             self.atomic_data_on_device = data.clone()

@@ -34,6 +34,7 @@ from fairchem.core.calculate._batch import (
     InferenceBatcher,
     _get_concurrency_backend,
 )
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to
@@ -67,7 +68,7 @@ def setup_ray():
         ignore_reinit_error=True,
         namespace=namespace,
         num_cpus=16,  # Increased to support default ray_actor_options num_cpus=8
-        num_gpus=1 if torch.cuda.is_available() else 0,
+        num_gpus=1 if device_utils.get_available_accelerator() else 0,
         logging_level="ERROR",
         _temp_dir="/tmp/ray",  # Use larger /tmp instead of default /var/tmp (512 MB tmpfs)
         _system_config={"local_fs_capacity_threshold": 0.99},

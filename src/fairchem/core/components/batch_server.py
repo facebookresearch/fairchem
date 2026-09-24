@@ -21,6 +21,14 @@ import ray
 import torch
 from ray import serve
 
+from fairchem.core.common.device_utils import (
+    device_module,
+    device_type_of,
+    empty_cache,
+    get_available_accelerator,
+    is_accelerator,
+    synchronize,
+)
 from fairchem.core.components.serve_utils import (
     get_app_handle_with_retry,
     get_ray_connection_info,
@@ -284,7 +292,7 @@ class BatchPredictServerMixin:
                     "Caught out of memory error. Splitting batch and retrying."
                 )
                 oom = True
-                torch.cuda.empty_cache()
+                empty_cache(get_available_accelerator() or "cpu")
             if oom:
                 mid = len(current) // 2
                 data_deque.appendleft(current[mid:])
@@ -859,17 +867,18 @@ def _prepare_deployment_config(
 
 def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -> None:
     """
-    Reject a predict unit pinned to a CUDA ordinal the replica will not have.
+    Reject a predict unit pinned to an accelerator ordinal the replica will not have.
 
-    Ray remaps ``CUDA_VISIBLE_DEVICES`` per replica, so a replica's ordinals
-    always start at ``cuda:0`` regardless of which physical GPUs it was given:
-    with the usual ``num_gpus=1`` it sees *only* ``cuda:0``, and with
-    ``num_gpus=n`` it sees ``cuda:0`` through ``cuda:n-1``.
+    Ray remaps the visible devices per replica, so a replica's ordinals
+    always start at ``<accelerator>:0`` regardless of which physical GPUs it
+    was given: with the usual ``num_gpus=1`` it sees *only* ``:0``, and with
+    ``num_gpus=n`` it sees ``:0`` through ``:n-1``.
 
     The driver, on the other hand, sees every GPU on its node, so a predict
-    unit built here can legitimately sit on ``cuda:1``. Serializing that unit
-    into a ``num_gpus=1`` replica fails on deserialization with an opaque
-    "invalid device ordinal", so fail here with an actionable message instead.
+    unit built here can legitimately sit on ``<accelerator>:1``. Serializing
+    that unit into a ``num_gpus=1`` replica fails on deserialization with an
+    opaque "invalid device ordinal", so fail here with an actionable message
+    instead.
 
     Args:
         predict_unit: The unit about to be placed in the object store.
@@ -877,17 +886,18 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
             for each whole or partial GPU allocation.
 
     Raises:
-        ValueError: If the unit is pinned to a CUDA ordinal at or beyond the
-            number of GPUs the replica will be able to see.
+        ValueError: If the unit is pinned to an accelerator ordinal at or
+            beyond the number of GPUs the replica will be able to see.
     """
     device = torch.device(predict_unit.device)
-    if device.type != "cuda":
+    if not is_accelerator(device):
         return
 
     if num_gpus <= 0:
         raise ValueError(
             f"predict_unit is on {predict_unit.device!r}, but each replica is "
-            f"granted num_gpus={num_gpus} and will not see a CUDA device. Grant "
+            f"granted num_gpus={num_gpus} and will not see an accelerator "
+            "device. Grant "
             "the replica a GPU or load the predict unit on 'cpu' before serving it."
         )
 
@@ -896,12 +906,14 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
     visible = math.ceil(num_gpus)
     ordinal = device.index or 0
     if ordinal >= visible:
+        device_type = device_type_of(predict_unit.device)
         raise ValueError(
             f"predict_unit is on {predict_unit.device!r}, but each replica is "
-            f"granted num_gpus={num_gpus} and Ray remaps CUDA_VISIBLE_DEVICES so "
+            f"granted num_gpus={num_gpus} and Ray remaps visible devices so "
             f"the replica only sees ordinals 0..{visible - 1}. Deserializing "
             "the unit there would fail with 'invalid device ordinal'. Load the "
-            "predict unit on 'cuda:0' (or 'cpu') before serving it, or raise "
+            f"predict unit on '{device_type}:0' (or 'cpu') before serving it, "
+            "or raise "
             "num_gpus."
         )
 
@@ -915,7 +927,7 @@ def _infer_num_gpus_per_replica() -> tuple[float, str]:
     reliable source of truth is the Ray cluster the replicas will actually be
     scheduled on, so use its GPU capacity whenever Ray is already connected.
     Only when Ray has not been initialised yet -- i.e. the cluster is about to
-    be spun up locally -- does this fall back to the driver's own CUDA
+    be spun up locally -- does this fall back to the driver's own accelerator
     visibility.
 
     Returns:
@@ -929,8 +941,8 @@ def _infer_num_gpus_per_replica() -> tuple[float, str]:
             f"inferred from the Ray cluster's GPU capacity ({cluster_gpus:g})",
         )
     return (
-        1 if torch.cuda.is_available() else 0,
-        "guessed from the driver's CUDA visibility (Ray is not connected yet)",
+        1 if get_available_accelerator() is not None else 0,
+        "guessed from the driver's accelerator visibility (Ray is not connected yet)",
     )
 
 
@@ -1114,7 +1126,7 @@ def setup_batch_predict_server(
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
         num_gpus: GPUs to request per replica. Defaults to ``1`` when
-            ``predict_unit`` is on CUDA and ``0`` otherwise. An explicit value
+            ``predict_unit`` is on an accelerator and ``0`` otherwise. An explicit value
             in ``deployment_config["ray_actor_options"]["num_gpus"]`` wins over
             this argument.
 
@@ -1123,8 +1135,8 @@ def setup_batch_predict_server(
     """
     if num_gpus is None:
         # Safe to infer here: the predict unit is a local object whose device is
-        # ground truth for this deployment, unlike a driver-side CUDA probe.
-        num_gpus = 1 if torch.device(predict_unit.device).type == "cuda" else 0
+        # ground truth for this deployment, unlike a driver-side accelerator probe.
+        num_gpus = 1 if is_accelerator(predict_unit.device) else 0
         basis = f"inferred from predict_unit.device={predict_unit.device!r}"
     else:
         basis = "explicit num_gpus argument"
@@ -1176,7 +1188,7 @@ def setup_multiplexed_batch_predict_server(
         route_prefix: HTTP route prefix for the deployment.
         num_gpus: GPUs to request per replica. When ``None``, this is inferred
             from the GPU capacity of the Ray cluster the replicas will run on
-            (or, if Ray is not connected yet, from the driver's own CUDA
+            (or, if Ray is not connected yet, from the driver's own accelerator
             visibility). Pass it explicitly to pin a value, to request more
             than one GPU per replica, or when connecting to a cluster whose
             GPU workers have not joined yet.
@@ -1330,7 +1342,7 @@ def probe_optimal_batch_size(
 
     device = predict_unit.device
 
-    if "cuda" not in str(device):
+    if not is_accelerator(device):
         logging.info("Autobatch probing skipped for CPU device, using defaults")
         return AutobatchResult(
             max_batch_size=config.min_batch_size,
@@ -1340,11 +1352,12 @@ def probe_optimal_batch_size(
 
     logging.info("Starting autobatch probing...")
 
+    device_mod = device_module(device_type_of(device))
     free_hardware, total_mem = (
-        (0, 0) if not torch.cuda.is_available() else torch.cuda.mem_get_info()
+        (0, 0) if get_available_accelerator() is None else device_mod.mem_get_info()
     )
-    torch_unused_cache = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
-    free_mem = free_hardware + torch_unused_cache
+    reclaimable_cache = device_mod.memory_reserved() - device_mod.memory_allocated()
+    free_mem = free_hardware + reclaimable_cache
 
     logging.info(
         f"GPU memory: {free_mem / 1e9:.2f}GB free / {total_mem / 1e9:.2f}GB total"
@@ -1357,7 +1370,7 @@ def probe_optimal_batch_size(
             predict_unit.predict(warmup_batch, undo_element_references=False)
         except Exception as exc:
             logging.warning(f"Warmup step failed: {exc}")
-    torch.cuda.empty_cache()
+    empty_cache(device)
 
     # Measure single-request latency (the probe data as-is, unexpanded). The
     # batch_wait_timeout must track how long a *single* request takes so that
@@ -1369,16 +1382,16 @@ def probe_optimal_batch_size(
     single_request_latencies: list[float] = []
     for step in range(config.probe_steps):
         try:
-            torch.cuda.synchronize()
+            synchronize(device)
             start = time.perf_counter()
             predict_unit.predict(warmup_batch, undo_element_references=False)
-            torch.cuda.synchronize()
+            synchronize(device)
             elapsed = time.perf_counter() - start
             single_request_latencies.append(elapsed)
             logging.debug(f"  Single-request step {step + 1}: {elapsed:.4f}s")
         except Exception as exc:
             logging.warning(f"  Single-request latency probe failed: {exc}")
-    torch.cuda.empty_cache()
+    empty_cache(device)
 
     # Binary search for optimal batch size. Only success/OOM matters here;
     # the timeout is derived separately from the single-request latency above.
@@ -1399,17 +1412,17 @@ def probe_optimal_batch_size(
                 expanded_data = _expand_probe_data(probe_data, mid)
                 batch = atomicdata_list_to_batch(expanded_data)
 
-                torch.cuda.synchronize()
+                synchronize(device)
                 start = time.perf_counter()
                 predict_unit.predict(batch, undo_element_references=False)
-                torch.cuda.synchronize()
+                synchronize(device)
                 elapsed = time.perf_counter() - start
 
                 logging.debug(f"  Step {step + 1}: {elapsed:.4f}s")
             except torch.OutOfMemoryError:
                 logging.debug(f"  OOM at batch size {mid}")
                 success = False
-                torch.cuda.empty_cache()
+                empty_cache(device)
                 break
             except Exception as exc:
                 logging.warning(f"  Probe failed at batch size {mid}: {exc}")

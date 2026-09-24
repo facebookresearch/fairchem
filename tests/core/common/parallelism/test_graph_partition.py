@@ -10,11 +10,15 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.common.parallelism.graph_partition import (
     PartitionStrategy,
     partition_atoms_index_split,
     partition_atoms_spatial,
 )
+
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 class TestPartitionStrategy:
@@ -108,7 +112,7 @@ class TestPartitionAtomsSpatial:
 
     def test_all_ranks_populated(self):
         """
-        No rank should be empty (avoids NCCL deadlock).
+        No rank should be empty (avoids collective deadlock).
         """
         pos = torch.randn(64, 3)
         assignments = partition_atoms_spatial(pos, 8)
@@ -158,7 +162,7 @@ class TestPartitionAtomsSpatial:
         """
         Spatial partitioning should work on GPU.
         """
-        pos = torch.randn(200, 3, device="cuda")
+        pos = torch.randn(200, 3, device=ACCELERATOR)
         assignments = partition_atoms_spatial(pos, 8)
         assert assignments.device == pos.device
         assert assignments.shape == (200,)

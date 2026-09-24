@@ -37,6 +37,7 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.components import batch_server
 from fairchem.core.components.batch_server import (
     MODEL_SPEC_CACHE_CAPACITY,
@@ -527,7 +528,7 @@ def test_check_predict_unit_device_rejects_out_of_range_ordinal():
 def test_check_predict_unit_device_rejects_cuda_without_gpu_allocation():
     unit = SimpleNamespace(device="cuda:0")
 
-    with pytest.raises(ValueError, match="will not see a CUDA device"):
+    with pytest.raises(ValueError, match="will not see an accelerator device"):
         batch_server._check_predict_unit_device(unit, 0)
 
 
@@ -545,7 +546,7 @@ def test_infer_num_gpus_prefers_ray_cluster_capacity(
     monkeypatch.setattr(
         batch_server.ray, "cluster_resources", lambda: {"GPU": cluster_gpus}
     )
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(batch_server, "get_available_accelerator", lambda: None)
 
     num_gpus, basis = batch_server._infer_num_gpus_per_replica()
 
@@ -555,7 +556,7 @@ def test_infer_num_gpus_prefers_ray_cluster_capacity(
 
 def test_infer_num_gpus_falls_back_to_driver_when_ray_is_not_connected(monkeypatch):
     monkeypatch.setattr(batch_server.ray, "is_initialized", lambda: False)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(batch_server, "get_available_accelerator", lambda: "cuda")
 
     num_gpus, basis = batch_server._infer_num_gpus_per_replica()
 
@@ -601,14 +602,20 @@ def test_resolve_device_returns_pinned_cpu_device():
 
 def test_resolve_device_raises_when_pinned_cuda_is_unavailable(monkeypatch):
     """Silently running a GPU workload on CPU is worse than failing fast."""
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(
+        "fairchem.core.units.mlip_unit.api.model_spec.accelerator_is_available",
+        lambda device: False,
+    )
 
-    with pytest.raises(RuntimeError, match="no CUDA device"):
+    with pytest.raises(RuntimeError, match="no accelerator device"):
         ModelSpec("x", device="cuda").resolve_device()
 
 
 def test_resolve_device_warns_when_unpinned_spec_falls_back_to_cpu(monkeypatch, caplog):
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(
+        "fairchem.core.units.mlip_unit.api.model_spec.get_available_accelerator",
+        lambda: None,
+    )
 
     with caplog.at_level(logging.WARNING):
         assert ModelSpec("x").resolve_device() == "cpu"
@@ -617,7 +624,10 @@ def test_resolve_device_warns_when_unpinned_spec_falls_back_to_cpu(monkeypatch, 
 
 
 def test_resolve_device_prefers_cuda_when_available(monkeypatch):
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        "fairchem.core.units.mlip_unit.api.model_spec.get_available_accelerator",
+        lambda: "cuda",
+    )
 
     assert ModelSpec("x").resolve_device() == "cuda"
 
@@ -716,7 +726,7 @@ def local_ray_cluster_with_inference(uma_predict_unit, dashboard_port):
     contention between tests (important on single-GPU CI runners) at the
     cost of one Ray init per test.
     """
-    num_gpus = 1 if torch.cuda.is_available() else 0
+    num_gpus = 1 if get_available_accelerator() is not None else 0
 
     ray.init(
         num_cpus=8,
@@ -757,7 +767,7 @@ def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard
 
     Only tests that call get_ray_connection_info need this fixture.
     """
-    num_gpus = 1 if torch.cuda.is_available() else 0
+    num_gpus = 1 if get_available_accelerator() is not None else 0
     cluster_id = str(uuid.uuid4())
     head_file_path = Path.home() / ".fairray" / cluster_id / "head.json"
     head_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -966,7 +976,7 @@ def local_multiplexed_cluster():
     and actor resources are returned to the pool before the next test
     runs.
     """
-    num_gpus = 1 if torch.cuda.is_available() else 0
+    num_gpus = 1 if get_available_accelerator() is not None else 0
 
     ray.init(
         log_to_driver=False,

@@ -19,6 +19,12 @@ from typing import Any, Literal
 
 import torch
 
+from fairchem.core.common.device_utils import (
+    accelerator_is_available,
+    device_type_of,
+    get_available_accelerator,
+    is_accelerator,
+)
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
@@ -228,35 +234,36 @@ class ModelSpec:
             The device string to hand to the model loader.
 
         Raises:
-            RuntimeError: If this spec pins a CUDA device but the replica has
-                no CUDA available. Falling back to CPU here would "work" while
-                running orders of magnitude slower, which is far harder to
-                diagnose than an immediate failure.
+            RuntimeError: If this spec pins an accelerator device but the
+                replica has no accelerator available. Falling back to CPU here
+                would "work" while running orders of magnitude slower, which is
+                far harder to diagnose than an immediate failure.
         """
         if self.device is not None:
-            if (
-                torch.device(self.device).type == "cuda"
-                and not torch.cuda.is_available()
+            if is_accelerator(self.device) and not accelerator_is_available(
+                device_type_of(self.device)
             ):
                 raise RuntimeError(
                     f"ModelSpec pins device={self.device!r} but this replica has "
-                    "no CUDA device. Ray sets CUDA_VISIBLE_DEVICES per replica, "
+                    "no accelerator device. Ray sets visible devices per "
+                    "replica, "
                     "so this usually means the deployment was created with "
                     "num_gpus=0 -- pass num_gpus=1 to "
                     "setup_multiplexed_batch_predict_server."
                 )
             return self.device
 
-        if torch.cuda.is_available():
-            return "cuda"
+        accelerator = get_available_accelerator()
+        if accelerator is not None:
+            return accelerator
 
         # Unpinned specs are allowed to land on CPU, but say so: a GPU-sized
         # workload silently running on CPU is the single most expensive way
         # for this to go wrong.
         logging.warning(
-            "ModelSpec %s left device unspecified and this replica has no CUDA "
-            "device, so the model will load on CPU. If the cluster has GPUs, "
-            "the deployment was likely created with num_gpus=0.",
+            "ModelSpec %s left device unspecified and this replica has no "
+            "accelerator device, so the model will load on CPU. If the cluster "
+            "has GPUs, the deployment was likely created with num_gpus=0.",
             self.model_id,
         )
         return "cpu"

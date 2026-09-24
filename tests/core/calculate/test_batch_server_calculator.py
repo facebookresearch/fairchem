@@ -13,11 +13,11 @@ from contextlib import suppress
 import numpy.testing as npt
 import pytest
 import ray
-import torch
 from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.components.batch_server import setup_batch_predict_server
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
@@ -31,7 +31,7 @@ def served_predict_unit(pretrained_checkpoint):
     """
     Load the predict unit served by the batch server.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_available_accelerator() or "cpu"
     return get_predict_unit_for_test(pretrained_checkpoint, device=device)
 
 
@@ -50,7 +50,7 @@ def batch_server_handle(served_predict_unit):
     ray.init(
         ignore_reinit_error=True,
         num_cpus=10,
-        num_gpus=1 if torch.cuda.is_available() else 0,
+        num_gpus=1 if get_available_accelerator() is not None else 0,
         logging_level="ERROR",
     )
 
@@ -59,7 +59,7 @@ def batch_server_handle(served_predict_unit):
         deployment_config={
             "num_replicas": 1,
             "ray_actor_options": {
-                "num_gpus": 1 if torch.cuda.is_available() else 0,
+                "num_gpus": 1 if get_available_accelerator() is not None else 0,
                 "num_cpus": 2,
             },
         },

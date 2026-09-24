@@ -20,10 +20,14 @@ import pytest
 import torch
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
+
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 
 @pytest.mark.inference_check()
@@ -101,7 +105,7 @@ def test_conserving_mole_inference_modes_gpu(
 
     calc = FAIRChemCalculator(
         checkpoint_path=command_line_inference_checkpoint,
-        device="cuda",
+        device=ACCELERATOR,
         task_name=task,
         inference_settings=InferenceSettings(
             tf32=tf32,

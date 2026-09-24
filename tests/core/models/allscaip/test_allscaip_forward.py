@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 import torch
 
+from fairchem.core.common import device_utils
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
@@ -23,6 +24,9 @@ from fairchem.core.models.allscaip.AllScAIP import (
     AllScAIPGradientEnergyForceStressHead,
 )
 from fairchem.core.models.base import HydraModelV2
+
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
+ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 MAX_ELEMENTS = 100
 DATASET_LIST = ["oc20", "omol", "osc", "omat", "odac"]
@@ -92,7 +96,7 @@ def get_allscaip_backbone(
     cutoff: float,
     use_compile: bool,
     otf_graph=False,
-    device="cuda",
+    device=ACCELERATOR,
     autograd: bool = True,
 ):
     backbone_config = get_backbone_config(
@@ -108,7 +112,7 @@ def get_allscaip_full(
     cutoff: float,
     use_compile: bool,
     otf_graph=False,
-    device="cuda",
+    device=ACCELERATOR,
     autograd: bool = True,
 ):
     backbone = get_allscaip_backbone(
@@ -141,7 +145,7 @@ def test_backbone_does_not_own_or_mutate_float32_matmul_precision(precision):
 @pytest.mark.gpu()
 def test_fixed_forward_full_gpu(compile_reset_state):
     # make_deterministic()
-    device = "cuda"
+    device = ACCELERATOR
     cutoff = 6.0
     seed_everywhere()
     # get model
@@ -171,7 +175,7 @@ def test_fixed_forward_full_gpu(compile_reset_state):
     results_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "fixed_results.pt"
     )
-    fixed_results = torch.load(results_path)
+    fixed_results = torch.load(results_path, map_location=ACCELERATOR)
     # compare fixed_results with output
     model_output = output
     assert torch.allclose(fixed_results["energy"], model_output["energy"], atol=5e-4)
