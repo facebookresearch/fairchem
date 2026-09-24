@@ -193,12 +193,8 @@ UMA supports Graph Parallel inference natively. The graph is chunked into each r
 To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called [ParallelMLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/85bd83535fedbc1d99eee4c12e175603ccc44ef7/src/fairchem/core/units/mlip_unit/predict.py#L415)
 
 :::{note}
-To enable multi-GPU inference, you need to install Ray manually or through the fairchem extra dependencies option.
+Multi-GPU inference requires Ray. Install it with `pip install fairchem-core[ray]`.
 :::
-
-```bash
-pip install fairchem-core[extras]
-```
 
 For example, we can create a predictor with 8 GPU workers in a very similar way to MLIPPredictUnit and perform an MD calculation with the ASE calculator. This mode of operation is also compatible with our LAMMPS integration.
 

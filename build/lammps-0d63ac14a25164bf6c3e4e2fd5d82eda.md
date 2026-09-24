@@ -49,7 +49,7 @@ Users can install LAMMPS however they like, but the simplest is to install via c
 For conda install, activate the conda env with LAMMPS and install fairchem into it. For manual LAMMPS installs, you need to provide python paths so LAMMPS can find fairchem.
 
 :::{note}
-We separate the LAMMPS integration code into a standalone package (`fairchem-lammps`). Please note fairchem-lammps uses the GnuV2 License as is required by any code that uses LAMMPS, instead of the MIT License used by the FAIRChem repository. The "extras" is required for multi-GPU inference.
+We separate the LAMMPS integration code into a standalone package (`fairchem-lammps`). Please note fairchem-lammps uses the GnuV2 License as is required by any code that uses LAMMPS, instead of the MIT License used by the FAIRChem repository.
 :::
 
 ```bash
@@ -75,6 +75,10 @@ lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ## Multi-GPU Parallelism
 
 Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.
+
+:::{note}
+Multi-GPU inference requires Ray. Install it with `pip install fairchem-core[ray]`.
+:::
 
 :::{tip}
 The only change required is to pass the `ParallelMLIPPredictUnit` [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/lammps/lammps_fc_config.yaml#L20) instead of the regular predict unit when initializing the LAMMPS fairchem script. No need to install anything new such as Kokkos or add communication code.
