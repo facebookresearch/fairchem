@@ -9,8 +9,12 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.11, <3.15"
 dependencies = [
-    "torch==2.13.0",
-    "ray[serve]>=2.53.0",
+    "torch~=2.13.0",
+    # 2.56.1 is the first release whose ray.serve._private.config handles
+    # protobuf>=7 removing FieldDescriptor.label; older ray breaks serve.run.
+    # Pinning the ray floor keeps that constraint where it belongs instead of
+    # capping protobuf for every downstream consumer of this library.
+    "ray[serve]>=2.56.1",
     "numpy>=2.0,<2.5",
     "scipy>=1.15.0",
     "lmdb>=1.6.2,<=1.7.3",
@@ -19,6 +23,7 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.26.0",
     "ase-db-backends>=0.10.0",
+    "backoff",
     "monty>=2026.2.18",
     "clusterscope==0.0.18",
     "setuptools<81.0.0",
@@ -31,6 +36,7 @@ dependencies = [
     "pyyaml",
     "wandb",
     "websockets",
+    "nvalchemi-toolkit-ops>=0.4.1",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
@@ -38,7 +44,7 @@ dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"
 docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book>=2.0", "torch-dftd"]
 adsorbml = ["dscribe", "x3dase", "scikit-image"]
 torchsim = ["torch-sim-atomistic>=0.6.0; python_version >= '3.12'"]
-extras = ["pymatgen>=2025.1.9", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops>=0.3.0", "pyarrow"]
+extras = ["pymatgen>=2025.1.9", "quacc[phonons]>=0.15.3", "pandas", "pyarrow"]
 
 [dependency-groups]
 cpu = ["torch==2.13.0"]

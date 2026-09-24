@@ -1,14 +1,10 @@
-[//]: # (<h1 align="center">)
-
-[//]: # ()
-[//]: # (<p align="center">)
-
-[//]: # (  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?)
-
-[//]: # (</p>)
-
-[//]: # ()
-[//]: # (</h1>)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fair-chemistry-logo-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/fair-chemistry-logo-light-mode.png">
+    <img src="docs/assets/fair-chemistry-logo-dark-mode.png" width="650" alt="FAIR Chemistry">
+  </picture>
+</p>
 
 <h4 align="center">
 
@@ -44,25 +40,24 @@ for the full setup.
 For more OMol model accuracy benchmarks, you can also see the
 [FAIR Chemistry leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
 
+Please use this logo for references to [UMA](docs/assets/uma-diagram-light-mode.png)!
+
 ## Latest news
 September 2026 - Read our new paper on
 [quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293). Also, UMA inference is now much faster with
 [`fairchem-core` 2.22.0](https://github.com/facebookresearch/fairchem/releases/tag/fairchem_core-2.22.0).
 
+<img src="https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/75fdb26063309f31514a6ddf3ba39fd87776a3e7/ndpk_atp_to_adp_3dmol_1200px.gif" alt="NDPK-catalyzed ATP-to-ADP reaction" width="1000">
+
+June 2026 - UMA playground released, try the interactive [educational demo](https://aidemos.atmeta.com/uma) here yourself!
+
+<img src="https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/b088b0eaf5f0253966458094afa3f6cac8f72b8d/uma_playground_demo.gif" alt="UMA playground demo" width="1000">
+
 March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
 
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
 
-## Read our latest release post!
-Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
-
-[![Meta FAIR Science Release](https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150)](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable)
-
-## Try the demo!
-If you want to explore model capabilities check out our
-[educational demo](https://facebook-fairchem-uma-demo.hf.space/)
-
-[![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
+June 2025 - UMA/OMol first released! Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
 ## Materials Project and OMat24 DFT settings
 UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
@@ -105,8 +100,7 @@ Models are referenced by their name, below are the currently supported models:
 
 | Model Name | Description |
 |---|---|
-| uma-s-1p2 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params) |
-| uma-s-1p1 | Early version of the UMA small model while still SOTA on most benchmarks (6.6M/150M active/total params) |
+| uma-s-1p2p1 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params) |
 | uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
 
 ### Set the task for your application and calculate
@@ -125,7 +119,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -147,7 +141,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -160,6 +154,7 @@ opt.run(0.05, 100)
 #### Run Molecular Dynamics (MD)
 Note: `pretrained_mlip.get_predict_unit()` currently uses a seed to set the global state of the numpy RNG. In order to obtain different trajectories for different runs of the following code, we have to set a random seed as shown below:
 ```python
+import numpy as np
 from ase import units
 from ase.io import Trajectory
 from ase.md.langevin import Langevin
@@ -167,7 +162,10 @@ from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
 seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda", seed=seed)
+# we recommend using turbo mode for MD to get the best speed
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2p1", device="cuda", seed=seed, inference_settings="turbo"
+)
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -189,7 +187,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
@@ -205,22 +203,28 @@ triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
 #### Multi-GPU Inference and LAMMPs
-If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). For example, you can run the following 8000 atom md simulation with ~10 qps (8x H100 GPU), ~10x faster than single-gpu inference! Current benchmarks show we can run uma-s @ ~1 ns/per day with 100k+ atoms systems in real MD scenarios (more on this to come!). This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://facebookresearch.github.io/fairchem/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
+If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://facebookresearch.github.io/fairchem/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
 ```
 pip install fairchem-core[extras]
 ```
 
 ```python
+import time
+
+import numpy as np
 from ase import units
 from ase.md.langevin import Langevin
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
-import time
 
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 seed = np.random.randint(0, np.iinfo(np.int32).max, dtype=int)
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=8, seed=seed,
+    "uma-s-1p2p1",
+    inference_settings="turbo",
+    device="cuda",
+    workers=8,
+    seed=seed,
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 

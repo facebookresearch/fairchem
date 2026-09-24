@@ -23,7 +23,10 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
+import backoff
+import ray
 import yaml
+from ray import serve
 
 from fairchem.core.common.device_utils import (
     device_count,
@@ -70,8 +73,6 @@ def _resolve_serve_configs(
       ``deployment_config.logging_config`` unless the caller already set
       ``logging_config`` explicitly.
     """
-    from ray import serve as _serve
-
     deployment_config = dict(cluster_config.get("deployment_config") or {})
     batch_config = dict(cluster_config.get("batch_config") or {})
 
@@ -106,7 +107,7 @@ def _resolve_serve_configs(
 
     serve_log_level = cluster_config.get("serve_log_level")
     if serve_log_level and "logging_config" not in deployment_config:
-        deployment_config["logging_config"] = _serve.schema.LoggingConfig(
+        deployment_config["logging_config"] = serve.schema.LoggingConfig(
             log_level=serve_log_level
         )
 
@@ -467,8 +468,6 @@ def get_slurm_inference_raycluster(
             )
 
             if cluster_config.get("start_inference_server", False):
-                import ray
-
                 client_address = (
                     f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
                 )
@@ -487,8 +486,6 @@ def get_slurm_inference_raycluster(
                         f"Connecting to Ray cluster at {client_address} "
                         "to start inference server..."
                     )
-                    import backoff
-
                     max_tries = int(
                         os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8")
                     )
@@ -601,8 +598,6 @@ def get_slurm_inference_raycluster(
         yield head_file
     finally:
         if ray_client_owned:
-            import ray
-
             try:
                 ray.shutdown()
                 logger.info("Released Ray client connection.")
@@ -654,9 +649,11 @@ def get_local_inference_raycluster(
     Args:
         head_file: Path where head.json will be written. If None, creates
             a temp file.
-        num_cpus: Number of CPUs for Ray. Defaults to 8.
-        num_gpus: Number of GPUs for Ray. If None, auto-detects via the
-            active accelerator backend (torch.cuda / torch.xpu).
+        num_cpus: CPUs to give the single local node. Defaults to 8.
+        num_gpus: GPUs to give the single local node. The cluster started here
+            is always single-node, so this is a per-node count, not a
+            cluster-wide one. If None, defaults to every accelerator device
+            visible to this process (``device_count()``).
         start_inference_server: If True (default), start FAIRChem Ray Serve
             inference server. Requires ``predict_unit`` to be provided.
         predict_unit: Predict unit to serve. Required when
@@ -667,9 +664,6 @@ def get_local_inference_raycluster(
     Yields:
         Path to head.json file.
     """
-    import ray
-    from ray import serve
-
     # Set defaults
     if num_cpus is None:
         num_cpus = 8
