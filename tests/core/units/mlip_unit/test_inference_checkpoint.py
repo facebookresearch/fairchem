@@ -81,8 +81,8 @@ def test_inference_checkpoint_direct(
         (True, False, True, True, True),  # test compile and merge
         # with acvitation checkpointing
         (True, True, True, True, True),  # test external model graph gen + compile
-        (True, True, True, False, True),  # test merge but no compile
-        (True, True, False, False, True),  # test no merge or compile
+        (True, True, True, False,  True),  # test merge but no compile
+        (True, True, False, False,  True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes_gpu(
