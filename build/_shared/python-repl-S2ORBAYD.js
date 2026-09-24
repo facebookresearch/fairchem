@@ -1,0 +1,1 @@
+import{c as s}from"/fairchem/build/_shared/chunk-RAQ24GF6.js";var t=s((i,n)=>{function a(e){return{aliases:["pycon"],contains:[{className:"meta",starts:{end:/ |$/,starts:{end:"$",subLanguage:"python"}},variants:[{begin:/^>>>(?=[ ]|$)/},{begin:/^\.\.\.(?=[ ]|$)/}]}]}}n.exports=a});export default t();
