@@ -10,8 +10,9 @@ Tests:  connectivity-preserving neighbour selection — per-atom nearest-k
         without changing anything else. Covers the component labeller, the
         no-op fast path, the component-count guarantee, the merge-round
         bounds, bidirectionality of a restored bridge, and the invariants of
-        the reserved edge set: rigid motion, uniform scaling, atom
-        relabelling, and run-to-run reproducibility.
+        the reserved edge set: rigid motion, uniform scaling (with the
+        absolute degeneracy tolerance scaled alongside), atom relabelling,
+        and run-to-run reproducibility.
 Models: none. Pure graph statistics, no checkpoint. One `gpu`-marked
         reproducibility test; everything else runs on CPU.
 CI:     test (core shard).
@@ -229,6 +230,29 @@ class TestTruncationCanDisconnect:
         assert component_count(full["edge_index"], num_atoms) == 2
         assert component_count(fixed["edge_index"], num_atoms) == 2
 
+    def test_repairable_contact_beside_a_real_vacuum_in_one_system(self):
+        """
+        One system, three grains: a contact truncation breaks, then a real
+        vacuum. The repair must rejoin the first two grains and leave the third
+        apart, so both the count and the membership are checked.
+        """
+        atoms = grain_chain([3.2, 8.0], blocks=3)
+        num_atoms = len(atoms)
+        full = graph_for(atoms, max_neighbors=0, preserve=False)
+        broken = graph_for(atoms, 30, preserve=False)
+        fixed = graph_for(atoms, 30, preserve=True)
+        assert component_count(full["edge_index"], num_atoms) == 2
+        assert component_count(broken["edge_index"], num_atoms) == 3
+        assert component_count(fixed["edge_index"], num_atoms) == 2
+
+        labels = connected_component_labels(
+            fixed["edge_index"][0], fixed["edge_index"][1], num_atoms
+        )
+        per_grain = labels.view(3, -1)
+        assert all(len(set(grain.tolist())) == 1 for grain in per_grain)
+        first, second, third = per_grain[:, 0].tolist()
+        assert first == second != third
+
 
 class TestNoOpWhenNothingFractured:
     def test_dense_bulk_is_untouched(self):
@@ -319,13 +343,45 @@ class TestReservedEdgeProperties:
         """
         Scaling the positions and the cutoff together rescales every distance by
         the same factor and reorders nothing, so the reserved pairs must be
-        identical. This is what catches an absolute length or an absolute
-        squared-distance threshold used where a relative one belongs.
+        identical. This is what catches an absolute length used where a
+        relative one belongs. The ties in these fcc grains are exact, so the
+        absolute degeneracy tolerance does not enter; near-ties are covered by
+        `test_near_ties_scale_only_with_the_tolerance`.
         """
         atoms = two_grain_contact(gap=3.2)
         scaled = atoms.copy()
         scaled.set_cell(atoms.cell * scale, scale_atoms=True)
         assert reserved_pairs(scaled, cutoff=CUTOFF * scale) == reserved_pairs(atoms)
+
+    def test_near_ties_scale_only_with_the_tolerance(self):
+        """
+        `degeneracy_tolerance` is absolute in squared length, as in the neighbour
+        budget, so uniform scaling preserves the selection among near-tied
+        bridges only when the tolerance scales by the factor squared. Two
+        retained dimers joined by four bridges within 0.0064 of each other: at
+        scale 1 all four tie, at scale 10 with the same tolerance only the
+        shortest does, and scaling the tolerance by 100 restores all four.
+        Connectivity is restored in every case.
+        """
+        pos = torch.tensor(
+            [[0.0, 0.0, 0.0], [0.0, 0.04, 0.0], [1.0, 0.0, 0.0], [1.0, 0.08, 0.0]],
+            dtype=torch.float64,
+        )
+        i, j = torch.where(~torch.eye(4, dtype=torch.bool))
+        kept = (i // 2) == (j // 2)
+
+        def bridges(scale, tolerance):
+            distance_sq = ((scale * pos[i] - scale * pos[j]) ** 2).sum(1)
+            extra = reconnect_mask(
+                i, j, distance_sq, kept, 4, degeneracy_tolerance=tolerance
+            )
+            restored = torch.stack([i[kept | extra], j[kept | extra]])
+            assert component_count(restored, 4) == 1
+            return int(extra.sum())
+
+        assert bridges(1.0, 0.01) == 8
+        assert bridges(10.0, 0.01) == 2
+        assert bridges(10.0, 0.01 * 10.0**2) == 8
 
     @pytest.mark.parametrize("max_neighbors", [8, 12, 20, 30])
     def test_the_flag_only_ever_adds_edges(self, max_neighbors):

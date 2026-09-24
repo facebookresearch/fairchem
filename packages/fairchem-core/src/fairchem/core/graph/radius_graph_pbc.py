@@ -216,7 +216,9 @@ def reconnect_mask(
         mask_num_neighbors: Mask of the edges the neighbor budget retained.
         num_atoms: Number of atoms the indices refer to.
         degeneracy_tolerance: Tolerance on the squared distance, applied the
-            same way as in the neighbor budget.
+            same way as in the neighbor budget. It is absolute, so scaling all
+            lengths by s preserves the selection among near-tied edges only
+            if the tolerance is scaled by s**2.
         natoms: Number of atoms per system in the batch. Used only to bound
             work, never to change the result. Defaults to treating the input as
             one system.
