@@ -46,6 +46,14 @@ from typing import TYPE_CHECKING, Any
 import matplotlib.pyplot as plt
 import torch
 from ase.build import bulk
+from monty.dev import requires
+
+try:
+    import ray
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate._batch import AutobatchConfig, InferenceBatcher
@@ -481,6 +489,7 @@ def print_summary_table(aggregated: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Benchmark the autobatching + batch-inference server."
@@ -583,8 +592,6 @@ def main() -> int:
     # Initialize Ray early so setup_batch_predict_server reuses this instance.
     # Use a writable temp dir on a large filesystem to avoid object-store
     # spill failures on small /dev/shm or /var/tmp mounts.
-    import ray
-
     ray_tmp = os.path.expanduser("~/.cache/ray_tmp")
     os.makedirs(ray_tmp, exist_ok=True)
     if not ray.is_initialized():

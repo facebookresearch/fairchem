@@ -13,11 +13,18 @@ from typing import TYPE_CHECKING
 
 import clusterscope
 import hydra
-import ray
 import torch.distributed as dist
+from monty.dev import requires
 from omegaconf import OmegaConf
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
+
+try:
+    import ray
+    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
@@ -35,7 +42,6 @@ if TYPE_CHECKING:
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
 
 
-@ray.remote
 class SPMDWorker:
     def __init__(
         self,
@@ -103,8 +109,17 @@ class SPMDWorker:
         self.runner.run()
 
 
+if ray_installed:
+    SPMDWorker = ray.remote(SPMDWorker)
+else:
+    SPMDWorker = requires(
+        ray_installed, message="Requires `ray[serve]` to be installed"
+    )(SPMDWorker)
+
+
 class SPMDController(Runner):
     # this is equivalent to the fairchem SlurmSPMDProgram routine that runs the runner on every worker
+    @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(self, job_config: DictConfig, runner_config: DictConfig):
         self.job_config = job_config
         self.runner_config = runner_config
@@ -193,6 +208,7 @@ class SPMDController(Runner):
         pass
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
     runner = hydra.utils.instantiate(
         runner_config,
@@ -202,6 +218,7 @@ def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
     runner.run()
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def ray_on_slurm_launch(config: DictConfig, log_dir: str):
     scheduler_config: SchedulerConfig = config.job.scheduler
     slurm_config: SlurmConfig = scheduler_config.slurm
