@@ -668,7 +668,7 @@ class MLIPWorkerLocal:
         self.is_setup = True
 
     def predict(
-        self, data: AtomicData, use_distributed_broadcast: bool = False
+        self, data: AtomicData, use_gpuccl: bool = False
     ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
             self._distributed_setup()
@@ -677,7 +677,7 @@ class MLIPWorkerLocal:
         if self.worker_id == 0:
             return move_tensors_to_cpu(out)
 
-        if self.worker_id != 0 and use_distributed_broadcast:
+        if self.worker_id != 0 and use_gpuccl:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
@@ -850,7 +850,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             _futures = [
                 w.predict.remote(
                     data_ref,
-                    use_distributed_broadcast=self.inference_settings.merge_mole,
+                    use_gpuccl=self.inference_settings.merge_mole,
                 )
                 for w in self.workers
             ]
