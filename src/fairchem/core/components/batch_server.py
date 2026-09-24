@@ -17,9 +17,32 @@ from dataclasses import asdict, dataclass, field
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any
 
-import ray
 import torch
-from ray import serve
+from monty.dev import requires
+
+try:
+    import ray
+    from ray import serve
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
+
+    def _identity_decorator(*args, **kwargs):
+        def decorator(obj):
+            return obj
+
+        return decorator
+
+    class _ServeStub:
+        batch = staticmethod(_identity_decorator)
+        deployment = staticmethod(_identity_decorator)
+        multiplexed = staticmethod(_identity_decorator)
+
+        class schema:
+            LoggingConfig = staticmethod(lambda **kwargs: None)
+
+    serve = _ServeStub()
 
 from fairchem.core.components.serve_utils import (
     get_app_handle_with_retry,
@@ -750,6 +773,15 @@ class MultiplexedBatchPredictServer(BatchPredictServerMixin):
             self._release_spec(model_id)
 
 
+if not ray_installed:
+    BatchPredictServer = requires(
+        ray_installed, message="Requires `ray[serve]` to be installed"
+    )(BatchPredictServer)
+    MultiplexedBatchPredictServer = requires(
+        ray_installed, message="Requires `ray[serve]` to be installed"
+    )(MultiplexedBatchPredictServer)
+
+
 def _init_ray_and_serve(
     ray_actor_options: dict,
     num_replicas: int,
@@ -996,6 +1028,7 @@ def _deploy_app(
     return handle
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def update_batch_config(
     deployment_name: str,
     batch_config: BatchConfig | dict,
@@ -1048,6 +1081,7 @@ def update_batch_config(
     return batch_config
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def update_served_predict_unit(
     deployment_name: str,
     predict_unit: MLIPPredictUnit,
@@ -1088,6 +1122,7 @@ def update_served_predict_unit(
     logging.info(f"Rolled new predict unit out to all replicas of {deployment_name!r}")
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
     deployment_config: DeploymentConfig | dict | None = None,
@@ -1153,6 +1188,7 @@ def setup_batch_predict_server(
     return handle
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def setup_multiplexed_batch_predict_server(
     deployment_config: DeploymentConfig | dict | None = None,
     batch_config: BatchConfig | dict | None = None,
@@ -1300,6 +1336,7 @@ def _expand_probe_data(
     return expanded_list
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def probe_optimal_batch_size(
     predict_unit: MLIPPredictUnit,
     probe_data: list[AtomicData],

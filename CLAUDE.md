@@ -240,7 +240,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `torchtnt` - PyTorch training framework (TrainUnit/EvalUnit)
 - `hydra-core` + `omegaconf` - Configuration management
 - `lmdb` - Dataset storage format
-- `ray[serve]>=2.53.0` - Distributed computing
+- Optional `ray` extra (`ray[serve]>=2.56.1`) - Distributed computing
 
 ## Testing Gotchas
 

@@ -34,6 +34,10 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 The `InferenceBatcher` class and underlying concurrent batching implementations are experimental and under current development. The API may change. If you have suggestions for improvements, please open an issue or submit a pull request.
 :::
 
+:::{note}
+`InferenceBatcher` requires Ray. Install it with `pip install fairchem-core[ray]`.
+:::
+
 When running many independent ASE calculations (relaxations, molecular dynamics, etc.) on small to medium-sized systems, you can significantly improve GPU utilization by batching model inference calls together. The `InferenceBatcher` class provides a high-level API to do this with minimal code changes.
 
 The key idea is simple: instead of running each simulation sequentially, `InferenceBatcher` collects inference requests from multiple concurrent simulations and batches them together for more efficient GPU computation.
