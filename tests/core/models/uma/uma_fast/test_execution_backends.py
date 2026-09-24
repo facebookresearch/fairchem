@@ -43,10 +43,7 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     permute_wigner_inv_edge_to_node_launcher,
 )
 
-# Accelerator these Triton tests run on. Triton itself is portable -- Intel
-# ships triton-xpu and the kernels compile and execute there -- so the
-# device follows the hardware rather than being pinned to NVIDIA. Numerical
-# agreement with the PyTorch reference is what these tests assert.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX - used only in test reference implementations

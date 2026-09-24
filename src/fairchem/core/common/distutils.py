@@ -25,6 +25,7 @@ from fairchem.core.common.device_utils import (
     ACCELERATOR_DEVICE_TYPES,
     accelerator_is_available,
     current_device_str,
+    device_type_of,
     get_available_accelerator,
     resolve_device_type,
     visible_devices_env,
@@ -294,11 +295,7 @@ def assign_device_for_local_rank(
         cpu: Pin to CPU regardless of what hardware is present.
         local_rank: Device index to bind within the node.
         device_type: Accelerator to bind ("cuda"/"xpu"). ``None`` autodetects.
-            Passing the type the caller actually asked for matters when the
-            collective backend was chosen from that same request: autodetecting
-            here can bind a *different* accelerator than the backend expects,
-            which surfaces much later as "No backend type associated with
-            device type ..." from inside DDP rather than as a device error.
+            Pass the type the backend was chosen for so the two cannot diverge.
     """
     if cpu:
         os.environ[CURRENT_DEVICE_TYPE_STR] = "cpu"
@@ -310,9 +307,7 @@ def assign_device_for_local_rank(
             device_type is not None
         ), "cannot set cpu=false and no accelerator (cuda/xpu) available!"
     else:
-        # An explicit request is validated rather than quietly reinterpreted:
-        # asking for hardware this node lacks is a misconfiguration, and
-        # substituting whatever is present hides it.
+        # An explicit request names hardware this node must actually have.
         device_type = resolve_device_type(device_type)
         assert device_type != "cpu", "cpu=False conflicts with device_type='cpu'"
 
@@ -335,7 +330,7 @@ def get_device_for_local_rank() -> str:
     if current == "cpu":
         return "cpu"
 
-    device_type = torch.device(current).type
+    device_type = device_type_of(current)
     if device_type in ACCELERATOR_DEVICE_TYPES:
         assert accelerator_is_available(
             device_type

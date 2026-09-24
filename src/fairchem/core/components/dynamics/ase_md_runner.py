@@ -16,9 +16,7 @@ from ase.md.langevin import Langevin
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
-from fairchem.core.common.device_utils import (
-    get_available_accelerator,
-)
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:

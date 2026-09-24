@@ -17,9 +17,7 @@ from ase import Atoms
 from ase.data import atomic_numbers, covalent_radii
 
 from fairchem.core import pretrained_mlip
-from fairchem.core.common.device_utils import (
-    get_available_accelerator,
-)
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
 # TODO these reference energies need to replaced if not using OMol25 or OMat24

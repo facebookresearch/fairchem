@@ -337,12 +337,11 @@ def test_a2a_multidim_embeddings(strategy):
 
 
 # =========================================================================
-# GPU tests (NCCL, 2 processes)
+# GPU tests (2 processes)
 # =========================================================================
 
 _ACCEL = du.get_available_accelerator()
-# NCCL on NVIDIA, oneCCL ("xccl") on Intel GPUs. Selecting by device type keeps
-# these tests meaningful on both instead of hard-failing wherever NCCL is absent.
+# Collective backend matching the detected accelerator.
 _GPU_BACKEND = du.distributed_backend(_ACCEL) if _ACCEL else "gloo"
 
 _skip_if_ci = pytest.mark.skipif(
@@ -357,11 +356,7 @@ _skip_if_no_gpu = pytest.mark.skipif(
 
 
 def _to_accelerator(*tensors):
-    """Move tensors onto this GP rank's slice of whichever accelerator exists.
-
-    Was hard-coded to cuda:{rank}; now follows the detected backend so these
-    tests exercise Intel GPUs too instead of erroring out.
-    """
+    """Move tensors onto this GP rank's slice of the detected accelerator."""
     device = torch.device(f"{_ACCEL}:{gp_utils.get_gp_rank()}")
     return tuple(t.to(device) for t in tensors)
 

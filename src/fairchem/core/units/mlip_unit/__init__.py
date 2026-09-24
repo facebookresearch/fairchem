@@ -10,9 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Literal
 
-from fairchem.core.common.device_utils import (
-    get_available_accelerator,
-)
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,

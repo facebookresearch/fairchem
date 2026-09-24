@@ -57,7 +57,6 @@ def seed_everywhere(seed):
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5):
     def timefunc():
         predictor.predict(data)
-        # synchronize(get_available_accelerator())
         torch.distributed.barrier()
 
     for _ in range(warmups):

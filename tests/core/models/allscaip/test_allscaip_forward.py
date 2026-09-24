@@ -25,10 +25,7 @@ from fairchem.core.models.allscaip.AllScAIP import (
 )
 from fairchem.core.models.base import HydraModelV2
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 MAX_ELEMENTS = 100

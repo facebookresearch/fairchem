@@ -26,10 +26,7 @@ from fairchem.core.common import device_utils
 from fairchem.core.models.allscaip.AllScAIP import AllScAIPBackbone
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"

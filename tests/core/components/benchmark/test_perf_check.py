@@ -35,10 +35,7 @@ from fairchem.core.components.benchmark.perf_check import (
 from fairchem.core.components.benchmark.systems import make_benchmark_system
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 

@@ -23,7 +23,7 @@ from fairchem.core.datasets.atomic_data import (
 )
 from fairchem.core.graph.compute import get_pbc_distances
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 

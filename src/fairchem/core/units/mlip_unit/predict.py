@@ -31,7 +31,6 @@ from torchtnt.framework import PredictUnit, State
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.device_utils import (
-    SUPPORTED_DEVICE_TYPES,
     distributed_backend,
     empty_cache,
     is_accelerator,
@@ -131,11 +130,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         assert_on_nans: bool = False,
     ):
         super().__init__()
-        # Normalise the request up front ("auto" -> the detected accelerator,
-        # "cuda:1" -> "cuda") so every later consumer -- including
-        # torch.device(self._requested_device) -- sees a bare, valid device
-        # type. Also validates the request against the hardware, so asking for
-        # an absent accelerator fails here instead of silently running on CPU.
+        # Normalise ("auto" -> detected accelerator, "cuda:1" -> "cuda") and
+        # validate against the hardware up front.
         device = resolve_device_type(device)
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
@@ -288,12 +284,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         Setup inference device.
         """
         device_type = resolve_device_type(device)
-        assert (
-            device_type in SUPPORTED_DEVICE_TYPES
-        ), f"device must be one of {list(SUPPORTED_DEVICE_TYPES)}"
-        # Anything that is not CPU is an accelerator we bind to the local rank.
-        # Note the original code resolved *anything* other than "cuda" to CPU,
-        # which turned an unsupported device into a silently slow CPU run.
         self.device = get_device_for_local_rank() if device_type != "cpu" else "cpu"
 
     def _build_overrides_from_settings(
@@ -656,15 +646,10 @@ class MLIPWorkerLocal:
         setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
 
         device = self.predictor_config.get("device", "cpu")
-        # Bind the device the caller asked for, not whatever autodetection
-        # finds: the backend below is derived from this same value, and a
-        # mismatch only surfaces later inside DDP.
+        # Bind the requested device (not an autodetected one) to match the backend.
         assign_device_for_local_rank(
             device == "cpu", 0, None if device == "cpu" else device
         )
-        # NCCL is NVIDIA-only; Intel GPUs use oneCCL via the native "xccl"
-        # backend. distributed_backend() picks per device type and warns if the
-        # build lacks the backend rather than failing deep inside init.
         backend = distributed_backend(device)
         dist.init_process_group(
             backend=backend,
@@ -794,11 +779,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         placement_groups = []
         for workers in num_workers_on_node_array:
             bundle = {"CPU": workers}
-            # Ray tracks Intel GPUs under the same generic "GPU" resource as
-            # NVIDIA, so the reservation is identical; only the detection
-            # differs, and that is Ray's concern rather than ours. This path is
-            # reached only for Ray-distributed multi-worker inference --
-            # single-device inference never gets here.
+            # Ray exposes every GPU vendor under the same "GPU" resource.
             if is_accelerator(device):
                 bundle["GPU"] = workers
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")

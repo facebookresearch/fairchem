@@ -28,9 +28,7 @@ import ray
 import yaml
 from ray import serve
 
-from fairchem.core.common.device_utils import (
-    device_count,
-)
+from fairchem.core.common.device_utils import device_count
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
     setup_batch_predict_server,

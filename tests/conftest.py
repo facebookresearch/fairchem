@@ -432,20 +432,6 @@ def pytest_runtest_logreport(report):
 
 
 @pytest.fixture()
-def accelerator_device() -> str:
-    """The accelerator this run should use ("cuda" / "xpu").
-
-    Use instead of a literal "cuda" in any @pytest.mark.gpu test, so the suite
-    follows whatever hardware is present. Tests that genuinely require NVIDIA
-    should be marked @pytest.mark.cuda_only and may keep "cuda".
-    """
-    accelerator = device_utils.get_available_accelerator()
-    if accelerator is None:
-        pytest.skip("no accelerator (cuda/xpu) available")
-    return accelerator
-
-
-@pytest.fixture()
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
 

@@ -890,7 +890,7 @@ def _check_predict_unit_device(predict_unit: MLIPPredictUnit, num_gpus: float) -
             beyond the number of GPUs the replica will be able to see.
     """
     device = torch.device(predict_unit.device)
-    if not is_accelerator(predict_unit.device):
+    if not is_accelerator(device):
         return
 
     if num_gpus <= 0:
@@ -1352,14 +1352,12 @@ def probe_optimal_batch_size(
 
     logging.info("Starting autobatch probing...")
 
-    mod = device_module(device_type_of(device))
+    device_mod = device_module(device_type_of(device))
     free_hardware, total_mem = (
-        (0, 0)
-        if get_available_accelerator() is None
-        else mod.mem_get_info()
+        (0, 0) if get_available_accelerator() is None else device_mod.mem_get_info()
     )
-    torch_unused_cache = mod.memory_reserved() - mod.memory_allocated()
-    free_mem = free_hardware + torch_unused_cache
+    reclaimable_cache = device_mod.memory_reserved() - device_mod.memory_allocated()
+    free_mem = free_hardware + reclaimable_cache
 
     logging.info(
         f"GPU memory: {free_mem / 1e9:.2f}GB free / {total_mem / 1e9:.2f}GB total"

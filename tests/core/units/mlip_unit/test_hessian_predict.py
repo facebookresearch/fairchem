@@ -28,10 +28,7 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 from fairchem.core.units.mlip_unit import InferenceSettings
 from tests.conftest import get_predict_unit_for_test
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 if TYPE_CHECKING:

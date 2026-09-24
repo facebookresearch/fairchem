@@ -53,7 +53,7 @@ from fairchem.core.models.uma.common.rotation import (
     wigner_D,
 )
 
-# Accelerator these tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # =============================================================================

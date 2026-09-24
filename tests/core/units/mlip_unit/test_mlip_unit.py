@@ -23,8 +23,7 @@ from fairchem.core.common import device_utils
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_RESUME_CONFIG
 from tests.core.testing_utils import launch_main
 
-# Accelerator these GPU tests run on, as the DeviceType config value
-# ("CUDA" on NVIDIA, "XPU" on Intel GPUs).
+# DeviceType config value for the detected accelerator.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 ACCELERATOR_DEVICE_TYPE = ACCELERATOR.upper()
 

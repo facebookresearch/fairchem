@@ -6,12 +6,8 @@ LICENSE file in the root directory of this source tree.
 
 Accelerator-agnostic device helpers.
 
-fairchem historically hard-coded ``cuda`` as *the* accelerator: ``torch.cuda.*``
-calls, ``nccl`` as the only non-CPU collective backend, and asserts of the form
-``device in ["cpu", "cuda"]``. That is portable only to NVIDIA hardware.
-
-This module centralises the device-type question so the rest of the codebase can
-say "the accelerator" instead of "cuda". It supports:
+Centralises the device-type question so the rest of the codebase can say "the
+accelerator" instead of "cuda". It supports:
 
   * ``cuda`` -- NVIDIA, via ``torch.cuda`` + NCCL.
   * ``xpu``  -- Intel GPUs (Data Center GPU Max), via ``torch.xpu`` + XCCL
@@ -61,18 +57,9 @@ __all__ = [
 ACCELERATOR_DEVICE_TYPES: tuple[str, ...] = ("cuda", "xpu")
 SUPPORTED_DEVICE_TYPES: tuple[str, ...] = ("cpu", *ACCELERATOR_DEVICE_TYPES)
 
-# Collective backend per device type.
-#
-# NCCL is NVIDIA-only. Intel GPUs use **oneCCL**, which is reachable two ways:
-#
-#   "xccl" -- oneCCL upstreamed into PyTorch as a native backend. This is the
-#             modern path and the one PyTorch itself selects for xpu (see
-#             torch.distributed.Backend.default_device_backend_map). Despite the
-#             name it *is* oneCCL: libtorch_xpu.so links libccl.so directly.
-#   "ccl"  -- the legacy out-of-tree bindings (torch-ccl /
-#             oneccl_bindings_for_pytorch), which must be imported before
-#             init_process_group to register themselves. Recent PyTorch
-#             distributions no longer ship them, so this is only a fallback.
+# Collective backend per device type. "xccl" is oneCCL upstreamed into PyTorch
+# as a native backend; "ccl" is the legacy out-of-tree bindings, kept as a
+# fallback for builds that still ship them.
 _DISTRIBUTED_BACKENDS: dict[str, str] = {
     "cpu": "gloo",
     "cuda": "nccl",
@@ -124,9 +111,7 @@ def device_type_of(device: str | torch.device) -> str:
 def device_index_of(device: str | torch.device | None) -> int | None:
     """Return the device index of a spec, or None if it names no specific one.
 
-    'xpu:1' -> 1, 'xpu' -> None, 'cpu' -> None. Callers forward this to the
-    per-device torch APIs so that asking about device 1 does not silently
-    report device 0's numbers.
+    'xpu:1' -> 1, 'xpu' -> None, 'cpu' -> None.
     """
     if device is None:
         return None
@@ -152,11 +137,8 @@ def device_module(device: str | torch.device) -> ModuleType:
 def accelerator_is_available(device: str | torch.device) -> bool:
     """Whether the given accelerator type is present AND usable right now.
 
-    Note this is deliberately stricter than ``torch.xpu`` merely importing:
-    ``torch.xpu`` exists in any XPU-enabled build regardless of whether the node
-    actually has a device. A silent CPU fall-through is a much worse failure
-    mode than a loud error, because it looks like a working but inexplicably
-    slow run.
+    Stricter than the module merely importing: e.g. ``torch.xpu`` exists in
+    any XPU-enabled build regardless of whether the node has such a device.
     """
     device_type = device_type_of(device)
     if device_type == "cpu":
@@ -241,7 +223,7 @@ def set_device(device: str | torch.device, local_rank: int) -> None:
     device_type = device_type_of(device)
     if device_type == "cpu":
         return
-    device_module(device_type).set_device(local_rank)
+    _device_api(device_type, "set_device")(local_rank)
 
 
 def current_device_str(device: str | torch.device) -> str:
@@ -263,13 +245,7 @@ def device_count(device: str | torch.device | None = None) -> int:
 
 
 def _device_api(device_type: str, name: str):
-    """Fetch a required attribute from a torch device module.
-
-    Both torch.cuda and torch.xpu expose every call this module uses, so a miss
-    means a backend is incomplete. Raising names the backend and the missing
-    call; the previous ``hasattr`` guards instead skipped silently, which
-    reports 0 bytes of memory or an unseeded RNG as success.
-    """
+    """Fetch a required attribute from a torch device module, or raise."""
     module = device_module(device_type)
     api = getattr(module, name, None)
     if api is None:
@@ -295,7 +271,7 @@ def synchronize(device: str | torch.device) -> None:
     device_type = device_type_of(device)
     if device_type == "cpu":
         return
-    device_module(device_type).synchronize()
+    _device_api(device_type, "synchronize")()
 
 
 def manual_seed_all(seed: int, device: str | torch.device | None = None) -> None:
@@ -347,12 +323,7 @@ def distributed_backend(device: str | torch.device) -> str:
 
 
 def visible_devices_env(device: str | torch.device | None = None) -> str:
-    """Human-readable summary of the vendor device-masking env vars.
-
-    CUDA uses ``CUDA_VISIBLE_DEVICES``; Intel GPUs use ``ZE_AFFINITY_MASK`` and
-    ``ONEAPI_DEVICE_SELECTOR``. Logging the wrong vendor's variable produces a
-    confident "None" that hides a real misconfiguration, so pick by device type.
-    """
+    """Human-readable summary of the vendor device-masking env vars."""
     device_type = (
         device_type_of(device) if device is not None else get_available_accelerator()
     )
@@ -407,10 +378,5 @@ _NATIVE_ALL_TO_ALL_BACKENDS = frozenset({"nccl", "xccl", "ccl", "mpi"})
 
 
 def supports_native_all_to_all(backend: str) -> bool:
-    """Whether ``backend`` implements all_to_all without a send/recv fallback.
-
-    NCCL and oneCCL (``xccl``/``ccl``) do; gloo does not. Checking the backend
-    by capability rather than by name keeps the fast path available on Intel
-    GPUs instead of silently demoting them to pairwise send/recv.
-    """
+    """Whether ``backend`` implements all_to_all without a send/recv fallback."""
     return str(backend).lower() in _NATIVE_ALL_TO_ALL_BACKENDS

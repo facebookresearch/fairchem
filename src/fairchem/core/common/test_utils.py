@@ -52,13 +52,10 @@ class PGConfig:
 
 
 def _to_cpu_for_ipc(obj):
-    """Move accelerator tensors to CPU before crossing a process boundary.
+    """Detach tensors to host memory before crossing a process boundary.
 
-    Results travel back to the parent through a multiprocessing.Manager dict,
-    which pickles them. CUDA tensors survive that via CUDA IPC, but XPU has no
-    equivalent -- torch raises "_share_fd_: only available on CPU". Detaching to
-    host memory here is correct for every backend and costs nothing at test
-    sizes, so the harness stops being CUDA-only.
+    Rank results travel through a multiprocessing.Manager dict (pickled); XPU
+    tensors cannot cross that way, so convert on every backend at test sizes.
     """
     if isinstance(obj, torch.Tensor):
         return obj.detach().cpu()

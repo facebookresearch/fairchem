@@ -72,9 +72,7 @@ def map_job_config_to_dist_config(job_cfg: JobConfig) -> dict:
         "distributed_backend": (distributed_backend(job_cfg.device_type.value)),
         "submit": scheduler_config.mode == SchedulerType.SLURM,
         "cpu": job_cfg.device_type == DeviceType.CPU,
-        # Carried alongside the backend so rank setup binds the accelerator the
-        # backend was chosen for. Autodetecting instead can pick a different
-        # accelerator than the backend supports on a node that has both.
+        # Kept alongside the backend so rank setup binds the same accelerator.
         "device_type": job_cfg.device_type.value,
         "init_method": scheduler_config.distributed_init_method,
         # for distributed shared file initialization

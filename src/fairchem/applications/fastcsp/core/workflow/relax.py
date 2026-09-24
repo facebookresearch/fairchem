@@ -47,9 +47,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from tqdm import tqdm
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.common.device_utils import (
-    get_available_accelerator,
-)
+from fairchem.core.common.device_utils import get_available_accelerator
 from fairchem.core.units import mlip_unit
 
 # Suppress scipy logm numerical precision warnings during structure relaxation

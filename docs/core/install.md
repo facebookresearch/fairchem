@@ -70,9 +70,9 @@ falling back to CPU.
 * UMA-S's fused Triton execution backend (`umas_fast_gpu`) is available on
   Intel GPUs exactly as on NVIDIA — Triton supports both, and the kernels are
   selected the same way on each. No extra opt-in is required.
-* CI does not cover XPU: GitHub-hosted runners have no Intel GPUs, so the
-  `gpu`-marked suite still gates on CUDA. XPU support is validated manually
-  on Intel GPU hardware.
+* CI does not cover XPU: GitHub-hosted runners have no Intel GPUs. The
+  `gpu`-marked suite runs on any accelerator present, and XPU support is
+  validated manually on Intel GPU hardware.
 :::
 
 ## Subpackages

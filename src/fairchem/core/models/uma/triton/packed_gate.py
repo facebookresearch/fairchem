@@ -74,8 +74,6 @@ def _validate_inputs(x0_full: Tensor, x1: Tensor, x2: Tensor, channels: int) -> 
         or x2.dtype != torch.float32
     ):
         raise ValueError("packed gate requires float32 inputs")
-    # Triton drives NVIDIA and Intel GPUs alike, so the requirement is "an
-    # accelerator", not "CUDA specifically".
     if not all(is_accelerator(t.device) for t in (x0_full, x1, x2)):
         raise ValueError("packed gate requires GPU inputs (cuda or xpu)")
     if x1.device != x0_full.device or x2.device != x0_full.device:

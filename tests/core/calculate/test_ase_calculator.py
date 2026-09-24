@@ -49,10 +49,7 @@ if TYPE_CHECKING:
 from fairchem.core.common import device_utils
 from tests.conftest import get_predict_unit_for_test, models_to_test
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # All tests use a GPU and a pretrained model. Tests that iterate over all

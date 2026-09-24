@@ -32,10 +32,7 @@ from fairchem.core.common import device_utils
 from fairchem.core.units.mlip_unit import InferenceSettings
 from tests.conftest import get_predict_unit_for_test, sweep_refs_from
 
-# Accelerator these GPU tests run on: "cuda" on NVIDIA, "xpu" on Intel GPUs.
-# Resolved once at import so the suite follows the hardware present rather
-# than hard-coding a vendor. Tests needing NVIDIA specifically are marked
-# @pytest.mark.cuda_only.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # Extensivity is a property of the UMA-S architecture, not of any particular

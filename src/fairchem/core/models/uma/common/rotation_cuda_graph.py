@@ -16,12 +16,7 @@ from fairchem.core.models.uma.common.rotation import eulers_to_wigner
 
 
 class RotMatWignerCudaGraph:
-    """Graph-capture wrapper for Wigner matrix construction.
-
-    Named "Cuda" for backwards compatibility, but backend-agnostic: it drives
-    whichever accelerator torch reports (``torch.cuda`` or ``torch.xpu``), both
-    of which expose ``Stream``/``make_graphed_callables``.
-    """
+    """Graph-capture wrapper for Wigner matrix construction (any accelerator)."""
 
     def __init__(self):
         self.device_type = get_available_accelerator()
@@ -78,9 +73,6 @@ def capture_rotmat_and_wigner_with_make_graph_callable(
     jds: list[torch.Tensor],
     device_type: str | None = None,
 ):
-    # Capture on a side stream so the capture does not serialise against work
-    # already queued on the default stream. torch.cuda and torch.xpu expose the
-    # same Stream / make_graphed_callables surface, so one code path covers both.
     if device_type is None:
         device_type = get_available_accelerator()
     dev = device_module(device_type)

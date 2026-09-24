@@ -35,9 +35,7 @@ from tests.core.models.uma.uma_fast.triton_test_utils import (
     wigner_inv_conv2_fused_fwd_launcher,
 )
 
-# Accelerator these Triton tests run on. Triton is portable -- Intel ships
-# triton-xpu and these kernels are numerically correct there -- so the device
-# follows the hardware present rather than being pinned to NVIDIA.
+# "cuda" on NVIDIA, "xpu" on Intel GPUs.
 ACCELERATOR = device_utils.get_available_accelerator() or "cpu"
 
 # L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX (test refs only).

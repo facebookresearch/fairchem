@@ -20,9 +20,7 @@ from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import gp_utils
-from fairchem.core.common.device_utils import (
-    distributed_backend,
-)
+from fairchem.core.common.device_utils import distributed_backend
 from fairchem.core.common.distutils import (
     assign_device_for_local_rank,
     setup_env_local_multi_gpu,
