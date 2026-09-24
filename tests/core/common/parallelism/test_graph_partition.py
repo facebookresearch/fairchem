@@ -112,7 +112,7 @@ class TestPartitionAtomsSpatial:
 
     def test_all_ranks_populated(self):
         """
-        No rank should be empty (avoids NCCL deadlock).
+        No rank should be empty (avoids collective deadlock).
         """
         pos = torch.randn(64, 3)
         assignments = partition_atoms_spatial(pos, 8)

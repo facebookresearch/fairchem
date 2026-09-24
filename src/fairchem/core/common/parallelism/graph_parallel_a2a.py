@@ -31,7 +31,7 @@ def _safe_all_to_all(
     """
     All-to-all with fallback for backends that don't support it (e.g. Gloo).
 
-    When the backend supports all_to_all natively (NCCL), uses it directly.
+    When the backend supports all_to_all natively (NCCL/XCCL), uses it directly.
     Otherwise, falls back to pairwise isend/irecv which works on any backend.
 
     Args:

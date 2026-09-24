@@ -135,7 +135,7 @@ def spawn_multi_process(
     server process is forked from the caller, so unpickling a CUDA tensor there
     fails with "Cannot re-initialize CUDA in forked subprocess" (the CUDA IPC
     rebuild needs a CUDA context the forked server cannot create). Call
-    ``.detach().cpu()`` on any tensor before returning it from a NCCL worker.
+    ``.detach().cpu()`` on any tensor before returning it from a collective worker.
 
     Args:
         world_size: number of processes
