@@ -43,7 +43,14 @@ pip install -e fairchem/src/packages/fairchem-core[dev]
 Run this script to create the aselmdbs as well as a set of templated yamls for finetuning, we will use a few dummy structures for demonstration purposes
 ```{code-cell} ipython3
 import os
-os.chdir('../../../../fairchem')
+from pathlib import Path
+
+repo_root = next(
+    path
+    for path in (Path.cwd(), *Path.cwd().parents)
+    if (path / "src/fairchem").is_dir()
+)
+os.chdir(repo_root)
 ! python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir docs/core/common_tasks/finetune_assets/train/ --val-dir docs/core/common_tasks/finetune_assets/val --output-dir /tmp/bulk --uma-task=omat --regression-task e
 ```
 
@@ -88,6 +95,8 @@ To modify the generated YAMLs, you can either edit the files directly or use [Hy
 :::
 
 ```{code-cell} ipython3
+:tags: [skip-execution]
+
 ! fairchem -c /tmp/bulk/uma_sm_finetune_template.yaml epochs=2 lr=2e-4 job.run_dir=/tmp/finetune_dir +job.timestamp_id=some_id
 ```
 
@@ -110,7 +119,7 @@ job:
     project: uma_finetune
 
 
-base_model_name: uma-s-1p2
+base_model_name: uma-s-1p2p1
 max_neighbors: 300
 epochs: 1
 steps: null
@@ -180,6 +189,8 @@ You must use the same task that you used for fine-tuning!
 :::
 
 ```{code-cell} ipython3
+:tags: [skip-execution]
+
 from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core import FAIRChemCalculator
 

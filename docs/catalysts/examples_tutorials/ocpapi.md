@@ -1,8 +1,6 @@
 ---
 jupytext:
-  cell_metadata_filter: -all
   formats: md:myst
-  main_language: python
   text_representation:
     extension: .md
     format_name: myst
@@ -36,11 +34,11 @@ Python library for programmatic use of the [Open Catalyst Demo](https://open-cat
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
 ```
 
-2. Get access to any necessary huggingface gated models 
+2. Get access to any necessary huggingface gated models
     * Get and login to your Huggingface account
     * Request access to https://huggingface.co/facebook/UMA
     * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
 
 ```{code-cell} ipython3
 :tags: [skip-execution]
