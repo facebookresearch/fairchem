@@ -15,6 +15,10 @@ kernelspec:
 
 [UMA](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/) is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to achieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis. [arXiv Paper](https://arxiv.org/abs/2506.23971)
 
+For most applications, start with `uma-s-1p2p1`. It is the latest patch release
+of the small UMA 1.2 model and offers the best default balance of speed,
+accuracy, and memory use.
+
 ![UMA model architecture](uma.svg "UMA model architecture")
 
 ## The UMA Mixture-of-Linear-Experts routing function

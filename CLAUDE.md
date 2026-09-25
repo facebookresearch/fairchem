@@ -313,9 +313,22 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Importing the benchmark package during core test collection can cause
   `matbench_discovery` to download its WBM summary data. Cache that data before
   running without Figshare access, or collection can fail before tests start.
+- A full executable documentation build reads the OC20NEB example trajectory.
+  Prefetch that file on the submission host and preserve the example's local
+  file guard before building on compute nodes, which do not have download
+  access.
 - Some GPU assertions are stochastic or tolerance-sensitive, and the complete
   GPU matrix is expensive. Reproduce failures with the exact test node (and
   repeat it when appropriate) before rerunning a full GPU shard.
+- Executable documentation runs notebooks from their source directories. Do
+  not rely on a fixed relative `chdir`; locate the repository root by a stable
+  marker such as `src/fairchem` instead.
+- MyST static builds configured with a `BASE_URL` must be reviewed through an
+  HTTP server at that same path prefix. Opening `index.html` directly can
+  trigger a redirect that does not resolve on the local filesystem.
+- Keep large documentation preview media remotely hosted when a stable source
+  URL exists, rather than adding duplicate binaries that increase repository
+  size.
 
 ## Hessian Backend Gotchas
 

@@ -33,7 +33,7 @@ Clone the repo and install in editable mode:
 ```bash
 git clone git@github.com:facebookresearch/fairchem.git
 cd fairchem
-pip install -e src/packages/fairchem-core[dev]
+pip install -e packages/fairchem-core[dev]
 ```
 :::
 

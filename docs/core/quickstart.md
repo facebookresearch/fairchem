@@ -4,259 +4,129 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# UMA Quick Start w/ ASE
+# Hello World with UMA
 
-The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
-A single UMA model can be used for a wide range of applications in chemistry and materials science by picking the
-appropriate task name for domain specific prediction.
+This tutorial takes you from an ASE structure to a UMA prediction. You will
+load one pretrained model, use it for two chemistry domains, and learn how to
+substitute your own structure.
 
-```{image} ../assets/uma-diagram-light-mode.png
-:alt: UMA model application domains
-:width: 650px
-:align: center
-:class: dark:hidden
-```
-
-```{image} ../assets/uma-diagram-dark-mode.png
-:alt: UMA model application domains
-:width: 650px
-:align: center
-:class: hidden dark:block
-```
-
-:::{tip}
-Make sure you have a Hugging Face account, have already applied for model access to the
-[UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
+:::{note} Before you start
+Complete the [installation and Hugging Face access steps](./install.md). The
+first run downloads the gated `uma-s-1p2p1` checkpoint.
 :::
 
-## Available Tasks
+## The four-step workflow
 
-Choose the task that matches your application domain:
+Every basic calculation follows the same pattern:
 
-:::::{grid} 1 2 3 5
-::::{card} oc20
-:link: ../catalysts/datasets/summary.md
+1. Represent the system as an ASE `Atoms` object.
+2. Load a pretrained UMA model.
+3. Choose the task matching the system and attach a `FAIRChemCalculator`.
+4. Ask ASE for energies and forces or use an ASE simulation method.
 
-```{image} ../assets/icons/catalysis.svg
-:alt: Catalysis
-:width: 60px
-:align: center
-```
-
-Heterogeneous Catalysis
-+++
-[Learn more →](../catalysts/datasets/summary.md)
-::::
-
-::::{card} oc22
-:link: ../catalysts/datasets/oc22.md
-
-```{image} ../assets/icons/catalysis.svg
-:alt: Oxide Catalysts
-:width: 60px
-:align: center
-```
-
-Oxide Catalysts
-+++
-[Learn more →](../catalysts/datasets/oc22.md)
-::::
-
-::::{card} oc25
-:link: ../catalysts/datasets/oc25.md
-
-```{image} ../assets/icons/catalysis.svg
-:alt: Electrocatalysis
-:width: 60px
-:align: center
-```
-
-Electrolyte Interfaces
-+++
-[Learn more →](../catalysts/datasets/oc25.md)
-::::
-
-::::{card} omat
-:link: ../inorganic_materials/datasets/summary.md
-
-```{image} ../assets/icons/inorganic.svg
-:alt: Inorganic Materials
-:width: 60px
-:align: center
-```
-
-Inorganic Materials
-+++
-[Learn more →](../inorganic_materials/datasets/summary.md)
-::::
-
-::::{card} omol
-:link: ../molecules/datasets/summary.md
-
-```{image} ../assets/icons/molecules.svg
-:alt: Molecules
-:width: 60px
-:align: center
-```
-
-Molecules & Polymers
-+++
-[Learn more →](../molecules/datasets/summary.md)
-::::
-
-::::{card} omc
-:link: ../molecules/datasets/omc25.md
-
-```{image} ../assets/icons/molecular-crystals.svg
-:alt: Molecular Crystals
-:width: 60px
-:align: center
-```
-
-Molecular Crystals
-+++
-[Learn more →](../molecules/datasets/omc25.md)
-::::
-
-::::{card} odac
-:link: ../dac/datasets/summary.md
-
-```{image} ../assets/icons/mofs-dac.svg
-:alt: MOFs for DAC
-:width: 60px
-:align: center
-```
-
-MOFs for Direct Air Capture
-+++
-[Learn more →](../dac/datasets/summary.md)
-::::
-:::::
-
-````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown
-
-
-1. Install the necessary packages using pip, uv etc
-```{code-cell} ipython3
-:tags: [skip-execution]
-
-! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
-```
-
-2. Get access to any necessary huggingface gated models
-    * Get and login to your Huggingface account
-    * Request access to https://huggingface.co/facebook/UMA
-    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+## Load UMA once
 
 ```{code-cell} ipython3
-:tags: [skip-execution]
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-# Login using the huggingface-cli utility
-! huggingface-cli login
-
-# alternatively,
-import os
-os.environ['HF_TOKEN'] = 'MY_TOKEN'
-```
-
-````
-
-## Relax an adsorbate on a catalytic surface
-
-```python
-from ase.build import fcc100, add_adsorbate, molecule
-from ase.optimize import LBFGS
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
-
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
-calc = FAIRChemCalculator(predictor, task_name="oc20")
-
-# Set up your system as an ASE atoms object
-slab = fcc100("Cu", (3, 3, 3), vacuum=8, periodic=True)
-adsorbate = molecule("CO")
-add_adsorbate(slab, adsorbate, 2.0, "bridge")
-
-slab.calc = calc
-
-# Set up LBFGS dynamics object
-opt = LBFGS(slab)
-opt.run(0.05, 100)
-```
-
-## Relax an inorganic crystal
-
-```python
-from ase.build import bulk
-from ase.optimize import FIRE
-from ase.filters import FrechetCellFilter
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
-
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
-calc = FAIRChemCalculator(predictor, task_name="omat")
-
-atoms = bulk("Fe")
-atoms.calc = calc
-
-opt = LBFGS(FrechetCellFilter(atoms))
-opt.run(0.05, 100)
-```
-
-## Run molecular MD
-
-```python
-from ase import units
-from ase.io import Trajectory
-from ase.md.langevin import Langevin
-from ase.build import molecule
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
-
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
-calc = FAIRChemCalculator(predictor, task_name="omol")
-
-atoms = molecule("H2O")
-atoms.calc = calc
-
-dyn = Langevin(
-    atoms,
-    timestep=0.1 * units.fs,
-    temperature_K=400,
-    friction=0.001 / units.fs,
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2p1",
+    device="cuda",
 )
-trajectory = Trajectory("my_md.traj", "w", atoms)
-dyn.attach(trajectory.write, interval=1)
-dyn.run(steps=1000)
 ```
 
-## Calculate a spin gap
+The predictor contains the shared UMA model. The calculator created for each
+system supplies the domain-specific task.
 
-:::{note}
-For molecular systems using the `omol` task, you can specify charge and spin multiplicity via the `atoms.info` dictionary. This is important for modeling charged or open-shell systems.
-:::
+## Example 1: calculate a molecular spin gap
 
-```python
+For the `omol` task, set the molecule's total charge and spin multiplicity in
+`atoms.info`. Here we compare singlet and triplet states of CH₂.
+
+```{code-cell} ipython3
 from ase.build import molecule
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
-
-#  singlet CH2
 singlet = molecule("CH2_s1A1d")
-singlet.info.update({"spin": 1, "charge": 0})
+singlet.info.update({"charge": 0, "spin": 1})
 singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
-#  triplet CH2
 triplet = molecule("CH2_s3B1d")
-triplet.info.update({"spin": 3, "charge": 0})
+triplet.info.update({"charge": 0, "spin": 3})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
-triplet.get_potential_energy() - singlet.get_potential_energy()
+spin_gap = triplet.get_potential_energy() - singlet.get_potential_energy()
+print(f"Triplet-singlet energy difference: {spin_gap:.3f} eV")
 ```
+
+## Example 2: relax an inorganic crystal
+
+The `omat` task predicts stress as well as energy and forces, so ASE can relax
+both the atoms and the unit cell.
+
+```{code-cell} ipython3
+from ase.build import bulk
+from ase.filters import FrechetCellFilter
+from ase.optimize import FIRE
+
+iron = bulk("Fe")
+iron.calc = FAIRChemCalculator(predictor, task_name="omat")
+
+optimizer = FIRE(FrechetCellFilter(iron), logfile=None)
+optimizer.run(fmax=0.05, steps=100)
+
+print(f"Relaxed energy: {iron.get_potential_energy():.3f} eV")
+print("Relaxed cell (Å):")
+print(iron.cell)
+```
+
+## Try your own structure
+
+ASE reads many common chemistry file formats, including XYZ, CIF, POSCAR, and
+trajectory files. Replace the filename and task below with values appropriate
+for your system.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+from ase.io import read
+
+atoms = read("my-structure.xyz")
+
+# Required for molecules evaluated with the omol task.
+atoms.info.update({"charge": 0, "spin": 1})
+
+atoms.calc = FAIRChemCalculator(predictor, task_name="omol")
+energy = atoms.get_potential_energy()
+forces = atoms.get_forces()
+```
+
+Choose the task by scientific domain, not merely by which task accepts the
+structure:
+
+| Domain | Task | Start here |
+| --- | --- | --- |
+| Molecules and polymers | `omol` | [OMol25](../molecules/datasets/omol25.md) |
+| Inorganic materials | `omat` | [OMat24](../inorganic_materials/datasets/omat24.md) |
+| Heterogeneous catalysis | `oc20`, `oc22`, or `oc25` | [Catalysis datasets](../catalysts/datasets/summary.md) |
+| Molecular crystals | `omc` | [OMC25](../molecules/datasets/omc25.md) |
+| MOFs and direct air capture | `odac` | [ODAC datasets](../dac/datasets/summary.md) |
+
+:::{warning}
+Different tasks reproduce different levels of theory. Do not compare energies
+across tasks as though they came from one reference calculation.
+:::
+
+## Next steps
+
+- [Explore UMA's capabilities](./introduction.md#what-you-can-do-with-uma) by
+  domain.
+- Review task limitations in the [UMA model guide](./uma.md).
+- Learn about inference settings in the [ASE calculator guide](./common_tasks/ase_calculator.md).
+- Try the [playground](https://aidemos.atmeta.com/uma?view=playground).

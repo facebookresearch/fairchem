@@ -1,6 +1,6 @@
 version: 1
 project:
-  title: fairchem
+  title: FAIR Chemistry
   authors:
     - name: FAIR Chemistry & Collaborators
   copyright: Meta Platforms, Inc
@@ -14,13 +14,12 @@ project:
   jupyter: true
   toc:
     - file: index.md
-    - title: Quickstart
-      children:
-        - file: core/install.md
-        - file: core/quickstart.md
-        - file: core/fairchemv1_v2.md
-        - url: https://facebook-fairchem-uma-demo.hf.space/
-          title: UMA Demo
+    - file: core/install.md
+      title: Install
+    - file: core/quickstart.md
+      title: Get Started
+    - file: core/introduction.md
+      title: Introduction to FAIR Chemistry
     - title: AI/ML Models & Usage
       children:
         - file: core/uma.md
@@ -37,96 +36,105 @@ project:
             - file: core/common_tasks/evaluation.md
             - file: core/common_tasks/fine_tuning.md
             - file: core/common_tasks/workflows.md
-            - file: core/uma_faq.md
-        - file: uma_tutorials/summary.md
-          children:
-            - file: uma_tutorials/uma_tutorial.md
-            - file: uma_tutorials/uma_catalysis_tutorial.md
         - file: core/generative_models.md
-    - file: core/fair_chemistry_papers.md
-    - title: Organic Molecules
+    - file: leaderboard/leaderboard.md
       children:
-        - file: molecules/datasets/summary.md
-          children:
-            - file: molecules/datasets/omol25.md
-            - file: molecules/datasets/omol25_elec.md
-            - file: molecules/datasets/omc25.md
-        - file: molecules/models.md
-        - file: molecules/FAQ.md
-    - title: Heterogeneous Catalysis
-      children:
-        - file: catalysts/datasets/summary.md
-          children:
-            - file: catalysts/datasets/oc20.md
-            - file: catalysts/datasets/oc20_mads.md
-            - file: catalysts/datasets/oc22.md
-            - file: catalysts/datasets/oc20dense.md
-            - file: catalysts/datasets/oc20neb.md
-            - file: catalysts/datasets/ocx24.md
-            - file: catalysts/datasets/oc25.md
-        - file: catalysts/models.md
-        - file: catalysts/examples_tutorials/summary.md
-          children:
-            - file: catalysts/examples_tutorials/OCP-introduction.md
-            - file: >-
-                catalysts/examples_tutorials/adsorption_energies/adsorption_energies.md
-            - file: catalysts/examples_tutorials/adsorbml_walkthrough.md
-            - file: catalysts/examples_tutorials/cattsunami_tutorial.md
-            - file: catalysts/examples_tutorials/ocpapi.md
-        - file: catalysts/FAQ.md
-        - url: https://open-catalyst.metademolab.com/
-          title: OCP Demo (no install required!)
-    - title: Leaderboard
-      children:
-        - file: leaderboard/summary.md
         - file: leaderboard/omol.md
         - file: leaderboard/oc20.md
-    - title: Inorganic Materials
+    - title: Scientific Domains
       children:
-        - file: inorganic_materials/datasets/summary.md
+        - title: Organic Molecules
           children:
-            - file: inorganic_materials/datasets/omat24.md
-        - file: inorganic_materials/models.md
-        - file: inorganic_materials/examples_tutorials/summary.md
+            - file: molecules/datasets/summary.md
+              children:
+                - file: molecules/datasets/omol25.md
+                - file: molecules/datasets/omol25_elec.md
+                - file: molecules/datasets/omc25.md
+            - file: molecules/models.md
+        - title: Inorganic Materials
           children:
-            - file: inorganic_materials/examples_tutorials/formation_energy.md
-            - file: inorganic_materials/examples_tutorials/phonons.md
-            - file: inorganic_materials/examples_tutorials/elastic.md
-        - file: inorganic_materials/FAQ.md
-    - title: MOFs for Direct Air Capture
+            - file: inorganic_materials/datasets/summary.md
+              children:
+                - file: inorganic_materials/datasets/omat24.md
+            - file: inorganic_materials/models.md
+            - file: inorganic_materials/examples_tutorials/summary.md
+              children:
+                - file: inorganic_materials/examples_tutorials/formation_energy.md
+                - file: inorganic_materials/examples_tutorials/phonons.md
+                - file: inorganic_materials/examples_tutorials/elastic.md
+        - title: Heterogeneous Catalysts
+          children:
+            - file: catalysts/datasets/summary.md
+              children:
+                - file: catalysts/datasets/oc20.md
+                - file: catalysts/datasets/oc20_mads.md
+                - file: catalysts/datasets/oc22.md
+                - file: catalysts/datasets/oc20dense.md
+                - file: catalysts/datasets/oc20neb.md
+                - file: catalysts/datasets/ocx24.md
+                - file: catalysts/datasets/oc25.md
+            - file: catalysts/models.md
+            - file: catalysts/examples_tutorials/summary.md
+              children:
+                - file: catalysts/examples_tutorials/OCP-introduction.md
+                - file: >-
+                    catalysts/examples_tutorials/adsorption_energies/adsorption_energies.md
+                - file: catalysts/examples_tutorials/adsorbml_walkthrough.md
+                - file: catalysts/examples_tutorials/cattsunami_tutorial.md
+                - file: catalysts/examples_tutorials/ocpapi.md
+            - url: https://open-catalyst.metademolab.com/
+              title: OCP Demo (no install required!)
+        - title: MOFs for Direct Air Capture
+          children:
+            - file: dac/datasets/summary.md
+              children:
+                - file: dac/datasets/odac25.md
+                - file: dac/datasets/odac23.md
+            - file: dac/models.md
+            - file: dac/examples_tutorials/summary.md
+              children:
+                - file: dac/examples_tutorials/adsorption_energy.md
+    - file: uma_tutorials/workshop_tutorials.md
       children:
-        - file: dac/datasets/summary.md
-          children:
-            - file: dac/datasets/odac25.md
-            - file: dac/datasets/odac23.md
-        - file: dac/models.md
-        - file: dac/examples_tutorials/summary.md
-          children:
-            - file: dac/examples_tutorials/adsorption_energy.md
-    - title: Learn More
-      children:
-        - file: core/intro_series.md
-        - file: videos/technical_talks.md
+        - file: uma_tutorials/uma_tutorial.md
+        - file: uma_tutorials/uma_catalysis_tutorial.md
+    - file: core/fair_chemistry_papers.md
+    - file: faq.md
+    - file: videos.md
+    - file: core/fairchemv1_v2.md
 site:
   title: FAIR Chemistry Documentation
   options:
     folders: false
     logo: assets/fair-chemistry-logo-light-mode.png
     logo_dark: assets/fair-chemistry-logo-dark-mode.png
+    favicon: assets/icons/molecules.svg
   template: book-theme
   nav:
-    - title: Quickstart
+    - title: Install
+      url: /install
+    - title: Get Started
       url: /quickstart
     - title: Docs
-      url: /install
-    - title: Tutorial
-      url: /uma-tutorial
+      url: /introduction
+    - title: Resources
+      children:
+      - title: Videos
+        url: /videos
+      - title: Workshop Tutorials
+        url: /workshop-tutorials
+      - title: Leaderboard
+        url: /leaderboard
+      - title: FAIR Chemistry Papers
+        url: /fair-chemistry-papers
+    - title: Playground
+      url: https://aidemos.atmeta.com/uma?view=playground
     - title: Demo
       url: https://facebook-fairchem-uma-demo.hf.space/
-    - title: Github
-      url: https://github.com/facebookresearch/fairchem
     - title: Help
       children:
+      - title: Frequently asked questions
+        url: /faq
       - title: Ask a question ❓
         url: https://github.com/facebookresearch/fairchem/discussions
       - title: Report a bug 🐛
