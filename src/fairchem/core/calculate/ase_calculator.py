@@ -326,6 +326,22 @@ class FormationEnergyCalculator(Calculator):
         if hasattr(calculator, "implemented_properties"):
             self.implemented_properties = calculator.implemented_properties
 
+    def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
+        """
+        Check for any system changes since the last calculation.
+
+        Args:
+            atoms (ase.Atoms): The atomic structure to check.
+            tol (float): Tolerance for detecting changes.
+
+        Returns:
+            list: A list of changes detected in the system.
+        """
+        state = super().check_state(atoms, tol=tol)
+        if (not state) and (self.atoms.info != atoms.info):
+            state.append("info")
+        return state
+
     def calculate(
         self, atoms: Atoms, properties: list[str], system_changes: list[str]
     ) -> None:
@@ -337,6 +353,8 @@ class FormationEnergyCalculator(Calculator):
             properties (list[str]): The list of properties to calculate.
             system_changes (list[str]): The list of changes in the system.
         """
+        # Store a copy of atoms so ASE can skip recomputing unchanged systems
+        Calculator.calculate(self, atoms, properties, system_changes)
         self.calculator.calculate(atoms, properties, system_changes)
 
         self.results = self.calculator.results.copy()
