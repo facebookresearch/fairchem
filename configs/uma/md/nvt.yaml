@@ -30,6 +30,7 @@ runner:
     _target_: fairchem.core.components.calculate.LangevinThermostat
     temperature_K: ${temperature_K}
     friction_per_fs: 0.01
+    use_fix_com_constraint: true
   timestep_fs: 1.0
   steps: 1000
   trajectory_interval: 10

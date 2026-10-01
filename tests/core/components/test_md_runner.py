@@ -18,9 +18,10 @@ import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import pytest
-from ase import units
+from ase import Atoms, units
 from ase.build import bulk
 from ase.calculators.emt import EMT
+from ase.constraints import FixAtoms, FixCom, FixSubsetCom
 from ase.io import Trajectory
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
@@ -105,6 +106,34 @@ class TestMDRunner:
         npt.assert_allclose(atoms1.get_momenta().sum(axis=0), 0.0, atol=1e-12)
         assert atoms1.info["velocity_seed"] == 17
         assert atoms1.info["initial_temperature_K"] == 300.0
+
+    def test_initialize_momenta_rejects_single_mobile_atom(self):
+        atoms = Atoms("Cu")
+
+        with pytest.raises(ValueError, match="at least two mobile atoms"):
+            initialize_momenta(atoms, temperature_K=300.0, seed=17)
+
+        initialize_momenta(
+            atoms,
+            temperature_K=300.0,
+            seed=17,
+            remove_center_of_mass_momentum=False,
+        )
+        assert np.isfinite(atoms.get_momenta()).all()
+        assert not np.allclose(atoms.get_momenta(), 0.0)
+
+    def test_initialize_momenta_removes_mobile_subset_momentum(self):
+        atoms = bulk("Cu", cubic=True)
+        fixed = np.array([0, 1])
+        mobile = np.array([2, 3])
+        atoms.set_constraint(FixAtoms(indices=fixed))
+
+        initialize_momenta(atoms, temperature_K=300.0, seed=17)
+
+        momenta = atoms.get_momenta()
+        npt.assert_array_equal(momenta[fixed], 0.0)
+        npt.assert_allclose(momenta[mobile].sum(axis=0), 0.0, atol=1e-12)
+        assert np.isfinite(momenta).all()
 
     @pytest.mark.parametrize(
         ("velocity_seed", "initialization_temperature_K"),
@@ -205,6 +234,74 @@ class TestMDRunner:
             npt.assert_allclose(
                 row["energy"], ase_atoms.get_potential_energy(), atol=1e-10
             )
+
+    def test_resume_writes_new_trajectory_segment(self, cu_atoms, results_dir):
+        checkpoint_dir = results_dir / "checkpoint"
+        runner1 = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=10,
+            trajectory_interval=5,
+            log_interval=5,
+        )
+        runner1._job_config = _create_mock_job_config(
+            str(results_dir), checkpoint_dir=str(checkpoint_dir)
+        )
+        results1 = runner1.calculate()
+        runner1.save_state(str(checkpoint_dir), is_preemption=True)
+        original_trajectory = pd.read_parquet(results1["trajectory_file"])
+
+        runner2 = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            thermostat=VelocityVerletThermostat(),
+            timestep_fs=1.0,
+            steps=20,
+            trajectory_interval=5,
+            log_interval=5,
+        )
+        runner2._job_config = _create_mock_job_config(
+            str(results_dir), checkpoint_dir=str(checkpoint_dir)
+        )
+        runner2.load_state(str(checkpoint_dir))
+        results2 = runner2.calculate()
+
+        assert Path(results1["trajectory_file"]).name == "trajectory.parquet"
+        assert (
+            Path(results2["trajectory_file"]).name
+            == "trajectory.step-000000010.parquet"
+        )
+        pd.testing.assert_frame_equal(
+            pd.read_parquet(results1["trajectory_file"]), original_trajectory
+        )
+        resumed_trajectory = pd.read_parquet(results2["trajectory_file"])
+        assert list(original_trajectory["step"]) == [0, 5, 10]
+        assert list(resumed_trajectory["step"]) == [15, 20]
+        assert (results_dir / "thermo.log").is_file()
+        assert (results_dir / "thermo.step-000000010.log").is_file()
+
+    def test_langevin_fix_com_uses_mobile_subset(self):
+        atoms = bulk("Cu", cubic=True)
+        atoms.set_constraint(FixAtoms(indices=[0, 1]))
+        thermostat = LangevinThermostat(
+            temperature_K=300.0,
+            friction_per_fs=0.01,
+            use_fix_com_constraint=True,
+        )
+
+        dynamics = thermostat.build(atoms, timestep_fs=1.0)
+
+        assert dynamics.fix_com is False
+        constraints = [
+            constraint
+            for constraint in atoms.constraints
+            if isinstance(constraint, FixCom)
+        ]
+        assert len(constraints) == 1
+        assert isinstance(constraints[0], FixSubsetCom)
+        npt.assert_array_equal(constraints[0].get_indices(), [2, 3])
 
     @pytest.mark.parametrize(
         "thermostat",

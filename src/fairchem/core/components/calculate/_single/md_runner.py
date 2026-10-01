@@ -164,8 +164,11 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         if not init_atoms_file.exists():
             ase.io.write(str(init_atoms_file), self._atoms, format="extxyz")
 
-        trajectory_file = results_dir / "trajectory.parquet"
-        log_file = results_dir / "thermo.log"
+        segment_suffix = (
+            "" if self._start_step == 0 else f".step-{self._start_step:09d}"
+        )
+        trajectory_file = results_dir / f"trajectory{segment_suffix}.parquet"
+        log_file = results_dir / f"thermo{segment_suffix}.log"
 
         self._atoms.calc = self.calculator
 
@@ -200,7 +203,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
             atoms=self._atoms,
             logfile=str(log_file),
             header=True,
-            mode="a" if self._start_step > 0 else "w",
+            mode="w",
         )
 
         def log_with_alignment():
@@ -293,6 +296,7 @@ class MDRunner(PreemptableMixin, CalculateRunner):
                 "trajectory_file": trajectory_file,
                 "log_file": log_file,
                 "total_steps": results["total_steps"],
+                "start_step": results["start_step"],
                 "trajectory_interval": self.trajectory_interval,
                 "log_interval": self.log_interval,
                 "thermostat_class": type(self.thermostat).__name__,

@@ -33,6 +33,7 @@ runner:
     pressure_bar: ${pressure_bar}
     taut_fs: 100.0
     taup_fs: 1000.0
+    # Cu isothermal compressibility in bar^-1, approximated from B = 140 GPa.
     compressibility_bar: 7.14e-7
   timestep_fs: 1.0
   steps: 1000

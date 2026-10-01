@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from ase.calculators.emt import EMT
+from ase.constraints import FixCom
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core._cli import get_hydra_config_from_yaml
@@ -52,6 +53,11 @@ def test_public_md_config_runs_with_emt(ensemble, monkeypatch, tmp_path):
     runner = hydra.utils.instantiate(cfg.runner)
     runner.job_config = cfg.job
     runner.run()
+
+    if ensemble == "nvt":
+        assert any(
+            isinstance(constraint, FixCom) for constraint in runner._atoms.constraints
+        )
 
     results_dir = Path(cfg.job.metadata.results_dir)
     trajectory = pd.read_parquet(results_dir / "trajectory.parquet")

@@ -18,6 +18,28 @@ Only run configurations that you wrote yourself or obtained from a trusted
 source.
 :::
 
+## Prerequisites
+
+The Hydra runner writes Parquet trajectories with PyArrow, which is included in
+the `extras` installation:
+
+```bash
+pip install "fairchem-core[extras]"
+```
+
+Request access to the gated [UMA model repository](https://huggingface.co/facebook/UMA)
+and authenticate with `huggingface-cli login` before the first model download.
+See the [installation guide](../install.md) for complete environment and access
+instructions.
+
+The checked-in configurations target a CUDA GPU. To run one on CPU, override
+both the launcher device and calculator device (CPU inference is much slower):
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml \
+  job.device_type=CPU runner.calculator.device=cpu
+```
+
 ## Run NVT directly with ASE
 
 An MD calculator must provide energy and forces. Initialize momenta before
@@ -28,14 +50,16 @@ thermostats because it avoids an artificial heating transient.
 import numpy as np
 from ase import units
 from ase.build import bulk
+from ase.constraints import FixCom
 from ase.io import Trajectory
 from ase.md import MDLogger
 from ase.md.langevin import Langevin
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 # A 2 x 2 x 2 conventional FCC cell: 32 atoms with periodic boundaries.
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2)
+atoms.set_constraint(FixCom())
 
 predictor = pretrained_mlip.get_predict_unit(
     "uma-s-1p2p1", device="cuda", inference_settings="turbo"
@@ -44,13 +68,13 @@ atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
 
 rng = np.random.RandomState(42)
 MaxwellBoltzmannDistribution(atoms, temperature_K=300, rng=rng)
-Stationary(atoms)  # remove center-of-mass momentum
 
 dyn = Langevin(
     atoms,
     timestep=1.0 * units.fs,
     temperature_K=300,
     friction=0.01 / units.fs,
+    fixcm=False,
 )
 trajectory = Trajectory("cu-nvt.traj", "w", atoms)
 logger = MDLogger(dyn, atoms, "cu-nvt.log", header=True, mode="w")
@@ -65,6 +89,12 @@ spin normally remain fixed throughout a trajectory. It enables TF32 in
 addition to the compiled fast path, so use the default inference mode when the
 small precision trade-off is not appropriate.
 
+The explicit `FixCom` constraint with `fixcm=False` follows ASE's recommended
+Langevin behavior. ASE's legacy internal `fixcm=True` correction does not
+strictly sample the correct NVT position and momentum distributions, with a
+larger effect for small systems. The Hydra NVT example selects the same
+constraint-based behavior through `use_fix_com_constraint: true`.
+
 ## Choose an ensemble
 
 `MDRunner` provides the following ASE dynamics adapters:
@@ -74,7 +104,7 @@ small precision trade-off is not appropriate.
 | NVE | `VelocityVerletThermostat` | Initial velocities and `timestep_fs` |
 | NVT | `NoseHooverNVT` | `temperature_K`, `tdamp_fs` |
 | NVT | `BussiThermostat` | `temperature_K`, `taut_fs` |
-| NVT | `LangevinThermostat` | `temperature_K`, `friction_per_fs` |
+| NVT | `LangevinThermostat` | `temperature_K`, `friction_per_fs`, `use_fix_com_constraint` |
 | NPT | `BerendsenNPT` | Temperature, pressure, damping, and compressibility |
 
 NPT additionally requires a fully periodic system with a nonzero cell and a
@@ -84,6 +114,13 @@ assume that every UMA task or third-party ASE calculator does so.
 Berendsen coupling is useful for bringing a system toward a target temperature
 and pressure, but it does not generate the exact NPT ensemble. Use an integrator
 appropriate to the property being measured for production sampling.
+
+The NPT example's `compressibility_bar: 7.14e-7` is an approximate Cu
+isothermal compressibility in reciprocal bar. It is calculated from an
+illustrative Cu bulk modulus of 140 GPa using
+`1 / (140 GPa * 10,000 bar/GPa)`. This is a material-specific physical input,
+not a value inferred by the calculator. Replace it with an appropriate
+isothermal compressibility whenever you replace the example system.
 
 ## Run with Hydra
 
@@ -150,10 +187,27 @@ Each CLI invocation creates a timestamped directory below `job.run_dir`. Its
 `results` directory contains:
 
 - `init_atoms.extxyz`: the structure and initialized velocities at step zero;
-- `trajectory.parquet`: positions, cell, velocities, predictions, and
-  thermodynamic properties at `trajectory_interval`;
-- `thermo.log`: ASE thermodynamic logging at `log_interval`; and
+- `trajectory.parquet`: the initial trajectory segment;
+- `trajectory.step-XXXXXXXXX.parquet`: additional restart segments, where the
+  suffix is the checkpoint step;
+- `thermo.log` and matching `thermo.step-XXXXXXXXX.log` restart segments; and
 - `metadata.json`: run and output metadata.
+
+The Parquet trajectory uses the following units and conventions:
+
+| Field | Unit or convention |
+| --- | --- |
+| `step`, `natoms`, `atomic_numbers` | Unitless integers |
+| `time` | Femtoseconds |
+| `positions`, `cell` | Å |
+| `pbc`, `fixed` | Boolean arrays |
+| `velocities` | Raw `Atoms.get_velocities()` values in ASE internal velocity units; multiply by `ase.units.fs` for Å/fs |
+| `energy`, `kinetic_energy` | eV |
+| `forces` | eV/Å |
+| `stress` | eV/Å³ in ASE Voigt order `(xx, yy, zz, yz, xz, xy)` |
+| `pressure` | Bar, computed as `-trace(stress) / 3`; this is configurational pressure and excludes kinetic stress |
+| `temperature` | K |
+| `tags`, `charge`, `spin`, `sid` | Unmodified ASE metadata |
 
 `checkpoint_interval` writes a rolling checkpoint containing atoms, velocities,
 thermostat state, step count, and generated `resume_config.yaml` and
@@ -161,6 +215,22 @@ thermostat state, step count, and generated `resume_config.yaml` and
 
 ```bash
 fairchem -c /path/to/preemption_state/resume_config.yaml
+```
+
+Each resume writes a new trajectory and log segment instead of truncating the
+pre-checkpoint output. Analyze the full trajectory by concatenating the segment
+files and sorting on `step`, for example:
+
+```python
+from pathlib import Path
+
+import pandas as pd
+
+results_dir = Path("/path/to/run/results")
+trajectory = pd.concat(
+    [pd.read_parquet(path) for path in results_dir.glob("trajectory*.parquet")],
+    ignore_index=True,
+).sort_values("step")
 ```
 
 When `heartbeat_interval` is enabled, creating a file named `STOPFAIR` alongside
