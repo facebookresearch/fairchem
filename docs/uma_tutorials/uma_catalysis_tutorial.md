@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   name: python3
@@ -36,10 +36,16 @@ By the end of this tutorial, you will be able to:
 - Apply D3 dispersion corrections to improve accuracy
 ```
 
-```{admonition} About UMA-S-1P2
+```{admonition} About UMA-S-1P2P1
 :class: tip
 
-The **UMA-S-1P2** model is a state-of-the-art universal machine learning potential trained on the OMat24, OC20, OMol25, ODAC23, and OMC25 datasets, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies. Here we'll use the uma-s-1p2 checkpoint which is the small (=faster) 1.1 version released in June. The uma-s-1p2 checkpoint is open science with a lightweight license that users have to agree to through Huggingface. 
+The **UMA-S-1P2P1** model is a state-of-the-art universal machine learning
+potential trained on the OMat24, OC20, OMol25, ODAC23, and OMC25 datasets,
+covering diverse materials and surface chemistries. It provides roughly a
+1000× speedup over DFT while maintaining useful accuracy for screening studies.
+Here we use `uma-s-1p2p1`, the latest patch release of the small UMA 1.2 model.
+The checkpoint is open science under a lightweight license that users accept
+through Hugging Face.
 
 You can read more about the UMA models here: https://arxiv.org/abs/2506.23971
 ```
@@ -108,7 +114,7 @@ fairchem.core.__version__
 
 ## Package imports
 
-First, let's import all necessary libraries and initialize the UMA-S-1P2 predictor:
+First, let's import all necessary libraries and initialize the UMA-S-1P2P1 predictor:
 
 ```{code-cell} ipython3
 from pathlib import Path
@@ -160,9 +166,9 @@ for key, dirname in part_dirs.items():
 for facet in ["111", "100", "110", "211"]:
     (output_dir / part_dirs["part2"] / f"ni{facet}").mkdir(exist_ok=True)
 
-# Initialize the UMA-S-1P2 predictor
-print("\nLoading UMA-S-1P2 model...")
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+# Initialize the UMA-S-1P2P1 predictor
+print("\nLoading UMA-S-1P2P1 model...")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 print("✓ Model loaded successfully!")
 ```
 
@@ -246,11 +252,11 @@ Don't have access to UMA yet? You can still explore this calculation!
 ```{admonition} Understanding the Results
 :class: tip
 
-uma-s-1p2 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values. 
+uma-s-1p2p1 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values.
 
 Small discrepancies arise from:
 - Training data biases (if your structure is far from OMAT24)
-- Temperature effects (0 K vs room temperature). You can do a quasi-harmonic analysis to include finite temperature effects if desired. 
+- Temperature effects (0 K vs room temperature). You can do a quasi-harmonic analysis to include finite temperature effects if desired.
 - Quantum effects not captured by the underlying DFT/PBE simulations
 
 For surface calculations, using the ML-optimized lattice constant maintains internal consistency.
@@ -261,7 +267,7 @@ For surface calculations, using the ML-optimized lattice constant maintains inte
 
 **Paper (Table 1):** Ni lattice constant = 3.524 Å (experimental reference)
 
-The UMA-S-1P2 model with OMAT provides excellent agreement with experiment, as would be expected for the PBE functional for simple BCC Ni. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
+The UMA-S-1P2P1 model with OMAT provides excellent agreement with experiment, as would be expected for the PBE functional for simple BCC Ni. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
 ```
 
 ```{admonition} Further exploration
@@ -269,7 +275,7 @@ The UMA-S-1P2 model with OMAT provides excellent agreement with experiment, as w
 
 Try modifying the following parameters and observe the effects:
 
-1. **Task name**: The original paper re-relaxed the structures at the RPBE level of theory before continuing. Try that with the uma-s-1p2 model (using the oc20 task name) and see if it matters here.
+1. **Task name**: The original paper re-relaxed the structures at the RPBE level of theory before continuing. Try that with the uma-s-1p2p1 model (using the oc20 task name) and see if it matters here.
 2. **Initial guess**: Change `a_initial` to 3.0 or 4.0 Å. Does the optimizer still converge to the same value?
 3. **Convergence criterion**: Tighten `fmax` to 0.01 eV/Å. How many more steps are required?
 4. **Different metals**: Replace `"Ni"` with `"Cu"`, `"Pd"`, or `"Pt"`. Compare predicted vs experimental lattice constants.
@@ -300,13 +306,13 @@ where:
 - $A$ = surface area
 - Factor of 2 accounts for two surfaces (top and bottom)
 
-**Challenge**: Direct calculation suffers from quantum size effects, and if you were doing DFT calculations small numerical errors in the simulation or from the K-point grid sampling can lead to small (but significant) errors in the bulk lattice energy. 
+**Challenge**: Direct calculation suffers from quantum size effects, and if you were doing DFT calculations small numerical errors in the simulation or from the K-point grid sampling can lead to small (but significant) errors in the bulk lattice energy.
 
 **Solution**: It is fairly common when calculating surface energies to use the bulk energy from a bulk relaxation in the above equation. However, because DFT often has some small numerical noise in the predictions from k-point convergence, this might lead to the wrong surface energy. Instead, two more careful schemes are either:
 1. Calculate the energy of a bulk structure oriented to each slab to maximize cancellation of small numerical errors or
 2. Calculate the energy of multiple slabs at multiple thicknesses and extrapolate to zero thickness. The intercept will be the surface energy, and the slope will be a fitted bulk energy. A benefit of this approach is that it also forces us to check that we have a sufficiently thick slab for a well defined surface energy; if the fit is non-linear we need thicker slabs.
 
-We'll use the linear extrapolation method here as it's more likely to work in future DFT studies if you use this code! 
+We'll use the linear extrapolation method here as it's more likely to work in future DFT studies if you use this code!
 
 ### Step 1: Setup and Bulk Energy Reference
 
@@ -498,7 +504,7 @@ Don't have access to UMA yet? You can still explore this calculation!
 
 **Paper Results (PBE-DFT, Tran et al.):**
 - Ni(111): 1.92 J/m²
-- Ni(100): 2.21 J/m²  
+- Ni(100): 2.21 J/m²
 - Ni(110): 2.29 J/m²
 - Ni(211): 2.24 J/m²
 
@@ -509,12 +515,12 @@ Don't have access to UMA yet? You can still explore this calculation!
 4. **Physical trend correct**: Close-packed surfaces have lower energy
 
 **Why differences exist:**
-- Training data biases in ML model, which has seen mostly periodic bulk structures, not surfaces. 
+- Training data biases in ML model, which has seen mostly periodic bulk structures, not surfaces.
 - Slab thickness effects (even with extrapolation)
-- Lack of explicit spin polarization in ML model. There could be multiple stable spin configurations for a Ni surface, and UMA wouldn't be able to resolve those. 
+- Lack of explicit spin polarization in ML model. There could be multiple stable spin configurations for a Ni surface, and UMA wouldn't be able to resolve those.
 
 **Caveat**
-Both methods here use PBE as the underlying functional in DFT. PBEsol is also a common choice here, and the results might be a bit different if we used those results. 
+Both methods here use PBE as the underlying functional in DFT. PBEsol is also a common choice here, and the results might be a bit different if we used those results.
 
 **Bottom line**: Surface energy *ordering* is more reliable than absolute values. Use ML for screening, validate critical cases with DFT.
 ```
@@ -692,7 +698,7 @@ $$
 E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}{2}\text{ZPE}(\text{H}_2)
 $$
 
-The ZPE correction is calculated by analyzing the vibrational modes of the molecule/adsorbate. 
+The ZPE correction is calculated by analyzing the vibrational modes of the molecule/adsorbate.
 
 ### Step 1: Setup and Relax Clean Slab
 
@@ -884,17 +890,19 @@ print(f"   ZPE(H₂):  {zpe_h2:.2f} eV")
 print(f"   E_ads(ZPE): {E_ads_zpe:.2f} eV")
 
 # Visualize vibrational modes
+from IPython.display import Image, display
+
 print("\n   Creating animations of vibrational modes...")
 vib.write_mode(n=0)
-ase.io.write("vib.0.gif", ase.io.read("vib.0.traj@:"), rotation=("-45x,0y,0z"))
+try:
+    ase.io.write("vib.0.gif", ase.io.read("vib.0.traj@:"), rotation=("-45x,0y,0z"))
+    display(Image(filename="vib.0.gif"))
+except IndexError:
+    print("   No animation frames were generated for this mode.")
 
 vib.clean()
 vib_h2.clean()
 ```
-
-<img src="vib.0.gif" width="750" align="center">
-
-+++
 
 ### Step 8: Visualize and Compare Results
 
@@ -1210,7 +1218,7 @@ Don't have access to UMA yet? You can still explore this calculation!
 - Pauli repulsion: Overlapping electron clouds
 - Strain: Lattice distortions propagate
 
-**Magnitude**: 
+**Magnitude**:
 - Weak (~10 kJ/mol/ML) → isolated adsorbates
 - Strong (>50 kJ/mol/ML) → clustering or phase separation likely
 
@@ -1985,7 +1993,7 @@ Limitations:
 
 ### Key Takeaways
 
-1. **ML Potentials**: uma-s-1p2 provides ~1000× speedup over DFT with reasonable accuracy
+1. **ML Potentials**: uma-s-1p2p1 provides ~1000× speedup over DFT with reasonable accuracy
 2. **Bulk optimization**: Always use the ML-optimized lattice constant for consistency
 3. **Surface energies**: Linear extrapolation eliminates finite-size effects
 4. **Adsorption**: Test multiple sites; lowest energy may not be intuitive
@@ -2080,11 +2088,11 @@ When using ML potentials for surface catalysis, be aware of these critical issue
    - Small adsorbates (H, O, N): D3 effect ~0.01-0.05 eV (often negligible)
    - Large molecules (CO, CO₂, aromatics): D3 effect ~0.1-0.3 eV (important!)
    - Physisorption: D3 critical (can change binding from repulsive to attractive)
-   - RPBE was originally fit for chemisorption energies without D3 corrections, so adding D3 corrections may actually cause small adsorbates to overbind. However, it probably would be important for larger molecules. It's relatively uncommon to see RPBE+D3 as a choice in the catalysis literature (compared to PBE+D3, or RPBE, or BEEF-vdW). 
+   - RPBE was originally fit for chemisorption energies without D3 corrections, so adding D3 corrections may actually cause small adsorbates to overbind. However, it probably would be important for larger molecules. It's relatively uncommon to see RPBE+D3 as a choice in the catalysis literature (compared to PBE+D3, or RPBE, or BEEF-vdW).
 
 2. **Which DFT functional for D3?**
    - This tutorial uses `method="PBE"` consistently for the D3 correction. This is often implied when papers say they use a D3 correction, but the results can be different if use the RPBE parameterizations.
-   - Original paper used PBE for bulk/surfaces, RPBE for adsorption. It's not specified what D3 parameterization they used, but it's likely PBE. 
+   - Original paper used PBE for bulk/surfaces, RPBE for adsorption. It's not specified what D3 parameterization they used, but it's likely PBE.
 
 3. **When to apply D3?**
    - **End-point correction** (used here): Fast, run ML optimization then add D3 energy
@@ -2095,7 +2103,7 @@ When using ML potentials for surface catalysis, be aware of these critical issue
 
 **Non-linearity at high coverage**:
 - This tutorial assumes linear E_ads(θ) = E₀ + βθ
-- Reality: Often non-linear, especially near θ = 1 ML. See the plots generated - there is a linear regime for relatively high coverage, and relatively low coverage, but it's not uniformly linear everywhere. As long as you consistently in one regime or the other a linear assumption is probably ok, but you could get into problems if solving microkinetic models where the coverage of the species in question changes significantly from very low to high. 
+- Reality: Often non-linear, especially near θ = 1 ML. See the plots generated - there is a linear regime for relatively high coverage, and relatively low coverage, but it's not uniformly linear everywhere. As long as you consistently in one regime or the other a linear assumption is probably ok, but you could get into problems if solving microkinetic models where the coverage of the species in question changes significantly from very low to high.
 - **Why**: Phase transitions, adsorbate ordering, surface reconstruction
 - **Solution**: Test polynomial fits, look for ordering in visualizations
 
@@ -2214,7 +2222,7 @@ You've completed a comprehensive computational catalysis workflow using state-of
 - Calculate reaction thermodynamics and kinetics
 - Apply these methods to your own research questions
 
-**Next steps**: 
+**Next steps**:
 - Apply to your catalyst system of interest
 - Validate key results with DFT
 - Develop microkinetic models
