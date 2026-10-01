@@ -415,3 +415,111 @@ class TestMOLE:
 
         # Verify the assertion passes for correct input
         assert output.shape[0] == x.shape[0]
+
+
+def _reference_forward(layer, x, coefficients, sizes):
+    """
+    Apply each system's mixed expert weight to that system's rows of x.
+    """
+    outputs = []
+    start = 0
+    for system, size in enumerate(sizes):
+        weight = torch.einsum("e,eoi->oi", coefficients[system], layer.weights)
+        output = x[start : start + size] @ weight.T
+        if layer.bias is not None:
+            output = output + layer.bias
+        outputs.append(output)
+        start += size
+    return torch.cat(outputs)
+
+
+class TestMOLEOutputs:
+    """
+    Check MOLE outputs and gradients against a per-system reference.
+    """
+
+    num_experts = 4
+    in_features = 6
+    out_features = 5
+    # The empty second system must not shift which coefficients later systems use
+    sizes = (4, 0, 5, 3)
+
+    def _make_layer(self, sizes, bias=True):
+        """
+        Build a MOLE layer with random mixing coefficients for each system.
+        """
+        torch.manual_seed(0)
+        coefficients = torch.softmax(torch.randn(len(sizes), self.num_experts), dim=1)
+        global_mole_tensors = MOLEGlobals(
+            expert_mixing_coefficients=coefficients,
+            mole_sizes=torch.tensor(sizes),
+        )
+        layer = MOLE(
+            num_experts=self.num_experts,
+            in_features=self.in_features,
+            out_features=self.out_features,
+            global_mole_tensors=global_mole_tensors,
+            bias=bias,
+        )
+        return layer, coefficients
+
+    def test_each_system_uses_its_own_mixed_weights(self):
+        """
+        Rows of each system are transformed by that system's mixture of the
+        expert weights, including when a system has no rows.
+        """
+        layer, coefficients = self._make_layer(self.sizes)
+        x = torch.randn(sum(self.sizes), self.in_features)
+
+        torch.testing.assert_close(
+            layer(x), _reference_forward(layer, x, coefficients, self.sizes)
+        )
+
+    @pytest.mark.parametrize("chunk_size", [1, 3, 5])
+    def test_chunked_inputs_match_full_input(self, chunk_size):
+        """
+        Feeding the rows in chunks with ac_start_idx set to each chunk's offset,
+        as activation checkpointing does, reproduces the full output. The chunk
+        sizes split systems, span several systems, and border the empty system.
+        """
+        layer, _ = self._make_layer(self.sizes)
+        x = torch.randn(sum(self.sizes), self.in_features)
+        full = layer(x)
+
+        chunks = []
+        for start in range(0, x.shape[0], chunk_size):
+            layer.global_mole_tensors.ac_start_idx = start
+            chunks.append(layer(x[start : start + chunk_size]))
+
+        torch.testing.assert_close(torch.cat(chunks), full)
+
+    @pytest.mark.parametrize("bias", [True, False])
+    def test_merged_linear_layer_matches_forward(self, bias):
+        """
+        For a single system, the merged nn.Linear gives the same output as the
+        MOLE layer.
+        """
+        layer, _ = self._make_layer((7,), bias=bias)
+        x = torch.randn(7, self.in_features)
+
+        merged = layer.merged_linear_layer()
+
+        torch.testing.assert_close(merged(x), layer(x))
+
+    def test_frozen_weights_with_3d_input(self):
+        """
+        With frozen expert weights and a 3D input that needs gradients, as in
+        force inference, outputs and input gradients match the reference.
+        """
+        layer, coefficients = self._make_layer(self.sizes)
+        layer.requires_grad_(False)
+        x = torch.randn(sum(self.sizes), 3, self.in_features, requires_grad=True)
+
+        out = layer(x)
+        expected = _reference_forward(layer, x, coefficients, self.sizes)
+        torch.testing.assert_close(out, expected)
+
+        grad_out = torch.randn_like(out)
+        (grad,) = torch.autograd.grad(out, x, grad_out)
+        (expected_grad,) = torch.autograd.grad(expected, x, grad_out)
+        torch.testing.assert_close(grad, expected_grad)
