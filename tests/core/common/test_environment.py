@@ -179,6 +179,24 @@ def test_system_collection_is_isolated_and_bounded(monkeypatch) -> None:
     assert errors == []
 
 
+def test_package_versions_include_pipless_environment_metadata() -> None:
+    packages = environment.get_python_package_versions(
+        {
+            "pip_packages": None,
+            "conda_packages": None,
+            "installed_python_packages": {
+                "fairchem-core": "2.23.0",
+                "torch": "2.13.0+cpu",
+            },
+        }
+    )
+
+    assert packages == {
+        "fairchem-core": "2.23.0",
+        "torch": "2.13.0+cpu",
+    }
+
+
 def test_slurm_local_rank_takes_precedence(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SLURM_LOCALID", "0")
     monkeypatch.setenv("LOCAL_RANK", "1")

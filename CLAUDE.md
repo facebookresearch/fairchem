@@ -299,6 +299,10 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `torch.utils.collect_env.get_env_info()` runs multiple external tools without
   subprocess timeouts. Do not invoke it directly on a distributed job's critical
   startup path; isolate the collector and enforce a timeout.
+- PyTorch's environment collector can report no pip packages in environments
+  created without a `pip` executable, including isolated `uv` environments. Use
+  `importlib.metadata` inside the bounded collector process as the authoritative
+  package inventory.
 - In Slurm processes, prefer `SLURM_LOCALID` over `LOCAL_RANK`. Slurm's value is
   authoritative, while an inherited `LOCAL_RANK` may be stale.
 - H100 compute nodes do not have PyPI egress. Provision Python environments on

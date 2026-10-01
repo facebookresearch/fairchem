@@ -26,10 +26,17 @@ ENVIRONMENT_COLLECTION_TIMEOUT_SECONDS = 30
 
 _COLLECT_ENVIRONMENT_SCRIPT = """
 import json
+from importlib import metadata
 
 from torch.utils.collect_env import get_env_info
 
-print(json.dumps(get_env_info()._asdict()))
+system_environment = get_env_info()._asdict()
+system_environment["installed_python_packages"] = {
+    name: distribution.version
+    for distribution in metadata.distributions()
+    if (name := distribution.metadata.get("Name"))
+}
+print(json.dumps(system_environment))
 """
 
 ENVIRONMENT_VARIABLE_ALLOWLIST = (
@@ -147,6 +154,15 @@ def get_python_package_versions(system_environment: Any) -> dict[str, str]:
         package_version = line.split()
         if len(package_version) >= 2:
             packages[package_version[0]] = package_version[1]
+
+    installed_packages = _system_value(system_environment, "installed_python_packages")
+    if isinstance(installed_packages, dict):
+        packages.update(
+            {
+                str(package): str(version)
+                for package, version in installed_packages.items()
+            }
+        )
 
     return dict(sorted(packages.items(), key=lambda package: package[0].casefold()))
 
