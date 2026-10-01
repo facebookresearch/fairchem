@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 
 import hydra
 import pytest
+import yaml
 from omegaconf import OmegaConf
 
 from fairchem.core import _cli
@@ -28,12 +29,52 @@ from fairchem.core.components.runner import MockRunner
 from fairchem.core.launchers import ray_on_slurm_launch
 
 
-def test_cli():
+def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    sys_args = ["--config", "tests/core/test_cli.yml"]
+    for variable in (
+        "RANK",
+        "LOCAL_RANK",
+        "WORLD_SIZE",
+        "SLURM_PROCID",
+        "SLURM_LOCALID",
+        "SLURM_NTASKS",
+        "SLURM_NODEID",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    timestamp_id = "live-environment-test"
+    sys_args = [
+        "--config",
+        "tests/core/test_cli.yml",
+        f"+job.run_dir={tmp_path}",
+        f"+job.timestamp_id={timestamp_id}",
+    ]
     sys.argv[1:] = sys_args
     main()
+
+    report_path = (
+        tmp_path
+        / timestamp_id
+        / "logs"
+        / "environment"
+        / f"run_{timestamp_id}_node_0_restart_0.yaml"
+    )
+    report = yaml.safe_load(report_path.read_text())
+
+    assert report["schema_version"] == 1
+    assert report["job"]["run_type"] == "run"
+    assert report["job"]["timestamp_id"] == timestamp_id
+    assert report["rank"] == {
+        "global_rank": 0,
+        "local_rank": 0,
+        "world_size": 1,
+        "node_id": "0",
+        "hostname": report["rank"]["hostname"],
+    }
+    assert report["python"]["version"]
+    assert report["pytorch"]["version"]
+    assert "torch" in report["python_packages"]
+    assert report["collection_errors"] == {}
 
 
 @pytest.mark.serial()
