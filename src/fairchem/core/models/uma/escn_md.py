@@ -278,6 +278,8 @@ def resolve_dataset_mapping(
 
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
+    supports_padded_edges = True
+
     def __init__(
         self,
         max_num_elements: int = 100,
@@ -663,10 +665,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             # Compute shifts from cell offsets
             if len(data_dict["natoms"]) == 1:
-                # Single system: use matmul (compile-friendly, no data-dependent ops)
-                shifts = data_dict["cell_offsets"].to(
-                    data_dict["cell"].dtype
-                ) @ data_dict["cell"].squeeze(0)
+                offsets = data_dict["cell_offsets"].to(data_dict["cell"].dtype)
+                if "edge_valid_mask" in data_dict:
+                    cell_per_edge = data_dict["cell"].expand(offsets.shape[0], -1, -1)
+                    shifts = torch.bmm(offsets.unsqueeze(1), cell_per_edge).squeeze(1)
+                else:
+                    shifts = offsets @ data_dict["cell"].squeeze(0)
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
@@ -684,6 +688,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 - data_dict["pos"][data_dict["edge_index"][1]]
                 + shifts
             )  # [n_edges, 3]
+            edge_valid_mask = data_dict.get("edge_valid_mask", None)
+            if edge_valid_mask is not None:
+                padding_vec = edge_distance_vec.new_zeros(3)
+                padding_vec[0].fill_(self.cutoff + 1.0)
+                edge_distance_vec = torch.where(
+                    edge_valid_mask.unsqueeze(1), edge_distance_vec, padding_vec
+                )
             # pylint: disable=E1102
             edge_distance = torch.linalg.norm(
                 edge_distance_vec, dim=-1, keepdim=False
@@ -952,7 +963,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if settings.edge_chunk_size is not None:
             overrides["edge_chunk_size"] = settings.edge_chunk_size
         if settings.external_graph_gen is not None:
-            overrides["otf_graph"] = not settings.external_graph_gen
+            padded_internal_graph = (
+                settings.compile_mode == "reduce-overhead"
+                and not settings.external_graph_gen
+                and settings.internal_graph_gen_version == 3
+            )
+            overrides["otf_graph"] = not (
+                settings.external_graph_gen or padded_internal_graph
+            )
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
         if settings.use_quaternion_wigner is not None:
