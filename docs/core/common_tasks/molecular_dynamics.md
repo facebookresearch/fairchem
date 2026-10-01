@@ -38,7 +38,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 atoms = bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2)
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
 )
 atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
 
@@ -115,7 +115,7 @@ runner:
   _target_: fairchem.core.components.calculate.MDRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
-    name_or_path: uma-s-1p2
+    name_or_path: uma-s-1p2p1
     task_name: omat
     inference_settings: turbo
     device: cuda

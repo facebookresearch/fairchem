@@ -1,4 +1,4 @@
-model_name: uma-s-1p2
+model_name: uma-s-1p2p1
 task_name: omat
 temperature_K: 300.0
 pressure_bar: 1.0
