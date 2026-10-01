@@ -7,19 +7,30 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import socket
+import subprocess
+import sys
 import tempfile
-from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 import yaml
-from torch.utils.collect_env import get_env_info
 
 from fairchem.core.common import distutils
+
+ENVIRONMENT_COLLECTION_TIMEOUT_SECONDS = 30
+
+_COLLECT_ENVIRONMENT_SCRIPT = """
+import json
+
+from torch.utils.collect_env import get_env_info
+
+print(json.dumps(get_env_info()._asdict()))
+"""
 
 ENVIRONMENT_VARIABLE_ALLOWLIST = (
     "RANK",
@@ -79,7 +90,7 @@ _EnvironmentDumper.add_representer(str, _represent_string)
 
 
 def _get_local_rank() -> int:
-    for variable in ("LOCAL_RANK", "SLURM_LOCALID"):
+    for variable in ("SLURM_LOCALID", "LOCAL_RANK"):
         if variable in os.environ:
             return int(os.environ[variable])
     return 0
@@ -93,35 +104,58 @@ def _safe_filename_component(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", value)
 
 
-def _collect_python_packages() -> tuple[dict[str, str], list[str]]:
-    packages: list[tuple[str, str]] = []
-    errors: set[str] = set()
+def _collect_system_environment() -> tuple[dict[str, Any] | None, list[str]]:
     try:
-        distributions = metadata.distributions()
-        for distribution in distributions:
-            try:
-                name = distribution.metadata.get("Name")
-                if name:
-                    packages.append((name, distribution.version))
-            except Exception as error:
-                errors.add(type(error).__name__)
-    except Exception as error:
-        errors.add(type(error).__name__)
+        result = subprocess.run(
+            [sys.executable, "-c", _COLLECT_ENVIRONMENT_SCRIPT],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=ENVIRONMENT_COLLECTION_TIMEOUT_SECONDS,
+        )
+        return json.loads(result.stdout), []
+    except (
+        json.JSONDecodeError,
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        UnicodeError,
+    ) as error:
+        return None, [type(error).__name__]
 
-    return (
-        dict(
-            sorted(
-                packages,
-                key=lambda package: package[0].casefold(),
-            )
-        ),
-        sorted(errors),
-    )
+
+def get_python_package_versions(system_environment: Any) -> dict[str, str]:
+    """
+    Extract installed Python package versions from PyTorch environment data.
+
+    Args:
+        system_environment: A ``SystemEnv`` instance or equivalent mapping.
+
+    Returns:
+        Package names mapped to versions in stable, case-insensitive order.
+    """
+    packages = {}
+    pip_packages = str(_system_value(system_environment, "pip_packages") or "")
+    for line in pip_packages.splitlines():
+        package, separator, version = line.partition("==")
+        if package and separator:
+            packages[package] = version
+
+    conda_packages = str(_system_value(system_environment, "conda_packages") or "")
+    for line in conda_packages.splitlines():
+        package_version = line.split()
+        if len(package_version) >= 2:
+            packages[package_version[0]] = package_version[1]
+
+    return dict(sorted(packages.items(), key=lambda package: package[0].casefold()))
 
 
 def _system_value(system_environment: Any, name: str) -> Any:
     if system_environment is None:
         return None
+    if isinstance(system_environment, dict):
+        return system_environment.get(name)
     return getattr(system_environment, name, None)
 
 
@@ -140,7 +174,6 @@ def _to_yaml_safe(value: Any) -> Any:
 
 
 def collect_environment_report(
-    *,
     run_type: str,
     timestamp_id: str,
     commit: str,
@@ -155,16 +188,8 @@ def collect_environment_report(
     Environment variables are restricted to a fixed allow-list so credentials and
     other secrets are not copied into the report.
     """
-    collection_errors: dict[str, list[str]] = {}
-    try:
-        system_environment = get_env_info()
-    except Exception as error:
-        system_environment = None
-        collection_errors["system_environment"] = [type(error).__name__]
-
-    python_packages, package_errors = _collect_python_packages()
-    if package_errors:
-        collection_errors["python_packages"] = package_errors
+    system_environment, system_errors = _collect_system_environment()
+    collection_errors = {"system_environment": system_errors} if system_errors else {}
 
     return {
         "schema_version": 1,
@@ -193,7 +218,7 @@ def collect_environment_report(
             "version": _system_value(system_environment, "python_version"),
             "platform": _system_value(system_environment, "python_platform"),
         },
-        "python_packages": python_packages,
+        "python_packages": get_python_package_versions(system_environment),
         "pytorch": {
             "version": _system_value(system_environment, "torch_version"),
             "debug_build": _system_value(system_environment, "is_debug_build"),
@@ -251,7 +276,6 @@ def collect_environment_report(
 
 
 def write_environment_report(
-    *,
     log_dir: str,
     run_type: str,
     timestamp_id: str,
@@ -269,7 +293,7 @@ def write_environment_report(
     """
     try:
         local_rank = _get_local_rank()
-    except Exception as error:
+    except ValueError as error:
         logging.warning(
             "Failed to determine local rank for environment report (%s)",
             type(error).__name__,
@@ -325,12 +349,11 @@ def write_environment_report(
                     sort_keys=False,
                 )
             os.replace(temporary_path, report_path)
-        except Exception:
+        finally:
             Path(temporary_path).unlink(missing_ok=True)
-            raise
 
-        logging.info(f"Wrote environment report to {report_path}")
+        logging.info("Wrote environment report to %s", report_path)
         return report_path
-    except Exception as error:
+    except (OSError, TypeError, ValueError, yaml.YAMLError) as error:
         logging.warning("Failed to write environment report (%s)", type(error).__name__)
         return None

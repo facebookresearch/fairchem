@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import subprocess
 from types import SimpleNamespace
 
 import yaml
@@ -44,6 +45,8 @@ def _fake_system_environment() -> SimpleNamespace:
         hip_runtime_version="N/A",
         miopen_runtime_version="N/A",
         is_xnnpack_available="True",
+        pip_packages="z-package==2.0\nA-package==1.0",
+        conda_packages="A-package 1.1 pypi_0 pypi\nconda-only 3.0 pypi_0 pypi",
     )
 
 
@@ -71,14 +74,10 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HF_TOKEN", "secret-huggingface-token")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret-cloud-key")
 
-    monkeypatch.setattr(environment, "get_env_info", _fake_system_environment)
     monkeypatch.setattr(
-        environment.metadata,
-        "distributions",
-        lambda: [
-            SimpleNamespace(metadata={"Name": "z-package"}, version="2.0"),
-            SimpleNamespace(metadata={"Name": "A-package"}, version="1.0"),
-        ],
+        environment,
+        "_collect_system_environment",
+        lambda: (_fake_system_environment(), []),
     )
     monkeypatch.setattr(environment.distutils, "get_rank", lambda: 8)
     monkeypatch.setattr(environment.distutils, "get_world_size", lambda: 16)
@@ -101,7 +100,12 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
         "SLURM_LOCALID": "0",
         "CUDA_VISIBLE_DEVICES": "0",
     }
-    assert list(report["python_packages"]) == ["A-package", "z-package"]
+    assert list(report["python_packages"]) == [
+        "A-package",
+        "conda-only",
+        "z-package",
+    ]
+    assert report["python_packages"]["A-package"] == "1.1"
     assert report["pytorch"]["version"] == "2.13.0"
     assert report["cpu"]["details"] == "CPU(s): 8\nModel name: Test CPU"
     assert "details: |-" in report_text
@@ -119,24 +123,21 @@ def test_non_node_leader_does_not_collect_or_write(tmp_path, monkeypatch) -> Non
     def fail_if_called():
         raise AssertionError("non-node leaders must not collect environment data")
 
-    monkeypatch.setattr(environment, "get_env_info", fail_if_called)
+    monkeypatch.setattr(environment, "_collect_system_environment", fail_if_called)
 
     assert _write_report(tmp_path) is None
     assert not (tmp_path / "environment").exists()
 
 
-def test_collection_failures_produce_partial_report(tmp_path, monkeypatch) -> None:
+def test_collection_failure_produces_partial_report(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LOCAL_RANK", "0")
     monkeypatch.delenv("SLURM_LOCALID", raising=False)
 
-    def fail_system_collection():
-        raise RuntimeError("sensitive failure details")
-
-    def fail_package_collection():
-        raise OSError("sensitive package details")
-
-    monkeypatch.setattr(environment, "get_env_info", fail_system_collection)
-    monkeypatch.setattr(environment.metadata, "distributions", fail_package_collection)
+    monkeypatch.setattr(
+        environment,
+        "_collect_system_environment",
+        lambda: (None, ["RuntimeError"]),
+    )
     monkeypatch.setattr(environment.distutils, "get_rank", lambda: 0)
     monkeypatch.setattr(environment.distutils, "get_world_size", lambda: 1)
 
@@ -146,12 +147,52 @@ def test_collection_failures_produce_partial_report(tmp_path, monkeypatch) -> No
 
     assert report["collection_errors"] == {
         "system_environment": ["RuntimeError"],
-        "python_packages": ["OSError"],
     }
     assert report["python_packages"] == {}
     assert report["operating_system"]["description"] is None
-    assert "sensitive failure details" not in report_text
-    assert "sensitive package details" not in report_text
+
+
+def test_system_collection_timeout_is_nonfatal(monkeypatch) -> None:
+    def time_out(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="collect-env", timeout=30)
+
+    monkeypatch.setattr(environment.subprocess, "run", time_out)
+
+    system_environment, errors = environment._collect_system_environment()
+
+    assert system_environment is None
+    assert errors == ["TimeoutExpired"]
+
+
+def test_system_collection_is_isolated_and_bounded(monkeypatch) -> None:
+    def collect(command, **kwargs):
+        assert command[:2] == [environment.sys.executable, "-c"]
+        assert kwargs["timeout"] == environment.ENVIRONMENT_COLLECTION_TIMEOUT_SECONDS
+        assert kwargs["check"] is True
+        return SimpleNamespace(stdout='{"python_version": "3.12.0"}')
+
+    monkeypatch.setattr(environment.subprocess, "run", collect)
+
+    system_environment, errors = environment._collect_system_environment()
+
+    assert system_environment == {"python_version": "3.12.0"}
+    assert errors == []
+
+
+def test_slurm_local_rank_takes_precedence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SLURM_LOCALID", "0")
+    monkeypatch.setenv("LOCAL_RANK", "1")
+    monkeypatch.setattr(
+        environment,
+        "_collect_system_environment",
+        lambda: (_fake_system_environment(), []),
+    )
+    monkeypatch.setattr(environment.distutils, "get_rank", lambda: 0)
+    monkeypatch.setattr(environment.distutils, "get_world_size", lambda: 2)
+
+    report_path = _write_report(tmp_path)
+
+    assert yaml.safe_load(report_path.read_text())["rank"]["local_rank"] == 0
 
 
 def test_invalid_local_rank_is_nonfatal(tmp_path, monkeypatch, caplog) -> None:

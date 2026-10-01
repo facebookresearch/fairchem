@@ -296,6 +296,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Cluster Validation Gotchas
 
+- `torch.utils.collect_env.get_env_info()` runs multiple external tools without
+  subprocess timeouts. Do not invoke it directly on a distributed job's critical
+  startup path; isolate the collector and enforce a timeout.
+- In Slurm processes, prefer `SLURM_LOCALID` over `LOCAL_RANK`. Slurm's value is
+  authoritative, while an inherited `LOCAL_RANK` may be stale.
 - H100 compute nodes do not have PyPI egress. Provision Python environments on
   the submission host before launching validation jobs.
 - Imports from home-backed virtual environments are extremely slow on H100

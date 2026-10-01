@@ -26,6 +26,8 @@ from torch.cuda import is_available as is_cuda_available
 from torch.profiler import ProfilerActivity, profile, record_function
 from torch.utils.collect_env import SystemEnv, get_env_info
 
+from fairchem.core.common.environment import get_python_package_versions
+
 
 class MeasurementStats:
     """
@@ -55,13 +57,11 @@ class MeasurementStats:
 
         # Assume anything decorated with @property is a stat
         properties = [
-            name for name, value in vars(self.__class__).items()
+            name
+            for name, value in vars(self.__class__).items()
             if isinstance(value, property)
         ]
-        return {
-            prop: getattr(self, prop)
-            for prop in properties
-        }
+        return {prop: getattr(self, prop) for prop in properties}
 
     @property
     def num_samples(self) -> int:
@@ -124,6 +124,7 @@ class MeasurementStats:
         """
         return float(np.std(np.array(self._values)))
 
+
 @dataclass
 class MeasurementChange:
     """
@@ -149,12 +150,10 @@ class MeasurementChange:
     relative_change: float | None = field(init=False)
 
     def __post_init__(self) -> None:
-
         # Relative change is not defined if value or baseline_value is not set
         if self.value is None or self.baseline_value is None:
             self.relative_change = None
         else:
-
             # Set to zero if there was no change
             if (difference := self.value - self.baseline_value) == 0:
                 self.relative_change = 0
@@ -206,7 +205,6 @@ class MeasurementChanges:
     total_changes: list[MeasurementChange] = field(init=False)
 
     def __post_init__(self) -> None:
-
         # Sort each of the lists to make the order predictable
         self.added.sort(key=lambda m: (m.measurement, m.metric, m.stat))
         self.removed.sort(key=lambda m: (m.measurement, m.metric, m.stat))
@@ -243,7 +241,7 @@ class MeasurementChanges:
                 )
                 for metric, stat in totals
             ],
-            key=lambda m: -abs(m.relative_change or 0)
+            key=lambda m: -abs(m.relative_change or 0),
         )
 
     def as_dict(self) -> dict[str, list[dict[str, int | float]]]:
@@ -260,10 +258,7 @@ class MeasurementChanges:
         # Assume all fields for this dataclass are lists with values that each
         # have their own as_dict() method
         return {
-            field.name: [
-                m.as_dict()
-                for m in getattr(self, field.name)
-            ]
+            field.name: [m.as_dict() for m in getattr(self, field.name)]
             for field in fields(self)
         }
 
@@ -304,9 +299,9 @@ class Measurements:
             activities.append(ProfilerActivity.CUDA)
 
         # Track performance while control is yielded
-        with profile(
-            activities=activities
-        ) as torch_profile, record_function("wrapper"):
+        with profile(activities=activities) as torch_profile, record_function(
+            "wrapper"
+        ):
             start = perf_counter()
             yield
             wall_time = perf_counter() - start
@@ -320,17 +315,15 @@ class Measurements:
         #
         # These timings are in microseconds and converted to seconds.
         self.cpu_time_sec.add_sample(
-            sum(
-                e.self_cpu_time_total
-                for e in key_averages
-            ) / 10**6
+            sum(e.self_cpu_time_total for e in key_averages) / 10**6
         )
         self.cuda_time_sec.add_sample(
             sum(
                 e.self_device_time_total
                 for e in key_averages
                 if e.device_type == DeviceType.CUDA and not e.is_user_annotation
-            ) / 10**6
+            )
+            / 10**6
         )
 
     def as_dict(self) -> dict[str, dict[str, int | float]]:
@@ -343,8 +336,7 @@ class Measurements:
 
         # Assume all fields for this dataclass have their own as_dict() method
         return {
-            field.name: getattr(self, field.name).as_dict()
-            for field in fields(self)
+            field.name: getattr(self, field.name).as_dict() for field in fields(self)
         }
 
     @staticmethod
@@ -414,7 +406,6 @@ class Measurements:
         unchanged: list[MeasurementChange] = []
         stats_iter = itertools.product(all_measurements, all_metrics, all_stats)
         for measurement, metric, stat in stats_iter:
-
             # Get the measurement stat from both reports
             target_value = target.get(measurement, {}).get(metric, {}).get(stat)
             baseline_value = baseline.get(measurement, {}).get(metric, {}).get(stat)
@@ -504,7 +495,6 @@ class EnvironmentChanges:
     unchanged: list[EnvironmentChange]
 
     def __post_init__(self) -> None:
-
         # Sort each of the lists to make the order predictable
         self.added.sort(key=lambda e: e.attribute)
         self.removed.sort(key=lambda e: e.attribute)
@@ -525,10 +515,7 @@ class EnvironmentChanges:
         # Assume all fields for this dataclass are lists with values that each
         # have their own as_dict() method
         return {
-            field.name: [
-                m.as_dict()
-                for m in getattr(self, field.name)
-            ]
+            field.name: [m.as_dict() for m in getattr(self, field.name)]
             for field in fields(self)
         }
 
@@ -541,7 +528,9 @@ _lscpu_cpu_count_pattern: re.Pattern = re.compile(r"\n\s*CPU\(s\):\s+([0-9]+)\s*
 # Matches e.g.
 #    Model name:             Type of CPU
 # And saves the "Type of CPU" in a capturing group.
-_lscpu_cpu_model_pattern: re.Pattern = re.compile(r"\n\s*Model name:\s+(.*)(?!\s*[\r\n])")
+_lscpu_cpu_model_pattern: re.Pattern = re.compile(
+    r"\n\s*Model name:\s+(.*)(?!\s*[\r\n])"
+)
 
 
 @dataclass
@@ -606,42 +595,7 @@ class Environment:
         self.miopen_runtime_version = system_env.miopen_runtime_version
         self.xnnpack_available = system_env.is_xnnpack_available
 
-        # pip_packages are stored in a multiline string:
-        #
-        #  mypy_extensions==1.1.0
-        #  numpy==2.2.6
-        #  nvidia-cublas-cu12==12.4.5.8
-        #  nvidia-cuda-cupti-cu12==12.4.127
-        #
-        # Convert to a map from package name to version. e.g.
-        #  {
-        #    "mypy_extensions": "1.1.0",
-        #    "numpy": "2.2.6"
-        #  }
-        #
-        # Conda packages are also stored in a multiline string:
-        #
-        #  numpy                     2.2.6                    pypi_0    pypi
-        #  nvidia-cublas-cu12        12.4.5.8                 pypi_0    pypi
-        #  nvidia-cuda-cupti-cu12    12.4.127                 pypi_0    pypi
-        #  nvidia-cuda-nvrtc-cu12    12.4.127                 pypi_0    pypi
-        #
-        # Also convert them to a map from package name to version:
-        #  {
-        #    "numpy": "2.2.6",
-        #    "nvidia-cublas-cu12 ": "12.4.5.8"
-        #  }
-        #
-        # Then merge both dictionaries.
-        self.libraries = {
-          package_version[0]: package_version[1]
-          for line in system_env.pip_packages.splitlines()
-          if len(package_version := line.split("==")) == 2
-        } | {
-            package_version[0]: package_version[1]
-            for line in system_env.conda_packages.splitlines()
-            if len(package_version := line.split()) >= 2
-        }
+        self.libraries = get_python_package_versions(system_env)
 
         # nvidia_gpu_models is a multiline string with lines for each gpu:
         #
@@ -654,11 +608,14 @@ class Environment:
             # Get the unique GPU types. For any situation in which there is
             # not exactly one type, mark as unknown.
             list(gpu_models)[0]
-            if len(gpu_models := {
-                parts[1].strip()
-                for line in system_env.nvidia_gpu_models.splitlines()
-                if len(parts := line.split(":")) > 1
-            }) == 1
+            if len(
+                gpu_models := {
+                    parts[1].strip()
+                    for line in system_env.nvidia_gpu_models.splitlines()
+                    if len(parts := line.split(":")) > 1
+                }
+            )
+            == 1
             else "Unknown"
         )
 
@@ -760,7 +717,6 @@ class Environment:
         changed: list[EnvironmentChange] = []
         unchanged: list[EnvironmentChange] = []
         for attribute in all_attributes:
-
             # Get the measurement stat from both reports
             target_value = get_value(target, attribute)
             baseline_value = get_value(baseline, attribute)
@@ -796,6 +752,7 @@ class Environment:
             unchanged=unchanged,
         )
 
+
 @cache
 def get_torch_env_info() -> SystemEnv:
     """
@@ -830,7 +787,7 @@ class PerformanceReport:
             "measurements": {
                 measurement_name: measurement.as_dict()
                 for measurement_name, measurement in self._measurements.items()
-            }
+            },
         }
 
     @contextmanager
@@ -896,7 +853,7 @@ def cli() -> None:
         "included in the comparison. Use this to limit to a subset of "
         "measurements. This option can be passed multiple times to set more "
         "than one stat name."
-    )
+    ),
 )
 @click.option(
     "--metric",
@@ -907,7 +864,7 @@ def cli() -> None:
         "By default, if this option is not set, all metrics will be included "
         "in the comparison. Use this to limit to a subset of metrics. This "
         "option can be passed multiple times to set more than one stat name."
-    )
+    ),
 )
 @click.option(
     "--stat",
@@ -918,13 +875,10 @@ def cli() -> None:
         "By default, if this option is not set, all stats will be included in "
         "the comparison. Use this to limit to a subset of stats. This option "
         "can be passed multiple times to set more than one stat name."
-    )
+    ),
 )
 @click.option(
-    "--json",
-    "as_json",
-    is_flag=True,
-    help="Print output formatted as a JSON object."
+    "--json", "as_json", is_flag=True, help="Print output formatted as a JSON object."
 )
 def compare(
     target: Path,
@@ -976,7 +930,6 @@ def compare(
             measurements: list[MeasurementChange],
             force_relative_change: bool = False,
         ) -> str:
-
             # Avoid errors below for empty lists
             if not measurements:
                 return header
@@ -993,7 +946,6 @@ def compare(
             # Build the measurements line by line
             lines: list[str] = []
             for m in measurements:
-
                 # Add the relative change if needed
                 line: str = "  "
                 if any_changed or force_relative_change:
@@ -1023,7 +975,6 @@ def compare(
             header: str,
             attributes: list[EnvironmentChange],
         ) -> str:
-
             # Avoid errors below for empty lists
             if not attributes:
                 return header
@@ -1034,7 +985,6 @@ def compare(
             # Build the results line by line
             lines: list[str] = []
             for a in attributes:
-
                 # Add attribute name
                 line = f"  {a.attribute.rjust(max_attribute_len)}"
 
@@ -1052,7 +1002,6 @@ def compare(
                 lines.append(line)
 
             return "\n".join([header] + lines + [""])
-
 
         print(f"""
 --------------
