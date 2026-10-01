@@ -25,6 +25,7 @@ from submitit.slurm.slurm import SlurmJobEnvironment
 from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import distutils
+from fairchem.core.common.environment import write_environment_report
 from fairchem.core.common.gp_utils import set_gp_config, setup_graph_parallel_groups
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
@@ -137,6 +138,17 @@ class SlurmSPMDProgram(Checkpointable):
         logging.info("Setting up distributed backend...")
         distutils.setup(dist_config)
         distutils.synchronize()
+        slurm_env = self.config.job.metadata.slurm_env
+        write_environment_report(
+            log_dir=self.config.job.metadata.log_dir,
+            run_type=run_type.value,
+            timestamp_id=self.config.job.timestamp_id,
+            commit=self.config.job.metadata.commit,
+            job_id=slurm_env.job_id,
+            array_job_id=slurm_env.array_job_id,
+            array_task_id=slurm_env.array_task_id,
+            restart_count=slurm_env.restart_count,
+        )
         if (
             distutils.is_master()
             and self.config.job.scheduler.mode == SchedulerType.SLURM
