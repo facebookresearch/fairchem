@@ -5,14 +5,20 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.18.1
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# UMA Intro Tutorial
+# General UMA Workshop
+
+This 1–2 hour tutorial is intended for classrooms, workshops, and guided
+self-study. It combines several UMA workflows in one linear lesson. The same
+topics also appear as shorter, task-focused pages elsewhere in the
+documentation; use [Hello World](../core/quickstart.md) if you only need a
+concise introduction.
 
 :::{note} Learning Objectives
 By the end of this tutorial, you will be able to:
@@ -27,7 +33,9 @@ By the end of this tutorial, you will be able to:
 - Set up and run transition state calculations (NEBs)
 :::
 
-This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations.
+This tutorial walks through representative ways to use UMA. It is best suited
+to researchers who are new to UMA and already have some familiarity with ASE
+and molecular simulation.
 
 
 # Before you start / installation
@@ -108,7 +116,7 @@ We don't set a device here, so we get a warning about using a CPU device. You ca
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 ```
 
 ```{code-cell}
@@ -142,7 +150,7 @@ from ase.build import add_adsorbate, fcc100, molecule
 from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -170,7 +178,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -193,7 +201,7 @@ from ase.io import Trajectory
 from ase.md.langevin import Langevin
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -257,7 +265,7 @@ from ase.build import add_adsorbate, fcc111
 from ase.optimize import BFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -339,7 +347,7 @@ axs[1].set_axis_off()
 from ase import Atoms
 from ase.optimize import BFGS
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 from ase.vibrations import Vibrations
@@ -369,7 +377,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 
 cu = Atoms(
     [Atom("Cu", [0.000, 0.000, 0.000])],
@@ -472,7 +480,7 @@ Phonons have applications in computing the stability and free energy of solids. 
 from ase.build import bulk
 from ase.phonons import Phonons
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Setup crystal
@@ -543,7 +551,7 @@ from ase.build import add_adsorbate, fcc111, molecule
 from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object

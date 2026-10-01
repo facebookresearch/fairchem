@@ -1,5 +1,11 @@
 # `fairchem>=2.0`
 
+Fairchem 2 is the current platform for pretrained UMA models, multi-task
+training, and scalable atomistic inference. It replaces the version 1 trainer,
+calculator, and model interfaces with a Hydra-configured system built around a
+shared backbone and task-aware prediction heads. New projects should use
+fairchem 2 and the current `FAIRChemCalculator` interface.
+
 :::{warning}
 `fairchem>=2.0` is a major upgrade with completely rewritten trainer, fine-tuning, models, and calculators. The old `OCPCalculator` and trainer code will NOT be revived.
 :::
@@ -9,9 +15,9 @@ We plan to bring back the following models compatible with Fairchem V2 soon:
 * EquiformerV2
 * eSEN
 
-:::{tip}
-We will be releasing more detailed documentation on how to use Fairchem V2. Stay tuned!
-:::
+Start with the [installation guide](./install.md) and [Hello
+World](./quickstart.md), then use the [common workflows](./common_tasks/summary.md)
+for training, evaluation, and scaled inference.
 
 ## Using Fairchem V1
 

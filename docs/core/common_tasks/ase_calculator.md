@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -116,7 +116,7 @@ Use batch mode for heterogeneous batches whose systems differ in composition, ta
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings="batch"
+    "uma-s-1p2p1", device="cuda", inference_settings="batch"
 )
 ```
 
@@ -126,7 +126,7 @@ Turbo mode uses the same `merge_mole + compile` fast path as default mode and ad
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
 )
 ```
 
@@ -162,7 +162,7 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings=settings
+    "uma-s-1p2p1", device="cuda", inference_settings=settings
 )
 ```
 
@@ -185,7 +185,7 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings=settings
+    "uma-s-1p2p1", device="cuda", inference_settings=settings
 )
 ```
 
@@ -210,7 +210,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2p1", inference_settings="turbo", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
