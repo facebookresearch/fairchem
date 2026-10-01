@@ -1,7 +1,7 @@
 # Molecular Dynamics with ASE
 
 FAIRChem models implement the standard
-[ASE calculator interface](https://wiki.fysik.dtu.dk/ase/ase/calculators/calculators.html).
+[ASE calculator interface](https://docs.ase-lib.org/ase/calculators/calculators.html).
 You can therefore use them with ASE molecular dynamics directly, or use
 FAIRChem's Hydra-configured `MDRunner` when you need reproducible configuration,
 structured output, checkpointing, or cluster submission.
@@ -39,6 +39,12 @@ both the launcher device and calculator device (CPU inference is much slower):
 fairchem -c configs/uma/md/nvt.yaml \
   job.device_type=CPU runner.calculator.device=cpu
 ```
+
+The examples select `inference_settings: turbo`, which enables TF32. Hardware-
+accelerated TF32 requires an NVIDIA GPU with compute capability 8.0 or newer
+(Ampere or a later architecture). On older GPUs, or when the TF32 precision
+trade-off is not appropriate, use `inference_settings="default"` in Python or
+the Hydra override `runner.calculator.inference_settings=default`.
 
 ## Run NVT directly with ASE
 
@@ -86,8 +92,8 @@ trajectory.close()
 
 `turbo` inference is a good fit for MD because composition, task, charge, and
 spin normally remain fixed throughout a trajectory. It enables TF32 in
-addition to the compiled fast path, so use the default inference mode when the
-small precision trade-off is not appropriate.
+addition to the compiled fast path; the hardware requirement and fallback are
+described in [Prerequisites](#prerequisites).
 
 The explicit `FixCom` constraint with `fixcm=False` follows ASE's recommended
 Langevin behavior. ASE's legacy internal `fixcm=True` correction does not
@@ -95,9 +101,26 @@ strictly sample the correct NVT position and momentum distributions, with a
 larger effect for small systems. The Hydra NVT example selects the same
 constraint-based behavior through `use_fix_com_constraint: true`.
 
-## Choose an ensemble
+## Run with Hydra
 
-`MDRunner` provides the following ASE dynamics adapters:
+The repository contains two runnable configurations:
+
+- [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
+  uses Langevin NVT at 300 K.
+- [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
+  uses Berendsen NPT at 300 K and 1 bar.
+
+Run either configuration from the repository root:
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml
+fairchem -c configs/uma/md/npt.yaml
+```
+
+### Choose an ensemble
+
+The Hydra configurations instantiate `MDRunner`, which provides the following
+ASE dynamics adapters:
 
 | Ensemble | Adapter | Important parameters |
 | --- | --- | --- |
@@ -121,22 +144,6 @@ illustrative Cu bulk modulus of 140 GPa using
 `1 / (140 GPa * 10,000 bar/GPa)`. This is a material-specific physical input,
 not a value inferred by the calculator. Replace it with an appropriate
 isothermal compressibility whenever you replace the example system.
-
-## Run with Hydra
-
-The repository contains two runnable configurations:
-
-- [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
-  uses Langevin NVT at 300 K.
-- [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
-  uses Berendsen NPT at 300 K and 1 bar.
-
-Run either configuration from the repository root:
-
-```bash
-fairchem -c configs/uma/md/nvt.yaml
-fairchem -c configs/uma/md/npt.yaml
-```
 
 Hydra overrides let you reuse the configuration without editing it:
 
@@ -238,8 +245,10 @@ the run's `checkpoints` directory requests a checkpoint and graceful stop.
 
 ## Adapt the configuration to a cluster
 
-The example YAMLs deliberately contain no FAIR-specific paths or scheduler
-settings. For a single-GPU SLURM job, supply values appropriate to your site:
+SLURM clusters differ in scheduler policies, hardware, and filesystem layout,
+so the repository does not provide a default cluster YAML. Start with either
+local example configuration and supply values appropriate to your site. For a
+single-GPU SLURM job, the required overrides typically look like:
 
 ```bash
 fairchem -c configs/uma/md/nvt.yaml \

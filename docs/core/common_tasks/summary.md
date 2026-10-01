@@ -10,7 +10,7 @@ Use FAIRChem models with ASE for single-point calculations and relaxations.
 :::
 
 :::{card} Molecular Dynamics
-:link: molecular_dynamics
+:link: ./molecular_dynamics.md
 Run NVT and NPT simulations directly with ASE or through reproducible Hydra configurations.
 :::
 
