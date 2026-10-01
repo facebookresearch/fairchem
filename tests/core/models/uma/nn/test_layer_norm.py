@@ -12,6 +12,7 @@ import math
 import pytest
 import torch
 import torch.nn as nn
+from e3nn.o3 import rand_angles, wigner_D
 
 from src.fairchem.core.models.uma.nn.layer_norm import (
     EquivariantDegreeLayerScale,
@@ -20,6 +21,7 @@ from src.fairchem.core.models.uma.nn.layer_norm import (
     EquivariantRMSNormArraySphericalHarmonics,
     EquivariantRMSNormArraySphericalHarmonicsV2,
     get_l_to_all_m_expand_index,
+    get_normalization_layer,
 )
 
 
@@ -1015,3 +1017,107 @@ class TestEquivariantDegreeLayerScale:
         assert f"lmax={data['lmax']}" in repr_str
         assert f"num_channels={data['num_channels']}" in repr_str
         assert f"scale_factor={scale_factor}" in repr_str
+
+
+def _random_rotation(lmax):
+    """
+    Block-diagonal real Wigner D-matrix for a random rotation, one block per degree.
+    """
+    angles = rand_angles(dtype=torch.float64)
+    return torch.block_diag(*[wigner_D(lval, *angles) for lval in range(lmax + 1)])
+
+
+class TestNormalizationProperties:
+    """
+    Properties every equivariant normalization layer in this module should have.
+    """
+
+    lmax = 3
+    num_channels = 8
+    norm_classes = (
+        EquivariantLayerNormArray,
+        EquivariantLayerNormArraySphericalHarmonics,
+        EquivariantRMSNormArraySphericalHarmonics,
+        EquivariantRMSNormArraySphericalHarmonicsV2,
+    )
+
+    def _make_layer(self, layer_class, **kwargs):
+        """
+        Build a float64 layer with random affine parameters, so that weights and
+        biases affect the output.
+        """
+        torch.manual_seed(0)
+        layer = layer_class(self.lmax, self.num_channels, **kwargs).double()
+        with torch.no_grad():
+            for param in layer.parameters():
+                param.uniform_(0.5, 1.5)
+        return layer
+
+    def _make_input(self, num_nodes=5):
+        torch.manual_seed(1)
+        return torch.randn(
+            num_nodes, (self.lmax + 1) ** 2, self.num_channels, dtype=torch.float64
+        )
+
+    @pytest.mark.parametrize(
+        "layer_class", [*norm_classes, EquivariantDegreeLayerScale]
+    )
+    def test_rotation_equivariance(self, layer_class):
+        """
+        Rotating the input rotates the output in the same way: layer(D x) equals
+        D layer(x) for a Wigner D-matrix D acting on the m components.
+        """
+        layer = self._make_layer(layer_class)
+        x = self._make_input()
+        rotation = _random_rotation(self.lmax)
+
+        output_of_rotated = layer(torch.einsum("ij,njc->nic", rotation, x))
+        rotated_output = torch.einsum("ij,njc->nic", rotation, layer(x))
+
+        torch.testing.assert_close(output_of_rotated, rotated_output)
+
+    @pytest.mark.parametrize("layer_class", norm_classes)
+    def test_nodes_are_normalized_independently(self, layer_class):
+        """
+        Each node is normalized using only its own features, so normalizing a
+        batch gives the same result as normalizing each node on its own.
+        """
+        layer = self._make_layer(layer_class)
+        x = self._make_input()
+
+        per_node = torch.cat([layer(x[i : i + 1]) for i in range(x.shape[0])])
+
+        torch.testing.assert_close(layer(x), per_node)
+
+    @pytest.mark.parametrize("layer_class", norm_classes)
+    def test_output_does_not_depend_on_input_scale(self, layer_class):
+        """
+        Scaling the whole input leaves the normalized output unchanged. eps is
+        made negligible so that it does not blur the comparison.
+        """
+        layer = self._make_layer(layer_class, eps=1e-12)
+        x = self._make_input()
+
+        torch.testing.assert_close(layer(3.0 * x), layer(x))
+
+    def test_get_normalization_layer(self):
+        """
+        Each norm_type name builds the matching layer class, and unknown names
+        are rejected.
+        """
+        expected_classes = {
+            "layer_norm": EquivariantLayerNormArray,
+            "layer_norm_sh": EquivariantLayerNormArraySphericalHarmonics,
+            "rms_norm_sh": EquivariantRMSNormArraySphericalHarmonicsV2,
+        }
+        for norm_type, layer_class in expected_classes.items():
+            layer = get_normalization_layer(
+                norm_type, lmax=self.lmax, num_channels=self.num_channels
+            )
+            assert type(layer) is layer_class
+            assert (layer.lmax, layer.num_channels) == (self.lmax, self.num_channels)
+
+        with pytest.raises((AssertionError, ValueError)):
+            get_normalization_layer(
+                "batch_norm", lmax=self.lmax, num_channels=self.num_channels
+            )
