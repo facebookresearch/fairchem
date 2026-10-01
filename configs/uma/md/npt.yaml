@@ -1,0 +1,44 @@
+model_name: uma-s-1p2
+task_name: omat
+temperature_K: 300.0
+pressure_bar: 1.0
+seed: 42
+
+job:
+  device_type: CUDA
+  run_dir: ./md-runs
+  run_name: fcc-cu-npt
+  seed: ${seed}
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 1
+
+runner:
+  _target_: fairchem.core.components.calculate.MDRunner
+  calculator:
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${model_name}
+    task_name: ${task_name}
+    inference_settings: turbo
+    device: cuda
+    workers: 1
+  atoms:
+    _target_: fairchem.core.datasets.common_structures.get_fcc_crystal_by_num_cells
+    n_cells: 2
+    atom_type: Cu
+    lattice_constant: 3.61
+  thermostat:
+    _target_: fairchem.core.components.calculate.BerendsenNPT
+    temperature_K: ${temperature_K}
+    pressure_bar: ${pressure_bar}
+    taut_fs: 100.0
+    taup_fs: 1000.0
+    compressibility_bar: 7.14e-7
+  timestep_fs: 1.0
+  steps: 1000
+  trajectory_interval: 10
+  log_interval: 10
+  checkpoint_interval: 100
+  heartbeat_interval: 100
+  velocity_seed: ${seed}
+  initialization_temperature_K: ${temperature_K}

@@ -35,6 +35,9 @@ from fairchem.core.components.calculate import (
     TrajectoryFrame,
     VelocityVerletThermostat,
 )
+from fairchem.core.components.calculate.simulation_tools.initialization import (
+    initialize_momenta,
+)
 
 
 @dataclass
@@ -88,6 +91,66 @@ def results_dir():
 
 
 class TestMDRunner:
+    def test_initialize_momenta_is_reproducible(self):
+        """
+        Initial momenta use the requested seed and have no center-of-mass drift.
+        """
+        atoms1 = bulk("Cu", cubic=True) * (2, 2, 2)
+        atoms2 = atoms1.copy()
+
+        initialize_momenta(atoms1, temperature_K=300.0, seed=17)
+        initialize_momenta(atoms2, temperature_K=300.0, seed=17)
+
+        npt.assert_array_equal(atoms1.get_momenta(), atoms2.get_momenta())
+        npt.assert_allclose(atoms1.get_momenta().sum(axis=0), 0.0, atol=1e-12)
+        assert atoms1.info["velocity_seed"] == 17
+        assert atoms1.info["initial_temperature_K"] == 300.0
+
+    @pytest.mark.parametrize(
+        ("velocity_seed", "initialization_temperature_K"),
+        [(17, None), (None, 300.0)],
+    )
+    def test_initialization_requires_seed_and_temperature(
+        self,
+        cu_atoms,
+        results_dir,
+        velocity_seed,
+        initialization_temperature_K,
+    ):
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            thermostat=VelocityVerletThermostat(),
+            steps=0,
+            velocity_seed=velocity_seed,
+            initialization_temperature_K=initialization_temperature_K,
+        )
+        runner._job_config = _create_mock_job_config(str(results_dir))
+
+        with pytest.raises(
+            ValueError,
+            match="velocity_seed and initialization_temperature_K must be set together",
+        ):
+            runner.calculate()
+
+    def test_initialization_is_not_repeated_after_resume(self, results_dir):
+        atoms = bulk("Cu", cubic=True) * (2, 2, 2)
+        atoms.set_momenta(np.zeros((len(atoms), 3)))
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=atoms,
+            thermostat=VelocityVerletThermostat(),
+            steps=1,
+            velocity_seed=17,
+            initialization_temperature_K=300.0,
+        )
+        runner._start_step = 1
+        runner._job_config = _create_mock_job_config(str(results_dir))
+
+        runner.calculate()
+
+        npt.assert_array_equal(runner._atoms.get_momenta(), np.zeros((len(atoms), 3)))
+
     def test_md_correctness_vs_ase(self, cu_atoms, results_dir):
         """
         Verify MDRunner produces identical trajectories to plain ASE.

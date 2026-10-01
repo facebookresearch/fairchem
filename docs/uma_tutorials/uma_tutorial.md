@@ -27,7 +27,7 @@ By the end of this tutorial, you will be able to:
 - Set up and run transition state calculations (NEBs)
 :::
 
-This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations. 
+This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations.
 
 
 # Before you start / installation
@@ -222,6 +222,12 @@ plt.xlabel("Time (fs)")
 plt.ylabel("Energy (eV)");
 ```
 
+:::{seealso}
+For tested NVT and NPT examples, velocity initialization, Hydra configurations,
+checkpointing, and cluster submission, see the
+[molecular dynamics guide](../core/common_tasks/molecular_dynamics.md).
+:::
+
 # [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
 
 The basic approach in computing an adsorption energy is to compute this energy difference:
@@ -232,7 +238,7 @@ We use UMA for two of these energies `E_adslab` and `E_slab`. For `E_ads` We hav
 
 The OC20 reference scheme is this reaction:
 
-    x CO + (x + y/2 - z) H2 + (z-x) H2O + w/2 N2 + * -> CxHyOzNw*  
+    x CO + (x + y/2 - z) H2 + (z-x) H2O + w/2 N2 + * -> CxHyOzNw*
 
 For this example we have
 
@@ -642,6 +648,6 @@ This takes up to an hour with a GPU, and much longer with a CPU.
 
 The CatTsunami tutorial is an example of enumerating initial and final states, and computing reaction paths between them with UMA.
 
-## Acknowledgements 
+## Acknowledgements
 
 This tutorial was originally compiled by John Kitchin (CMU) for the NAM29 catalysis tutorial session, using a variety of resources from the FAIR chemistry repository.

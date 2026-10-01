@@ -6,7 +6,12 @@ This section provides practical guides for common tasks you will encounter when 
 
 :::{card} ASE Calculator
 :link: ase_calculator
-Use FAIRChem models with ASE for single-point calculations, relaxations, and molecular dynamics.
+Use FAIRChem models with ASE for single-point calculations and relaxations.
+:::
+
+:::{card} Molecular Dynamics
+:link: molecular_dynamics
+Run NVT and NPT simulations directly with ASE or through reproducible Hydra configurations.
 :::
 
 :::{card} Batch Inference

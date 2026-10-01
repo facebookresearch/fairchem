@@ -29,6 +29,7 @@ project:
         - file: core/common_tasks/summary.md
           children:
             - file: core/common_tasks/ase_calculator.md
+            - file: core/common_tasks/molecular_dynamics.md
             - file: core/common_tasks/lammps.md
             - file: core/common_tasks/batch_inference.md
             - file: core/common_tasks/inference_batcher.md

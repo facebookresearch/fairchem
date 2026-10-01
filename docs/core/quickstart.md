@@ -236,6 +236,12 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
+:::{seealso}
+The [molecular dynamics guide](common_tasks/molecular_dynamics.md) covers
+velocity initialization, NVT and NPT ensembles, Hydra configurations,
+checkpointing, and cluster submission.
+:::
+
 ## Calculate a spin gap
 
 :::{note}
