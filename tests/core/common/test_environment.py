@@ -213,6 +213,15 @@ def test_slurm_local_rank_takes_precedence(tmp_path, monkeypatch) -> None:
     assert yaml.safe_load(report_path.read_text())["rank"]["local_rank"] == 0
 
 
+def test_slurm_rank_is_used_before_distributed_setup(monkeypatch) -> None:
+    monkeypatch.setenv("SLURM_PROCID", "3")
+    monkeypatch.setenv("SLURM_NTASKS", "8")
+    monkeypatch.setattr(environment.distutils, "initialized", lambda: False)
+
+    assert environment._get_global_rank() == 3
+    assert environment._get_world_size() == 8
+
+
 def test_invalid_local_rank_is_nonfatal(tmp_path, monkeypatch, caplog) -> None:
     monkeypatch.setenv("SLURM_LOCALID", "not-an-integer")
 

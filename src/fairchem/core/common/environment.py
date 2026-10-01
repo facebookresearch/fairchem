@@ -107,6 +107,18 @@ def _get_node_id() -> str:
     return os.environ.get("SLURM_NODEID", "0")
 
 
+def _get_global_rank() -> int:
+    if not distutils.initialized() and "SLURM_PROCID" in os.environ:
+        return int(os.environ["SLURM_PROCID"])
+    return distutils.get_rank()
+
+
+def _get_world_size() -> int:
+    if not distutils.initialized() and "SLURM_NTASKS" in os.environ:
+        return int(os.environ["SLURM_NTASKS"])
+    return distutils.get_world_size()
+
+
 def _safe_filename_component(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", value)
 
@@ -219,9 +231,9 @@ def collect_environment_report(
             "restart_count": restart_count,
         },
         "rank": {
-            "global_rank": distutils.get_rank(),
+            "global_rank": _get_global_rank(),
             "local_rank": _get_local_rank(),
-            "world_size": distutils.get_world_size(),
+            "world_size": _get_world_size(),
             "node_id": _get_node_id(),
             "hostname": socket.gethostname(),
         },
