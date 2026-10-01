@@ -11,7 +11,7 @@
     <loc>http://localhost:3000/quickstart</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/fairchemv1-v2</loc>
+    <loc>http://localhost:3000/introduction</loc>
   </url>
   <url>
     <loc>http://localhost:3000/uma</loc>
@@ -53,25 +53,19 @@
     <loc>http://localhost:3000/workflows</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/uma-faq</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/summary-1</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/uma-tutorial</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/uma-catalysis-tutorial</loc>
-  </url>
-  <url>
     <loc>http://localhost:3000/generative-models</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/fair-chemistry-papers</loc>
+    <loc>http://localhost:3000/leaderboard</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-2</loc>
+    <loc>http://localhost:3000/omol</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/oc20</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/summary-1</loc>
   </url>
   <url>
     <loc>http://localhost:3000/omol25</loc>
@@ -86,13 +80,31 @@
     <loc>http://localhost:3000/models</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/faq</loc>
+    <loc>http://localhost:3000/summary-2</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/omat24</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/models-1</loc>
   </url>
   <url>
     <loc>http://localhost:3000/summary-3</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/oc20</loc>
+    <loc>http://localhost:3000/formation-energy</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/phonons</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/elastic</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/summary-4</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/oc20-1</loc>
   </url>
   <url>
     <loc>http://localhost:3000/oc20-mads</loc>
@@ -113,10 +125,10 @@
     <loc>http://localhost:3000/oc25</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/models-1</loc>
+    <loc>http://localhost:3000/models-2</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-4</loc>
+    <loc>http://localhost:3000/summary-5</loc>
   </url>
   <url>
     <loc>http://localhost:3000/ocp-introduction</loc>
@@ -134,43 +146,7 @@
     <loc>http://localhost:3000/ocpapi</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/faq-1</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/summary-5</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/omol</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/oc20-1</loc>
-  </url>
-  <url>
     <loc>http://localhost:3000/summary-6</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/omat24</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/models-2</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/summary-7</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/formation-energy</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/phonons</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/elastic</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/faq-2</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/summary-8</loc>
   </url>
   <url>
     <loc>http://localhost:3000/odac25</loc>
@@ -182,15 +158,30 @@
     <loc>http://localhost:3000/models-3</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/summary-9</loc>
+    <loc>http://localhost:3000/summary-7</loc>
   </url>
   <url>
     <loc>http://localhost:3000/adsorption-energy</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/intro-series</loc>
+    <loc>http://localhost:3000/workshop-tutorials</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/technical-talks</loc>
+    <loc>http://localhost:3000/uma-tutorial</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/uma-catalysis-tutorial</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/fair-chemistry-papers</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/faq</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/videos</loc>
+  </url>
+  <url>
+    <loc>http://localhost:3000/fairchemv1-v2</loc>
   </url>
 </urlset>
