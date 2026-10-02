@@ -7,12 +7,14 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from types import SimpleNamespace
 
-import yaml
+from click.testing import CliRunner
 
 from fairchem.core.common import environment
+from tests.perf import performance_report
 
 
 class _StringSubclass(str):
@@ -85,9 +87,11 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
 
     report_path = _write_report(tmp_path)
 
-    assert report_path == (tmp_path / "environment" / "run_123_4_node_2_restart_1.yaml")
+    assert report_path == (tmp_path / "environment" / "run_123_4_node_2_restart_1.json")
     report_text = report_path.read_text()
-    report = yaml.safe_load(report_text)
+    report = json.loads(report_text)
+    assert report["schema_version"] == 1
+    assert report["measurements"] == {}
     assert report["rank"] == {
         "global_rank": 8,
         "local_rank": 0,
@@ -95,20 +99,20 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
         "node_id": "2",
         "hostname": "test-host",
     }
-    assert report["environment_variables"] == {
+    assert report["environment"]["environment_variables"] == {
         "SLURM_NODEID": "2",
         "SLURM_LOCALID": "0",
         "CUDA_VISIBLE_DEVICES": "0",
     }
-    assert list(report["python_packages"]) == [
+    assert list(report["environment"]["libraries"]) == [
         "A-package",
         "conda-only",
         "z-package",
     ]
-    assert report["python_packages"]["A-package"] == "1.1"
-    assert report["pytorch"]["version"] == "2.13.0"
-    assert report["cpu"]["details"] == "CPU(s): 8\nModel name: Test CPU"
-    assert "details: |-" in report_text
+    assert report["environment"]["libraries"]["A-package"] == "1.1"
+    assert report["environment"]["pytorch_version"] == "2.13.0"
+    assert report["environment"]["num_cpus"] == "8"
+    assert report["environment"]["cpu_model"] == "Test CPU"
     assert "HF_TOKEN" not in report_text
     assert "secret-huggingface-token" not in report_text
     assert "AWS_SECRET_ACCESS_KEY" not in report_text
@@ -143,13 +147,49 @@ def test_collection_failure_produces_partial_report(tmp_path, monkeypatch) -> No
 
     report_path = _write_report(tmp_path)
     report_text = report_path.read_text()
-    report = yaml.safe_load(report_text)
+    report = json.loads(report_text)
 
     assert report["collection_errors"] == {
         "system_environment": ["RuntimeError"],
     }
-    assert report["python_packages"] == {}
-    assert report["operating_system"]["description"] is None
+    assert report["environment"]["libraries"] == {}
+    assert report["environment"]["os"] is None
+
+
+def test_written_report_is_accepted_by_performance_cli(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOCAL_RANK", "0")
+    monkeypatch.setenv("OMP_NUM_THREADS", "8")
+    monkeypatch.delenv("SLURM_LOCALID", raising=False)
+    monkeypatch.setattr(
+        environment,
+        "_collect_system_environment",
+        lambda: (_fake_system_environment(), []),
+    )
+    monkeypatch.setattr(environment.distutils, "get_rank", lambda: 0)
+    monkeypatch.setattr(environment.distutils, "get_world_size", lambda: 1)
+    report_path = _write_report(tmp_path)
+    target_report = json.loads(report_path.read_text())
+    target_report["environment"]["environment_variables"]["OMP_NUM_THREADS"] = "4"
+    target_path = tmp_path / "target.json"
+    target_path.write_text(json.dumps(target_report))
+
+    result = CliRunner().invoke(
+        performance_report.cli,
+        ["compare", str(target_path), "--baseline", str(report_path), "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    comparison = json.loads(result.output)
+    assert comparison["environment"]["changed"] == [
+        {
+            "attribute": "environment_variables.OMP_NUM_THREADS",
+            "value": "4",
+            "baseline_value": "8",
+        }
+    ]
+    assert comparison["environment"]["added"] == []
+    assert comparison["environment"]["removed"] == []
+    assert comparison["environment"]["unchanged"]
 
 
 def test_system_collection_timeout_is_nonfatal(monkeypatch) -> None:
@@ -210,7 +250,7 @@ def test_slurm_local_rank_takes_precedence(tmp_path, monkeypatch) -> None:
 
     report_path = _write_report(tmp_path)
 
-    assert yaml.safe_load(report_path.read_text())["rank"]["local_rank"] == 0
+    assert json.loads(report_path.read_text())["rank"]["local_rank"] == 0
 
 
 def test_slurm_rank_is_used_before_distributed_setup(monkeypatch) -> None:

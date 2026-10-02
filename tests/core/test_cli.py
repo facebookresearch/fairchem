@@ -19,7 +19,6 @@ from unittest.mock import MagicMock
 
 import hydra
 import pytest
-import yaml
 from omegaconf import OmegaConf
 
 from fairchem.core import _cli
@@ -57,9 +56,9 @@ def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
         / timestamp_id
         / "logs"
         / "environment"
-        / f"run_{timestamp_id}_node_0_restart_0.yaml"
+        / f"run_{timestamp_id}_node_0_restart_0.json"
     )
-    report = yaml.safe_load(report_path.read_text())
+    report = json.loads(report_path.read_text())
 
     assert report["schema_version"] == 1
     assert report["job"]["run_type"] == "run"
@@ -71,9 +70,9 @@ def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
         "node_id": "0",
         "hostname": report["rank"]["hostname"],
     }
-    assert report["python"]["version"]
-    assert report["pytorch"]["version"]
-    assert "torch" in report["python_packages"]
+    assert report["environment"]["python_version"]
+    assert report["environment"]["pytorch_version"]
+    assert "torch" in report["environment"]["libraries"]
     assert report["collection_errors"] == {}
 
 

@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import os
@@ -15,10 +16,12 @@ import socket
 import subprocess
 import sys
 import tempfile
+from dataclasses import InitVar, asdict, dataclass, field, fields
+from functools import cache
 from pathlib import Path
 from typing import Any
 
-import yaml
+from torch.utils.collect_env import SystemEnv, get_env_info
 
 from fairchem.core.common import distutils
 
@@ -82,18 +85,6 @@ ENVIRONMENT_VARIABLE_ALLOWLIST = (
     "NUMEXPR_NUM_THREADS",
     "LOGLEVEL",
 )
-
-
-class _EnvironmentDumper(yaml.SafeDumper):
-    pass
-
-
-def _represent_string(dumper: yaml.SafeDumper, value: str) -> yaml.nodes.ScalarNode:
-    style = "|" if "\n" in value else None
-    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
-
-
-_EnvironmentDumper.add_representer(str, _represent_string)
 
 
 def _get_local_rank() -> int:
@@ -187,18 +178,271 @@ def _system_value(system_environment: Any, name: str) -> Any:
     return getattr(system_environment, name, None)
 
 
-def _to_yaml_safe(value: Any) -> Any:
+def _to_json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
         return str(value)
     if isinstance(value, dict):
         return {
-            str(key): _to_yaml_safe(nested_value) for key, nested_value in value.items()
+            str(key): _to_json_safe(nested_value) for key, nested_value in value.items()
         }
     if isinstance(value, (list, tuple, set)):
-        return [_to_yaml_safe(nested_value) for nested_value in value]
+        return [_to_json_safe(nested_value) for nested_value in value]
     return str(value)
+
+
+@dataclass
+class EnvironmentChange:
+    """Store one environment attribute change between two reports."""
+
+    attribute: str
+    value: Any
+    baseline_value: Any
+
+    def as_dict(self) -> dict[str, Any]:
+        """Create a dictionary containing this change."""
+        return asdict(self)
+
+
+@dataclass
+class EnvironmentChanges:
+    """Store environment changes grouped by change type."""
+
+    added: list[EnvironmentChange]
+    removed: list[EnvironmentChange]
+    changed: list[EnvironmentChange]
+    unchanged: list[EnvironmentChange]
+
+    def __post_init__(self) -> None:
+        for changes in (self.added, self.removed, self.changed, self.unchanged):
+            changes.sort(key=lambda change: change.attribute)
+
+    def as_dict(self) -> dict[str, list[dict[str, Any]]]:
+        """Create a dictionary containing all grouped changes."""
+        return {
+            item.name: [change.as_dict() for change in getattr(self, item.name)]
+            for item in fields(self)
+        }
+
+
+# Match the corresponding fields in the multiline output from ``lscpu``.
+_LSCPU_CPU_COUNT_PATTERN = re.compile(r"(?:^|\n)\s*CPU\(s\):\s+([0-9]+)\s*(?:\r?\n|$)")
+_LSCPU_CPU_MODEL_PATTERN = re.compile(r"(?:^|\n)\s*Model name:\s+(.*?)\s*(?:\r?\n|$)")
+_COLLECT_CURRENT_ENVIRONMENT = object()
+
+
+@dataclass
+class Environment:
+    """Store comparable information about a software and hardware environment.
+
+    The field names preserve the performance-report schema. Additional launcher
+    information is represented as fields in the same schema so reports written by
+    FairChem can be compared by the existing performance-report tooling.
+    """
+
+    _system_environment: InitVar[Any] = _COLLECT_CURRENT_ENVIRONMENT
+    _commit: InitVar[str | None] = None
+
+    git_commit_hash: str = field(init=False)
+
+    pytorch_version: Any = field(init=False)
+    pytorch_is_debug_build: Any = field(init=False)
+    cuda_version_to_build_pytorch: Any = field(init=False)
+    rocm_version_to_build_pytorch: Any = field(init=False)
+    pytorch_caching_allocator_config: Any = field(init=False)
+
+    os: Any = field(init=False)
+    gcc_version: Any = field(init=False)
+    clang_version: Any = field(init=False)
+    cmake_version: Any = field(init=False)
+    libc_version: Any = field(init=False)
+
+    python_version: Any = field(init=False)
+    python_platform: Any = field(init=False)
+    cuda_runtime_version: Any = field(init=False)
+    cuda_module_loading: Any = field(init=False)
+    nvidia_driver_version: Any = field(init=False)
+    cudnn_version: Any = field(init=False)
+    hip_runtime_version: Any = field(init=False)
+    miopen_runtime_version: Any = field(init=False)
+    xnnpack_available: Any = field(init=False)
+
+    libraries: dict[str, str] = field(init=False)
+
+    num_gpus: str = field(init=False)
+    gpu_model: str = field(init=False)
+    nvidia_gpu_models: Any = field(init=False)
+    num_cpus: str = field(init=False)
+    cpu_model: str = field(init=False)
+    cpu_info: Any = field(init=False)
+    cuda_available: Any = field(init=False)
+    xpu_available: Any = field(init=False)
+    environment_variables: dict[str, str] = field(init=False)
+
+    @classmethod
+    def from_system_environment(
+        cls,
+        system_environment: Any,
+        commit: str,
+    ) -> Environment:
+        """Build an environment from already collected PyTorch data."""
+        return cls(_system_environment=system_environment, _commit=commit)
+
+    def __post_init__(self, _system_environment: Any, _commit: str | None) -> None:
+        system_environment = (
+            get_torch_env_info()
+            if _system_environment is _COLLECT_CURRENT_ENVIRONMENT
+            else _system_environment
+        )
+
+        self.git_commit_hash = _commit or self._get_git_commit_hash()
+
+        self.pytorch_version = _system_value(system_environment, "torch_version")
+        self.pytorch_is_debug_build = _system_value(
+            system_environment, "is_debug_build"
+        )
+        self.cuda_version_to_build_pytorch = _system_value(
+            system_environment, "cuda_compiled_version"
+        )
+        self.rocm_version_to_build_pytorch = _system_value(
+            system_environment, "hip_compiled_version"
+        ) or _system_value(system_environment, "rocm_compiled_version")
+        self.pytorch_caching_allocator_config = _system_value(
+            system_environment, "caching_allocator_config"
+        )
+
+        self.os = _system_value(system_environment, "os")
+        self.gcc_version = _system_value(system_environment, "gcc_version")
+        self.clang_version = _system_value(system_environment, "clang_version")
+        self.cmake_version = _system_value(system_environment, "cmake_version")
+        self.libc_version = _system_value(system_environment, "libc_version")
+
+        self.python_version = _system_value(system_environment, "python_version")
+        self.python_platform = _system_value(system_environment, "python_platform")
+        self.cuda_runtime_version = _system_value(
+            system_environment, "cuda_runtime_version"
+        )
+        self.cuda_module_loading = _system_value(
+            system_environment, "cuda_module_loading"
+        )
+        self.nvidia_driver_version = _system_value(
+            system_environment, "nvidia_driver_version"
+        )
+        self.cudnn_version = _system_value(system_environment, "cudnn_version")
+        self.hip_runtime_version = _system_value(
+            system_environment, "hip_runtime_version"
+        )
+        self.miopen_runtime_version = _system_value(
+            system_environment, "miopen_runtime_version"
+        )
+        self.xnnpack_available = _system_value(
+            system_environment, "is_xnnpack_available"
+        )
+
+        self.libraries = get_python_package_versions(system_environment)
+
+        gpu_models_text = str(
+            _system_value(system_environment, "nvidia_gpu_models") or ""
+        )
+        self.nvidia_gpu_models = _system_value(system_environment, "nvidia_gpu_models")
+        gpu_model_lines = gpu_models_text.splitlines()
+        self.num_gpus = str(len(gpu_model_lines))
+        gpu_models = {
+            parts[1].strip()
+            for line in gpu_model_lines
+            if len(parts := line.split(":", maxsplit=1)) > 1
+        }
+        self.gpu_model = next(iter(gpu_models)) if len(gpu_models) == 1 else "Unknown"
+
+        cpu_info = str(_system_value(system_environment, "cpu_info") or "")
+        self.cpu_info = _system_value(system_environment, "cpu_info")
+        self.num_cpus = (
+            match.group(1)
+            if (match := _LSCPU_CPU_COUNT_PATTERN.search(cpu_info))
+            else "Unknown"
+        )
+        self.cpu_model = (
+            match.group(1)
+            if (match := _LSCPU_CPU_MODEL_PATTERN.search(cpu_info))
+            else "Unknown"
+        )
+
+        self.cuda_available = _system_value(system_environment, "is_cuda_available")
+        self.xpu_available = _system_value(system_environment, "is_xpu_available")
+        self.environment_variables = {
+            variable: os.environ[variable]
+            for variable in ENVIRONMENT_VARIABLE_ALLOWLIST
+            if variable in os.environ
+        }
+
+    @staticmethod
+    def _get_git_commit_hash() -> str:
+        """Try to detect the current Git commit hash."""
+        try:
+            result = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            result = ""
+        return result or "Unknown"
+
+    def as_dict(self) -> dict[str, Any]:
+        """Create a dictionary containing the comparable environment."""
+        return _to_json_safe(asdict(self))
+
+    @staticmethod
+    def compare(
+        target: dict[str, Any],
+        baseline: dict[str, Any],
+    ) -> EnvironmentChanges:
+        """Compare dictionaries produced by :meth:`as_dict`."""
+        all_attributes: set[str] = set()
+        for name, value in itertools.chain(target.items(), baseline.items()):
+            if isinstance(value, dict):
+                all_attributes.update(f"{name}.{nested_name}" for nested_name in value)
+            else:
+                all_attributes.add(name)
+
+        def get_value(environment: dict[str, Any], attribute: str) -> Any:
+            path = attribute.split(".", maxsplit=1)
+            value = environment.get(path[0])
+            if len(path) == 2:
+                return value.get(path[1]) if isinstance(value, dict) else None
+            return value
+
+        added: list[EnvironmentChange] = []
+        removed: list[EnvironmentChange] = []
+        changed: list[EnvironmentChange] = []
+        unchanged: list[EnvironmentChange] = []
+        for attribute in all_attributes:
+            target_value = get_value(target, attribute)
+            baseline_value = get_value(baseline, attribute)
+            change = EnvironmentChange(attribute, target_value, baseline_value)
+            if baseline_value is None and target_value is None:
+                continue
+            if baseline_value is None:
+                added.append(change)
+            elif target_value is None:
+                removed.append(change)
+            elif target_value != baseline_value:
+                changed.append(change)
+            else:
+                unchanged.append(change)
+
+        return EnvironmentChanges(
+            added=added,
+            removed=removed,
+            changed=changed,
+            unchanged=unchanged,
+        )
+
+
+@cache
+def get_torch_env_info() -> SystemEnv:
+    """Return and cache the environment information reported by PyTorch."""
+    return get_env_info()
 
 
 def collect_environment_report(
@@ -217,90 +461,36 @@ def collect_environment_report(
     other secrets are not copied into the report.
     """
     system_environment, system_errors = _collect_system_environment()
-    collection_errors = {"system_environment": system_errors} if system_errors else {}
-
-    return {
-        "schema_version": 1,
-        "job": {
-            "run_type": run_type,
-            "timestamp_id": timestamp_id,
-            "commit": commit,
-            "job_id": job_id,
-            "array_job_id": array_job_id,
-            "array_task_id": array_task_id,
-            "restart_count": restart_count,
-        },
-        "rank": {
-            "global_rank": _get_global_rank(),
-            "local_rank": _get_local_rank(),
-            "world_size": _get_world_size(),
-            "node_id": _get_node_id(),
-            "hostname": socket.gethostname(),
-        },
-        "environment_variables": {
-            variable: os.environ[variable]
-            for variable in ENVIRONMENT_VARIABLE_ALLOWLIST
-            if variable in os.environ
-        },
-        "python": {
-            "version": _system_value(system_environment, "python_version"),
-            "platform": _system_value(system_environment, "python_platform"),
-        },
-        "python_packages": get_python_package_versions(system_environment),
-        "pytorch": {
-            "version": _system_value(system_environment, "torch_version"),
-            "debug_build": _system_value(system_environment, "is_debug_build"),
-            "cuda_build_version": _system_value(
-                system_environment, "cuda_compiled_version"
+    comparable_environment = Environment.from_system_environment(
+        system_environment=system_environment,
+        commit=commit,
+    )
+    return _to_json_safe(
+        {
+            "schema_version": 1,
+            "environment": comparable_environment.as_dict(),
+            "measurements": {},
+            "job": {
+                "run_type": run_type,
+                "timestamp_id": timestamp_id,
+                "commit": commit,
+                "job_id": job_id,
+                "array_job_id": array_job_id,
+                "array_task_id": array_task_id,
+                "restart_count": restart_count,
+            },
+            "rank": {
+                "global_rank": _get_global_rank(),
+                "local_rank": _get_local_rank(),
+                "world_size": _get_world_size(),
+                "node_id": _get_node_id(),
+                "hostname": socket.gethostname(),
+            },
+            "collection_errors": (
+                {"system_environment": system_errors} if system_errors else {}
             ),
-            "rocm_build_version": _system_value(
-                system_environment, "rocm_compiled_version"
-            ),
-            "hip_build_version": _system_value(
-                system_environment, "hip_compiled_version"
-            ),
-            "caching_allocator_config": _system_value(
-                system_environment, "caching_allocator_config"
-            ),
-        },
-        "operating_system": {
-            "description": _system_value(system_environment, "os"),
-            "gcc_version": _system_value(system_environment, "gcc_version"),
-            "clang_version": _system_value(system_environment, "clang_version"),
-            "cmake_version": _system_value(system_environment, "cmake_version"),
-        },
-        "cpu": {
-            "details": _system_value(system_environment, "cpu_info"),
-        },
-        "accelerators": {
-            "cuda_available": _system_value(system_environment, "is_cuda_available"),
-            "cuda_module_loading": _system_value(
-                system_environment, "cuda_module_loading"
-            ),
-            "nvidia_gpu_models": _system_value(system_environment, "nvidia_gpu_models"),
-            "xpu_available": _system_value(system_environment, "is_xpu_available"),
-        },
-        "native_libraries": {
-            "libc_version": _system_value(system_environment, "libc_version"),
-            "cuda_runtime_version": _system_value(
-                system_environment, "cuda_runtime_version"
-            ),
-            "nvidia_driver_version": _system_value(
-                system_environment, "nvidia_driver_version"
-            ),
-            "cudnn_version": _system_value(system_environment, "cudnn_version"),
-            "hip_runtime_version": _system_value(
-                system_environment, "hip_runtime_version"
-            ),
-            "miopen_runtime_version": _system_value(
-                system_environment, "miopen_runtime_version"
-            ),
-            "xnnpack_available": _system_value(
-                system_environment, "is_xnnpack_available"
-            ),
-        },
-        "collection_errors": collection_errors,
-    }
+        }
+    )
 
 
 def write_environment_report(
@@ -332,16 +522,14 @@ def write_environment_report(
         return None
 
     try:
-        report = _to_yaml_safe(
-            collect_environment_report(
-                run_type=run_type,
-                timestamp_id=timestamp_id,
-                commit=commit,
-                job_id=job_id,
-                array_job_id=array_job_id,
-                array_task_id=array_task_id,
-                restart_count=restart_count,
-            )
+        report = collect_environment_report(
+            run_type=run_type,
+            timestamp_id=timestamp_id,
+            commit=commit,
+            job_id=job_id,
+            array_job_id=array_job_id,
+            array_task_id=array_task_id,
+            restart_count=restart_count,
         )
         report_dir = Path(log_dir) / "environment"
         report_dir.mkdir(parents=True, exist_ok=True)
@@ -359,7 +547,7 @@ def write_environment_report(
                 f"restart_{_safe_filename_component(restart_count or '0')}",
             )
         )
-        report_path = report_dir / f"{filename}.yaml"
+        report_path = report_dir / f"{filename}.json"
 
         file_descriptor, temporary_path = tempfile.mkstemp(
             dir=report_dir,
@@ -369,19 +557,14 @@ def write_environment_report(
         )
         try:
             with os.fdopen(file_descriptor, "w", encoding="utf-8") as report_file:
-                yaml.dump(
-                    report,
-                    report_file,
-                    Dumper=_EnvironmentDumper,
-                    default_flow_style=False,
-                    sort_keys=False,
-                )
+                json.dump(report, report_file, indent=4)
+                report_file.write("\n")
             os.replace(temporary_path, report_path)
         finally:
             Path(temporary_path).unlink(missing_ok=True)
 
         logging.info("Wrote environment report to %s", report_path)
         return report_path
-    except (OSError, TypeError, ValueError, yaml.YAMLError) as error:
+    except (OSError, TypeError, ValueError) as error:
         logging.warning("Failed to write environment report (%s)", type(error).__name__)
         return None
