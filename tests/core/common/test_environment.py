@@ -57,11 +57,7 @@ def _write_report(tmp_path, **overrides):
         "log_dir": str(tmp_path),
         "run_type": "run",
         "timestamp_id": "timestamp",
-        "commit": "abc123",
-        "job_id": "123_4",
-        "array_job_id": "123",
-        "array_task_id": "4",
-        "restart_count": "1",
+        "submission_commit": "submission-abc123",
     }
     arguments.update(overrides)
     return environment.write_environment_report(**arguments)
@@ -72,6 +68,10 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("SLURM_LOCALID", "0")
     monkeypatch.setenv("SLURM_NODEID", "2")
+    monkeypatch.setenv("SLURM_JOB_ID", "456")
+    monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "123")
+    monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "4")
+    monkeypatch.setenv("SLURM_RESTART_COUNT", "1")
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     monkeypatch.setenv("HF_TOKEN", "secret-huggingface-token")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret-cloud-key")
@@ -84,6 +84,7 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(environment.distutils, "get_rank", lambda: 8)
     monkeypatch.setattr(environment.distutils, "get_world_size", lambda: 16)
     monkeypatch.setattr(environment.socket, "gethostname", lambda: "test-host")
+    monkeypatch.setattr(environment, "get_commit_hash", lambda: "runtime-def456")
 
     report_path = _write_report(tmp_path)
 
@@ -92,6 +93,16 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
     report = json.loads(report_text)
     assert report["schema_version"] == 1
     assert report["measurements"] == {}
+    assert report["job"] == {
+        "run_type": "run",
+        "timestamp_id": "timestamp",
+        "commit": "submission-abc123",
+        "job_id": "123_4",
+        "array_job_id": "123",
+        "array_task_id": "4",
+        "restart_count": "1",
+    }
+    assert report["environment"]["git_commit_hash"] == "runtime-def456"
     assert report["rank"] == {
         "global_rank": 8,
         "local_rank": 0,
@@ -100,6 +111,9 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
         "hostname": "test-host",
     }
     assert report["environment"]["environment_variables"] == {
+        "SLURM_JOB_ID": "456",
+        "SLURM_ARRAY_JOB_ID": "123",
+        "SLURM_ARRAY_TASK_ID": "4",
         "SLURM_NODEID": "2",
         "SLURM_LOCALID": "0",
         "CUDA_VISIBLE_DEVICES": "0",

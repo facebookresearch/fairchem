@@ -12,11 +12,7 @@ from types import SimpleNamespace
 from fairchem.core.launchers import ray_on_slurm_launch
 
 
-def test_ray_environment_report_uses_runtime_slurm_metadata(monkeypatch) -> None:
-    monkeypatch.setenv("SLURM_JOB_ID", "123")
-    monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "120")
-    monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "3")
-    monkeypatch.setenv("SLURM_RESTART_COUNT", "2")
+def test_ray_environment_report_passes_config_metadata(monkeypatch) -> None:
     report_arguments = []
     monkeypatch.setattr(
         ray_on_slurm_launch,
@@ -35,10 +31,6 @@ def test_ray_environment_report_uses_runtime_slurm_metadata(monkeypatch) -> None
             "log_dir": "logs",
             "run_type": "run",
             "timestamp_id": "timestamp",
-            "commit": "abc123",
-            "job_id": "123",
-            "array_job_id": "120",
-            "array_task_id": "3",
-            "restart_count": "2",
+            "submission_commit": "abc123",
         }
     ]

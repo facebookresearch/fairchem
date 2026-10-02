@@ -21,9 +21,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+from submitit.slurm.slurm import SlurmJobEnvironment
 from torch.utils.collect_env import SystemEnv, get_env_info
 
 from fairchem.core.common import distutils
+from fairchem.core.common.utils import get_commit_hash
+from fairchem.core.launchers.api import SlurmEnv
 
 ENVIRONMENT_COLLECTION_TIMEOUT_SECONDS = 30
 
@@ -108,6 +111,22 @@ def _get_world_size() -> int:
     if not distutils.initialized() and "SLURM_NTASKS" in os.environ:
         return int(os.environ["SLURM_NTASKS"])
     return distutils.get_world_size()
+
+
+def _get_slurm_env() -> SlurmEnv:
+    """Return normalized Slurm metadata, or empty metadata for a local run."""
+    slurm_job_environment = SlurmJobEnvironment()
+    try:
+        return SlurmEnv(
+            job_id=slurm_job_environment.job_id,
+            raw_job_id=slurm_job_environment.raw_job_id,
+            array_job_id=slurm_job_environment.array_job_id,
+            array_task_id=slurm_job_environment.array_task_id,
+            restart_count=os.environ.get("SLURM_RESTART_COUNT"),
+        )
+    except KeyError:
+        # Slurm environment variables are undefined for local runs.
+        return SlurmEnv()
 
 
 def _safe_filename_component(value: str) -> str:
@@ -242,7 +261,6 @@ class Environment:
     """
 
     _system_environment: InitVar[Any] = _COLLECT_CURRENT_ENVIRONMENT
-    _commit: InitVar[str | None] = None
 
     git_commit_hash: str = field(init=False)
 
@@ -284,19 +302,18 @@ class Environment:
     def from_system_environment(
         cls,
         system_environment: Any,
-        commit: str,
     ) -> Environment:
         """Build an environment from already collected PyTorch data."""
-        return cls(_system_environment=system_environment, _commit=commit)
+        return cls(_system_environment=system_environment)
 
-    def __post_init__(self, _system_environment: Any, _commit: str | None) -> None:
+    def __post_init__(self, _system_environment: Any) -> None:
         system_environment = (
             get_torch_env_info()
             if _system_environment is _COLLECT_CURRENT_ENVIRONMENT
             else _system_environment
         )
 
-        self.git_commit_hash = _commit or self._get_git_commit_hash()
+        self.git_commit_hash = self._get_git_commit_hash()
 
         self.pytorch_version = _system_value(system_environment, "torch_version")
         self.pytorch_is_debug_build = _system_value(
@@ -378,15 +395,8 @@ class Environment:
 
     @staticmethod
     def _get_git_commit_hash() -> str:
-        """Try to detect the current Git commit hash."""
-        try:
-            result = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                text=True,
-            ).strip()
-        except (OSError, subprocess.CalledProcessError):
-            result = ""
-        return result or "Unknown"
+        """Return the current FairChem source revision."""
+        return get_commit_hash() or "Unknown"
 
     def as_dict(self) -> dict[str, Any]:
         """Create a dictionary containing the comparable environment."""
@@ -448,23 +458,24 @@ def get_torch_env_info() -> SystemEnv:
 def collect_environment_report(
     run_type: str,
     timestamp_id: str,
-    commit: str,
-    job_id: str | None,
-    array_job_id: str | None,
-    array_task_id: str | None,
-    restart_count: str | None,
+    submission_commit: str,
 ) -> dict[str, Any]:
     """
     Collect diagnostic information for a FairChem process.
 
     Environment variables are restricted to a fixed allow-list so credentials and
     other secrets are not copied into the report.
+
+    Args:
+        run_type: FairChem operation being executed, such as run or reduce.
+        timestamp_id: Logical run ID shared across nodes and restarts.
+        submission_commit: FairChem revision captured when the job was configured.
     """
     system_environment, system_errors = _collect_system_environment()
     comparable_environment = Environment.from_system_environment(
         system_environment=system_environment,
-        commit=commit,
     )
+    slurm_environment = _get_slurm_env()
     return _to_json_safe(
         {
             "schema_version": 1,
@@ -473,11 +484,15 @@ def collect_environment_report(
             "job": {
                 "run_type": run_type,
                 "timestamp_id": timestamp_id,
-                "commit": commit,
-                "job_id": job_id,
-                "array_job_id": array_job_id,
-                "array_task_id": array_task_id,
-                "restart_count": restart_count,
+                # This revision is captured when the job configuration is created.
+                # It can differ from environment.git_commit_hash if a queued or
+                # requeued job runs from a changed checkout, or if its worker imports
+                # FairChem from a different installation.
+                "commit": submission_commit,
+                "job_id": slurm_environment.job_id,
+                "array_job_id": slurm_environment.array_job_id,
+                "array_task_id": slurm_environment.array_task_id,
+                "restart_count": slurm_environment.restart_count,
             },
             "rank": {
                 "global_rank": _get_global_rank(),
@@ -497,14 +512,16 @@ def write_environment_report(
     log_dir: str,
     run_type: str,
     timestamp_id: str,
-    commit: str,
-    job_id: str | None,
-    array_job_id: str | None,
-    array_task_id: str | None,
-    restart_count: str | None,
+    submission_commit: str,
 ) -> Path | None:
     """
     Write an environment report from local rank zero on each node.
+
+    Args:
+        log_dir: Configured directory in which to create the environment directory.
+        run_type: FairChem operation being executed, such as run or reduce.
+        timestamp_id: Logical run ID shared across nodes and restarts.
+        submission_commit: FairChem revision captured when the job was configured.
 
     Returns:
         The report path on node leaders, otherwise ``None``.
@@ -525,26 +542,24 @@ def write_environment_report(
         report = collect_environment_report(
             run_type=run_type,
             timestamp_id=timestamp_id,
-            commit=commit,
-            job_id=job_id,
-            array_job_id=array_job_id,
-            array_task_id=array_task_id,
-            restart_count=restart_count,
+            submission_commit=submission_commit,
         )
         report_dir = Path(log_dir) / "environment"
         report_dir.mkdir(parents=True, exist_ok=True)
 
+        job_metadata = report["job"]
         execution_id = (
-            f"{array_job_id}_{array_task_id}"
-            if array_job_id is not None and array_task_id is not None
-            else job_id or timestamp_id
+            f"{job_metadata['array_job_id']}_{job_metadata['array_task_id']}"
+            if job_metadata["array_job_id"] is not None
+            and job_metadata["array_task_id"] is not None
+            else job_metadata["job_id"] or timestamp_id
         )
         filename = "_".join(
             (
                 _safe_filename_component(run_type),
                 _safe_filename_component(execution_id),
                 f"node_{_safe_filename_component(_get_node_id())}",
-                f"restart_{_safe_filename_component(restart_count or '0')}",
+                f"restart_{_safe_filename_component(job_metadata['restart_count'] or '0')}",
             )
         )
         report_path = report_dir / f"{filename}.json"

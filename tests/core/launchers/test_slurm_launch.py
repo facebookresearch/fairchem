@@ -66,11 +66,7 @@ def test_environment_report_follows_distributed_setup(tmp_path, monkeypatch) -> 
             "log_dir": str(tmp_path),
             "run_type": "run",
             "timestamp_id": "timestamp",
-            "commit": "abc123",
-            "job_id": "123_4",
-            "array_job_id": "123",
-            "array_task_id": "4",
-            "restart_count": "1",
+            "submission_commit": "abc123",
         }
 
     monkeypatch.setattr(

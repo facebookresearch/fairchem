@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-import os
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -53,11 +52,7 @@ def write_ray_environment_report(job_config: DictConfig) -> None:
         log_dir=job_config.metadata.log_dir,
         run_type=RunType.RUN.value,
         timestamp_id=job_config.timestamp_id,
-        commit=job_config.metadata.commit,
-        job_id=os.environ.get("SLURM_JOB_ID"),
-        array_job_id=os.environ.get("SLURM_ARRAY_JOB_ID"),
-        array_task_id=os.environ.get("SLURM_ARRAY_TASK_ID"),
-        restart_count=os.environ.get("SLURM_RESTART_COUNT"),
+        submission_commit=job_config.metadata.commit,
     )
 
 

@@ -21,11 +21,10 @@ from omegaconf import DictConfig, OmegaConf
 from submitit import AutoExecutor
 from submitit.core.utils import JobPaths, cloudpickle_dump
 from submitit.helpers import Checkpointable, DelayedSubmission
-from submitit.slurm.slurm import SlurmJobEnvironment
 from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import distutils
-from fairchem.core.common.environment import write_environment_report
+from fairchem.core.common.environment import _get_slurm_env, write_environment_report
 from fairchem.core.common.gp_utils import set_gp_config, setup_graph_parallel_groups
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
@@ -37,29 +36,11 @@ from fairchem.core.launchers.api import (
     JobConfig,
     RunType,
     SchedulerType,
-    SlurmEnv,
 )
 
 if TYPE_CHECKING:
     from fairchem.core.components.reducer import Reducer
     from fairchem.core.components.runner import Runner
-
-
-def _get_slurm_env() -> SlurmEnv:
-    slurm_job_env = SlurmJobEnvironment()
-    try:
-        slurm_env = SlurmEnv(
-            job_id=slurm_job_env.job_id,
-            raw_job_id=slurm_job_env.raw_job_id,
-            array_job_id=slurm_job_env.array_job_id,
-            array_task_id=slurm_job_env.array_task_id,
-            restart_count=os.environ.get("SLURM_RESTART_COUNT"),
-        )
-    except KeyError:
-        # slurm environment variables are undefined, running locally
-        slurm_env = SlurmEnv()
-
-    return slurm_env
 
 
 def map_job_config_to_dist_config(job_cfg: JobConfig) -> dict:
@@ -138,16 +119,11 @@ class SlurmSPMDProgram(Checkpointable):
         logging.info("Setting up distributed backend...")
         distutils.setup(dist_config)
         distutils.synchronize()
-        slurm_env = self.config.job.metadata.slurm_env
         write_environment_report(
             log_dir=self.config.job.metadata.log_dir,
             run_type=run_type.value,
             timestamp_id=self.config.job.timestamp_id,
-            commit=self.config.job.metadata.commit,
-            job_id=slurm_env.job_id,
-            array_job_id=slurm_env.array_job_id,
-            array_task_id=slurm_env.array_task_id,
-            restart_count=slurm_env.restart_count,
+            submission_commit=self.config.job.metadata.commit,
         )
         if (
             distutils.is_master()
