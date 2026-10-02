@@ -15,6 +15,11 @@ on:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
+# This job only reads the repository and reports results to the run log; it
+# needs no write access. Pin the token to least privilege (CodeQL finding).
+permissions:
+  contents: read
+
 jobs:
   external-links:
     runs-on: ubuntu-latest
