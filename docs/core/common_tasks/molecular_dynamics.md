@@ -103,14 +103,14 @@ constraint-based behavior through `use_fix_com_constraint: true`.
 
 ## Run with Hydra
 
-The repository contains two runnable configurations:
+MD can also by run through a CLI which utilizes a Hydra configuration file.  The repository contains two example configurations:
 
 - [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
   uses Langevin NVT at 300 K.
 - [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
   uses Berendsen NPT at 300 K and 1 bar.
 
-Run either configuration from the repository root:
+Either configuration from the repository root:
 
 ```bash
 fairchem -c configs/uma/md/nvt.yaml
