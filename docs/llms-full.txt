@@ -3418,7 +3418,7 @@ We don't have to change much code from above, we just use a built-in recipe to c
 3. For each deformation, a relaxation using the MLIP and (optionally) a single point calculation is run
 4. Finally, all of the above calculations are used to calculate the elastic properties of the material
 
-For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/mlp/elastic.html#quacc.recipes.mlp.elastic.elastic_tensor_flow)
+For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html)
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -7343,7 +7343,7 @@ vib.summary()
 
 # Bulk alloy phase behavior
 
-Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/dft.html#orgheadline29
+Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/notebooks/04-bulk-systems/10-bulk-reaction-energies.html
 
 We manually compute the formation energy of pure compounds and some alloy compositions to assess stability.
 

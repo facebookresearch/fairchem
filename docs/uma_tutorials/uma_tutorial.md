@@ -361,7 +361,7 @@ vib.summary()
 
 # Bulk alloy phase behavior
 
-Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/dft.html#orgheadline29
+Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/notebooks/04-bulk-systems/10-bulk-reaction-energies.html
 
 We manually compute the formation energy of pure compounds and some alloy compositions to assess stability.
 
