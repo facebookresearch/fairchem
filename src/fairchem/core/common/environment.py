@@ -293,7 +293,6 @@ class Environment:
     nvidia_gpu_models: Any = field(init=False)
     num_cpus: str = field(init=False)
     cpu_model: str = field(init=False)
-    cpu_info: Any = field(init=False)
     cuda_available: Any = field(init=False)
     xpu_available: Any = field(init=False)
     environment_variables: dict[str, str] = field(init=False)
@@ -373,7 +372,6 @@ class Environment:
         self.gpu_model = next(iter(gpu_models)) if len(gpu_models) == 1 else "Unknown"
 
         cpu_info = str(_system_value(system_environment, "cpu_info") or "")
-        self.cpu_info = _system_value(system_environment, "cpu_info")
         self.num_cpus = (
             match.group(1)
             if (match := _LSCPU_CPU_COUNT_PATTERN.search(cpu_info))

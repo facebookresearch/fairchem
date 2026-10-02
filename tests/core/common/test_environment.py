@@ -127,6 +127,7 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
     assert report["environment"]["pytorch_version"] == "2.13.0"
     assert report["environment"]["num_cpus"] == "8"
     assert report["environment"]["cpu_model"] == "Test CPU"
+    assert "cpu_info" not in report["environment"]
     assert "HF_TOKEN" not in report_text
     assert "secret-huggingface-token" not in report_text
     assert "AWS_SECRET_ACCESS_KEY" not in report_text
