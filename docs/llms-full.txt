@@ -1268,7 +1268,7 @@ The main advantage is that we can optimize UMA for distributed parallel inferenc
 
 There is some Python overhead, but for very fast empirical force fields where Python would be a limiting factor, this is negligible at the speeds of current MLIPs (10s - 100s of ms per step). This is the same reason nearly all modern LLM inference uses Python engines. Additionally, to easily scale to multi-node parallelism regimes, we designed the architecture using a client-server interface so LAMMPS would only see the client and the server code running inference can be optimized completely independently later.
 
-Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
+Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](./ase_calculator.md).
 
 ## Usage Notes
 
@@ -1372,7 +1372,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 If your application requires predictions over many systems, you can run batch inference using UMA models to use compute more efficiently and improve GPU utilization.
 
 :::{tip}
-To learn more about the different inference settings supported, see the [Prediction interface documentation](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
+To learn more about the different inference settings supported, see the [Prediction interface documentation](./ase_calculator.md).
 :::
 
 ## Generate Batches at Runtime
@@ -1668,14 +1668,14 @@ Source: `docs/core/common_tasks/ase_dataset_creation.md`
 
 `fairchem` provides training and evaluation code for tasks and models that take arbitrary chemical structures as input to predict energies, forces, positions, and stresses. It can be used as a base scaffold for research projects. For an overview of tasks, data, and metrics, please read the documentation and respective papers:
 
-- [OC20](catalysts/datasets/oc20)
-- [OC22](catalysts/datasets/oc22)
-- [ODAC23](dac/datasets/odac)
-- [OC20Dense](catalysts/datasets/oc20dense)
-- [OC20NEB](catalysts/datasets/oc20neb)
-- [OMat24](inorganic_materials/datasets/omat24)
+- [OC20](../../catalysts/datasets/oc20.md)
+- [OC22](../../catalysts/datasets/oc22.md)
+- [ODAC23](../../dac/datasets/odac23.md)
+- [OC20Dense](../../catalysts/datasets/oc20dense.md)
+- [OC20NEB](../../catalysts/datasets/oc20neb.md)
+- [OMat24](../../inorganic_materials/datasets/omat24.md)
 - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
-- [OMC25](molecules/datasets/omc25)
+- [OMC25](../../molecules/datasets/omc25.md)
 
 :::{note}
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
@@ -1683,7 +1683,7 @@ There are multiple ways to train and evaluate FAIRChem models on data other than
 
 ## Custom ASE Databases
 
-If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
+If your data is already in an [ASE Database](https://docs.ase-lib.org/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
 
 :::{tip}
 Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effectively utilize more resources than this, consider writing your data to an LMDB.
@@ -2068,7 +2068,7 @@ This repo provides a number of scripts to quickly fine-tune a model using a cust
 :::
 
 :::{note}
-Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
+Training datasets must be in the [ASE-lmdb format](https://docs.ase-lib.org/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
 
 ## Generating Training/Fine-tuning Datasets
@@ -2734,7 +2734,7 @@ The OMol25 dataset is broken into several training splits - All and 4M. The 4M s
 
 For each calculation, the following data is available:
 
-* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
+* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, `orca.xyz`). To open:
 
 ```
 >> tar --zstd -xvf orca.tar.zst
@@ -2803,11 +2803,11 @@ The data are stored and accessible via storage on the Eagle cluster at Argonne N
 [General Issues](https://github.com/facebookresearch/fairchem)
 
 Dataset questions?
-* [Muhammed Shuaibi](mshuaibi@meta.com)
-* [Daniel Levine](levineds@meta.com)
+* [Muhammed Shuaibi](mailto:mshuaibi@meta.com)
+* [Daniel Levine](mailto:levineds@meta.com)
 
 Cluster/Access questions?
-* [Ben Blaiszik](blaiszik@uchicago.edu)
+* [Ben Blaiszik](mailto:blaiszik@uchicago.edu)
 
 ---
 
@@ -3046,7 +3046,7 @@ please see the manuscript.
 
 
 ## Getting ASE atoms objects
-Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://wiki.fysik.dtu.dk/ase/ase/db/db.html),
+Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://docs.ase-lib.org/ase/db/db.html),
 in LMDB format. A single **.aselmdb* file can be read and queried like any other ASE DB.
 
 You can also read many DB files at once and access atoms objects using the `AseDBDataset` class.
@@ -3133,7 +3133,7 @@ The UMA model has a number of nice features over the previous checkpoints:
 These checkpoints are included here for baselining and model reproducibility. For new projects, we recommend using UMA.
 :::
 
-* All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24) directory.
+* All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24) directory.
 * All models are equiformerV2 S2EFS models
 
 **Note** in order to download any of the model checkpoints from the links below, you will need to first request access
@@ -3143,9 +3143,9 @@ These checkpoints are trained on OMat24 only. Note that predictions are *not* Ma
 
 | Model Name            | Checkpoint	| Config                                                                                      |
 |-----------------------|--------------|---------------------------------------------------------------------------------------------|
-| EquiformerV2-31M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_31M.yml)   |
-| EquiformerV2-86M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_86M.yml)   |
-| EquiformerV2-153M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_153M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_153M.yml)  |
+| EquiformerV2-31M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_31M.yml)   |
+| EquiformerV2-86M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_86M.yml)   |
+| EquiformerV2-153M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_153M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_153M.yml)  |
 
 
 ## MPTrj only models
@@ -3153,10 +3153,10 @@ These models are trained only on the [MPTrj](https://figshare.com/articles/datas
 
 | Model Name                | Checkpoint	| Config                                                                          |
 |---------------------------|--------------|---------------------------------------------------------------------------------|
-| EquiformerV2-31M-MP       | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_31M_mptrj.yml) |
-| EquiformerV2-31M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_31M_dens_mptrj.yml) |
-| EquiformerV2-86M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_86M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_86M_dens_mptrj.yml) |
-| EquiformerV2-153M-DeNS-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_153M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_153M_dens_mptrj.yml) |
+| EquiformerV2-31M-MP       | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_31M_mptrj.yml) |
+| EquiformerV2-31M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_31M_dens_mptrj.yml) |
+| EquiformerV2-86M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_86M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_86M_dens_mptrj.yml) |
+| EquiformerV2-153M-DeNS-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_153M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_153M_dens_mptrj.yml) |
 
 
 ## Finetuned OMat models
@@ -3165,9 +3165,9 @@ from the 3D PBE Alexandria dataset, which we call Alex.
 
 | Model Name                     | Checkpoint	| Config                                                                             |
 |--------------------------------|--------------|------------------------------------------------------------------------------------|
-| EquiformerV2-31M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_31M_ft_salexmptrj.yml) |
-| EquiformerV2-86M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_86M_ft_salexmptrj.yml) |
-| EquiformerV2-153M-OMat-Alex-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_153M_ft_salexmptrj.yml) |
+| EquiformerV2-31M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_31M_ft_salexmptrj.yml) |
+| EquiformerV2-86M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_86M_ft_salexmptrj.yml) |
+| EquiformerV2-153M-OMat-Alex-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_153M_ft_salexmptrj.yml) |
 
 
 Please consider citing the following work if you use OMat24 models in your work,
@@ -3573,7 +3573,7 @@ Data files for all tasks/splits were updated on Feb 10, 2021 due to minor bugs (
 IS2* datasets are stored as LMDB files and are ready to be used upon download.
 S2EF train+val datasets require an additional preprocessing step.
 
-For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/main/configs/oc20).
+For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
 
 For IS2*, run the script as:
 
@@ -3613,7 +3613,7 @@ python scripts/download_data.py --task s2ef --split test
 
 To download and process the dataset in a directory other than your local `fairchem/data` folder, add the following command line argument `--data-path`.
 
-Note that the baseline [configs](https://github.com/facebookresearch/fairchem/tree/main/configs/oc20).
+Note that the baseline [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
 expect the data to be found in `fairchem/data`, make sure you symlink your directory or
 modify the paths in the configs accordingly.
 
@@ -3804,7 +3804,7 @@ where:
 * `reference_energy` - Energy used to reference system energies to bare catalyst+gas reference energies. Used for adsorption energy calculations.
 
 
-The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://wiki.fysik.dtu.dk/ase/dev/ase/io/formatoptions.html#extxyz .
+The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://docs.ase-lib.org/ase/io/formatoptions.html#extxyz .
 
 In order to uncompress the files, `uncompress.py` provides a multi-core implementation which could be used.
 
@@ -4104,7 +4104,7 @@ where:
 * `reference_energy` - Energy used to reference system energies to bare catalyst+gas reference energies. Used for adsorption energy calculations.
 
 
-The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz.
+The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://docs.ase-lib.org/ase/io/formatoptions.html#extxyz.
 
 In order to uncompress the files, `uncompress.py` provides a multi-core implementation which could be used.
 
@@ -4575,54 +4575,54 @@ This page summarizes all the pretrained models released as part of the [Open Cat
 
 
 * All configurations for these models are available in the [`configs/`](https://github.com/facebookresearch/fairchem/tree/main/configs) directory.
-* All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
+* All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/02d83f5f/DATASET.md.
 * All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://facebookresearch.github.io/fairchem/oc20).
 
 ### S2EF models: optimized for EFwT
 
 | Model Name                          | Model	              | Split  |Download	|val ID force MAE (eV / Å)	|val ID EFwT	|
 |-------------------------------------|---------------------|--------|---	|---	|---	|
-| CGCNN-S2EF-OC20-200k               | CGCNN               | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/cgcnn/cgcnn.yml)	|0.08	|0%	|
-| CGCNN-S2EF-OC20-2M                 | CGCNN               | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/cgcnn/cgcnn.yml)	|0.0673	|0.01%	|
-| CGCNN-S2EF-OC20-20M                | CGCNN               | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/cgcnn/cgcnn.yml)	|0.065	|0%	|
-| CGCNN-S2EF-OC20-All                | CGCNN               | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/cgcnn/cgcnn.yml)	|0.0684	|0.01%	|
+| CGCNN-S2EF-OC20-200k               | CGCNN               | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/200k/cgcnn/cgcnn.yml)	|0.08	|0%	|
+| CGCNN-S2EF-OC20-2M                 | CGCNN               | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/2M/cgcnn/cgcnn.yml)	|0.0673	|0.01%	|
+| CGCNN-S2EF-OC20-20M                | CGCNN               | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/20M/cgcnn/cgcnn.yml)	|0.065	|0%	|
+| CGCNN-S2EF-OC20-All                | CGCNN               | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/all/cgcnn/cgcnn.yml)	|0.0684	|0.01%	|
 | DimeNet-S2EF-OC20-200k             | DimeNet             | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenet_200k.pt)	|0.0693	|0.01%	|
 | DimeNet-S2EF-OC20-2M               | DimeNet             | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenet_2M.pt)	|0.0576	|0.02%	|
-| SchNet-S2EF-OC20-200k              | SchNet              | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/schnet/schnet.yml)	|0.0743	|0%	|
-| SchNet-S2EF-OC20-2M                | SchNet              | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/schnet/schnet.yml)	|0.0737	|0%	|
-| SchNet-S2EF-OC20-20M               | SchNet              | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/schnet/schnet.yml)	|0.0568	|0.03%	|
-| SchNet-S2EF-OC20-All               | SchNet              | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_large.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/schnet/schnet.yml)	|0.0494	|0.12%	|
-| DimeNet++-S2EF-OC20-200k           | DimeNet++           | 200k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/dimenet_plus_plus/dpp.yml)	|0.0741	|0%	|
-| DimeNet++-S2EF-OC20-2M             | DimeNet++           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/dimenet_plus_plus/dpp.yml)	|0.0595	|0.01%	|
-| DimeNet++-S2EF-OC20-20M            | DimeNet++           | 20M    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/dimenet_plus_plus/dpp.yml)	|0.0511	|0.06%	|
-| DimeNet++-S2EF-OC20-All            | DimeNet++           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp.yml)	|0.0444	|0.12%	|
-| SpinConv-S2EF-OC20-2M              | SpinConv            | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/spinconv_force_centric_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/spinconv/spinconv_force.yml)	|0.0329	|0.18%	|
-| SpinConv-S2EF-OC20-All             | SpinConv            | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/spinconv_force_centric_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/spinconv/spinconv_force.yml)	|0.0267	|1.02%	|
-| GemNet-dT-S2EF-OC20-2M             | GemNet-dT           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/gemnet_t_direct_h512_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/gemnet/gemnet-dT.yml)	|0.0257	|1.10%	|
-| GemNet-dT-S2EF-OC20-All            | GemNet-dT           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/gemnet_t_direct_h512_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-dT.yml)	|0.0211	|2.21%	|
-| PaiNN-S2EF-OC20-All                | PaiNN               | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/s2ef/painn_h512_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_h512.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.0294 |0.91%   |
-| GemNet-OC-S2EF-OC20-2M             | GemNet-OC           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt)  |0.0225 |2.12%  |
-| GemNet-OC-S2EF-OC20-All            | GemNet-OC           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0179 |4.56%  |
-| GemNet-OC-S2EF-OC20-All+MD         | GemNet-OC           | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/gemnet_oc_base_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0173 |4.72%  |
-| GemNet-OC-Large-S2EF-OC20-All+MD   | GemNet-OC-Large     | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_large_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc-large.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc-large.pt) |0.0164 |5.34%  |
-| SCN-S2EF-OC20-2M                   | SCN                 | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t1_b1_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/scn/scn-t1-b1.yml) |0.0216 |1.68%  |
-| SCN-t4-b2-S2EF-OC20-2M             | SCN-t4-b2           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t4_b2_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/scn/scn-t4-b2.yml) |0.0193 |2.68%  |
-| SCN-S2EF-OC20-All+MD               | SCN                 | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/scn/scn-all-md.yml) |0.0160 |5.08%  |
-| eSCN-L4-M2-Lay12-S2EF-OC20-2M      | eSCN-L4-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l4_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/escn/eSCN-L4-M2-Lay12.yml) |0.0191 |2.55%  |
-| eSCN-L6-M2-Lay12-S2EF-OC20-2M      | eSCN-L6-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/escn/eSCN-L6-M2-Lay12.yml) \| [exported](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef_export_cuda_9182024.pt2) |0.0186 |2.66%  |
-| eSCN-L6-M2-Lay12-S2EF-OC20-All+MD  | eSCN-L6-M2-Lay12    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/escn/eSCN-L6-M2-Lay12-All-MD.yml) |0.0161 |4.28%  |
-| eSCN-L6-M3-Lay20-S2EF-OC20-All+MD  | eSCN-L6-M3-Lay20    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m3_lay20_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/escn/eSCN-L6-M3-Lay20-All-MD.yml) |0.0139 |6.64%  |
-| EquiformerV2-83M-S2EF-OC20-2M      | EquiformerV2 (83M)  | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_83M_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/equiformer_v2/equiformer_v2_N@12_L@6_M@2.yml) |0.0167 |4.26%  |
-| EquiformerV2-31M-S2EF-OC20-All+MD  | EquiformerV2 (31M)  | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_31M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@8_L@4_M@2_31M.yml) |0.0142  |6.20%  |
-| EquiformerV2-153M-S2EF-OC20-All+MD | EquiformerV2 (153M) | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_153M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@20_L@6_M@3_153M.yml)   |0.0126     |8.90%  |
+| SchNet-S2EF-OC20-200k              | SchNet              | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/200k/schnet/schnet.yml)	|0.0743	|0%	|
+| SchNet-S2EF-OC20-2M                | SchNet              | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/schnet/schnet.yml)	|0.0737	|0%	|
+| SchNet-S2EF-OC20-20M               | SchNet              | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/20M/schnet/schnet.yml)	|0.0568	|0.03%	|
+| SchNet-S2EF-OC20-All               | SchNet              | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_large.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/schnet/schnet.yml)	|0.0494	|0.12%	|
+| DimeNet++-S2EF-OC20-200k           | DimeNet++           | 200k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/200k/dimenet_plus_plus/dpp.yml)	|0.0741	|0%	|
+| DimeNet++-S2EF-OC20-2M             | DimeNet++           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/dimenet_plus_plus/dpp.yml)	|0.0595	|0.01%	|
+| DimeNet++-S2EF-OC20-20M            | DimeNet++           | 20M    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/20M/dimenet_plus_plus/dpp.yml)	|0.0511	|0.06%	|
+| DimeNet++-S2EF-OC20-All            | DimeNet++           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp.yml)	|0.0444	|0.12%	|
+| SpinConv-S2EF-OC20-2M              | SpinConv            | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/spinconv_force_centric_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/2M/spinconv/spinconv_force.yml)	|0.0329	|0.18%	|
+| SpinConv-S2EF-OC20-All             | SpinConv            | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/spinconv_force_centric_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/all/spinconv/spinconv_force.yml)	|0.0267	|1.02%	|
+| GemNet-dT-S2EF-OC20-2M             | GemNet-dT           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/gemnet_t_direct_h512_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/gemnet/gemnet-dT.yml)	|0.0257	|1.10%	|
+| GemNet-dT-S2EF-OC20-All            | GemNet-dT           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/gemnet_t_direct_h512_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-dT.yml)	|0.0211	|2.21%	|
+| PaiNN-S2EF-OC20-All                | PaiNN               | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/s2ef/painn_h512_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_h512.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.0294 |0.91%   |
+| GemNet-OC-S2EF-OC20-2M             | GemNet-OC           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt)  |0.0225 |2.12%  |
+| GemNet-OC-S2EF-OC20-All            | GemNet-OC           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0179 |4.56%  |
+| GemNet-OC-S2EF-OC20-All+MD         | GemNet-OC           | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/gemnet_oc_base_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0173 |4.72%  |
+| GemNet-OC-Large-S2EF-OC20-All+MD   | GemNet-OC-Large     | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_large_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc-large.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc-large.pt) |0.0164 |5.34%  |
+| SCN-S2EF-OC20-2M                   | SCN                 | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t1_b1_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/scn/scn-t1-b1.yml) |0.0216 |1.68%  |
+| SCN-t4-b2-S2EF-OC20-2M             | SCN-t4-b2           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t4_b2_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/scn/scn-t4-b2.yml) |0.0193 |2.68%  |
+| SCN-S2EF-OC20-All+MD               | SCN                 | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/scn/scn-all-md.yml) |0.0160 |5.08%  |
+| eSCN-L4-M2-Lay12-S2EF-OC20-2M      | eSCN-L4-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l4_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/escn/eSCN-L4-M2-Lay12.yml) |0.0191 |2.55%  |
+| eSCN-L6-M2-Lay12-S2EF-OC20-2M      | eSCN-L6-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/escn/eSCN-L6-M2-Lay12.yml) \| [exported](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef_export_cuda_9182024.pt2) |0.0186 |2.66%  |
+| eSCN-L6-M2-Lay12-S2EF-OC20-All+MD  | eSCN-L6-M2-Lay12    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/escn/eSCN-L6-M2-Lay12-All-MD.yml) |0.0161 |4.28%  |
+| eSCN-L6-M3-Lay20-S2EF-OC20-All+MD  | eSCN-L6-M3-Lay20    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m3_lay20_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/escn/eSCN-L6-M3-Lay20-All-MD.yml) |0.0139 |6.64%  |
+| EquiformerV2-83M-S2EF-OC20-2M      | EquiformerV2 (83M)  | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_83M_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/equiformer_v2/equiformer_v2_N@12_L@6_M@2.yml) |0.0167 |4.26%  |
+| EquiformerV2-31M-S2EF-OC20-All+MD  | EquiformerV2 (31M)  | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_31M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@8_L@4_M@2_31M.yml) |0.0142  |6.20%  |
+| EquiformerV2-153M-S2EF-OC20-All+MD | EquiformerV2 (153M) | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_153M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@20_L@6_M@3_153M.yml)   |0.0126     |8.90%  |
 
 ### S2EF models: optimized for force only
 
 | Model Name                           |Model	|Split	|Download	|val ID force MAE	|
 |--------------------------------------|---	|---	|---	|---	|
 | SchNet-S2EF-force-only-OC20-All            |SchNet	|All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_forceonly.pt)	|0.0443	|
-| DimeNet++-force-only-OC20-All              | DimeNet++	                |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenetpp_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp_forceonly.yml)	|0.0334	|
-| DimeNet++-Large-S2EF-force-only-OC20-All   | DimeNet++-Large	          |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_large_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp10.7M_forceonly.yml)	|0.02825	|
+| DimeNet++-force-only-OC20-All              | DimeNet++	                |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenetpp_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp_forceonly.yml)	|0.0334	|
+| DimeNet++-Large-S2EF-force-only-OC20-All   | DimeNet++-Large	          |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_large_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp10.7M_forceonly.yml)	|0.02825	|
 | DimeNet++-S2EF-force-only-OC20-20M+Rattled | DimeNet++	                |20M+Rattled    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M_rattled_forceonly.pt)	|0.0614	|
 | DimeNet++-S2EF-force-only-OC20-20M+MD      | DimeNet++	                |20M+MD         |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M_md_forceonly.pt)	|0.0594	|
 
@@ -4630,19 +4630,19 @@ This page summarizes all the pretrained models released as part of the [Open Cat
 
 | Model Name                | Model	     | Split	 |Download	|val ID energy MAE	|
 |---------------------------|------------|--------|---	|---	|
-| CGCNN-IS2RE-OC20-10k      | CGCNN      | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/cgcnn/cgcnn.yml)	|0.9881	|
-| CGCNN-IS2RE-OC20-100k     | CGCNN      | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/cgcnn/cgcnn.yml)	|0.682	|
-| CGCNN-IS2RE-OC20-All      | CGCNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/cgcnn/cgcnn.yml)	|0.6199	|
+| CGCNN-IS2RE-OC20-10k      | CGCNN      | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/10k/cgcnn/cgcnn.yml)	|0.9881	|
+| CGCNN-IS2RE-OC20-100k     | CGCNN      | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/100k/cgcnn/cgcnn.yml)	|0.682	|
+| CGCNN-IS2RE-OC20-All      | CGCNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/all/cgcnn/cgcnn.yml)	|0.6199	|
 | DimeNet-IS2RE-OC20-10k    | DimeNet    | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_10k.pt)	|1.0117	|
 | DimeNet-IS2RE-OC20-100k   | DimeNet    | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_100k.pt)	|0.6658	|
 | DimeNet-IS2RE-OC20-all    | DimeNet    | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_all.pt)	|0.5999	|
-| SchNet-IS2RE-OC20-10k     | SchNet     | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/schnet/schnet.yml)	|1.059	|
-| SchNet-IS2RE-OC20-100k    | SchNet     | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/schnet/schnet.yml)	|0.7137	|
-| SchNet-IS2RE-OC20-All     | SchNet     | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/schnet/schnet.yml)	|0.6458	|
-| DimeNet++-IS2RE-OC20-10k  | DimeNet++	 | 10k	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/dimenet_plus_plus/dpp.yml)	|0.8837	|
-| DimeNet++-IS2RE-OC20-100k | DimeNet++	 | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/dimenet_plus_plus/dpp.yml)	|0.6388	|
-| DimeNet++-IS2RE-OC20-All  | DimeNet++	 | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/dimenet_plus_plus/dpp.yml)	|0.5639	|
-| PaiNN-IS2RE-OC20-All      | PaiNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/is2re/painn_h1024_bs4x8_is2re_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/painn/painn_h1024_bs8x4.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.5728 |
+| SchNet-IS2RE-OC20-10k     | SchNet     | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/10k/schnet/schnet.yml)	|1.059	|
+| SchNet-IS2RE-OC20-100k    | SchNet     | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/100k/schnet/schnet.yml)	|0.7137	|
+| SchNet-IS2RE-OC20-All     | SchNet     | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/schnet/schnet.yml)	|0.6458	|
+| DimeNet++-IS2RE-OC20-10k  | DimeNet++	 | 10k	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/10k/dimenet_plus_plus/dpp.yml)	|0.8837	|
+| DimeNet++-IS2RE-OC20-100k | DimeNet++	 | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/100k/dimenet_plus_plus/dpp.yml)	|0.6388	|
+| DimeNet++-IS2RE-OC20-All  | DimeNet++	 | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/dimenet_plus_plus/dpp.yml)	|0.5639	|
+| PaiNN-IS2RE-OC20-All      | PaiNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/is2re/painn_h1024_bs4x8_is2re_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/painn/painn_h1024_bs8x4.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.5728 |
 
 The Open Catalyst 2020 (OC20) dataset is licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
 
@@ -4661,8 +4661,8 @@ OC20 dataset or pretrained models, as well as the original paper for each model:
 
 ## Open Catalyst 2022 (OC22)
 
-* All configurations for these models are available in the [`configs/oc22`](https://github.com/facebookresearch/fairchem/tree/main/configs/oc22) directory.
-* All of these models are trained on various splits of the OC22 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2206.08917](https://arxiv.org/abs/2206.08917) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
+* All configurations for these models are available in the [`configs/oc22`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc22) directory.
+* All of these models are trained on various splits of the OC22 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2206.08917](https://arxiv.org/abs/2206.08917) and https://github.com/facebookresearch/fairchem/blob/02d83f5f/DATASET.md.
 * All OC22 models released here are trained on DFT total energies, in contrast to the OC20 models listed above, which are trained on adsorption energies.
 
 
@@ -4670,12 +4670,12 @@ OC20 dataset or pretrained models, as well as the original paper for each model:
 
 | Model Name                        |Model	|Training	|Download	|val ID force MAE	|val ID energy MAE	|
 |-----------------------------------|---	|---	|---	|---	|---	|
-| GemNet-dT-S2EFS-OC22              |GemNet-dT | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gndt_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-dt/gemnet-dT.yml)	|0.032	|1.127	|
-| GemNet-OC-S2EFS-OC22              | GemNet-OC                                                                                                                                                | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc.yml)	|0.030	|0.563	|
-| GemNet-OC-S2EFS-OC20+OC22         | GemNet-OC                                                                                                                                                | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22.yml)	|0.027	|0.483	|
-| GemNet-OC-S2EFS-nsn-OC20+OC22     | GemNet-OC <br><sub><sup>(trained with `enforce_max_neighbors_strictly=False`, [#467](https://github.com/facebookresearch/fairchem/pull/467))</sup></sub> | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22_degen_edges.yml)	|0.027	|0.458	|
-| GemNet-OC-S2EFS-OC20->OC22        | GemNet-OC                                                                                                                                                | OC20->OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_finetune.yml)	|0.030	|0.417	|
-| EquiformerV2-lE4-lF100-S2EFS-OC22 | EquiformerV2 ($\lambda_E$=4, $\lambda_F$=100)                                                                                                            | OC22  | [checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_10/oc22/s2ef/eq2_121M_e4_f100_oc22_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml) | 0.023 | 0.447
+| GemNet-dT-S2EFS-OC22              |GemNet-dT | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gndt_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-dt/gemnet-dT.yml)	|0.032	|1.127	|
+| GemNet-OC-S2EFS-OC22              | GemNet-OC                                                                                                                                                | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc.yml)	|0.030	|0.563	|
+| GemNet-OC-S2EFS-OC20+OC22         | GemNet-OC                                                                                                                                                | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22.yml)	|0.027	|0.483	|
+| GemNet-OC-S2EFS-nsn-OC20+OC22     | GemNet-OC <br><sub><sup>(trained with `enforce_max_neighbors_strictly=False`, [#467](https://github.com/facebookresearch/fairchem/pull/467))</sup></sub> | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22_degen_edges.yml)	|0.027	|0.458	|
+| GemNet-OC-S2EFS-OC20->OC22        | GemNet-OC                                                                                                                                                | OC20->OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_finetune.yml)	|0.030	|0.417	|
+| EquiformerV2-lE4-lF100-S2EFS-OC22 | EquiformerV2 ($\lambda_E$=4, $\lambda_F$=100)                                                                                                            | OC22  | [checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_10/oc22/s2ef/eq2_121M_e4_f100_oc22_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml) | 0.023 | 0.447
 
 The Open Catalyst 2022 (OC22) dataset is licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
 
@@ -6413,11 +6413,11 @@ print([
 ```
 
 
-### Converting to [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects
+### Converting to [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects
 
 **Important! The `to_ase_atoms()` method described below will fail with an import error if [ase](https://wiki.fysik.dtu.dk/ase) is not installed.**
 
-Two classes have support for generating [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects:
+Two classes have support for generating [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects:
 * `ocpapi.Atoms.to_ase_atoms()`: Adds unit cell, atomic positions, and other structural information to the returned `ase.Atoms` object.
 * `ocpapi.AdsorbateSlabRelaxationResult.to_ase_atoms()`: Adds the same structure information to the `ase.Atoms` object. Also adds the predicted forces and energy of the relaxed structure, which can be accessed with the `ase.Atoms.get_potential_energy()` and `ase.Atoms.get_forces()` methods.
 
@@ -6440,7 +6440,7 @@ print(ase_atoms)
 
 ### Converting to other structure formats
 
-From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
+From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
 :tags: ["skip-execution"]
@@ -6678,27 +6678,27 @@ If you use the ODAC25 trained models, please cite the following paper:
 **Deprecated**: These models are superseded by ODAC25 models and UMA. They are provided here for reproducibility only.
 :::
 
-* All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/main/configs/odac) directory.
+* All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac) directory.
 
 ### S2EF models
 
 | Model Name                   |Model	|Checkpoint	| Config |
 |------------------------------|---	|---	|---	|
-| SchNet-S2EF-ODAC             | SchNet               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Schnet.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/schnet.yml) |
-| DimeNet++-S2EF-ODAC          | DimeNet++           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/DimenetPP.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/dpp.yml) |
-| PaiNN-S2EF-ODAC              | PaiNN               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/PaiNN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/painn.yml) |
-| GemNet-OC-S2EF-ODAC          | GemNet-OC           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/gemnet-oc.yml) |
-| eSCN-S2EF-ODAC               | eSCN                | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eSCN.yml) |
-| EquiformerV2-S2EF-ODAC       | EquiformerV2        | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/eqv2_31M.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eqv2_31M.yml) |
-| EquiformerV2-Large-S2EF-ODAC | EquiformerV2 (Large) | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Large.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eqv2_153M.yml) |
+| SchNet-S2EF-ODAC             | SchNet               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Schnet.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/schnet.yml) |
+| DimeNet++-S2EF-ODAC          | DimeNet++           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/DimenetPP.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/dpp.yml) |
+| PaiNN-S2EF-ODAC              | PaiNN               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/PaiNN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/painn.yml) |
+| GemNet-OC-S2EF-ODAC          | GemNet-OC           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/gemnet-oc.yml) |
+| eSCN-S2EF-ODAC               | eSCN                | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eSCN.yml) |
+| EquiformerV2-S2EF-ODAC       | EquiformerV2        | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/eqv2_31M.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eqv2_31M.yml) |
+| EquiformerV2-Large-S2EF-ODAC | EquiformerV2 (Large) | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Large.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eqv2_153M.yml) |
 
 ### IS2RE Direct models
 
 | Model Name              | Model        |Checkpoint	| Config |
 |-------------------------|--------------|---	| --- |
-| Gemnet-OC-IS2RE-ODAC    | Gemnet-OC    | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/gemnet-oc.yml) |
-| eSCN-IS2RE-ODAC         | eSCN         | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/eSCN.yml) |
-| EquiformerV2-IS2RE-ODAC | EquiformerV2 | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/eqv2_31M.yml) |
+| Gemnet-OC-IS2RE-ODAC    | Gemnet-OC    | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/gemnet-oc.yml) |
+| eSCN-IS2RE-ODAC         | eSCN         | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/eSCN.yml) |
+| EquiformerV2-IS2RE-ODAC | EquiformerV2 | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/eqv2_31M.yml) |
 
 The models in the table above were trained to predict relaxed energy directly. Relaxed energies can also be predicted by running structural relaxations using the S2EF models from the previous section.
 
@@ -7445,7 +7445,7 @@ These indicate that cupd-1 and cupd-2 are both more stable than phase separated 
 
 ## Phonon calculation
 
-This takes 4-10 minutes. Adapted from https://wiki.fysik.dtu.dk/ase/ase/phonons.html#example.
+This takes 4-10 minutes. Adapted from https://docs.ase-lib.org/ase/phonons.html.
 
 Phonons have applications in computing the stability and free energy of solids. See:
 
@@ -11045,7 +11045,7 @@ You can still find these in the v1 version of fairchem github. However, many of 
 ::::{grid} 1 2 2 3
 
 :::{card} GemNet-dT
-[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/gemnet)
+[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/gemnet)
 :::
 
 :::{card} PaiNN

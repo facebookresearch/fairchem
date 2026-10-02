@@ -463,7 +463,7 @@ These indicate that cupd-1 and cupd-2 are both more stable than phase separated 
 
 ## Phonon calculation
 
-This takes 4-10 minutes. Adapted from https://wiki.fysik.dtu.dk/ase/ase/phonons.html#example.
+This takes 4-10 minutes. Adapted from https://docs.ase-lib.org/ase/phonons.html.
 
 Phonons have applications in computing the stability and free energy of solids. See:
 

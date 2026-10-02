@@ -62,7 +62,7 @@ You can still find these in the v1 version of fairchem github. However, many of 
 ::::{grid} 1 2 2 3
 
 :::{card} GemNet-dT
-[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/gemnet)
+[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/gemnet)
 :::
 
 :::{card} PaiNN
