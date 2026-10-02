@@ -38,7 +38,7 @@ def _fake_system_environment() -> SimpleNamespace:
         cpu_info="CPU(s): 8\nModel name: Test CPU",
         is_cuda_available="True",
         cuda_module_loading="LAZY",
-        nvidia_gpu_models="GPU 0: Test GPU",
+        nvidia_gpu_models="GPU 0: Test GPU\nGPU 1: Other Test GPU",
         is_xpu_available="False",
         libc_version="glibc-2.39",
         cuda_runtime_version="13.0",
@@ -125,6 +125,12 @@ def test_writes_safe_node_report(tmp_path, monkeypatch) -> None:
     ]
     assert report["environment"]["libraries"]["A-package"] == "1.1"
     assert report["environment"]["pytorch_version"] == "2.13.0"
+    assert report["environment"]["nvidia_gpu_models"] == {
+        "0": "Test GPU",
+        "1": "Other Test GPU",
+    }
+    assert report["environment"]["num_gpus"] == "2"
+    assert report["environment"]["gpu_model"] == "Unknown"
     assert report["environment"]["num_cpus"] == "8"
     assert report["environment"]["cpu_model"] == "Test CPU"
     assert "cpu_info" not in report["environment"]

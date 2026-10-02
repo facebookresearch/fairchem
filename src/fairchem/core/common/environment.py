@@ -248,6 +248,7 @@ class EnvironmentChanges:
 # Match the corresponding fields in the multiline output from ``lscpu``.
 _LSCPU_CPU_COUNT_PATTERN = re.compile(r"(?:^|\n)\s*CPU\(s\):\s+([0-9]+)\s*(?:\r?\n|$)")
 _LSCPU_CPU_MODEL_PATTERN = re.compile(r"(?:^|\n)\s*Model name:\s+(.*?)\s*(?:\r?\n|$)")
+_NVIDIA_GPU_MODEL_PATTERN = re.compile(r"^GPU\s+([0-9]+):\s*(.+?)\s*$")
 _COLLECT_CURRENT_ENVIRONMENT = object()
 
 
@@ -290,7 +291,7 @@ class Environment:
 
     num_gpus: str = field(init=False)
     gpu_model: str = field(init=False)
-    nvidia_gpu_models: Any = field(init=False)
+    nvidia_gpu_models: dict[str, str] = field(init=False)
     num_cpus: str = field(init=False)
     cpu_model: str = field(init=False)
     cuda_available: Any = field(init=False)
@@ -361,14 +362,23 @@ class Environment:
         gpu_models_text = str(
             _system_value(system_environment, "nvidia_gpu_models") or ""
         )
-        self.nvidia_gpu_models = _system_value(system_environment, "nvidia_gpu_models")
         gpu_model_lines = gpu_models_text.splitlines()
-        self.num_gpus = str(len(gpu_model_lines))
-        gpu_models = {
-            parts[1].strip()
+        self.nvidia_gpu_models = {
+            match.group(1): match.group(2)
             for line in gpu_model_lines
-            if len(parts := line.split(":", maxsplit=1)) > 1
+            if (match := _NVIDIA_GPU_MODEL_PATTERN.fullmatch(line))
         }
+        if self.nvidia_gpu_models:
+            self.num_gpus = str(len(self.nvidia_gpu_models))
+            gpu_models = set(self.nvidia_gpu_models.values())
+        else:
+            # Preserve the existing summaries for non-NVIDIA or unexpected output.
+            self.num_gpus = str(len(gpu_model_lines))
+            gpu_models = {
+                parts[1].strip()
+                for line in gpu_model_lines
+                if len(parts := line.split(":", maxsplit=1)) > 1
+            }
         self.gpu_model = next(iter(gpu_models)) if len(gpu_models) == 1 else "Unknown"
 
         cpu_info = str(_system_value(system_environment, "cpu_info") or "")
