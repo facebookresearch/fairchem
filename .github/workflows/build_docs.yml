@@ -82,6 +82,13 @@ jobs:
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
 
+    # Fail fast on broken documentation links (internal targets must exist on
+    # disk; external URLs returning 404/410 or a DNS failure are fatal, while
+    # gated/transient responses are tolerated). Runs before the expensive
+    # --execute build so a dead link fails CI quickly.
+    - name: Check documentation links
+      run: python docs/check_links.py --timeout 20 --retries 2
+
     # Build the book
     - name: Build the book
       env:
