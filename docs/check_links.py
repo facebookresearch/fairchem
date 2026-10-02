@@ -1,27 +1,39 @@
 #!/usr/bin/env python3
-"""Check every link in the documentation sources and fail on broken ones.
+"""Check links in the documentation sources and fail on broken ones.
 
-Run as part of the docs build (see .github/workflows/build_docs.yml) so a PR that
-introduces a dead link fails CI instead of silently shipping a 404.
+The checker is split into two tiers so the per-PR gate is deterministic and the
+flaky part (reaching the public internet) runs as a scheduled monitor instead:
 
-What is checked (over all ``docs/**/*.md`` sources, ignoring fenced code and
-``{code-cell}`` blocks so example URLs inside code are not flagged):
-
-* Internal links -- relative paths to other docs, images, and downloadable
+* **Internal links** -- relative paths to other docs, images, and downloadable
   assets (e.g. ``example_configs/ni_bulk.xyz``). The target must exist on disk
-  relative to the linking file. These are deterministic -> a broken one is a
-  hard ERROR (fatal).
-* External links -- ``http(s)`` URLs are fetched. A definitively dead link
-  (HTTP 404/410 or a DNS/connection failure) is a hard ERROR. Transient or
-  access-gated responses (401/403/429/5xx, timeouts) are reported as WARN only,
-  so CI is not flaky on rate-limiting or login-gated pages (e.g. HuggingFace
-  gated models).
+  relative to the linking file. This is deterministic, so a broken one is a
+  hard ERROR. The per-PR docs build runs ``--no-external`` (see
+  ``.github/workflows/build_docs.yml``) so a new dead relative link fails CI
+  immediately and offline.
+* **External links** -- ``http(s)`` URLs are fetched concurrently. A definitively
+  dead link (HTTP 404/410 or a DNS failure) is a hard ERROR; transient or
+  access-gated responses (401/403/429/5xx, timeouts) are reported as WARN /
+  "unverified" so the monitor is not flaky on rate-limiting or login-gated pages
+  (e.g. HuggingFace gated models). These run on a schedule
+  (``.github/workflows/check_links_external.yml``), not on every PR.
+
+Link syntaxes understood (over all ``docs/**/*.md`` sources, ignoring fenced
+code and ``{code-cell}`` blocks so example URLs inside code are not flagged):
+
+* inline links / images ``[text](target)`` / ``![alt](target)`` -- with
+  balanced-parenthesis-aware target capture (so URLs like
+  ``.../Article_(disambiguation)`` are not truncated);
+* autolinks ``<https://...>``;
+* reference-style definitions ``[label]: target``;
+* MyST ``:link:`` directive options (used by ``{grid-item-card}`` / ``{card}``);
+* raw HTML ``<a href="...">`` and ``<img src="...">``.
 
 Exit code is non-zero iff there is at least one ERROR.
 
 Usage:
-    python docs/check_links.py                 # internal + external (CI default)
-    python docs/check_links.py --no-external   # internal links only (offline)
+    python docs/check_links.py                 # internal + external
+    python docs/check_links.py --no-external    # internal only (CI PR gate, offline)
+    python docs/check_links.py --workers 16     # concurrency for external fetches
 """
 from __future__ import annotations
 
@@ -29,6 +41,7 @@ import argparse
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urldefrag, urlsplit
@@ -36,14 +49,20 @@ from urllib.request import Request, urlopen
 
 # --- link extraction -------------------------------------------------------
 
-# inline markdown links and images: [text](target)  /  ![alt](target)
-_LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)")
 # autolinks: <https://...>
 _AUTOLINK_RE = re.compile(r"<((?:https?)://[^>\s]+)>")
-# fenced code blocks ``` ... ``` or ~~~ ... ~~~ (incl. ```{code-cell} ...```)
+# fenced code blocks ``` ... ``` or ~~~ ... ~~~ (incl. ```{code-cell} ...```).
+# NOTE: MyST ``:::`` colon-fence directives (grid-item-card, admonitions) are
+# intentionally NOT stripped -- their ``:link:`` options are real links.
 _FENCE_RE = re.compile(r"^([ \t]*)(`{3,}|~{3,})")
 # inline code spans `...`
 _INLINE_CODE_RE = re.compile(r"`[^`]*`")
+# reference-style link definition at line start: [label]: target
+_REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(\S+)")
+# MyST directive option: ":link: target"
+_MYST_LINK_RE = re.compile(r"^\s*:link:\s*(\S+)")
+# raw HTML href/src attributes
+_HTML_ATTR_RE = re.compile(r"""(?:href|src)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 
 # External responses that must NOT fail the build (gated / transient / flaky).
 _TOLERATED_STATUS = {401, 403, 429, 500, 502, 503, 504, 408}
@@ -66,15 +85,65 @@ def strip_code(text: str) -> str:
     return _INLINE_CODE_RE.sub("", joined)
 
 
-def extract_links(text: str) -> list[str]:
-    body = strip_code(text)
-    links = []
-    for m in _LINK_RE.finditer(body):
-        tgt = m.group(1).strip()
+def _inline_targets(body: str) -> list[str]:
+    """Extract targets from ``[text](target)`` / ``![alt](target)``.
+
+    Scans for the ``](`` opener and matches balanced parentheses so that URLs
+    containing balanced ``()`` (e.g. Wikipedia disambiguation links) are kept
+    whole. The target ends at the first whitespace (the optional "title").
+    """
+    out: list[str] = []
+    for m in re.finditer(r"!?\[[^\]]*\]\(", body):
+        j, depth, buf = m.end(), 1, []
+        while j < len(body) and depth > 0:
+            c = body[j]
+            if c == "(":
+                depth += 1
+                buf.append(c)
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+                buf.append(c)
+            elif c.isspace():
+                break  # start of the optional title -> target is complete
+            else:
+                buf.append(c)
+            j += 1
+        tgt = "".join(buf).strip()
         if tgt.startswith("<") and tgt.endswith(">"):
             tgt = tgt[1:-1].strip()
-        links.append(tgt)
+        if tgt:
+            out.append(tgt)
+    return out
+
+
+def _looks_like_path(target: str) -> bool:
+    """Heuristic: is a reference-style target an actual link (not prose)?
+
+    Reference-definition lines can occasionally capture non-link text; only
+    treat a target as a checkable internal path if it is clearly path-like, to
+    avoid false ERRORs in the blocking gate.
+    """
+    if target.startswith(("http://", "https://", "/", "./", "../", "#")):
+        return True
+    return "/" in target or "." in target
+
+
+def extract_links(text: str) -> list[str]:
+    """Return every link target found in ``text`` (code stripped)."""
+    body = strip_code(text)
+    links: list[str] = []
+    links.extend(_inline_targets(body))
     links.extend(_AUTOLINK_RE.findall(body))
+    for line in body.splitlines():
+        if m := _MYST_LINK_RE.match(line):
+            links.append(m.group(1).strip())
+        if m := _REF_DEF_RE.match(line):
+            tgt = m.group(1).strip()
+            if _looks_like_path(tgt):
+                links.append(tgt)
+    links.extend(_HTML_ATTR_RE.findall(body))
     return links
 
 
@@ -162,6 +231,7 @@ def main() -> int:
     ap.add_argument("--no-external", dest="external", action="store_false")
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--retries", type=int, default=2)
+    ap.add_argument("--workers", type=int, default=16, help="concurrent external fetches")
     args = ap.parse_args()
 
     docs_dir = Path(args.docs_dir).resolve()
@@ -171,6 +241,7 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
     external: dict[str, list[Path]] = {}
+    internal_checked = 0
 
     for src in md_files:
         if "_build" in src.parts:
@@ -180,20 +251,39 @@ def main() -> int:
             if target.startswith(("http://", "https://")):
                 external.setdefault(target, []).append(src)
             elif is_checkable_internal(target):
+                internal_checked += 1
                 err = check_internal(docs_dir, src, target)
                 if err:
                     errors.append(f"[internal] {err}")
 
-    print(f"Internal links checked. {len(external)} unique external URLs found.")
+    internal_broken = len(errors)
+    print(
+        f"Internal: {internal_checked} link(s) checked, {internal_broken} broken. "
+        f"{len(external)} unique external URL(s) found."
+    )
 
+    ext_ok = ext_warn = ext_err = 0
     if args.external:
-        for i, (url, srcs) in enumerate(sorted(external.items()), 1):
+        def _probe(item: tuple[str, list[Path]]) -> tuple[str, str, str]:
+            url, srcs = item
             level, msg = check_external(url, args.timeout, args.retries)
             where = ", ".join(sorted({str(s.relative_to(docs_dir)) for s in srcs}))
-            if level == "error":
-                errors.append(f"[external] {msg}  (in {where})")
-            elif level == "warn":
-                warnings.append(f"[external] {msg}  (in {where})")
+            return level, msg, where
+
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+            for level, msg, where in pool.map(_probe, sorted(external.items())):
+                if level == "error":
+                    ext_err += 1
+                    errors.append(f"[external] {msg}  (in {where})")
+                elif level == "warn":
+                    ext_warn += 1
+                    warnings.append(f"[external] {msg}  (in {where})")
+                else:
+                    ext_ok += 1
+        print(
+            f"External: {ext_ok} verified, {ext_warn} unverified "
+            f"(gated/transient), {ext_err} broken (of {len(external)})."
+        )
     else:
         print("Skipping external link checks (--no-external).")
 
@@ -209,7 +299,14 @@ def main() -> int:
         print("\nFAILED: broken links found.")
         return 1
 
-    print("\nAll links OK.")
+    # Deliberately NOT claiming "all links OK" when some were only unverified.
+    if ext_warn:
+        print(
+            f"\nNo broken links. ({ext_warn} external link(s) unverified -- "
+            "gated/transient, not confirmed.)"
+        )
+    else:
+        print("\nAll links OK.")
     return 0
 
 

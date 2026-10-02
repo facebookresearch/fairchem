@@ -1,0 +1,31 @@
+# Scheduled monitor for external documentation links.
+#
+# Internal (relative) links are gated deterministically on every PR by the docs
+# build (build_docs.yml, `check_links.py --no-external`). External-URL liveness
+# is inherently flaky -- rate limiting, login-gated pages, transient 5xx -- so
+# it is NOT a per-PR gate. Instead this job fetches every external URL
+# concurrently on a weekly schedule (and on demand) and fails only on links that
+# are authoritatively dead (HTTP 404/410 or a DNS failure); gated/transient
+# responses are reported as "unverified" warnings and do not fail the run.
+name: external docs link check
+
+on:
+  schedule:
+    # Mondays at 06:17 UTC (off the hour to avoid the cron stampede).
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  external-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check external documentation links
+        run: python docs/check_links.py --workers 16 --timeout 20 --retries 2

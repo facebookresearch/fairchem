@@ -25,7 +25,7 @@ We don't have to change much code from above, we just use a built-in recipe to c
 3. For each deformation, a relaxation using the MLIP and (optionally) a single point calculation is run
 4. Finally, all of the above calculations are used to calculate the elastic properties of the material
 
-For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html)
+For more documentation, see the quacc docs for the [`elastic_tensor_flow` recipe](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html). The example below uses the MLP-specific wrapper `quacc.recipes.mlp.elastic.elastic_tensor_flow`, which drives this flow with MLIP relax/static jobs.
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown

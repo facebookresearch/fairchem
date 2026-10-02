@@ -82,12 +82,17 @@ jobs:
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
 
-    # Fail fast on broken documentation links (internal targets must exist on
-    # disk; external URLs returning 404/410 or a DNS failure are fatal, while
-    # gated/transient responses are tolerated). Runs before the expensive
-    # --execute build so a dead link fails CI quickly.
-    - name: Check documentation links
-      run: python docs/check_links.py --timeout 20 --retries 2
+    # Unit-test the link checker's parser/internal logic (network-free).
+    - name: Test the documentation link checker
+      run: python -m pytest docs/tests/test_check_links.py -q
+
+    # Fail fast on broken *internal* documentation links: relative targets must
+    # exist on disk. This is deterministic and offline, so it is the per-PR
+    # gate. External-URL liveness is inherently flaky (rate limits, gated pages)
+    # and is checked on a schedule instead -- see check_links_external.yml.
+    # Runs before the expensive --execute build so a dead link fails quickly.
+    - name: Check internal documentation links
+      run: python docs/check_links.py --no-external
 
     # Build the book
     - name: Build the book

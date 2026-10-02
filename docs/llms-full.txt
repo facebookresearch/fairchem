@@ -1812,7 +1812,7 @@ The FAIRChem training framework currently uses a simple SPMD (Single Program Mul
 
 3. **Runner Interface** - The core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs. Runners are distinct user functions that run on a single rank (i.e., GPU). They describe separate high-level tasks such as Train, Eval, Predict, Relaxations, MD, etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.
 
-4. **Trainer** - We use [TorchTNT](https://docs.pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
+4. **Trainer** - We use [TorchTNT](https://meta-pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
 
 :::{note}
 TNT is PyTorch's replacement for PyTorch Lightning - which has become severely bloated and difficult to use over the years; so we opted for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation, and prediction. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, e.g., training a Multitask-MLIP is one unit, training a diffusion model should be another unit.
@@ -3201,7 +3201,7 @@ Learn how to use FAIRChem models for inorganic materials property prediction and
 ::::{grid} 1 2 2 3
 
 :::{card} Formation Energy
-:link: formation-energy
+:link: formation_energy
 
 Calculate formation energies for inorganic materials using UMA and MP-compatible corrections.
 :::
@@ -3418,7 +3418,7 @@ We don't have to change much code from above, we just use a built-in recipe to c
 3. For each deformation, a relaxation using the MLIP and (optionally) a single point calculation is run
 4. Finally, all of the above calculations are used to calculate the elastic properties of the material
 
-For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html)
+For more documentation, see the quacc docs for the [`elastic_tensor_flow` recipe](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html). The example below uses the MLP-specific wrapper `quacc.recipes.mlp.elastic.elastic_tensor_flow`, which drives this flow with MLIP relax/static jobs.
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -5129,7 +5129,7 @@ plt.legend(["DFT (PBE)", "UMA-OC20"]);
 
 ## Next steps
 
-In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./NRR/NRR_example-gemnet).
+In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./adsorption_energies/adsorption_energies.md).
 
 +++
 
@@ -6737,7 +6737,7 @@ Learn how to use FAIRChem models for Direct Air Capture (DAC) applications with 
 ::::{grid} 1 2 2 2
 
 :::{card} Adsorption Energy
-:link: adsorption-energy
+:link: adsorption_energy
 
 Calculate CO2 and H2O adsorption energies in MOFs, including flexible framework effects.
 :::
@@ -7874,7 +7874,7 @@ a_opt = a_optimized
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni bulk structure](example_configs/ni_bulk.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
+[Download the example Ni bulk input structure](example_configs/ni_bulk.xyz) (unrelaxed; this is the pre-optimization geometry) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
 ```
 
 ```{admonition} Understanding the Results
@@ -8124,7 +8124,7 @@ for facet in facets:
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni(111) slab structure](example_configs/ni111_slab.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
+[Download the example Ni(111) slab input structure](example_configs/ni111_slab.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
 ```
 
 ```{admonition} Comparison with Paper (Table 1)
@@ -8546,7 +8546,7 @@ view(slab_with_h, viewer='x3d')
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example H on Ni(111) structure](example_configs/h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
+[Download the example H on Ni(111) input structure](example_configs/h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
 ```
 
 ```{code-cell} ipython3
@@ -8817,7 +8817,7 @@ print("\n✓ Coverage dependence analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example multiple H on Ni(111) structure](example_configs/4h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
+[Download the example multiple-H on Ni(111) input structure](example_configs/4h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
 ```
 
 ```{admonition} Comparison with Paper
@@ -9552,7 +9552,7 @@ print("\n✓ NEB analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example CO on Ni(111) structure](example_configs/co_on_ni111.xyz) and [Download C+O on Ni(111) structure](example_configs/c_o_on_ni111.xyz) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
+[Download the example CO on Ni(111) input structure](example_configs/co_on_ni111.xyz) (unrelaxed) and [Download the C+O on Ni(111) input structure](example_configs/c_o_on_ni111.xyz) (unrelaxed) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
 ```
 
 ```{admonition} Comparison with Paper (Tables 4 & 5)
