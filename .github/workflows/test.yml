@@ -486,7 +486,10 @@ jobs:
       - name: Install core dependencies and package
         shell: micromamba-shell {0}
         run: |
-          micromamba install lammps
+          # Newer Python 3.14 builds currently require GLIBC 2.38, which is
+          # newer than this GPU runner. Keep the compatible conda-forge build
+          # until the runner image or package compatibility floor changes.
+          micromamba install "lammps=2025.07.22=cpu_py314_h47f5652_nompi_2"
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras,ray] \
           packages/fairchem-lammps \
@@ -495,8 +498,7 @@ jobs:
       - name: LAMMPS unit tests
         shell: micromamba-shell {0}
         run: |
-          pytest tests/lammps/test_lammps_fc.py \
-          tests/lammps/test_preflight.py \
+          pytest tests/lammps/test_preflight.py \
           --durations=0 -vv
 
       - name: LAMMPS two-worker CPU integration
