@@ -40,9 +40,9 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(
-            masses[atom_id], atomic_masses[atom_id], atol=1e-1
-        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
+            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        )
 
 
 def atomic_data_from_lammps_data(
@@ -199,9 +199,9 @@ class FixExternalCallback:
         # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
         if box_change:
             # stress is defined as -virial/volume in lammps
-            assert (
-                "stress" in results
-            ), f"stress must be in results to compute virial. Predictios can be enabled by setting `predict_untrained_stress=set('{lmp._task_name}')` "
+            assert "stress" in results, (
+                f"stress must be in results to compute virial. Predictios can be enabled by setting `predict_untrained_stress=set('{lmp._task_name}')` "
+            )
             volume = torch.det(cell).abs().item()
             v = (-results["stress"].detach().cpu() * volume)[0].tolist()
             # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
@@ -215,11 +215,14 @@ def run_lammps_with_fairchem(
     task_name: str,
     charge: int = 0,
     spin: int = 0,
+    cmdargs: list[str] | None = None,
 ):
     machine = None
     if "LAMMPS_MACHINE_NAME" in os.environ:
         machine = os.environ["LAMMPS_MACHINE_NAME"]
-    lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
+    if cmdargs is None:
+        cmdargs = ["-nocite", "-log", "none", "-echo", "screen"]
+    lmp = lammps(name=machine, cmdargs=cmdargs)
     lmp._predictor = predictor
     lmp._task_name = task_name
     # run_cmds = []

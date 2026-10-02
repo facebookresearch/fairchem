@@ -330,6 +330,27 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   URL exists, rather than adding duplicate binaries that increase repository
   size.
 
+## LAMMPS Agent Workflow
+
+- Before configuring a user's LAMMPS run, inspect `CUDA_VISIBLE_DEVICES` and
+  the visible GPU models, then preserve the production structure's UMA task,
+  total charge, and spin.
+- Run `lmp_fc_preflight mode=check` on the user's structure. Do not proceed to a
+  long run unless its strict atom-mapping, energy/force-transfer, and finite-MD
+  checks pass.
+- Run `lmp_fc_preflight mode=benchmark expected_steps=...` on that same structure
+  and target hardware. Retain the JSON report and apply its emitted Hydra
+  overrides; do not assume turbo mode, compilation, graph generator v3, or all
+  visible GPUs will be faster.
+- Leave `execution_mode` unset so compatible UMA-S GPU runs can select the
+  optimized backend automatically. Treat activation checkpointing as a memory
+  fallback and use one parallel worker per visible GPU at most.
+- A generated FCC input is only an installation fallback. It is not evidence
+  for settings on a chemically different production system.
+- Keep `RAY_TMPDIR` short on cluster jobs (for example `/tmp/r-$SLURM_JOB_ID`);
+  Ray's Unix-domain sockets can exceed the platform path limit under a long
+  checkpoint or worktree path.
+
 ## Hessian Backend Gotchas
 
 - PyTorch's generic `vmap` fallback cannot batch the mutable, output-argument

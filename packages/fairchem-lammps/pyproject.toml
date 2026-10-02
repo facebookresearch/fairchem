@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 lmp_fc = "fairchem.lammps.lammps_fc:main"
+lmp_fc_preflight = "fairchem.lammps.preflight:main"
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem"

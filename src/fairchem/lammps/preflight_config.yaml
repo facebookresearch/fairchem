@@ -1,0 +1,34 @@
+mode: check
+
+# Use an ASE-readable periodic structure for production decisions. Leave null
+# only for the deterministic generated FCC installation fallback.
+structure: null
+generated_atoms: 32
+task: omat
+charge: 0
+spin: null
+model: uma-s-1p1
+timestep_fs: 0.5
+
+# Fast correctness-check settings.
+profile: tf32_eager
+graph_version: 2
+workers: 1
+steps: 5
+
+# Benchmark settings. All visible worker counts are used when null.
+expected_steps: 100000
+worker_counts: null
+warmup_steps: 10
+timing_blocks: 5
+block_steps: 20
+
+# Null selects a mode-specific filename in the launch directory.
+output: null
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

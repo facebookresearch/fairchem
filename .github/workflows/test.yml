@@ -488,9 +488,24 @@ jobs:
         run: |
           micromamba install lammps
           python -m pip install --upgrade pip
-          pip install packages/fairchem-core[dev,extras] \
+          pip install packages/fairchem-core[dev,extras,ray] \
           packages/fairchem-lammps \
           -r tests/requirements.txt # pin test packages
+
+      - name: LAMMPS unit tests
+        shell: micromamba-shell {0}
+        run: |
+          pytest tests/lammps/test_lammps_fc.py \
+          tests/lammps/test_preflight.py \
+          --durations=0 -vv
+
+      - name: LAMMPS two-worker CPU integration
+        shell: micromamba-shell {0}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest tests/lammps/test_preflight_integration.py::test_two_worker_predictor_runs_through_lammps \
+          --durations=0 -vv --sweep-model=uma-s-1p1
 
       - name: Core GPU tests
         shell: micromamba-shell {0}
