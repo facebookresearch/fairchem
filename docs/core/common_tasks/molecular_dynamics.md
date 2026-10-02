@@ -194,10 +194,8 @@ Each CLI invocation creates a timestamped directory below `job.run_dir`. Its
 `results` directory contains:
 
 - `init_atoms.extxyz`: the structure and initialized velocities at step zero;
-- `trajectory.parquet`: the initial trajectory segment;
-- `trajectory.step-XXXXXXXXX.parquet`: additional restart segments, where the
-  suffix is the checkpoint step;
-- `thermo.log` and matching `thermo.step-XXXXXXXXX.log` restart segments; and
+- `trajectory.parquet`: trajectory frames written at `trajectory_interval`;
+- `thermo.log`: thermodynamic output written at `log_interval`; and
 - `metadata.json`: run and output metadata.
 
 The Parquet trajectory uses the following units and conventions:
@@ -218,27 +216,11 @@ The Parquet trajectory uses the following units and conventions:
 
 `checkpoint_interval` writes a rolling checkpoint containing atoms, velocities,
 thermostat state, step count, and generated `resume_config.yaml` and
-`portable_config.yaml` files. Resume on the same system with:
-
-```bash
-fairchem -c /path/to/preemption_state/resume_config.yaml
-```
-
-Each resume writes a new trajectory and log segment instead of truncating the
-pre-checkpoint output. Analyze the full trajectory by concatenating the segment
-files and sorting on `step`, for example:
-
-```python
-from pathlib import Path
-
-import pandas as pd
-
-results_dir = Path("/path/to/run/results")
-trajectory = pd.concat(
-    [pd.read_parquet(path) for path in results_dir.glob("trajectory*.parquet")],
-    ignore_index=True,
-).sort_values("step")
-```
+`portable_config.yaml` files. Full restart output handling is under active
+development. Currently, resuming into the same results directory recreates
+`trajectory.parquet`, replacing its pre-checkpoint frames, while appending to
+`thermo.log`. Preserve the trajectory before using a generated resume
+configuration.
 
 When `heartbeat_interval` is enabled, creating a file named `STOPFAIR` alongside
 the run's `checkpoints` directory requests a checkpoint and graceful stop.

@@ -235,53 +235,6 @@ class TestMDRunner:
                 row["energy"], ase_atoms.get_potential_energy(), atol=1e-10
             )
 
-    def test_resume_writes_new_trajectory_segment(self, cu_atoms, results_dir):
-        checkpoint_dir = results_dir / "checkpoint"
-        runner1 = MDRunner(
-            calculator=EMT(),
-            atoms=cu_atoms.copy(),
-            thermostat=VelocityVerletThermostat(),
-            timestep_fs=1.0,
-            steps=10,
-            trajectory_interval=5,
-            log_interval=5,
-        )
-        runner1._job_config = _create_mock_job_config(
-            str(results_dir), checkpoint_dir=str(checkpoint_dir)
-        )
-        results1 = runner1.calculate()
-        runner1.save_state(str(checkpoint_dir), is_preemption=True)
-        original_trajectory = pd.read_parquet(results1["trajectory_file"])
-
-        runner2 = MDRunner(
-            calculator=EMT(),
-            atoms=cu_atoms.copy(),
-            thermostat=VelocityVerletThermostat(),
-            timestep_fs=1.0,
-            steps=20,
-            trajectory_interval=5,
-            log_interval=5,
-        )
-        runner2._job_config = _create_mock_job_config(
-            str(results_dir), checkpoint_dir=str(checkpoint_dir)
-        )
-        runner2.load_state(str(checkpoint_dir))
-        results2 = runner2.calculate()
-
-        assert Path(results1["trajectory_file"]).name == "trajectory.parquet"
-        assert (
-            Path(results2["trajectory_file"]).name
-            == "trajectory.step-000000010.parquet"
-        )
-        pd.testing.assert_frame_equal(
-            pd.read_parquet(results1["trajectory_file"]), original_trajectory
-        )
-        resumed_trajectory = pd.read_parquet(results2["trajectory_file"])
-        assert list(original_trajectory["step"]) == [0, 5, 10]
-        assert list(resumed_trajectory["step"]) == [15, 20]
-        assert (results_dir / "thermo.log").is_file()
-        assert (results_dir / "thermo.step-000000010.log").is_file()
-
     def test_langevin_fix_com_uses_mobile_subset(self):
         atoms = bulk("Cu", cubic=True)
         atoms.set_constraint(FixAtoms(indices=[0, 1]))
