@@ -36,7 +36,6 @@ Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without on
 ### Model Highlights
 
 ::::{grid} 2
-:gutter: 3
 
 :::{grid-item-card} 🔋 Better Charge Handling
 Leading to improvements across molecular systems:
@@ -81,7 +80,6 @@ UMA is built to easily scale up to multi-node, multi-GPU parallel inference with
 :::
 
 ::::{grid} 2
-:gutter: 3
 
 :::{grid-item-card} 🚀 Large-Scale MD Simulations
 Run MD with ASE and LAMMPS on large-scale systems with ns/day speeds:
