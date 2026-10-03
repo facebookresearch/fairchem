@@ -14,12 +14,17 @@ import tempfile
 import hydra
 import numpy as np
 import pytest
+import torch
 from ase import Atoms
 
 pytest.importorskip("lammps")
 
 from fairchem.lammps import lammps_fc  # noqa: E402
-from fairchem.lammps.lammps_fc import restricted_cell_from_lammps_box  # noqa: E402
+from fairchem.lammps.lammps_fc import (  # noqa: E402
+    FIX_EXT_ID,
+    FixExternalCallback,
+    restricted_cell_from_lammps_box,
+)
 
 
 def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
@@ -70,6 +75,53 @@ def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
         f.write("Atoms\n\n")
         for i, (pos, atype) in enumerate(zip(positions, atom_types), start=1):
             f.write(f"{i} {atype} {pos[0]} {pos[1]} {pos[2]}\n")
+
+
+def test_callback_transfers_stress_with_lammps_sign_units_and_component_order():
+    class FakeNumpyInterface:
+        @staticmethod
+        def extract_atom(name):
+            if name == "type":
+                return np.array([1])
+            if name == "mass":
+                return np.array([0.0, 12.011])
+            raise AssertionError(f"Unexpected atom field: {name}")
+
+    class FakePredictor:
+        @staticmethod
+        def predict(data):
+            assert data.natoms.item() == 1
+            return {
+                "energy": torch.tensor([2.0]),
+                "forces": torch.tensor([[0.1, 0.2, 0.3]]),
+                "stress": torch.tensor([[1.0, 2.0, 3.0, 2.0, 4.0, 5.0, 3.0, 5.0, 6.0]]),
+            }
+
+    class FakeLammps:
+        numpy = FakeNumpyInterface()
+        _predictor = FakePredictor()
+        _task_name = "omat"
+
+        @staticmethod
+        def extract_box():
+            return ([0, 0, 0], [2, 2, 2], 0, 0, 0, [1, 1, 1], 1)
+
+        def fix_external_set_energy_global(self, fix_id, energy):
+            self.energy_call = (fix_id, energy)
+
+        def fix_external_set_virial_global(self, fix_id, virial):
+            self.virial_call = (fix_id, virial)
+
+    lmp = FakeLammps()
+    forces = np.zeros((1, 3))
+    FixExternalCallback()(lmp, 0, 1, np.array([1]), np.array([[0.5, 0.5, 0.5]]), forces)
+
+    assert lmp.energy_call == (FIX_EXT_ID, 2.0)
+    assert np.allclose(forces, [[0.1, 0.2, 0.3]])
+    assert lmp.virial_call == (
+        FIX_EXT_ID,
+        [-8.0, -32.0, -48.0, -16.0, -24.0, -40.0],
+    )
 
 
 @pytest.mark.parametrize(

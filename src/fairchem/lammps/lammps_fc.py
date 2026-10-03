@@ -1,8 +1,10 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
 
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation. See LICENSE.md in this
+directory for the full license.
 """
 
 from __future__ import annotations
@@ -40,9 +42,9 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(
-            masses[atom_id], atomic_masses[atom_id], atol=1e-1
-        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
+            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        )
 
 
 def atomic_data_from_lammps_data(
@@ -161,6 +163,23 @@ def restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     return unit_cell_matrix.unsqueeze(0)
 
 
+def stress_to_lammps_virial(stress: torch.Tensor, volume: float) -> list[float]:
+    """Convert a 3x3 tensile-positive stress to LAMMPS virial ordering."""
+    if stress.shape[0] != 1 or stress[0].numel() != 9:
+        raise ValueError(f"Expected one 3x3 stress tensor, got {stress.shape}.")
+    # LAMMPS defines stress as -virial / volume and consumes the symmetric
+    # components in xx, yy, zz, xy, xz, yz order.
+    virial = (-stress.detach().cpu() * volume)[0].reshape(3, 3)
+    return [
+        virial[0, 0].item(),
+        virial[1, 1].item(),
+        virial[2, 2].item(),
+        virial[0, 1].item(),
+        virial[0, 2].item(),
+        virial[1, 2].item(),
+    ]
+
+
 class FixExternalCallback:
     def __init__(self, charge: int = 0, spin: int = 0):
         self.charge = charge
@@ -199,13 +218,13 @@ class FixExternalCallback:
         # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
         if box_change:
             # stress is defined as -virial/volume in lammps
-            assert (
-                "stress" in results
-            ), f"stress must be in results to compute virial. Predictios can be enabled by setting `predict_untrained_stress=set('{lmp._task_name}')` "
+            assert "stress" in results, (
+                "stress must be in results to compute virial. Predictions can be "
+                "enabled by setting "
+                f"`predict_untrained_stress=set('{lmp._task_name}')`"
+            )
             volume = torch.det(cell).abs().item()
-            v = (-results["stress"].detach().cpu() * volume)[0].tolist()
-            # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
-            virial_arr = [v[0], v[4], v[8], v[1], v[2], v[5]]
+            virial_arr = stress_to_lammps_virial(results["stress"], volume)
             lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
 
 
@@ -215,11 +234,14 @@ def run_lammps_with_fairchem(
     task_name: str,
     charge: int = 0,
     spin: int = 0,
+    cmdargs: list[str] | None = None,
 ):
     machine = None
     if "LAMMPS_MACHINE_NAME" in os.environ:
         machine = os.environ["LAMMPS_MACHINE_NAME"]
-    lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
+    if cmdargs is None:
+        cmdargs = ["-nocite", "-log", "none", "-echo", "screen"]
+    lmp = lammps(name=machine, cmdargs=cmdargs)
     lmp._predictor = predictor
     lmp._task_name = task_name
     # run_cmds = []
