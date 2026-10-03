@@ -23,6 +23,12 @@ warmup_steps: 10
 timing_blocks: 5
 block_steps: 20
 
+# A case is eligible for recommendation only when it stays within all three
+# limits relative to eager FP32. Energy is normalized by system size.
+max_energy_error_meV_per_atom: 1.0
+max_force_mae_eV_per_A: 0.005
+max_force_error_eV_per_A: 0.02
+
 # Null selects a mode-specific filename in the launch directory.
 output: null
 

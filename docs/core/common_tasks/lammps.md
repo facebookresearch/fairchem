@@ -92,7 +92,8 @@ only when:
 - atom types round-trip to the original elements;
 - energy and forces returned by UMA are finite;
 - the callback agrees with direct UMA inference on the ASE structure within
-  the established inference-mode tolerances;
+  1 meV/atom energy error, 0.005 eV/A force MAE, and 0.02 eV/A maximum force
+  error by default;
 - LAMMPS applies the callback energy and forces within `1e-5` eV and
   `1e-5` eV/A; and
 - five 0.5 fs NVE steps finish with finite thermodynamics.
@@ -150,6 +151,16 @@ backend, and the exact Hydra overrides for the selected configuration.
 If the eager FP32 baseline does not fit, the first passing FP32 case becomes
 the numerical reference.
 
+A candidate must also stay within all three numerical limits relative to the
+FP32 reference: `max_energy_error_meV_per_atom=1.0`,
+`max_force_mae_eV_per_A=0.005`, and
+`max_force_error_eV_per_A=0.02`. Energy error is normalized per atom rather
+than compared to the extensive total energy. These conservative defaults are
+explicit Hydra settings, so a domain-specific workflow can tighten them. Do
+not loosen them without validating the effect on the target observables. The
+separate `1e-5` criteria above test lossless transfer across the LAMMPS callback;
+they are not the FP32-versus-accelerated-mode acceptance limits.
+
 ### Automatic GPU execution backend
 
 The LAMMPS YAML does not set `execution_mode`. This is intentional. With
@@ -199,7 +210,10 @@ lmp_fc lmp_in="lammps_in_example.file" task_name="omol" \
 ```
 
 Set `num_workers` to no more than the GPUs made visible to the process. The
-public LAMMPS CI runner has one T4 GPU, so it validates the LAMMPS callback on
-CUDA and the two-worker Ray/graph-parallel path on CPU/Gloo. Actual multi-GPU
-NCCL correctness and performance must also be checked on the target hardware;
-the pre-flight benchmark provides that check.
+public LAMMPS CI runner has one T4 GPU. It validates the LAMMPS callback on
+CUDA and Ray/graph-parallel orchestration on CPU/Gloo, but it does **not**
+continuously validate multi-GPU CUDA/NCCL execution. A conditional two-GPU
+integration test runs when such a test host is available. Until the project has
+a maintained multi-GPU runner, treat a passing pre-flight benchmark on the
+target multi-GPU host—not public CI—as the required correctness and performance
+signal before applying a graph-parallel recommendation.

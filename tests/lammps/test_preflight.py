@@ -12,22 +12,22 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from hydra import compose, initialize_config_dir
-
 from fairchem.lammps.preflight import (
     PROFILE_BY_NAME,
     BenchmarkCase,
     RecordingPredictor,
+    _atom_mapping_matches,
     _namespace_from_config,
     add_break_even_steps,
     add_numerical_comparison,
     build_case_matrix,
     generate_fcc_system,
     hydra_overrides_for_case,
-    numerical_tolerances,
+    numerical_acceptance,
     projected_runtime_seconds,
     recommend_case,
 )
+from hydra import compose, initialize_config_dir
 
 
 def _result(
@@ -80,6 +80,9 @@ def test_hydra_config_composes_benchmark_overrides():
     assert args.mode == "benchmark"
     assert args.generated_atoms == 64
     assert args.worker_counts == [1, 2, 4]
+    assert args.max_energy_error_meV_per_atom == 1.0
+    assert args.max_force_mae_eV_per_A == 0.005
+    assert args.max_force_error_eV_per_A == 0.02
     assert args.output == Path("results.json")
 
 
@@ -149,11 +152,23 @@ def test_break_even_steps_include_extra_startup_cost():
     assert compiled["break_even_steps_vs_fp32_eager"] == 2010
 
 
-def test_tf32_uses_relaxed_established_tolerances():
-    fp32 = numerical_tolerances(PROFILE_BY_NAME["fp32_eager"])
-    tf32 = numerical_tolerances(PROFILE_BY_NAME["turbo"])
-    assert tf32["force_rtol"] > fp32["force_rtol"]
-    assert tf32["energy_rtol"] > fp32["energy_rtol"]
+def test_atom_mapping_uses_ids_for_heterogeneous_system():
+    expected = np.array([6, 8])
+    assert _atom_mapping_matches(
+        received_atomic_numbers=np.array([8, 6]),
+        expected_atomic_numbers=expected,
+        lammps_atom_ids=np.array([2, 1]),
+    )
+    assert not _atom_mapping_matches(
+        received_atomic_numbers=np.array([8, 6]),
+        expected_atomic_numbers=expected,
+        lammps_atom_ids=np.array([1, 2]),
+    )
+
+
+def test_numerical_acceptance_rejects_negative_limits():
+    with pytest.raises(ValueError, match="non-negative"):
+        numerical_acceptance(max_energy_error_meV_per_atom=-1.0)
 
 
 def test_numerical_comparison_records_errors_and_removes_private_arrays():
@@ -163,11 +178,28 @@ def test_numerical_comparison_records_errors_and_removes_private_arrays():
         "_forces": np.ones((2, 3)),
     }
     reference = {"energy": np.array([2.0]), "forces": np.ones((2, 3))}
-    add_numerical_comparison(result, reference)
+    add_numerical_comparison(
+        result, reference, num_atoms=2, acceptance=numerical_acceptance()
+    )
     assert result["numerical_passed"] is True
+    assert result["energy_error_meV_per_atom"] == 0
     assert result["force_max_error_eV_per_A"] == 0
     assert "_energy" not in result
     assert "_forces" not in result
+
+
+def test_numerical_comparison_uses_size_normalized_energy_and_absolute_forces():
+    result = {
+        "profile": "turbo",
+        "_energy": np.array([100.0015]),
+        "_forces": np.full((2, 3), 0.021),
+    }
+    reference = {"energy": np.array([100.0]), "forces": np.zeros((2, 3))}
+    add_numerical_comparison(
+        result, reference, num_atoms=2, acceptance=numerical_acceptance()
+    )
+    assert result["energy_error_meV_per_atom"] == pytest.approx(0.75)
+    assert result["numerical_passed"] is False
 
 
 def test_recommendation_requires_material_speedup():

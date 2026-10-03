@@ -8,6 +8,7 @@ Tests:  Strict LAMMPS callback parity and the distributed predictor path.
 Models: uma-s-1p1.
 CI:     test_lammps_gpu; the public GPU runner has one T4, so the
         two-worker distributed case uses CPU/Gloo while exercising Ray and GP.
+        The NCCL test runs conditionally on hosts exposing at least two GPUs.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import torch
 pytest.importorskip("lammps")
 pytest.importorskip("ray")
 
-from fairchem.lammps.preflight import (
+from fairchem.lammps.preflight import (  # noqa: E402
     BRIDGE_ATOL,
     BenchmarkCase,
     execute_case,
@@ -27,11 +28,13 @@ from fairchem.lammps.preflight import (
 )
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1")
 def test_gpu_preflight_has_strict_bridge_parity(pretrained_checkpoint):
+    atoms = generate_fcc_system(8)
+    atoms.set_atomic_numbers([6, 8, 6, 8, 6, 8, 6, 8])
     result = execute_case(
-        atoms=generate_fcc_system(8),
+        atoms=atoms,
         task="omat",
         charge=0,
         spin=0,
@@ -44,10 +47,11 @@ def test_gpu_preflight_has_strict_bridge_parity(pretrained_checkpoint):
     assert result["status"] == "passed", result.get("error")
     assert result["bridge_energy_error_eV"] <= BRIDGE_ATOL
     assert result["bridge_force_max_error_eV_per_A"] <= BRIDGE_ATOL
+    assert result["atom_mapping_passed"] is True
     assert result["direct_reference_passed"] is True
 
 
-@pytest.mark.serial
+@pytest.mark.serial()
 @pytest.mark.pretrained("uma-s-1p1")
 def test_two_worker_predictor_runs_through_lammps(pretrained_checkpoint):
     result = execute_case(
@@ -67,7 +71,7 @@ def test_two_worker_predictor_runs_through_lammps(pretrained_checkpoint):
     assert result["direct_reference_passed"] is True
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1")
 @pytest.mark.skipif(
     torch.cuda.device_count() < 2,

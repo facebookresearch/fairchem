@@ -1,8 +1,10 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
 
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation. See LICENSE.md in this
+directory for the full license.
 
 Validate and benchmark the FAIR-Chem LAMMPS integration.
 """
@@ -47,6 +49,9 @@ if TYPE_CHECKING:
 BRIDGE_ATOL = 1.0e-5
 MAX_TIMING_CV = 0.10
 MIN_RECOMMENDATION_SPEEDUP = 1.10
+DEFAULT_MAX_ENERGY_ERROR_MEV_PER_ATOM = 1.0
+DEFAULT_MAX_FORCE_MAE_EV_PER_A = 5.0e-3
+DEFAULT_MAX_FORCE_ERROR_EV_PER_A = 2.0e-2
 
 
 @dataclass(frozen=True)
@@ -246,26 +251,11 @@ def add_break_even_steps(results: list[dict[str, Any]]) -> None:
         )
 
 
-def numerical_tolerances(profile: InferenceProfile) -> dict[str, float]:
-    """
-    Return the repository's established inference-mode comparison tolerances.
-    """
-    if profile.tf32:
-        return {
-            "energy_rtol": 2.0e-4,
-            "force_rtol": 1.0e-1,
-            "force_atol": 5.0e-2,
-        }
-    return {
-        "energy_rtol": 1.0e-4,
-        "force_rtol": 2.0e-4,
-        "force_atol": 1.0e-3,
-    }
-
-
 def add_numerical_comparison(
     result: dict[str, Any],
     reference: dict[str, np.ndarray],
+    num_atoms: int,
+    acceptance: dict[str, float],
 ) -> None:
     """
     Add accuracy metrics and a pass/fail decision to a completed case.
@@ -274,25 +264,36 @@ def add_numerical_comparison(
     forces = np.asarray(result.pop("_forces"))
     energy_ref = reference["energy"]
     forces_ref = reference["forces"]
-    tolerances = numerical_tolerances(PROFILE_BY_NAME[result["profile"]])
-    result["energy_absolute_error_eV"] = float(np.max(np.abs(energy - energy_ref)))
+    energy_error = float(np.max(np.abs(energy - energy_ref)))
+    result["energy_absolute_error_eV"] = energy_error
+    result["energy_error_meV_per_atom"] = 1000.0 * energy_error / num_atoms
     force_delta = forces - forces_ref
     result["force_mae_eV_per_A"] = float(np.mean(np.abs(force_delta)))
     result["force_max_error_eV_per_A"] = float(np.max(np.abs(force_delta)))
-    energy_ok = np.allclose(
-        energy,
-        energy_ref,
-        rtol=tolerances["energy_rtol"],
-        atol=BRIDGE_ATOL,
+    result["numerical_acceptance"] = acceptance
+    result["numerical_passed"] = bool(
+        result["energy_error_meV_per_atom"]
+        <= acceptance["max_energy_error_meV_per_atom"]
+        and result["force_mae_eV_per_A"] <= acceptance["max_force_mae_eV_per_A"]
+        and result["force_max_error_eV_per_A"] <= acceptance["max_force_error_eV_per_A"]
     )
-    forces_ok = np.allclose(
-        forces,
-        forces_ref,
-        rtol=tolerances["force_rtol"],
-        atol=tolerances["force_atol"],
-    )
-    result["numerical_tolerances"] = tolerances
-    result["numerical_passed"] = bool(energy_ok and forces_ok)
+
+
+def numerical_acceptance(
+    *,
+    max_energy_error_meV_per_atom: float = DEFAULT_MAX_ENERGY_ERROR_MEV_PER_ATOM,
+    max_force_mae_eV_per_A: float = DEFAULT_MAX_FORCE_MAE_EV_PER_A,
+    max_force_error_eV_per_A: float = DEFAULT_MAX_FORCE_ERROR_EV_PER_A,
+) -> dict[str, float]:
+    """Build and validate the accuracy limits used for recommendations."""
+    acceptance = {
+        "max_energy_error_meV_per_atom": max_energy_error_meV_per_atom,
+        "max_force_mae_eV_per_A": max_force_mae_eV_per_A,
+        "max_force_error_eV_per_A": max_force_error_eV_per_A,
+    }
+    if any(value < 0 for value in acceptance.values()):
+        raise ValueError("Numerical acceptance limits must be non-negative.")
+    return acceptance
 
 
 def recommend_case(
@@ -549,8 +550,9 @@ def _bridge_checks(
     lammps_forces = lmp.numpy.extract_atom("f")[:nlocal].copy()
     lammps_energy = float(lmp.get_thermo("pe"))
     received_atomic_numbers = recording.last_input.atomic_numbers.detach().cpu().numpy()
-    atom_mapping_ok = np.array_equal(
-        np.sort(received_atomic_numbers), np.sort(expected_atomic_numbers)
+    atom_ids = lmp.numpy.extract_atom("id")[:nlocal].copy()
+    atom_mapping_ok = _atom_mapping_matches(
+        received_atomic_numbers, expected_atomic_numbers, atom_ids
     )
     energy_error = abs(lammps_energy - float(np.asarray(energy).reshape(-1)[0]))
     force_error = float(np.max(np.abs(lammps_forces - forces)))
@@ -576,6 +578,26 @@ def _bridge_checks(
     }
 
 
+def _atom_mapping_matches(
+    received_atomic_numbers: np.ndarray,
+    expected_atomic_numbers: np.ndarray,
+    lammps_atom_ids: np.ndarray,
+) -> bool:
+    """Compare elements in LAMMPS local-storage order using stable atom IDs."""
+    received = np.asarray(received_atomic_numbers).reshape(-1)
+    expected = np.asarray(expected_atomic_numbers).reshape(-1)
+    atom_ids = np.asarray(lammps_atom_ids, dtype=np.int64).reshape(-1)
+    if (
+        len(received) != len(expected)
+        or len(atom_ids) != len(expected)
+        or np.any(atom_ids < 1)
+        or np.any(atom_ids > len(expected))
+        or len(np.unique(atom_ids)) != len(expected)
+    ):
+        return False
+    return bool(np.array_equal(received, expected[atom_ids - 1]))
+
+
 def _direct_reference_checks(
     predictor: MLIPPredictUnitProtocol,
     atoms: Atoms,
@@ -584,7 +606,7 @@ def _direct_reference_checks(
     spin: int,
     callback_energy: np.ndarray,
     callback_forces: np.ndarray,
-    profile: InferenceProfile,
+    acceptance: dict[str, float],
 ) -> dict[str, Any]:
     """
     Compare the callback result with direct UMA inference on the ASE structure.
@@ -601,26 +623,22 @@ def _direct_reference_checks(
     direct_forces = direct["forces"].detach().cpu().numpy()
     prism = Prism(np.asarray(atoms.cell), pbc=np.asarray(atoms.pbc))
     direct_forces_lammps = prism.vector_to_lammps(direct_forces)
-    tolerances = numerical_tolerances(profile)
     energy_error = float(np.max(np.abs(direct_energy - callback_energy)))
-    force_error = float(np.max(np.abs(direct_forces_lammps - callback_forces)))
+    energy_error_per_atom = 1000.0 * energy_error / len(atoms)
+    force_delta = direct_forces_lammps - callback_forces
+    force_mae = float(np.mean(np.abs(force_delta)))
+    force_error = float(np.max(np.abs(force_delta)))
     passed = bool(
-        np.allclose(
-            direct_energy,
-            callback_energy,
-            rtol=tolerances["energy_rtol"],
-            atol=BRIDGE_ATOL,
-        )
-        and np.allclose(
-            direct_forces_lammps,
-            callback_forces,
-            rtol=tolerances["force_rtol"],
-            atol=tolerances["force_atol"],
-        )
+        energy_error_per_atom <= acceptance["max_energy_error_meV_per_atom"]
+        and force_mae <= acceptance["max_force_mae_eV_per_A"]
+        and force_error <= acceptance["max_force_error_eV_per_A"]
     )
     return {
         "direct_energy_error_eV": energy_error,
+        "direct_energy_error_meV_per_atom": energy_error_per_atom,
+        "direct_force_mae_eV_per_A": force_mae,
         "direct_force_max_error_eV_per_A": force_error,
+        "direct_reference_acceptance": acceptance,
         "direct_reference_passed": passed,
     }
 
@@ -639,17 +657,20 @@ def execute_case(
     warmup_steps: int = 0,
     timing_blocks: int = 0,
     block_steps: int = 0,
+    acceptance: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """
     Execute one isolated LAMMPS configuration and collect validation/timing data.
     """
     # LAMMPS is an optional dependency of fairchem-core and is required only
     # when a check is actually executed.
-    from fairchem.lammps.lammps_fc import (  # noqa: PLC0415
+    from fairchem.lammps.lammps_fc import (
         run_lammps_with_fairchem,
     )
 
     profile = PROFILE_BY_NAME[case.profile]
+    if acceptance is None:
+        acceptance = numerical_acceptance()
     result: dict[str, Any] = asdict(case)
     result["status"] = "failed"
     lmp = None
@@ -688,7 +709,7 @@ def execute_case(
                     spin,
                     result["_energy"],
                     result["_forces"],
-                    profile,
+                    acceptance,
                 )
             )
             result["resolved_execution_mode"] = recording.resolved_execution_mode
@@ -766,6 +787,11 @@ def run_check(args: SimpleNamespace) -> int:
             f"{hardware['visible_gpu_count']} visible CUDA GPUs."
         )
     atoms, input_report = load_system(args)
+    acceptance = numerical_acceptance(
+        max_energy_error_meV_per_atom=args.max_energy_error_meV_per_atom,
+        max_force_mae_eV_per_A=args.max_force_mae_eV_per_A,
+        max_force_error_eV_per_A=args.max_force_error_eV_per_A,
+    )
     model_path = resolve_model_path(args.model)
     case = BenchmarkCase(args.profile, args.graph_version, args.workers)
     result = execute_case(
@@ -777,6 +803,7 @@ def run_check(args: SimpleNamespace) -> int:
         case=case,
         timestep_fs=args.timestep_fs,
         dynamics_steps=args.steps,
+        acceptance=acceptance,
     )
     for private_key in ("_energy", "_forces"):
         result.pop(private_key, None)
@@ -813,6 +840,11 @@ def run_benchmark(args: SimpleNamespace) -> int:
     worker_counts = parse_worker_counts(args.worker_counts)
     cases = build_case_matrix(gpu_count, worker_counts)
     atoms, input_report = load_system(args)
+    acceptance = numerical_acceptance(
+        max_energy_error_meV_per_atom=args.max_energy_error_meV_per_atom,
+        max_force_mae_eV_per_A=args.max_force_mae_eV_per_A,
+        max_force_error_eV_per_A=args.max_force_error_eV_per_A,
+    )
     model_path = resolve_model_path(args.model)
     results = []
     for case in cases:
@@ -832,6 +864,7 @@ def run_benchmark(args: SimpleNamespace) -> int:
             warmup_steps=args.warmup_steps,
             timing_blocks=args.timing_blocks,
             block_steps=args.block_steps,
+            acceptance=acceptance,
         )
         result["model"] = args.model
         results.append(result)
@@ -866,7 +899,12 @@ def run_benchmark(args: SimpleNamespace) -> int:
     )
     for result in results:
         if result.get("status") == "passed" and reference is not None:
-            add_numerical_comparison(result, reference)
+            add_numerical_comparison(
+                result,
+                reference,
+                num_atoms=input_report["atoms"],
+                acceptance=acceptance,
+            )
         else:
             result.pop("_energy", None)
             result.pop("_forces", None)
@@ -882,6 +920,7 @@ def run_benchmark(args: SimpleNamespace) -> int:
         "selection_policy": {
             "minimum_speedup_for_compile_or_more_workers": (MIN_RECOMMENDATION_SPEEDUP),
             "maximum_timing_coefficient_of_variation": MAX_TIMING_CV,
+            "numerical_acceptance": acceptance,
         },
         "cases": results,
         "recommendation": recommendation,
