@@ -752,9 +752,18 @@ def batched_radius_graph(
         .view(1, -1)
         .expand(max_atoms, knn_pad_size)
     )
-    padded_disp = torch.zeros((max_atoms, knn_pad_size, 3), device=device)
-    src_env = torch.full((max_atoms, knn_pad_size), torch.inf, device=device)
-    dst_env = torch.full((max_atoms, knn_pad_size), torch.inf, device=device)
+    # match the dtypes of the tensors scattered into these buffers below —
+    # under float64 inference disp/env are double while the default dtype is
+    # float32, and index_put requires source and destination dtypes to match.
+    padded_disp = torch.zeros(
+        (max_atoms, knn_pad_size, 3), device=device, dtype=disp.dtype
+    )
+    src_env = torch.full(
+        (max_atoms, knn_pad_size), torch.inf, device=device, dtype=env.dtype
+    )
+    dst_env = torch.full(
+        (max_atoms, knn_pad_size), torch.inf, device=device, dtype=env.dtype
+    )
     edge_index = torch.stack([padded_index, padded_index], dim=0)
     src_index = torch.stack([padded_index, padded_rank], dim=0)
     dst_index = torch.stack([padded_index, padded_rank], dim=0)
@@ -872,6 +881,11 @@ def biknn_radius_graph(
         rep_a2 = rep_a2.masked_fill(data.pbc[:, 1] == 0, 0).tolist()
         rep_a3 = rep_a3.masked_fill(data.pbc[:, 2] == 0, 0).tolist()
 
+        # image_id multiplies the cell (torch.mm) downstream, so it must match
+        # the cell dtype: under float64 inference (e.g. InferenceSettings
+        # base_precision_dtype=torch.float64) the batch is double while the
+        # default dtype is still float32, and a default-dtype image_id raises
+        # "expected mat1 and mat2 to have the same dtype".
         image_id_list: list[torch.Tensor] = [
             torch.cartesian_prod(
                 *[
@@ -879,7 +893,7 @@ def biknn_radius_graph(
                         -rep,
                         rep + 1,
                         device=device,
-                        dtype=torch.get_default_dtype(),
+                        dtype=data.cell.dtype,
                     )
                     for rep in reps
                 ]
@@ -888,9 +902,7 @@ def biknn_radius_graph(
         ]
     else:
         # No PBC - use identity image only (no replications needed)
-        identity_image = torch.zeros(
-            (1, 3), device=device, dtype=torch.get_default_dtype()
-        )
+        identity_image = torch.zeros((1, 3), device=device, dtype=data.cell.dtype)
         image_id_list = [identity_image for _ in range(num_graphs)]
 
     cell_list: list[torch.Tensor] = list(data.cell)
