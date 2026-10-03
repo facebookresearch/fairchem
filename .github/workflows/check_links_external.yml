@@ -15,14 +15,14 @@ on:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
-# This job only reads the repository and reports results to the run log; it
-# needs no write access. Pin the token to least privilege (CodeQL finding).
-permissions:
-  contents: read
-
 jobs:
   external-links:
     runs-on: ubuntu-latest
+    # Least privilege (CodeQL): read the repo, and write to a single tracking
+    # issue on failure. No other scopes are needed.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -34,3 +34,40 @@ jobs:
 
       - name: Check external documentation links
         run: python docs/check_links.py --workers 16 --timeout 20 --retries 2
+
+      # On failure, keep exactly ONE open tracking issue (dedup by run): if an
+      # open issue with the `link-check` label already exists, comment on it;
+      # otherwise open one. This avoids filing a fresh duplicate every week a
+      # link stays dead. Close the issue once a run is green again.
+      - name: File or update the broken-links tracking issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: link-check
+          TITLE: "Broken external documentation links detected"
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          set -euo pipefail
+          # Idempotently ensure the dedup label exists.
+          gh label create "$LABEL" --color B60205 \
+            --description "Automated external documentation link monitor" 2>/dev/null || true
+          existing=$(gh issue list --state open --label "$LABEL" --limit 1 \
+            --json number --jq '.[0].number // empty')
+          stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" \
+              --body "Still failing as of ${stamp}. Run log: ${RUN_URL}"
+          else
+            gh issue create --title "$TITLE" --label "$LABEL" --body \
+          "The scheduled external documentation link check failed on ${stamp}.
+
+          The run log lists the authoritatively-dead URLs (HTTP 404/410 or DNS
+          failure); gated/transient responses are reported as unverified and do
+          not fail the run.
+
+          Run log: ${RUN_URL}
+
+          This is the single tracking issue for the external link monitor: each
+          subsequent failing run adds a comment here rather than opening a new
+          issue. Please close it once a run is green again."
+          fi
