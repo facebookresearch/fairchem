@@ -246,7 +246,7 @@ a_opt = a_optimized
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni bulk structure](example_configs/ni_bulk.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
+[Download the example Ni bulk input structure](example_configs/ni_bulk.xyz) (unrelaxed; this is the pre-optimization geometry) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
 ```
 
 ```{admonition} Understanding the Results
@@ -496,7 +496,7 @@ for facet in facets:
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni(111) slab structure](example_configs/ni111_slab.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
+[Download the example Ni(111) slab input structure](example_configs/ni111_slab.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
 ```
 
 ```{admonition} Comparison with Paper (Table 1)
@@ -918,7 +918,7 @@ view(slab_with_h, viewer='x3d')
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example H on Ni(111) structure](example_configs/h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
+[Download the example H on Ni(111) input structure](example_configs/h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
 ```
 
 ```{code-cell} ipython3
@@ -1189,7 +1189,7 @@ print("\n✓ Coverage dependence analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example multiple H on Ni(111) structure](example_configs/4h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
+[Download the example multiple-H on Ni(111) input structure](example_configs/4h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
 ```
 
 ```{admonition} Comparison with Paper
@@ -1924,7 +1924,7 @@ print("\n✓ NEB analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example CO on Ni(111) structure](example_configs/co_on_ni111.xyz) and [Download C+O on Ni(111) structure](example_configs/c_o_on_ni111.xyz) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
+[Download the example CO on Ni(111) input structure](example_configs/co_on_ni111.xyz) (unrelaxed) and [Download the C+O on Ni(111) input structure](example_configs/c_o_on_ni111.xyz) (unrelaxed) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
 ```
 
 ```{admonition} Comparison with Paper (Tables 4 & 5)
