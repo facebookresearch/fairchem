@@ -341,6 +341,39 @@ def test_radius_pbc_version_2_and_3_produce_identical_edges(
     )
 
 
+def test_radius_pbc_version_3_supports_left_handed_cells():
+    """Version 3 preserves offsets expressed in a reflected input basis."""
+    atoms = Atoms(
+        "H2",
+        positions=[[0.2, 0.0, 0.0], [4.8, 0.0, 0.0]],
+        cell=[[-5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]],
+        pbc=True,
+    )
+    data = AtomicData.from_ase(atoms)
+
+    graph_v2 = generate_graph(
+        data,
+        cutoff=0.5,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=data.pbc,
+    )
+    graph_v3 = generate_graph(
+        data,
+        cutoff=0.5,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=3,
+        pbc=data.pbc,
+    )
+
+    edges_v2 = _graph_dict_to_edge_set(graph_v2)
+    edges_v3 = _graph_dict_to_edge_set(graph_v3)
+    assert any(edge[2] != 0 for edge in edges_v2)
+    assert edges_v3 == edges_v2
+
+
 def _validate_edges_match(data1, data2):
     """Helper function to validate that two graph datasets have matching edges."""
     if data1.nedges.item() != data2.nedges.item():
