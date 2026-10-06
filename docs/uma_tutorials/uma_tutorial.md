@@ -230,6 +230,12 @@ plt.xlabel("Time (fs)")
 plt.ylabel("Energy (eV)");
 ```
 
+:::{seealso}
+For tested NVT and NPT examples, velocity initialization, Hydra configurations,
+checkpointing, and cluster submission, see the
+[molecular dynamics guide](../core/common_tasks/molecular_dynamics.md).
+:::
+
 # [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
 
 The basic approach in computing an adsorption energy is to compute this energy difference:

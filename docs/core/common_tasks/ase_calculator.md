@@ -16,7 +16,10 @@ kernelspec:
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
 :::{tip}
-For simple cases such as demos or education, the ASE calculator is very easy to use. For more complex cases such as running MD or batched inference, we recommend using the predictor directly for better performance.
+For simple cases such as demos or education, the ASE calculator is very easy to
+use. See [Molecular Dynamics with ASE](molecular_dynamics.md) for direct ASE and
+Hydra-configured NVT/NPT examples. For batched inference, use the predictor
+directly for better performance.
 :::
 
 ```{code-cell} python3
