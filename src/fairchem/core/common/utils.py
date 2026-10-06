@@ -11,6 +11,7 @@ import datetime
 import errno
 import functools
 import importlib
+import importlib.metadata
 import logging
 import os
 import pathlib
@@ -402,6 +403,54 @@ def get_commit_hash_for_repo(
         commit_hash = None
 
     return commit_hash
+
+
+def get_branch() -> str | None:
+    """
+    Branch of the fairchem.core checkout the job is running from.
+
+    Returns:
+        The branch name, or None when it cannot be determined: a released
+        install does not sit in a git repo, and a detached HEAD has no branch.
+    """
+    return get_branch_for_repo(fairchem.core.__path__[0])
+
+
+def get_branch_for_repo(
+    git_repo_path: str,
+) -> str | None:
+    try:
+        branch = (
+            subprocess.check_output(
+                ["git", "-C", git_repo_path, "branch", "--show-current"],
+                stderr=subprocess.DEVNULL,
+            )
+            .strip()
+            .decode("ascii")
+        )
+    # catch instances where code is not being run from a git repo
+    except Exception:
+        return None
+
+    # empty on a detached HEAD
+    return branch or None
+
+
+def get_package_version() -> str | None:
+    """
+    Installed version of fairchem-core.
+
+    Returns:
+        The version, e.g. "2.21.1" for a release or "2.21.1.dev50+gdfbfb7044"
+        for a dev checkout, or None if the package metadata is unavailable.
+        Note that for an editable install this is resolved when the package is
+        installed, so it can lag behind the commit reported by
+        :func:`get_commit_hash`.
+    """
+    try:
+        return importlib.metadata.version("fairchem.core")
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:

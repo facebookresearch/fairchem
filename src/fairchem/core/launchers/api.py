@@ -19,7 +19,9 @@ import clusterscope
 from fairchem.core.common.gp_utils import GraphParallelConfig
 from fairchem.core.common.utils import (
     StrEnum,
+    get_branch,
     get_commit_hash,
+    get_package_version,
     get_timestamp_uid,
 )
 
@@ -158,6 +160,15 @@ class Metadata:
     cluster_name: str
     array_job_num: int = 0
     slurm_env: SlurmEnv = field(default_factory=lambda: SlurmEnv())
+    # branch of the fairchem.core checkout, None for a released install or a
+    # detached HEAD; the commit above identifies the code either way
+    branch: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    # installed fairchem-core version, e.g. "2.21.1" or "2.21.1.dev50+gdfbfb7044"
+    version: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
 
 
 @dataclass
@@ -231,4 +242,6 @@ class JobConfig:
                 PREEMPTION_STATE_DIR_NAME,
             ),
             cluster_name=cluster,
+            branch=get_branch(),
+            version=get_package_version(),
         )
