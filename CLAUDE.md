@@ -351,9 +351,12 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   fallback and use one parallel worker per visible GPU at most.
 - A generated FCC input is only an installation fallback. It is not evidence
   for settings on a chemically different production system.
-- Keep `RAY_TMPDIR` short on cluster jobs (for example `/tmp/r-$SLURM_JOB_ID`);
-  Ray's Unix-domain sockets can exceed the platform path limit under a long
-  checkpoint or worktree path.
+- Put `RAY_TMPDIR` in the scheduler- or site-provided node-local scratch, after
+  verifying the path and available capacity on an allocated compute node. Keep
+  its job-owned subdirectory short because Ray's Unix-domain sockets have a
+  platform path limit. On fair-sc-3, Slurm creates
+  `/scratch/slurm_tmpdir/$SLURM_JOB_ID`; use a child such as
+  `/scratch/slurm_tmpdir/$SLURM_JOB_ID/ray`, not `/tmp`.
 - Public CI has only one GPU and is not a multi-GPU CUDA/NCCL signal. Require
   the benchmark to pass on the target multi-GPU host before recommending more
   than one worker.

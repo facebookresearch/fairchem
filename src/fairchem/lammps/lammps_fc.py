@@ -42,9 +42,9 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
-            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
-        )
+        assert np.allclose(
+            masses[atom_id], atomic_masses[atom_id], atol=1e-1
+        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
 
 
 def atomic_data_from_lammps_data(
@@ -169,6 +169,7 @@ def stress_to_lammps_virial(stress: torch.Tensor, volume: float) -> list[float]:
         raise ValueError(f"Expected one 3x3 stress tensor, got {stress.shape}.")
     # LAMMPS defines stress as -virial / volume and consumes the symmetric
     # components in xx, yy, zz, xy, xz, yz order.
+    # https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
     virial = (-stress.detach().cpu() * volume)[0].reshape(3, 3)
     return [
         virial[0, 0].item(),
