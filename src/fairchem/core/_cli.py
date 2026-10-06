@@ -136,6 +136,11 @@ def main(
             logging.info(
                 f"Running in local mode with local ray cluster with recursive_instantiate_runner={cfg.job.recursive_instantiate_runner}"
             )
+            from fairchem.core.launchers.ray_on_slurm_launch import (
+                write_ray_environment_report,
+            )
+
+            write_ray_environment_report(cfg.job)
             # disable recursively instantiate the runner here to allow lazy instantiations in the runner
             runner: Runner = hydra.utils.instantiate(
                 cfg.runner, _recursive_=cfg.job.recursive_instantiate_runner
