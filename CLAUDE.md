@@ -342,6 +342,37 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   URL exists, rather than adding duplicate binaries that increase repository
   size.
 
+## LAMMPS Agent Workflow
+
+- Before configuring a user's LAMMPS run, inspect `CUDA_VISIBLE_DEVICES` and
+  the visible GPU models, then preserve the production structure's UMA task,
+  total charge, and spin.
+- Run `lmp_fc_preflight mode=check` on the user's structure. Do not proceed to a
+  long run unless its strict atom-mapping, energy/force-transfer, and finite-MD
+  checks pass.
+- Run `lmp_fc_preflight mode=benchmark expected_steps=...` on that same structure
+  and target hardware. Retain the JSON report and apply its emitted Hydra
+  overrides; do not assume turbo mode, compilation, graph generator v3, or all
+  visible GPUs will be faster.
+- Keep the default FP32 comparison limits (1 meV/atom energy error, 0.005 eV/A
+  force MAE, and 0.02 eV/A maximum force error) unless the user's scientific
+  validation justifies tighter or looser limits. The `1e-5` callback criterion
+  measures bridge transfer, not accelerated-mode accuracy.
+- Leave `execution_mode` unset so compatible UMA-S GPU runs can select the
+  optimized backend automatically. Treat activation checkpointing as a memory
+  fallback and use one parallel worker per visible GPU at most.
+- A generated FCC input is only an installation fallback. It is not evidence
+  for settings on a chemically different production system.
+- Put `RAY_TMPDIR` in the scheduler- or site-provided node-local scratch, after
+  verifying the path and available capacity on an allocated compute node. Keep
+  its job-owned subdirectory short because Ray's Unix-domain sockets have a
+  platform path limit. On fair-sc-3, Slurm creates
+  `/scratch/slurm_tmpdir/$SLURM_JOB_ID`; use a child such as
+  `/scratch/slurm_tmpdir/$SLURM_JOB_ID/ray`, not `/tmp`.
+- Public CI has only one GPU and is not a multi-GPU CUDA/NCCL signal. Require
+  the benchmark to pass on the target multi-GPU host before recommending more
+  than one worker.
+
 ## Hessian Backend Gotchas
 
 - PyTorch's generic `vmap` fallback cannot batch the mutable, output-argument

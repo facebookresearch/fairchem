@@ -56,7 +56,7 @@ We separate the LAMMPS integration code into a standalone package (`fairchem-lam
 # first install conda and lammps following the instructions above, ie: conda install lammps
 # then activate the environment and install fairchem
 conda activate lammps-env
-pip install fairchem-core[extras]
+pip install fairchem-core[extras,ray]
 pip install fairchem-lammps
 ```
 
@@ -72,12 +72,129 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
+## Pre-flight validation
+
+Run a pre-flight check before committing GPU time to a production trajectory.
+Use the same structure, UMA task, charge, and spin as the intended simulation:
+
+```bash
+lmp_fc_preflight mode=check \
+  structure=/absolute/path/system.extxyz \
+  task=omol charge=0 spin=1 \
+  model=uma-s-1p1 \
+  output=/absolute/path/preflight.json
+```
+
+The structure can be any single-frame, fully periodic format readable by ASE.
+The check converts it to a controlled atomic LAMMPS NVE calculation. It passes
+only when:
+
+- atom types round-trip to the original elements;
+- energy and forces returned by UMA are finite;
+- the callback agrees with direct UMA inference on the ASE structure within
+  1 meV/atom energy error, 0.005 eV/A force MAE, and 0.02 eV/A maximum force
+  error by default;
+- LAMMPS applies the callback energy and forces within `1e-5` eV and
+  `1e-5` eV/A; and
+- five 0.5 fs NVE steps finish with finite thermodynamics.
+
+The check is an integration test, not proof that the timestep, ensemble, or
+trajectory is scientifically valid. Validate those choices separately for the
+target system. For installation debugging only, a generated periodic crystal
+can be used with `generated_atoms=32`; do not use it to select production
+settings for unrelated chemistry.
+
+The check performs only a handful of model evaluations and is intended to
+finish in minutes. The configuration benchmark is deliberately longer because
+it loads and times each candidate independently.
+
+## Select GPU settings on the target system
+
+Performance depends on atom count, neighbor density, GPU model, available GPU
+count, and trajectory length. Do not assume that turbo mode or more GPUs is
+faster. Benchmark the production structure on the GPUs that will run it:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 lmp_fc_preflight mode=benchmark \
+  structure=/absolute/path/system.extxyz \
+  task=omol charge=0 spin=1 \
+  model=uma-s-1p1 \
+  expected_steps=100000 \
+  output=/absolute/path/lammps-benchmark.json
+```
+
+The benchmark measures these supported decisions:
+
+| Profile | TF32 | Compile | Activation checkpointing | Purpose |
+| --- | --- | --- | --- | --- |
+| `fp32_eager` | off | off | off | numerical and decision baseline |
+| `tf32_eager` | on | off | off | settings shipped in the LAMMPS YAML |
+| `fp32_compiled` | off | on | off | compiled FP32 execution |
+| `turbo` | on | on | off | maximum normal single-system speed |
+| `memory_saving` | off | off | on | fallback for systems that otherwise OOM |
+
+On one GPU it also compares internal graph generators v2 and v3. Version 3
+uses the NVIDIA Alchemi neighbor list and can be faster on one GPU. Worker-count
+tests use v2, which is designed for parallel inference. Each parallel worker
+occupies one visible GPU; never request more workers than visible GPUs.
+By default every visible worker count is tested. Use, for example,
+`worker_counts=[1,2,4]` to restrict an exploratory run; one GPU is always added
+as the reference. All options come from the packaged Hydra configuration and
+can be recorded in a site-specific YAML config or supplied as overrides.
+
+The tool includes model startup and compile costs when projecting the requested
+run length. It recommends additional compilation or GPUs only when the measured
+projected runtime improves by at least 10%, and rejects timing results with a
+coefficient of variation above 10%. The JSON report contains every measurement,
+failure, numerical comparison, software/hardware version, resolved execution
+backend, and the exact Hydra overrides for the selected configuration.
+If the eager FP32 baseline does not fit, the first passing FP32 case becomes
+the numerical reference.
+
+A candidate must also stay within all three numerical limits relative to the
+FP32 reference: `max_energy_error_meV_per_atom=1.0`,
+`max_force_mae_eV_per_A=0.005`, and
+`max_force_error_eV_per_A=0.02`. Energy error is normalized per atom rather
+than compared to the extensive total energy. These conservative defaults are
+explicit Hydra settings, so a domain-specific workflow can tighten them. Do
+not loosen them without validating the effect on the target observables. The
+separate `1e-5` criteria above test lossless transfer across the LAMMPS callback;
+they are not the FP32-versus-accelerated-mode acceptance limits.
+
+### Automatic GPU execution backend
+
+The LAMMPS YAML does not set `execution_mode`. This is intentional. With
+`execution_mode=None`, compatible UMA-S CUDA runs automatically select the
+optimized `umas_fast_gpu` backend, including its Triton kernels. It requires
+merged MoLE weights and no activation checkpointing; otherwise inference falls
+back to a compatible backend. The resolved backend is recorded in the benchmark
+report. Explicit backend selection is a development diagnostic and should not
+normally be added to a user's LAMMPS command.
+
+The benchmark also leaves the graph-parallel communication mode and partition
+at their supported defaults. All-to-all partitions, experimental edge padding,
+quaternion selection, and CPU thread tuning are advanced development knobs and
+are not automatically recommended by this workflow.
+
+### Why the LAMMPS YAML disables compile
+
+Compilation has a substantial first-evaluation cost and may recompile when
+neighbor-graph shapes change. Eager execution is therefore a safer default for
+short runs and unfamiliar systems. Long simulations with stable graph shapes
+can recover that cost and run faster. `expected_steps` lets the benchmark
+measure that tradeoff instead of applying a universal rule.
+
 ## Multi-GPU Parallelism
 
-Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.
+Our LAMMPS integration uses graph parallelism through the multi-GPU inference
+API. Multi-GPU execution has communication and Ray startup overhead, so it is
+primarily useful for systems that do not fit on one GPU or for which the
+pre-flight benchmark measures a meaningful speedup.
 
 :::{note}
 Multi-GPU inference requires Ray. Install it with `pip install fairchem-core[ray]`.
+On clusters whose temporary path is long, set `RAY_TMPDIR` to a short node-local
+path: Ray's Unix-domain socket names must fit the platform's path limit.
 :::
 
 :::{tip}
@@ -87,5 +204,16 @@ The only change required is to pass the `ParallelMLIPPredictUnit` [here](https:/
 For example:
 
 ```bash
-lmp_fc lmp_in="lammps_in_example.file" task_name="omol" predict_unit='${parallel_predict_unit}'
+lmp_fc lmp_in="lammps_in_example.file" task_name="omol" \
+  predict_unit='${parallel_predict_unit}' \
+  parallel_predict_unit.num_workers=4
 ```
+
+Set `num_workers` to no more than the GPUs made visible to the process. The
+public LAMMPS CI runner has one T4 GPU. It validates the LAMMPS callback on
+CUDA and Ray/graph-parallel orchestration on CPU/Gloo, but it does **not**
+continuously validate multi-GPU CUDA/NCCL execution. A conditional two-GPU
+integration test runs when such a test host is available. Until the project has
+a maintained multi-GPU runner, treat a passing pre-flight benchmark on the
+target multi-GPU host—not public CI—as the required correctness and performance
+signal before applying a graph-parallel recommendation.

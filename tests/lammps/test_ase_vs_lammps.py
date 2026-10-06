@@ -4,14 +4,9 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Tests:  ASE vs LAMMPS energy/force agreement for a fairchem-backed
-        calculator running NVE, NPT, and Langevin molecular dynamics
-        on a bulk-C fcc(2,2,2) supercell. Verifies the LAMMPS bridge
-        produces the same thermodynamics as the ASE reference.
-Models: uma-s-1p1 (module-level pytestmark). Requires the `lammps`
-        Python module + LAMMPS shared library installed.
-CI:     test_lammps_gpu (its own dedicated job — separate runner with
-        the LAMMPS toolchain installed).
+Tests:  Deterministic one-step ASE/LAMMPS NVE integration parity.
+Models: uma-s-1p1.
+CI:     test_lammps_gpu.
 """
 
 from __future__ import annotations
@@ -20,169 +15,124 @@ import numpy as np
 import pytest
 from ase import units
 from ase.build import bulk
-from ase.md.langevin import Langevin
-from ase.md.nose_hoover_chain import IsotropicMTKNPT
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from ase.calculators.lammps import convert
+from ase.io import write
 from ase.md.verlet import VelocityVerlet
 from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
 from tests.conftest import get_predict_unit_for_test
 
-pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
+pytest.importorskip("lammps")
+
+pytestmark = [
+    pytest.mark.gpu(),
+    pytest.mark.pretrained("uma-s-1p1"),
+]
 
 
-def run_ase_langevin(pretrained_checkpoint):
-    atoms = bulk("C", "fcc", a=3.567, cubic=True)
-    atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
-    atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
-    initial_temperature_K = 300.0
-    np.random.seed(12345)
-    MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temperature_K)
-    dyn = Langevin(
-        atoms,
-        timestep=1 * units.fs,
-        temperature_K=300,
-        friction=0.1 / units.fs,
-    )
-
-    def print_thermo(a=atoms):
-        """Function to print thermo info to stdout."""
-        ekin = a.get_kinetic_energy()
-        epot = a.get_potential_energy()
-        etot = ekin + epot
-        temp = ekin / (1.5 * units.kB) / len(a)
-        print(
-            f"Step: {dyn.get_number_of_steps()}, Temp: {temp:.2f} K, "
-            f"Ekin: {ekin:.4f} eV, Epot: {epot:.4f} eV, Etot: {etot:.4f} eV"
-        )
-
-    dyn.attach(print_thermo, interval=1)  # Print thermo every 1000 steps
-    dyn.run(100)
-    # return the kin and pot energy for comparison
-    return atoms.get_kinetic_energy(), atoms.get_potential_energy()
-
-
-def run_ase_nve(pretrained_checkpoint):
-    atoms = bulk("C", "fcc", a=3.567, cubic=True)
-    atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
-    atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
-    initial_temperature_K = 300.0
-    np.random.seed(12345)
-    MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temperature_K)
-    dyn = VelocityVerlet(
-        atoms, timestep=units.fs, trajectory="nve.traj", logfile="nve.log"
-    )
-
-    def print_thermo(a=atoms):
-        """Function to print thermo info to stdout."""
-        ekin = a.get_kinetic_energy()
-        epot = a.get_potential_energy()
-        etot = ekin + epot
-        temp = ekin / (1.5 * units.kB) / len(a)
-        print(
-            f"Step: {dyn.get_number_of_steps()}, Temp: {temp:.2f} K, "
-            f"Ekin: {ekin:.4f} eV, Epot: {epot:.4f} eV, Etot: {etot:.4f} eV"
-        )
-
-    dyn.attach(print_thermo, interval=1)  # Print thermo every 1000 steps
-    dyn.run(100)
-    # return the kin and pot energy for comparison
-    return atoms.get_kinetic_energy(), atoms.get_potential_energy()
-
-
-def run_ase_npt(pretrained_checkpoint):
-    """Run ASE NPT-like using a Berendsen barostat approximation via NPT wrapper.
-
-    ASE doesn't provide a direct NPT integrator in the core; here we mimic
-    an NPT run by coupling to a thermostat and using the `Parrinello-Rahman`
-    style barostat if available in user's setup. For portability in tests we
-    instead run VelocityVerlet with a simple rescaling of the cell using the
-    `ase.constraints` is out of scope — this is a lightweight smoke test to
-    exercise the predictor through an NPT LAMMPS run for comparison.
+def test_one_step_nve_matches_ase(pretrained_checkpoint, tmp_path):
     """
-    atoms = bulk("C", "fcc", a=3.567, cubic=True)
-    atoms = atoms.repeat((2, 2, 2))
-    predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
-    atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
-    initial_temperature_K = 300.0
-    np.random.seed(12345)
-    MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temperature_K)
-    # Use ASE's NPT integrator which couples Nose-Hoover thermostat and
-    # barostat (Parrinello-Rahman style) and updates the cell. We pick
-    # thermostat/barostat time constants that map to LAMMPS fix npt's
-    # Tdamp/Pdamp (units: ps here for LAMMPS). ASE's API expects time in
-    # fs via ase.units, so use 0.1 ps = 100 fs as the thermostat time constant.
-    tdamp = 0.1  # ps (thermostat damping time for LAMMPS mapping)
-    pdamp = 1.0  # ps (barostat damping time for LAMMPS mapping)
+    Compare one velocity-Verlet step from an identical deterministic state.
 
-    # Convert ps -> fs for ASE NPT ttime/pfactor which expect time in fs units
-    tdamp_fs = tdamp * 1000.0 * units.fs
-    pdamp_fs = pdamp * 1000.0 * units.fs
-
-    # ASE NPT takes timestep in ASE units (seconds via units.fs) and temperature_K
-    # externalstress is pressure in eV/Å^3 or a scalar (here 0 means 0 pressure)
-    dyn = IsotropicMTKNPT(
-        atoms,
-        timestep=1.0 * units.fs,
-        temperature_K=300,
-        pressure_au=0.0 * units.bar,
-        tdamp=tdamp_fs,
-        pdamp=pdamp_fs,
-    )
-
-    def print_thermo(a=atoms):
-        ekin = a.get_kinetic_energy()
-        epot = a.get_potential_energy()
-        etot = ekin + epot
-        temp = ekin / (1.5 * units.kB) / len(a)
-        vol = a.get_volume()
-        print(
-            f"Step: {dyn.get_number_of_steps()}, Temp: {temp:.2f} K, "
-            f"Ekin: {ekin:.4f} eV, Epot: {epot:.4f} eV, Etot: {etot:.4f} eV, Vol: {vol:.4f} Å^3"
+    NPT and Langevin trajectories are not compared because ASE and LAMMPS use
+    different thermostat, barostat, and random-number implementations.
+    """
+    timestep_fs = 0.5
+    initial = bulk("C", "fcc", a=3.8, cubic=True)
+    initial.set_velocities(
+        np.array(
+            [
+                [-0.012, 0.004, 0.008],
+                [0.006, -0.010, 0.002],
+                [0.009, 0.007, -0.011],
+                [-0.003, -0.001, 0.001],
+            ]
         )
+    )
 
-    dyn.attach(print_thermo, interval=1)
-    dyn.run(100)
-    return atoms.get_kinetic_energy(), atoms.get_potential_energy()
-
-
-def run_lammps(input_file, pretrained_checkpoint):
     predictor = get_predict_unit_for_test(pretrained_checkpoint, device="cuda")
-    lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
-    return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
+    ase_atoms = initial.copy()
+    ase_atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
+    VelocityVerlet(ase_atoms, timestep=timestep_fs * units.fs).run(1)
 
-
-@pytest.mark.gpu()
-def test_ase_vs_lammps_nve(pretrained_checkpoint):
-    ase_kinetic, ase_pot = run_ase_nve(pretrained_checkpoint)
-    lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_nve.file", pretrained_checkpoint
+    data_path = tmp_path / "system.data"
+    input_path = tmp_path / "one_step_nve.in"
+    write(
+        data_path,
+        initial,
+        format="lammps-data",
+        atom_style="atomic",
+        masses=True,
+        velocities=True,
+        units="metal",
     )
-    assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.1)
-    assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
-
-
-@pytest.mark.gpu()
-def test_ase_vs_lammps_npt(pretrained_checkpoint):
-    ase_kinetic, ase_pot = run_ase_npt(pretrained_checkpoint)
-    lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_npt.file", pretrained_checkpoint
+    input_path.write_text(
+        "\n".join(
+            [
+                "units metal",
+                "atom_style atomic",
+                "boundary p p p",
+                "atom_modify sort 0 0.0",
+                f"read_data {data_path}",
+                f"timestep {timestep_fs / 1000.0}",
+                "fix integrator all nve",
+                "thermo_style custom step pe ke etotal",
+                "run 1",
+                "",
+            ]
+        )
     )
-    assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
-    assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
 
-
-@pytest.mark.xfail(
-    reason="This is more demo purposes, need to configure the right parameters for ASE langevin to match lammps"
-)
-@pytest.mark.gpu()
-def test_ase_vs_lammps_langevin(pretrained_checkpoint):
-    ase_kinetic, ase_pot = run_ase_langevin(pretrained_checkpoint)
-    lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_langevin.file", pretrained_checkpoint
+    lmp = run_lammps_with_fairchem(
+        predictor,
+        str(input_path),
+        "omat",
+        cmdargs=["-nocite", "-log", "none", "-screen", "none"],
     )
-    assert np.isclose(ase_kinetic, lammps_kinetic, rtol=1e-4)
-    assert np.isclose(ase_pot, lammps_pot, rtol=1e-4)
+    try:
+        atom_count = int(lmp.get_natoms())
+        atom_ids = lmp.numpy.extract_atom("id")[:atom_count].copy()
+        order = np.argsort(atom_ids)
+        assert np.array_equal(atom_ids[order], np.arange(1, atom_count + 1))
+
+        lammps_positions = convert(
+            lmp.numpy.extract_atom("x")[:atom_count].copy()[order],
+            "distance",
+            "metal",
+            "ASE",
+        )
+        lammps_velocities = convert(
+            lmp.numpy.extract_atom("v")[:atom_count].copy()[order],
+            "velocity",
+            "metal",
+            "ASE",
+        )
+        lammps_forces = convert(
+            lmp.numpy.extract_atom("f")[:atom_count].copy()[order],
+            "force",
+            "metal",
+            "ASE",
+        )
+        lammps_potential_energy = convert(
+            lmp.get_thermo("pe"), "energy", "metal", "ASE"
+        )
+        lammps_kinetic_energy = convert(lmp.get_thermo("ke"), "energy", "metal", "ASE")
+    finally:
+        lmp.close()
+
+    np.testing.assert_allclose(
+        lammps_positions, ase_atoms.get_positions(), rtol=0.0, atol=2.0e-6
+    )
+    np.testing.assert_allclose(
+        lammps_velocities, ase_atoms.get_velocities(), rtol=0.0, atol=2.0e-6
+    )
+    np.testing.assert_allclose(
+        lammps_forces, ase_atoms.get_forces(), rtol=0.0, atol=1.0e-5
+    )
+    assert lammps_potential_energy == pytest.approx(
+        ase_atoms.get_potential_energy(), abs=1.0e-5
+    )
+    assert lammps_kinetic_energy == pytest.approx(
+        ase_atoms.get_kinetic_energy(), abs=1.0e-7
+    )
