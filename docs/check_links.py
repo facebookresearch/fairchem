@@ -17,8 +17,12 @@ flaky part (reaching the public internet) runs as a scheduled monitor instead:
   (e.g. HuggingFace gated models). These run on a schedule
   (``.github/workflows/check_links_external.yml``), not on every PR.
 
-Link syntaxes understood (over all ``docs/**/*.md`` sources, ignoring fenced
-code and ``{code-cell}`` blocks so example URLs inside code are not flagged):
+Sources scanned: all ``docs/**/*.md`` pages plus the user-facing READMEs that
+link into the published site (the repo-root ``README.md`` and every
+``src/**/README.md``), so a stale absolute link there is caught too.
+
+Link syntaxes understood (ignoring fenced code and ``{code-cell}`` blocks so
+example URLs inside code are not flagged):
 
 * inline links / images ``[text](target)`` / ``![alt](target)`` -- with
   balanced-parenthesis-aware target capture (so URLs like
@@ -156,6 +160,21 @@ def is_checkable_internal(target: str) -> bool:
     return True
 
 
+def _display_path(src: Path, docs_dir: Path) -> str:
+    """Repo-relative path for messages.
+
+    Files under ``docs/`` print relative to ``docs_dir`` (unchanged); files
+    scanned outside it (the repo ``README.md`` and ``src/**/README.md``) print
+    relative to the repo root so the reference does not crash or go absolute.
+    """
+    for base in (docs_dir, docs_dir.parent):
+        try:
+            return str(src.relative_to(base))
+        except ValueError:
+            continue
+    return str(src)
+
+
 # --- checks ----------------------------------------------------------------
 
 
@@ -176,7 +195,7 @@ def check_internal(docs_dir: Path, src: Path, target: str) -> str | None:
         return None
     if (candidate.parent / (candidate.name + ".ipynb")).exists():
         return None
-    return f"{src.relative_to(docs_dir)} -> {target} (no file at {candidate})"
+    return f"{_display_path(src, docs_dir)} -> {target} (no file at {candidate})"
 
 
 def check_external(url: str, timeout: int, retries: int) -> tuple[str, str]:
@@ -235,8 +254,15 @@ def main() -> int:
     args = ap.parse_args()
 
     docs_dir = Path(args.docs_dir).resolve()
-    md_files = sorted(docs_dir.rglob("*.md"))
-    print(f"Scanning {len(md_files)} markdown files under {docs_dir}")
+    # Scan docs/**/*.md plus the user-facing READMEs that link into the docs
+    # site (repo root + each src/** package). Those READMEs live outside docs/
+    # and so were historically unchecked -- yet they carry absolute links to the
+    # published site that break when a page's URL changes (e.g. the mystmd slug
+    # migration turned `core/common_tasks/summary.html` into `/summary`).
+    repo_root = docs_dir.parent
+    extra_readmes = [repo_root / "README.md", *(repo_root / "src").rglob("README.md")]
+    md_files = sorted(docs_dir.rglob("*.md")) + [p for p in extra_readmes if p.exists()]
+    print(f"Scanning {len(md_files)} markdown files under {repo_root}")
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -246,11 +272,16 @@ def main() -> int:
     for src in md_files:
         if "_build" in src.parts:
             continue
+        # Deterministic on-disk (internal) checks are scoped to docs/ pages,
+        # where the resolution base is well-defined. The extra READMEs are
+        # scanned for external site links only -- their relative links render
+        # against different bases (GitHub vs PyPI) and are out of scope here.
+        is_docs_page = docs_dir in src.parents
         text = src.read_text(encoding="utf-8", errors="ignore")
         for target in extract_links(text):
             if target.startswith(("http://", "https://")):
                 external.setdefault(target, []).append(src)
-            elif is_checkable_internal(target):
+            elif is_docs_page and is_checkable_internal(target):
                 internal_checked += 1
                 err = check_internal(docs_dir, src, target)
                 if err:
@@ -267,7 +298,7 @@ def main() -> int:
         def _probe(item: tuple[str, list[Path]]) -> tuple[str, str, str]:
             url, srcs = item
             level, msg = check_external(url, args.timeout, args.retries)
-            where = ", ".join(sorted({str(s.relative_to(docs_dir)) for s in srcs}))
+            where = ", ".join(sorted({_display_path(s, docs_dir) for s in srcs}))
             return level, msg, where
 
         with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
