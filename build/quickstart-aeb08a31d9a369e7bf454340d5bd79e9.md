@@ -129,4 +129,6 @@ across tasks as though they came from one reference calculation.
   domain.
 - Review task limitations in the [UMA model guide](./uma.md).
 - Learn about inference settings in the [ASE calculator guide](./common_tasks/ase_calculator.md).
+- Run NVT and NPT simulations with the
+  [molecular dynamics guide](./common_tasks/molecular_dynamics.md).
 - Try the [playground](https://aidemos.atmeta.com/uma?view=playground).

@@ -29,6 +29,9 @@
     <loc>http://localhost:3000/ase-calculator</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/molecular-dynamics</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/lammps</loc>
   </url>
   <url>
