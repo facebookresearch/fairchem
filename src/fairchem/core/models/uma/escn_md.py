@@ -788,6 +788,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
 
+        if self.backend.fused_backbone_features:
+            # Backends whose kernels fuse across the per-op hooks own the whole
+            # body, including Wigner construction and the final norm.
+            self.set_MOLE_sizes(
+                nsystems=csd_mixed_emb.shape[0],
+                batch_full=data_dict["batch_full"],
+                edge_index=graph_dict["edge_index"],
+            )
+            self.log_MOLE_stats()
+            with record_function("fused backbone features"):
+                x_message = self.backend.backbone_features(
+                    self, data_dict, graph_dict, csd_mixed_emb
+                )
+            return {"node_embedding": x_message, "batch": data_dict["batch"]}
+
         with record_function("obtain wigner"):
             wigner, wigner_inv = self._get_rotmat_and_wigner(
                 graph_dict["edge_distance_vec"],
