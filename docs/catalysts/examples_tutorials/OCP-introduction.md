@@ -383,7 +383,7 @@ plt.legend(["DFT (PBE)", "UMA-OC20"]);
 
 ## Next steps
 
-In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./NRR/NRR_example-gemnet).
+In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./adsorption_energies/adsorption_energies.md).
 
 +++
 
