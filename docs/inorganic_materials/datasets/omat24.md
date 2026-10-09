@@ -86,7 +86,7 @@ please see the manuscript.
 
 
 ## Getting ASE atoms objects
-Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://wiki.fysik.dtu.dk/ase/ase/db/db.html),
+Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://docs.ase-lib.org/ase/db/db.html),
 in LMDB format. A single **.aselmdb* file can be read and queried like any other ASE DB.
 
 You can also read many DB files at once and access atoms objects using the `AseDBDataset` class.
