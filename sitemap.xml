@@ -5,13 +5,13 @@
     <loc>http://localhost:3000</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/introduction</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/install</loc>
   </url>
   <url>
     <loc>http://localhost:3000/quickstart</loc>
-  </url>
-  <url>
-    <loc>http://localhost:3000/introduction</loc>
   </url>
   <url>
     <loc>http://localhost:3000/uma</loc>

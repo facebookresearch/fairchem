@@ -1,1 +1,111 @@
-/* No Custom Stylesheet Provided */
+/* User Provided Stylesheet */
+
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/* Keep the desktop navigation compact enough to remain on one line. */
+@media (min-width: 1024px) {
+  .myst-top-nav-bar > div:first-child {
+    margin-right: 0.5rem !important;
+  }
+
+  .myst-top-nav .myst-home-link {
+    margin-left: 0.75rem !important;
+  }
+
+  .myst-top-nav-item,
+  .myst-top-nav-dropdown {
+    margin-right: 0.25rem !important;
+    margin-left: 0.25rem !important;
+  }
+
+  .myst-top-nav-item > a,
+  .myst-top-nav-dropdown button {
+    margin-right: 0.25rem !important;
+    margin-left: 0.25rem !important;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 1280px) {
+  .myst-top-nav-bar > div:first-child {
+    min-width: 8.5rem !important;
+  }
+}
+
+/* The upstream theme overlaps its mobile and desktop navigation breakpoints. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .myst-top-nav-bar > div:first-child > div:first-child {
+    display: none !important;
+  }
+
+  .myst-top-nav-bar > div:nth-child(2) > div:first-child {
+    display: block !important;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1099px) {
+  .myst-search-bar {
+    width: 11rem !important;
+  }
+}
+
+/* Turn the mobile menu toggle into a visible close control when open. */
+@media (max-width: 1023px) {
+  body:has(.myst-primary-sidebar:not(.hidden)) .myst-top-nav {
+    z-index: 50;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    pointer-events: none;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden)) .myst-top-nav-bar > * {
+    visibility: hidden;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden))
+    .myst-top-nav-bar
+    > div:first-child {
+    visibility: visible;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden)) .myst-home-link {
+    visibility: hidden;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden))
+    .myst-top-nav-bar
+    > div:first-child
+    > div:first-child {
+    visibility: visible;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden)) .myst-top-nav-menu-button {
+    position: fixed;
+    top: 0.75rem;
+    left: min(calc(75vw - 3rem), 18.5rem);
+    z-index: 51;
+    border: 1px solid var(--myst-color-border-strong);
+    border-radius: 0.375rem;
+    background: var(--myst-color-bg);
+    color: var(--myst-color-text);
+    font-size: 2rem;
+    line-height: 1;
+    pointer-events: auto;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden)) .myst-top-nav-menu-button svg {
+    display: none;
+  }
+
+  body:has(.myst-primary-sidebar:not(.hidden))
+    .myst-top-nav-menu-button::before {
+    content: "×";
+  }
+}
