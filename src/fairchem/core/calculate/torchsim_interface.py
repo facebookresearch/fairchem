@@ -241,22 +241,12 @@ class FairChemModel(_TSModelInterface):
         self.task_name = task_name
 
         # Create efficient batch predictor for fast inference
-        if model in pretrained_mlip.available_models:
-            if model_cache_dir and os.path.exists(model_cache_dir):
-                self.predictor = pretrained_mlip.get_predict_unit(
-                    model, device=device_str, cache_dir=model_cache_dir
-                )
-            else:
-                self.predictor = pretrained_mlip.get_predict_unit(
-                    model, device=device_str
-                )
-        elif os.path.isfile(model):
-            self.predictor = pretrained_mlip.load_predict_unit(model, device=device_str)
-        else:
-            raise ValueError(
-                f"Invalid model name or checkpoint path: {model}. "
-                f"Available pretrained models are: {pretrained_mlip.available_models}"
+        if model_cache_dir and os.path.exists(model_cache_dir):
+            self.predictor = pretrained_mlip.get_predict_unit(
+                model, device=device_str, cache_dir=model_cache_dir
             )
+        else:
+            self.predictor = pretrained_mlip.get_predict_unit(model, device=device_str)
 
         self.implemented_properties = ["energy", "forces"]
         if compute_stress:

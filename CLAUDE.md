@@ -268,6 +268,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `graph_parallel_group_size=None` disables graph-parallel setup. A value of
   `1` intentionally initializes singleton graph- and data-parallel groups and
   is used to exercise those paths in tests; do not treat it as disabled.
+- Name-or-path checkpoint resolution belongs in
+  `pretrained_mlip.resolve_checkpoint` (registry names win over same-named
+  files). The batch server's `ModelSpec(source="auto")` is path-first instead,
+  so do not reroute its explicit `source` branches through the resolver
+  without reconciling that precedence.
 - Keep the full `AtomicData.clone()` boundary in prediction unless benchmarks
   justify changing it and every model-side mutation has been audited. Graph
   parallelism, MOLE preparation, and conservative gradients can replace or
