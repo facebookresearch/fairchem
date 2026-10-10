@@ -83,8 +83,11 @@ class DDPMTLoss(nn.Module):
 
     def _ddp_mean(self, num_samples, loss):
         # global_samples can be 0 if the head has no valid samples in the batch
-        # protect against division by zero
-        global_samples = max(distutils.all_reduce(num_samples, device=loss.device), 1)
+        # protect against division by zero.
+        # num_samples is a device scalar, so the all_reduce is enqueued and the
+        # host never waits on its result.
+        global_samples = distutils.all_reduce(num_samples, device=loss.device)
+        global_samples = torch.clamp(global_samples, min=1)
         # Multiply by world size since gradients are averaged across DDP replicas
         # warning this is probably incorrect for any model parallel approach
         # Graph parallel note: numerator and denominator are inflated by the same
@@ -105,28 +108,39 @@ class DDPMTLoss(nn.Module):
         return self._ddp_mean(num_samples, loss)
 
     def per_structure(self, input, mult_mask, num_samples, loss, natoms):
+        # Every size below is known without reading the device: output_size for
+        # repeat_interleave, scatter_add_ instead of bincount over a masked
+        # index, torch.where instead of index assignment, and a device count
+        # instead of nonzero().numel(). The three asserts that were here are
+        # gone with them: they synchronized, and all three hold by
+        # construction (struct_idx covers 0..natoms.numel()-1 exactly, and
+        # free_natoms is a count of set mask entries per structure, so it is
+        # between 1 -- after the where -- and natoms).
+        num_structs = natoms.numel()
         struct_idx = torch.repeat_interleave(
-            torch.arange(natoms.numel(), device=input.device), natoms
+            torch.arange(num_structs, device=input.device),
+            natoms,
+            output_size=loss.shape[0],
         )
-        assert torch.unique(struct_idx).numel() == natoms.numel()
-        per_struct_loss = torch.zeros(
-            natoms.numel(), device=input.device
-        ).scatter_reduce(0, struct_idx, loss, reduce="sum")
+        per_struct_loss = torch.zeros(num_structs, device=input.device).scatter_reduce(
+            0, struct_idx, loss, reduce="sum"
+        )
 
         # normalize by the number of free atoms in the structure
-        free_natoms = torch.bincount(struct_idx[mult_mask], minlength=natoms.numel())
-        zero_idx = torch.where(free_natoms == 0)[0]
-        free_natoms[zero_idx] = natoms[zero_idx]
-        assert torch.all(free_natoms > 0)
-        assert torch.all(free_natoms <= natoms)
+        free_natoms = torch.zeros(
+            num_structs, dtype=torch.long, device=input.device
+        ).scatter_add_(0, struct_idx, mult_mask.to(torch.long).view(-1))
+        free_natoms = torch.where(free_natoms == 0, natoms, free_natoms)
         per_struct_loss = per_struct_loss / free_natoms
 
         # takes the mean across all systems in the batch
-        num_samples = torch.nonzero(per_struct_loss).numel()
+        num_samples = (per_struct_loss != 0).sum()
         return self._ddp_mean(num_samples, per_struct_loss.sum())
 
     def _reduction(self, input, mult_mask, loss, natoms):
-        num_samples = loss[mult_mask].numel()
+        # The same count as loss[mult_mask].numel(), on the device: mult_mask
+        # either has the shape of loss or one entry per row of it.
+        num_samples = mult_mask.sum() * (loss.numel() // mult_mask.numel())
         if self.reduction in self.reduction_map:
             return self.reduction_map[self.reduction](
                 input, mult_mask, num_samples, loss, natoms
@@ -159,11 +173,9 @@ class DDPMTLoss(nn.Module):
         )
         loss = self._reduction(input, mult_mask, loss, natoms)
 
-        # Zero out nans, if any
-        found_nans_or_infs = not torch.all(loss.isfinite())
-        if found_nans_or_infs is True:
-            logging.warning("Found nans while computing loss")
-            loss = torch.nan_to_num(loss, nan=0.0)
+        # Zero out nans, if any. Applied unconditionally: it is the identity on
+        # finite values, and testing first reads the loss back to the host.
+        loss = torch.nan_to_num(loss, nan=0.0)
 
         return self.coefficient * loss
 
