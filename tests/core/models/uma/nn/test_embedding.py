@@ -271,3 +271,36 @@ class TestEdgeDegreeEmbedding:
         # Confirm the compact path was actually exercised
         assert prepared_inv.shape == (self.num_edges, 35)
         torch.testing.assert_close(outputs[1], outputs[0])
+
+    def test_chunked_forward_does_not_keep_a_node_copy_per_chunk(self, inputs):
+        """
+        Activation checkpointing should not keep a separate copy of the node
+        features for every chunk until backward. Otherwise the memory kept for
+        backward grows with the number of chunks times the number of nodes.
+        """
+        x, x_edge, scatter_target, wigner_inv = inputs
+        chunk_size = 8
+        num_chunks = -(-self.num_edges // chunk_size)
+        module = self._make_module(activation_checkpoint_chunk_size=chunk_size)
+        x = x.clone().requires_grad_()
+
+        saved = []
+
+        def pack(tensor):
+            saved.append(tensor)
+            return tensor
+
+        with torch.autograd.graph.saved_tensors_hooks(pack, lambda tensor: tensor):
+            module(x, x_edge, scatter_target, wigner_inv)
+
+        # The same tensor saved several times shares one storage, so count
+        # distinct storages rather than saves
+        node_copies = {
+            tensor.untyped_storage().data_ptr()
+            for tensor in saved
+            if tensor.shape == x.shape
+        }
+        assert len(node_copies) <= 1, (
+            f"{len(node_copies)} copies of the node features were kept for "
+            f"backward across {num_chunks} chunks"
+        )
