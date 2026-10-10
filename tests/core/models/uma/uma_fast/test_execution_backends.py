@@ -560,6 +560,22 @@ def test_node_to_edge_wigner_permute_matches_pytorch(sphere_channels):
 
 
 @pytest.mark.gpu()
+def test_permute_wigner_inv_bwd_dw_large_edge_offsets():
+    # Edge offsets past 2**31 elements must not wrap (#2223).
+    if torch.cuda.mem_get_info()[0] < 6 * 1024**3:
+        pytest.skip("needs 6 GiB free GPU memory")
+    import fairchem.core.models.uma.triton.custom_ops  # noqa: F401
+
+    block, reps = 1_000, 1_900  # 1.9M edges * 9 * 128 channels > 2**31
+    x = torch.randn(block, 9, 128, device="cuda", dtype=torch.float16)
+    x = x.repeat(reps, 1, 1)
+    dw = torch.zeros(block * reps, 81, device="cuda")
+    torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dw(x, x, dw)
+    tiles = dw.view(reps, block, 81)
+    assert (tiles == tiles[0]).all()
+
+
+@pytest.mark.gpu()
 @pytest.mark.parametrize("sphere_channels", [128, 512])
 def test_permute_wigner_inv_matches_pytorch(sphere_channels):
     """
