@@ -1,0 +1,49 @@
+# Deterministic, offline gate for *internal* (relative) documentation links,
+# plus unit tests for the link checker itself.
+#
+# This intentionally runs in the normal (unprivileged) `pull_request` context --
+# read-only GITHUB_TOKEN, no secrets -- NOT in the privileged docs-build workflow
+# (build_docs.yml, triggered by workflow_run). Internal-link resolution is a pure
+# filesystem check that needs neither secrets nor a built site, so there is no
+# reason to run it in a privileged checkout of untrusted PR code.
+#
+# External-URL liveness is inherently flaky (rate limits, gated pages, transient
+# 5xx) and is handled separately by the scheduled monitor, check_links_external.yml.
+name: docs link check
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs_links.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only: this job only reads the checked-out tree and reports to the run log.
+permissions:
+  contents: read
+
+jobs:
+  internal-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      # Unit-test the link checker's parser/internal logic (network-free).
+      - name: Test the documentation link checker
+        run: python -m pytest docs/tests/test_check_links.py -q
+
+      # Fail fast on broken *internal* documentation links: relative targets must
+      # exist on disk. Deterministic and offline, so it is a safe per-PR gate.
+      - name: Check internal documentation links
+        run: python docs/check_links.py --no-external

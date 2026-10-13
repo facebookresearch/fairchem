@@ -24,10 +24,17 @@ from pathlib import Path
 from typing import Any
 
 import backoff
-import ray
 import torch
 import yaml
-from ray import serve
+from monty.dev import requires
+
+try:
+    import ray
+    from ray import serve
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
@@ -303,6 +310,7 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
 
 
 # TODO move this and other setup somewhere else
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
@@ -364,6 +372,7 @@ def start_ray_cluster(
 
 
 @contextmanager
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def get_slurm_inference_raycluster(
     config: str | Path | None = None,
     num_workers: int = 1,
@@ -611,6 +620,7 @@ def get_slurm_inference_raycluster(
 
 
 @contextmanager
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def get_local_inference_raycluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,

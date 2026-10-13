@@ -203,7 +203,7 @@ triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
 #### Multi-GPU Inference and LAMMPs
-If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://facebookresearch.github.io/fairchem/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
+If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://facebookresearch.github.io/fairchem/summary) for more details. This requires the Ray package to be installed and comes with the extras bundle.
 ```
 pip install fairchem-core[extras]
 ```

@@ -240,7 +240,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `torchtnt` - PyTorch training framework (TrainUnit/EvalUnit)
 - `hydra-core` + `omegaconf` - Configuration management
 - `lmdb` - Dataset storage format
-- `ray[serve]>=2.53.0` - Distributed computing
+- Optional `ray` extra (`ray[serve]>=2.56.1`) - Distributed computing
 
 ## Testing Gotchas
 
@@ -296,6 +296,18 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 
 ## Cluster Validation Gotchas
 
+- `torch.utils.collect_env.get_env_info()` runs multiple external tools without
+  subprocess timeouts. Do not invoke it directly on a distributed job's critical
+  startup path; isolate the collector and enforce a timeout.
+- PyTorch's environment collector can report no pip packages in environments
+  created without a `pip` executable, including isolated `uv` environments. Use
+  `importlib.metadata` inside the bounded collector process as the authoritative
+  package inventory.
+- In Slurm processes, prefer `SLURM_LOCALID` over `LOCAL_RANK`. Slurm's value is
+  authoritative, while an inherited `LOCAL_RANK` may be stale.
+- CLI telemetry must be installed in every launcher entry point. The top-level
+  CLI runs on the submission host for Slurm jobs, so compute-node reports belong
+  in direct-Slurm and Ray node entry points rather than only in `_cli.py`.
 - H100 compute nodes do not have PyPI egress. Provision Python environments on
   the submission host before launching validation jobs.
 - Imports from home-backed virtual environments are extremely slow on H100
@@ -313,9 +325,22 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Importing the benchmark package during core test collection can cause
   `matbench_discovery` to download its WBM summary data. Cache that data before
   running without Figshare access, or collection can fail before tests start.
+- A full executable documentation build reads the OC20NEB example trajectory.
+  Prefetch that file on the submission host and preserve the example's local
+  file guard before building on compute nodes, which do not have download
+  access.
 - Some GPU assertions are stochastic or tolerance-sensitive, and the complete
   GPU matrix is expensive. Reproduce failures with the exact test node (and
   repeat it when appropriate) before rerunning a full GPU shard.
+- Executable documentation runs notebooks from their source directories. Do
+  not rely on a fixed relative `chdir`; locate the repository root by a stable
+  marker such as `src/fairchem` instead.
+- MyST static builds configured with a `BASE_URL` must be reviewed through an
+  HTTP server at that same path prefix. Opening `index.html` directly can
+  trigger a redirect that does not resolve on the local filesystem.
+- Keep large documentation preview media remotely hosted when a stable source
+  URL exists, rather than adding duplicate binaries that increase repository
+  size.
 
 ## Hessian Backend Gotchas
 

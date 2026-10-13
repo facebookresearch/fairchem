@@ -47,11 +47,20 @@ The content of these trajectory files is the repeating frame sets. Despite the i
 ```{code-cell} ipython3
 from __future__ import annotations
 
-!wget https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/desorption_id_83_2409_9_111-4_neb1.0.traj
+from pathlib import Path
+from urllib.request import urlretrieve
+
+trajectory_path = Path("desorption_id_83_2409_9_111-4_neb1.0.traj")
+if not trajectory_path.exists():
+    urlretrieve(
+        "https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/"
+        "desorption_id_83_2409_9_111-4_neb1.0.traj",
+        trajectory_path,
+    )
 
 from ase.io import read
 
-traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
+traj = read(trajectory_path, ":")
 unrelaxed_frames = traj[0:10]
 relaxed_frames = traj[-10:]
 ```
@@ -76,7 +85,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
 images = traj[0:10]
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 
 neb = DyNEB(images, k=1)
 for image in images:

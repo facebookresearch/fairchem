@@ -11,8 +11,15 @@ import json
 import logging
 import time
 
-from ray import serve
-from ray.serve.schema import ApplicationStatus
+from monty.dev import requires
+
+try:
+    from ray import serve
+    from ray.serve.schema import ApplicationStatus
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 # This module is deliberately a leaf: Ray Serve lifecycle helpers with no
 # fairchem imports, so consumers such as ``units.mlip_unit.predict`` can use
@@ -26,6 +33,7 @@ __all__ = [
 ]
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def get_app_handle_with_retry(
     deployment_name: str,
     timeout_seconds: float = 60.0,
@@ -67,6 +75,7 @@ def get_app_handle_with_retry(
             time.sleep(poll_interval_seconds)
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def wait_for_serve_ready(
     app_name: str,
     poll_interval_seconds: float = 2,

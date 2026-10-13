@@ -21,13 +21,19 @@ from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import hydra
 import numpy as np
-import ray
 import torch
 import torch.distributed as dist
-from ray import remote
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
+
+try:
+    import ray
+    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
@@ -674,12 +680,20 @@ class MLIPWorkerLocal:
         return None
 
 
-@remote
 class MLIPWorker(MLIPWorkerLocal):
     pass
 
 
+if ray_installed:
+    MLIPWorker = ray.remote(MLIPWorker)
+else:
+    MLIPWorker = requires(
+        ray_installed, message="Requires `ray[serve]` to be installed"
+    )(MLIPWorker)
+
+
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
+    @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(
         self,
         inference_model_path: str,
@@ -920,6 +934,7 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     _handle_cache: ClassVar[dict[str, DeploymentHandle]] = {}
 
+    @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(
         self,
         server_handle: DeploymentHandle,

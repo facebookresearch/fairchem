@@ -14,8 +14,15 @@ from functools import cached_property
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Literal, Protocol
 
-import ray
-from ray import serve
+from monty.dev import requires
+
+try:
+    import ray
+    from ray import serve
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.components.batch_server import (
     AutobatchConfig,
@@ -90,6 +97,7 @@ class InferenceBatcher:
         ...     futures = [batcher.executor.submit(run_sim, atoms) for atoms in systems]
     """
 
+    @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,

@@ -23,7 +23,7 @@ The OMol25 dataset is broken into several training splits - All and 4M. The 4M s
 
 For each calculation, the following data is available:
 
-* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
+* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, `orca.xyz`). To open:
 
 ```
 >> tar --zstd -xvf orca.tar.zst
@@ -92,8 +92,8 @@ The data are stored and accessible via storage on the Eagle cluster at Argonne N
 [General Issues](https://github.com/facebookresearch/fairchem)
 
 Dataset questions?
-* [Muhammed Shuaibi](mshuaibi@meta.com)
-* [Daniel Levine](levineds@meta.com)
+* [Muhammed Shuaibi](mailto:mshuaibi@meta.com)
+* [Daniel Levine](mailto:levineds@meta.com)
 
 Cluster/Access questions?
-* [Ben Blaiszik](blaiszik@uchicago.edu)
+* [Ben Blaiszik](mailto:blaiszik@uchicago.edu)

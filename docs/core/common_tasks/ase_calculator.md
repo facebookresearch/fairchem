@@ -16,7 +16,10 @@ kernelspec:
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
 :::{tip}
-For simple cases such as demos or education, the ASE calculator is very easy to use. For more complex cases such as running MD or batched inference, we recommend using the predictor directly for better performance.
+For simple cases such as demos or education, the ASE calculator is very easy to
+use. See [Molecular Dynamics with ASE](molecular_dynamics.md) for direct ASE and
+Hydra-configured NVT/NPT examples. For batched inference, use the predictor
+directly for better performance.
 :::
 
 ```{code-cell} python3
@@ -24,7 +27,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -113,7 +116,7 @@ Use batch mode for heterogeneous batches whose systems differ in composition, ta
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings="batch"
+    "uma-s-1p2p1", device="cuda", inference_settings="batch"
 )
 ```
 
@@ -123,7 +126,7 @@ Turbo mode uses the same `merge_mole + compile` fast path as default mode and ad
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
 )
 ```
 
@@ -159,7 +162,7 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings=settings
+    "uma-s-1p2p1", device="cuda", inference_settings=settings
 )
 ```
 
@@ -182,7 +185,7 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", device="cuda", inference_settings=settings
+    "uma-s-1p2p1", device="cuda", inference_settings=settings
 )
 ```
 
@@ -193,12 +196,8 @@ UMA supports Graph Parallel inference natively. The graph is chunked into each r
 To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called [ParallelMLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/85bd83535fedbc1d99eee4c12e175603ccc44ef7/src/fairchem/core/units/mlip_unit/predict.py#L415)
 
 :::{note}
-To enable multi-GPU inference, you need to install Ray manually or through the fairchem extra dependencies option.
+Multi-GPU inference requires Ray. Install it with `pip install fairchem-core[ray]`.
 :::
-
-```bash
-pip install fairchem-core[extras]
-```
 
 For example, we can create a predictor with 8 GPU workers in a very similar way to MLIPPredictUnit and perform an MD calculation with the ASE calculator. This mode of operation is also compatible with our LAMMPS integration.
 
@@ -211,7 +210,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2p1", inference_settings="turbo", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 

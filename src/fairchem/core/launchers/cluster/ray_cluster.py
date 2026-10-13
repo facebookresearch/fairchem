@@ -343,15 +343,19 @@ class CheckpointableRayJob(Checkpointable):
         worker_wait_timeout_seconds: int,
         payload: Optional[Callable[..., PayloadReturnT]],
         temp_dir_template: Optional[str] = None,
+        node_start_callback: Optional[Callable[[], None]] = None,
         **kwargs,
     ):
         self.cluster_state = cluster_state
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.payload = payload
         self.temp_dir_template = temp_dir_template
+        self.node_start_callback = node_start_callback
         self.kwargs = kwargs
 
     def __call__(self):
+        if self.node_start_callback is not None:
+            self.node_start_callback()
         # if we are the head node, start head
         # the worker nodes need to get the head address from the cluster state
         node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
@@ -379,6 +383,7 @@ class CheckpointableRayJob(Checkpointable):
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=self.payload,
             temp_dir_template=self.temp_dir_template,
+            node_start_callback=self.node_start_callback,
             **self.kwargs,
         )
         return DelayedSubmission(job)
@@ -718,6 +723,7 @@ class RayCluster:
         name: str = "default",
         executor: str = "slurm",
         payload: Optional[Callable[..., PayloadReturnT]] = None,
+        node_start_callback: Optional[Callable[[], None]] = None,
         **kwargs,
     ):
         assert not self.head_started, "head already started"
@@ -736,6 +742,7 @@ class RayCluster:
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=payload,
             temp_dir_template=self.temp_dir_template,
+            node_start_callback=node_start_callback,
             **kwargs,
         )
         slurm_job = s_executor.submit(ray_job)

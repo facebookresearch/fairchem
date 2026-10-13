@@ -8,25 +8,34 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import clusterscope
 import hydra
-import ray
 import torch.distributed as dist
+from monty.dev import requires
 from omegaconf import OmegaConf
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
+
+try:
+    import ray
+    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     assign_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.common.environment import write_environment_report
 from fairchem.core.common.utils import setup_env_vars
 from fairchem.core.components.runner import Runner
-from fairchem.core.launchers.api import DeviceType
+from fairchem.core.launchers.api import DeviceType, RunType
 from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
 if TYPE_CHECKING:
@@ -35,7 +44,18 @@ if TYPE_CHECKING:
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
 
 
-@ray.remote
+def write_ray_environment_report(job_config: DictConfig) -> None:
+    """
+    Write an environment report for a local or Slurm-backed Ray node.
+    """
+    write_environment_report(
+        log_dir=job_config.metadata.log_dir,
+        run_type=RunType.RUN.value,
+        timestamp_id=job_config.timestamp_id,
+        submission_commit=job_config.metadata.commit,
+    )
+
+
 class SPMDWorker:
     def __init__(
         self,
@@ -103,8 +123,17 @@ class SPMDWorker:
         self.runner.run()
 
 
+if ray_installed:
+    SPMDWorker = ray.remote(SPMDWorker)
+else:
+    SPMDWorker = requires(
+        ray_installed, message="Requires `ray[serve]` to be installed"
+    )(SPMDWorker)
+
+
 class SPMDController(Runner):
     # this is equivalent to the fairchem SlurmSPMDProgram routine that runs the runner on every worker
+    @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(self, job_config: DictConfig, runner_config: DictConfig):
         self.job_config = job_config
         self.runner_config = runner_config
@@ -193,6 +222,7 @@ class SPMDController(Runner):
         pass
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
     runner = hydra.utils.instantiate(
         runner_config,
@@ -202,6 +232,7 @@ def ray_entrypoint(job_config: DictConfig, runner_config: DictConfig):
     runner.run()
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def ray_on_slurm_launch(config: DictConfig, log_dir: str):
     scheduler_config: SchedulerConfig = config.job.scheduler
     slurm_config: SlurmConfig = scheduler_config.slurm
@@ -226,4 +257,5 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         job_config=config.job,
         runner_config=config.runner,
         metrics_config=metrics_config,
+        node_start_callback=partial(write_ray_environment_report, config.job),
     )
