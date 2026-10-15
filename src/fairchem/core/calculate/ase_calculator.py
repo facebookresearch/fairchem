@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-import os
 from collections import Counter
 from functools import partial
 from typing import TYPE_CHECKING, Literal
@@ -145,26 +144,13 @@ class FAIRChemCalculator(Calculator):
             workers: Number of parallel workers for prediction unit. Default is 1.
         """
 
-        if name_or_path in pretrained_mlip.available_models:
-            predict_unit = pretrained_mlip.get_predict_unit(
-                name_or_path,
-                inference_settings=inference_settings,
-                overrides=overrides,
-                device=device,
-                workers=workers,
-            )
-        elif os.path.isfile(name_or_path):
-            predict_unit = pretrained_mlip.load_predict_unit(
-                name_or_path,
-                inference_settings=inference_settings,
-                overrides=overrides,
-                device=device,
-                workers=workers,
-            )
-        else:
-            raise ValueError(
-                f"{name_or_path=} is not a valid model name or checkpoint path"
-            )
+        predict_unit = pretrained_mlip.get_predict_unit(
+            name_or_path,
+            inference_settings=inference_settings,
+            overrides=overrides,
+            device=device,
+            workers=workers,
+        )
         return cls(predict_unit=predict_unit, task_name=task_name, seed=seed)
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
