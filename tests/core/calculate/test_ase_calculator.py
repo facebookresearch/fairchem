@@ -743,6 +743,46 @@ def test_formation_energy_calculator_non_fairchemcalculator():
     assert np.isclose(formation_energy, expected, atol=1e-6)
 
 
+def test_formation_energy_calculator_caches_results():
+    from ase.calculators.calculator import Calculator
+
+    class CountingCalculator(Calculator):
+        implemented_properties = ("energy", "forces", "stress")
+
+        def __init__(self):
+            super().__init__()
+            self.n_calls = 0
+
+        def calculate(self, atoms, properties, system_changes):
+            self.n_calls += 1
+            self.results = {
+                "energy": 10.0,
+                "forces": np.zeros((len(atoms), 3)),
+                "stress": np.zeros(6),
+            }
+
+    base_calc = CountingCalculator()
+    formation_calc = FormationEnergyCalculator(
+        base_calc, element_references={"H": -0.5, "O": -1.0}
+    )
+
+    atoms = molecule("H2O")
+    atoms.calc = formation_calc
+    atoms.get_potential_energy()
+    atoms.get_forces()
+    atoms.get_potential_energy()
+    assert base_calc.n_calls == 1
+
+    # changing positions or info (e.g. charge/spin) must trigger a recompute
+    atoms.positions[0, 0] += 0.1
+    atoms.get_potential_energy()
+    assert base_calc.n_calls == 2
+
+    atoms.info["charge"] = 1
+    atoms.get_potential_energy()
+    assert base_calc.n_calls == 3
+
+
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_formation_energy_calculator_different_task_types(declared_predict_unit):
     for task_name in ["omol", "omat", "oc20"]:
