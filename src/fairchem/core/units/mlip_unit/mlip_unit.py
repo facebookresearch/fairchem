@@ -184,7 +184,25 @@ def initialize_finetuning_model(
     return model
 
 
-def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
+def get_dataset_masks(batch: AtomicData) -> dict[str, torch.Tensor]:
+    """
+    One boolean mask over the systems of the batch per dataset present in it.
+
+    Built on the device once per batch so that per-task mask construction
+    issues no host to device copies.
+    """
+    names = np.array(batch.dataset_name)
+    return {
+        dset: torch.from_numpy(names == dset).to(batch.pos.device)
+        for dset in set(batch.dataset_name)
+    }
+
+
+def get_output_mask(
+    batch: AtomicData,
+    task: Task,
+    dataset_masks: dict[str, torch.Tensor] | None = None,
+) -> dict[str, torch.Tensor]:
     """Get a dictionary of boolean masks for each task and dataset in a batch.
 
     Comment(@abhshkdz): Structures in our `batch` are a mix from various
@@ -203,12 +221,14 @@ def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
     if "forces" in task.name:
         output_masks[task.name] = output_masks[task.name].all(dim=1)
 
-    for dset in set(batch.dataset_name):
-        dset_mask = torch.from_numpy(np.array(batch.dataset_name) == dset).to(
-            batch.pos.device
-        )
+    if dataset_masks is None:
+        dataset_masks = get_dataset_masks(batch)
+    for dset, system_mask in dataset_masks.items():
+        dset_mask = system_mask
         if task.level == "atom":
-            dset_mask = torch.repeat_interleave(dset_mask, batch.natoms)
+            dset_mask = torch.repeat_interleave(
+                system_mask, batch.natoms, output_size=batch.pos.shape[0]
+            )
             output_masks[f"{dset}.{task.name}"] = dset_mask & output_masks[task.name]
         elif "stress" in task.name:
             assert output_masks[task.name].shape[0] == dset_mask.shape[0]
@@ -229,8 +249,9 @@ def get_output_masks(
 ) -> dict[str, torch.Tensor]:
     """Same as above but for a list of tasks."""
     output_masks = {}
+    dataset_masks = get_dataset_masks(batch)
     for task in tasks:
-        output_masks.update(get_output_mask(batch, task))
+        output_masks.update(get_output_mask(batch, task, dataset_masks))
 
     return output_masks
 
@@ -250,7 +271,9 @@ def compute_loss(
     """
 
     batch_size = batch.natoms.numel()
-    num_atoms_in_batch = batch.natoms.sum()
+    # a static shape, not batch.natoms.sum(): a device scalar used as a size
+    # would synchronize with the host
+    num_atoms_in_batch = batch.pos.shape[0]
 
     free_mask = batch.fixed == 0
     output_masks = get_output_masks(batch, tasks)
