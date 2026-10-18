@@ -139,6 +139,15 @@ def test_get_most_recent_viable_checkpoint_path():
     result = get_most_recent_viable_checkpoint_path("some/random/path")
     assert result is None
 
+    # A later write into the older checkpoint bumps its directory mtime but not
+    # when it was saved.
+    with open(os.path.join(dir_with_metadata, "inference.pt"), "w") as f:
+        f.write("artifact")
+    later = time.time() + 10
+    os.utime(dir_with_metadata, (later, later))
+    result = get_most_recent_viable_checkpoint_path(test_dir.name)
+    assert result == dir_with_metadata_newer
+
 
 class _Unit:
     pass

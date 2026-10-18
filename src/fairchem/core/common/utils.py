@@ -492,6 +492,39 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
     )
 
 
+def get_checkpoint_dirs_sorted_by_save_time(directory: str) -> list:
+    """
+    Get all subdirectories of a checkpoint directory sorted by when they were saved.
+
+    A checkpoint's save time is the modification time of its DCP ``.metadata``
+    file, which DCP writes last (via a temp file and rename). The directory's
+    own modification time is not used: it changes whenever an entry is added or
+    removed later, e.g. a file written next to an old checkpoint, or files
+    unlinked by an interrupted rotation. Subdirectories without ``.metadata``
+    (incomplete saves) are ordered by their own modification time.
+    Args:
+        directory (str): The checkpoint directory to search.
+    Returns:
+        list: A list of tuples containing the subdirectory path and its save time.
+    """
+    if not os.path.exists(directory):
+        return []
+
+    dirs = []
+    for d in pathlib.Path(directory).iterdir():
+        if not d.is_dir():
+            continue
+        try:
+            saved_at = (d / ".metadata").stat().st_mtime
+        except OSError:
+            try:
+                saved_at = d.stat().st_mtime
+            except OSError:  # removed while listing
+                continue
+        dirs.append((str(d), saved_at))
+    return sorted(dirs, key=lambda x: x[1])
+
+
 def os_arch_for_download() -> tuple[str, str]:
     """Return (os_type, arch) strings as used in typical release download URLs."""
     os_type = platform.system().lower()  # 'linux' / 'darwin'

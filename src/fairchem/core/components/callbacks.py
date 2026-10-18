@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from torchtnt.framework.callback import Callback
 
 from fairchem.core.common import distutils
-from fairchem.core.common.utils import get_subdirectories_sorted_by_time
+from fairchem.core.common.utils import get_checkpoint_dirs_sorted_by_save_time
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -57,7 +57,7 @@ class TrainCheckpointCallback(Callback):
         ):
             save_callback(os.path.join(checkpoint_dir, f"step_{step}"))
             if distutils.is_master():
-                checkpoint_dirs_by_time = get_subdirectories_sorted_by_time(
+                checkpoint_dirs_by_time = get_checkpoint_dirs_sorted_by_save_time(
                     checkpoint_dir
                 )
                 for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:

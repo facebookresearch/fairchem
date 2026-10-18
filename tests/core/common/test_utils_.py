@@ -7,13 +7,18 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import os
 import tarfile
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from fairchem.core.common.utils import get_deep, safe_extract_tar
+from fairchem.core.common.utils import (
+    get_checkpoint_dirs_sorted_by_save_time,
+    get_deep,
+    safe_extract_tar,
+)
 
 
 def test_get_deep() -> None:
@@ -81,3 +86,38 @@ class TestSafeExtractTar:
             dest.mkdir()
             with tarfile.open(tar_path) as tar, pytest.raises(ValueError):
                 safe_extract_tar(tar, str(dest))
+
+
+def _make_checkpoint(path: Path, saved_at: float) -> None:
+    path.mkdir()
+    (path / ".metadata").write_text("")
+    os.utime(path / ".metadata", (saved_at, saved_at))
+    os.utime(path, (saved_at, saved_at))
+
+
+class TestGetCheckpointDirsSortedBySaveTime:
+    def test_missing_dir(self, tmp_path):
+        assert get_checkpoint_dirs_sorted_by_save_time(str(tmp_path / "missing")) == []
+
+    def test_orders_by_metadata_mtime_not_dir_mtime(self, tmp_path):
+        _make_checkpoint(tmp_path / "step_10", 1_000.0)
+        _make_checkpoint(tmp_path / "step_20", 2_000.0)
+        # A file written into step_10 later bumps its directory mtime only.
+        (tmp_path / "step_10" / "inference.pt").write_text("artifact")
+        os.utime(tmp_path / "step_10", (3_000.0, 3_000.0))
+
+        assert get_checkpoint_dirs_sorted_by_save_time(str(tmp_path)) == [
+            (str(tmp_path / "step_10"), 1_000.0),
+            (str(tmp_path / "step_20"), 2_000.0),
+        ]
+
+    def test_incomplete_dirs_use_their_own_mtime(self, tmp_path):
+        _make_checkpoint(tmp_path / "step_10", 1_000.0)
+        (tmp_path / "step_20").mkdir()  # no .metadata: save never finished
+        os.utime(tmp_path / "step_20", (2_000.0, 2_000.0))
+        (tmp_path / "not_a_dir").write_text("")
+
+        assert get_checkpoint_dirs_sorted_by_save_time(str(tmp_path)) == [
+            (str(tmp_path / "step_10"), 1_000.0),
+            (str(tmp_path / "step_20"), 2_000.0),
+        ]

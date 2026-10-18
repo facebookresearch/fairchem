@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
 from torchtnt.framework.fit import fit
 
-from fairchem.core.common.utils import get_subdirectories_sorted_by_time
+from fairchem.core.common.utils import get_checkpoint_dirs_sorted_by_save_time
 from fairchem.core.components.callbacks import (
     StopBeforeTimeoutCallback,
     TrainCheckpointCallback,
@@ -59,14 +59,11 @@ def get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | 
     if not checkpoint_dir:
         return None
 
-    ckpt_dirs_time = get_subdirectories_sorted_by_time(checkpoint_dir)
-    most_recent_viable_checkpoint = None
+    ckpt_dirs_time = get_checkpoint_dirs_sorted_by_save_time(checkpoint_dir)
     for sub_dir_path, _ in ckpt_dirs_time[::-1]:
-        items = os.listdir(sub_dir_path)
-        if items and ".metadata" in items:
-            most_recent_viable_checkpoint = sub_dir_path
-            break
-    return most_recent_viable_checkpoint
+        if os.path.isfile(os.path.join(sub_dir_path, ".metadata")):
+            return sub_dir_path
+    return None
 
 
 class TrainEvalRunner(Runner):
