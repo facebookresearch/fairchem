@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 import torch  # - needed at runtime for dataclass field type resolution
 
@@ -331,6 +331,21 @@ NAME_TO_INFERENCE_SETTING = {
     "traineval": inference_settings_traineval(),
     "nitro": inference_settings_nitro(),
 }
+
+
+def describe_inference_settings(settings: InferenceSettings) -> str:
+    """
+    A preset's name, or the full settings on one line.
+
+    "default" is an alias of "nitro", so it reports the mode that runs. Presets
+    leave execution_mode to automatic backend selection, which fills it in when
+    the model loads, so the comparison ignores it.
+    """
+    auto_backend = replace(settings, execution_mode=None)
+    for name, preset in NAME_TO_INFERENCE_SETTING.items():
+        if name != "default" and auto_backend == preset:
+            return name
+    return repr(settings)
 
 
 def guess_inference_settings(settings: str | InferenceSettings):

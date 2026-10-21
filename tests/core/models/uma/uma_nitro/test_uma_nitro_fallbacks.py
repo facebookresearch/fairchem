@@ -18,6 +18,7 @@ time. The multigpu preset then falls back to the general model as it always has
 from __future__ import annotations
 
 import logging
+import re
 import sys
 
 import pytest
@@ -26,7 +27,11 @@ from ase import Atoms
 from ase.build import bulk, molecule
 
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
-from fairchem.core.units.mlip_unit.api.inference import UMANitroNotSupportedError
+from fairchem.core.units.mlip_unit.api.inference import (
+    UMANitroNotSupportedError,
+    describe_inference_settings,
+    inference_settings_batch,
+)
 from fairchem.core.units.mlip_unit.predict import _REDUCED_PRECISION_WARNING
 from tests.core.models.uma.uma_nitro.nitro_test_utils import (
     UNSUPPORTED_SETTINGS,
@@ -424,3 +429,31 @@ def test_other_errors_propagate(pretrained_model_name, monkeypatch):
     with pytest.raises(RuntimeError, match="non-finite"):
         predictor.predict(batch((_COPPER, "omat")))
     assert predictor.inference_settings.nitro is True
+
+
+# ------------------------------------------------- reported inference settings
+
+
+def test_first_predict_logs_the_inference_settings_once(
+    nitro_random_checkpoint_path, caplog
+):
+    predictor = MLIPPredictUnit(
+        nitro_random_checkpoint_path,
+        "cpu",
+        inference_settings=inference_settings_batch(),
+    )
+    water = (molecule("H2O"), "omol", 0, 1)
+    with caplog.at_level(logging.WARNING):
+        predictor.predict(batch(water))
+        predictor.predict(batch(water))
+    assert caplog.text.count(" with inference settings: ") == 1
+    assert re.search(r"Running \(.+\) with inference settings: batch\n", caplog.text)
+
+
+def test_settings_after_a_nitro_fallback_describe_as_multigpu(
+    nitro_random_checkpoint_path,
+):
+    predictor = MLIPPredictUnit(
+        nitro_random_checkpoint_path, "cpu", inference_settings=nitro_settings()
+    )
+    assert describe_inference_settings(predictor.inference_settings) == "multigpu"

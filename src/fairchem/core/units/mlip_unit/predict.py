@@ -44,6 +44,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.common.utils import get_commit_hash_for_repo
 from fairchem.core.components.serve_utils import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.models.uma.compat import get_uma_version
@@ -57,6 +58,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
     NITRO_MODEL_ID,
     MergeMoleConsistencyError,
     UMANitroNotSupportedError,
+    describe_inference_settings,
 )
 from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
@@ -661,7 +663,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            self._initialize(data)
+            self._initialize(data)  # may fall back: nitro -> multigpu -> general
+            revision = get_commit_hash_for_repo(os.path.dirname(__file__))
+            logging.warning(
+                f"Running ({revision or 'unknown commit'}) with inference settings: "
+                f"{describe_inference_settings(self.inference_settings)}"
+            )
 
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms

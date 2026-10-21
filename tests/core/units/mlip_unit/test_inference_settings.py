@@ -7,11 +7,15 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 import torch
 
 from fairchem.core.units.mlip_unit.api.inference import (
+    NAME_TO_INFERENCE_SETTING,
     InferenceSettings,
+    describe_inference_settings,
     guess_inference_settings,
     inference_settings_batch,
     inference_settings_default,
@@ -223,3 +227,36 @@ def test_settings_change_names_changed_fields_and_precision():
     assert _describe_settings_change(fp64, fp64, "cuda") == (
         "Now running with unchanged settings (FP64)."
     )
+
+
+# --- describe_inference_settings ---
+
+
+@pytest.mark.parametrize("name", sorted(set(NAME_TO_INFERENCE_SETTING) - {"default"}))
+def test_presets_describe_as_their_name(name):
+    assert describe_inference_settings(guess_inference_settings(name)) == name
+
+
+def test_default_describes_as_nitro():
+    assert describe_inference_settings(inference_settings_default()) == "nitro"
+
+
+def test_preset_with_a_selected_backend_keeps_its_name():
+    from fairchem.core.models.uma.nn.execution_backends import ExecutionMode
+
+    settings = dataclasses.replace(
+        inference_settings_high_precision(),
+        execution_mode=ExecutionMode.UMAS_FAST_GPU,
+    )
+    assert describe_inference_settings(settings) == "high-precision"
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        InferenceSettings(tf32=True, merge_mole=False),
+        dataclasses.replace(inference_settings_multigpu(), compile=False),
+    ],
+)
+def test_custom_settings_describe_as_their_full_repr(settings):
+    assert describe_inference_settings(settings) == repr(settings)
