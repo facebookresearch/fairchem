@@ -36,6 +36,23 @@ class MergeMoleConsistencyError(ValueError):
     """Raised when input data is incompatible with an already merged MOLE model."""
 
 
+# The released checkpoint nitro mode is for, and the model_id of every checkpoint
+# it accepts: uma_nitro's MD5 allowlist also admits fine-tunes of uma-s-1p2p1,
+# which keep this model_id.
+NITRO_CHECKPOINT = "uma-s-1p2p1"
+NITRO_MODEL_ID = "UMA-S-1.2.1"
+
+
+class UMANitroNotSupportedError(RuntimeError):
+    """
+    Raised when a request is outside what UMA Nitro supports.
+
+    The predict unit warns and runs the same settings with nitro turned off
+    (multigpu, for the default and nitro presets); any other exception from Nitro
+    propagates.
+    """
+
+
 def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
     """
     UMA-specific validation: handle charge/spin for OMOL task.
@@ -124,7 +141,8 @@ class MLIPInferenceCheckpoint:
 class InferenceSettings:
     # Flag to enable or disable the use of tf32 data type for inference.
     # TF32 will slightly reduce accuracy compared to FP32 but will still
-    # keep energy conservation in most cases.
+    # keep energy conservation in most cases. The predictor warns when it runs
+    # in a reduced-precision mode (tf32 or nitro).
     tf32: bool = False
 
     # Flag to enable or disable activation checkpointing during
@@ -170,6 +188,15 @@ class InferenceSettings:
     # cast to this dtype. Set to torch.float64 for higher precision.
     # Accepts a torch.dtype or a string in ALLOWED_DTYPES (e.g. "float32").
     base_precision_dtype: torch.dtype | str = torch.float32
+
+    # Run the standalone UMA Nitro model (UMA-S-1.2.1 checkpoints on Nitro's MD5
+    # allowlist, CUDA capability 8.x/9.x/10.x, one system per call) instead of the
+    # HydraModel. Nitro requires tf32=True to allow its reduced-precision kernels;
+    # compute capability 8.x uses IEEE matmul to meet the numerical limits.
+    # execution_mode does not apply, and compile only affects the HydraModel: a
+    # request Nitro cannot serve warns and runs the same settings with
+    # nitro=False (multigpu, for the default and nitro presets).
+    nitro: bool = False
 
     # Execution backend mode for the backbone.
     # Set to "general" for the default execution mode that works across all models and hardware.
@@ -226,10 +253,10 @@ class InferenceSettings:
         return config
 
 
-# Default to the fast path while retaining full FP32 precision. If the input
-# changes in a way that is incompatible with the merged MOLE model, the
-# predictor automatically falls back to an unmerged and uncompiled model.
-def inference_settings_default():
+# The fast path at full FP32 precision. If the input changes in a way that is
+# incompatible with the merged MOLE model, the predictor automatically falls
+# back to an unmerged and uncompiled model.
+def inference_settings_high_precision():
     return InferenceSettings(
         tf32=False,
         activation_checkpointing=False,
@@ -255,10 +282,11 @@ def inference_settings_batch():
     )
 
 
-# Turbo uses the same fast path as the default settings, with TF32 enabled for
-# additional speed on supported hardware. It remains opt-in because it trades
-# a small amount of precision for speed.
-def inference_settings_turbo():
+# The multigpu preset is a reduced-precision fast path: merged MOLE and
+# torch.compile with TF32 matrix multiplies on CUDA (tensors stay FP32), trading
+# precision for speed. Multi-worker inference runs it, since Nitro is single-GPU.
+# TF32 does not apply on the CPU.
+def inference_settings_multigpu():
     return InferenceSettings(
         tf32=True,
         activation_checkpointing=False,
@@ -267,6 +295,21 @@ def inference_settings_turbo():
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
+
+
+# Nitro is multigpu plus the standalone UMA Nitro model, so a request Nitro
+# cannot serve (another checkpoint, no CUDA, a batch, a composition change, ...)
+# runs multigpu: the same settings with nitro=False. Nitro has its own fused
+# kernels and CUDA graphs; compile=True only applies to that multigpu fallback.
+def inference_settings_nitro():
+    settings = inference_settings_multigpu()
+    settings.nitro = True
+    return settings
+
+
+# The default is nitro: UMA Nitro where it can run, multigpu everywhere else.
+def inference_settings_default():
+    return inference_settings_nitro()
 
 
 # this mode corresponds to the default settings used for training and evaluation
@@ -282,13 +325,21 @@ def inference_settings_traineval():
 
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
+    "high-precision": inference_settings_high_precision(),
     "batch": inference_settings_batch(),
-    "turbo": inference_settings_turbo(),
+    "multigpu": inference_settings_multigpu(),
     "traineval": inference_settings_traineval(),
+    "nitro": inference_settings_nitro(),
 }
 
 
 def guess_inference_settings(settings: str | InferenceSettings):
+    if settings == "turbo":
+        raise ValueError(
+            "inference_settings='turbo' is no longer available. Use the default "
+            "(nitro), the fastest mode for MD and standard workflows, or "
+            "'multigpu' (turbo's former settings) for multi-worker inference."
+        )
     if isinstance(settings, str):
         assert (
             settings in NAME_TO_INFERENCE_SETTING

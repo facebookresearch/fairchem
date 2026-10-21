@@ -240,13 +240,20 @@ class FairChemModel(_TSModelInterface):
         )  # ty:ignore[invalid-assignment]
         self.task_name = task_name
 
-        # Create efficient batch predictor for fast inference
+        # Create efficient batch predictor for fast inference. TorchSim sends
+        # batches of systems, so use the batch preset rather than the
+        # single-system default (Nitro).
         if model_cache_dir and os.path.exists(model_cache_dir):
             self.predictor = pretrained_mlip.get_predict_unit(
-                model, device=device_str, cache_dir=model_cache_dir
+                model,
+                inference_settings="batch",
+                device=device_str,
+                cache_dir=model_cache_dir,
             )
         else:
-            self.predictor = pretrained_mlip.get_predict_unit(model, device=device_str)
+            self.predictor = pretrained_mlip.get_predict_unit(
+                model, inference_settings="batch", device=device_str
+            )
 
         self.implemented_properties = ["energy", "forces"]
         if compute_stress:

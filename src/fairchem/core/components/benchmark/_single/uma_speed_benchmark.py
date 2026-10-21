@@ -31,7 +31,7 @@ from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atom
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
-    inference_settings_default,
+    inference_settings_high_precision,
 )
 
 # Configure logging to INFO level
@@ -212,7 +212,7 @@ class InferenceBenchRunner(Runner):
         seed: int = 1,
         device="cuda",
         overrides: dict | None = None,
-        inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
+        inference_settings: InferenceSettings = inference_settings_high_precision(),  # noqa B008
         generate_traces: bool = False,  # takes additional memory and time
         expand_supercells: int | None = None,
         dataset_name: str = "omat",

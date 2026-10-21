@@ -25,6 +25,42 @@ Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without on
 
 ---
 
+## UMA-S-1.2.1-FT-D4rev and UMA-S-1.2.1-FT-r2SCAN — October 2026
+
+:::{admonition} New models
+:class: tip
+
+**Two fine-tunes of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro.**
+:::
+
+- `uma-s-1p2p1-ft-d4rev`: `omol` task at the ωB97M-D4rev level of theory, fine-tuned on approximately 4 million OMol25 structures recomputed with ωB97M-D4rev labels.
+- `uma-s-1p2p1-ft-r2scan`: `omat` task at the r²SCAN level of theory, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089).
+
+See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations and acknowledgements.
+
+---
+
+## UMA Nitro and D3 dispersion — October 2026
+
+- **UMA Nitro** is the default inference mode and is much faster than turbo for single-GPU MD and relaxations. It runs `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on Ampere, Hopper and Blackwell GPUs. Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
+  On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
+  and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
+  with support for systems up to **15,000 atoms**.
+- **`DFTD3Calculator`** adds GPU DFT-D3(BJ) energies, forces and analytic stresses to any ASE calculator, with `pbe` and `r2scan` presets. See [Adding a DFT-D3(BJ) dispersion correction](common_tasks/ase_calculator.md#adding-a-dft-d3-bj-dispersion-correction).
+
+---
+
+## Library change — the default inference mode is nitro, and turbo is no longer available
+
+- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (and the fine-tunes of it on Nitro's checkpoint allowlist) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
+- The previous default (full FP32 with `merge_mole + compile`) is now `inference_settings="high-precision"`.
+- **Breaking:** `turbo` is no longer available; please use `nitro` (the default). Its former settings are `inference_settings="multigpu"`, which multi-worker inference (`workers > 1`) uses.
+- The batch server's `ModelSpec` and the torch-sim interface default to `"batch"`.
+- Fallback warnings name the settings that replace the requested ones.
+- On Linux x86_64 and aarch64, `nvidia-cutlass-dsl` and `cuda-python` are now installed with `fairchem-core`.
+
+---
+
 ## UMA 1.2
 
 :::{admonition} Latest Release

@@ -1,0 +1,36 @@
+name: sync internal main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-internal-main
+  cancel-in-progress: true
+
+jobs:
+  merge-main:
+    if: github.repository == 'fairinternal/fairchem'
+    runs-on: ubuntu-latest
+    environment: sync-uma-dev
+    steps:
+      - name: Checkout internal-main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: uma_dev
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Merge main into uma_dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git push origin HEAD:refs/heads/uma_dev

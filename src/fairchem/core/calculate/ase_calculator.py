@@ -133,10 +133,15 @@ class FAIRChemCalculator(Calculator):
             name_or_path: A model name from fairchem.core.pretrained.available_models or a path to the checkpoint
                 file
             task_name: Task name
-            inference_settings: Settings for inference. Both "default" and "turbo" use the
-                merge_mole + compile fast path, with automatic fallback if its fixed-input
-                contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
-                unmerged for heterogeneous inputs. More advanced use cases can use a custom
+            inference_settings: Settings for inference. "default" (the same as "nitro")
+                runs UMA Nitro for uma-s-1p2p1 and its fine-tunes on Nitro's
+                checkpoint allowlist on CUDA capability 8.x/9.x/10.x and "multigpu"
+                otherwise. "nitro" and "multigpu" are reduced-precision modes;
+                "multigpu" uses merge_mole + compile with TF32 matrix multiplies on
+                CUDA. "high-precision" uses merge_mole + compile in full FP32.
+                "multigpu" and "high-precision" fall back automatically if their
+                fixed-input contract is broken. "batch" keeps MOLE unmerged for
+                heterogeneous inputs. More advanced use cases can use a custom
                 InferenceSettings object.
             overrides: Optional dictionary of settings to override default inference settings.
             device: Optional torch device to load the model onto.

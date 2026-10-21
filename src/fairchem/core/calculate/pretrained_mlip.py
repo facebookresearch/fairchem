@@ -112,7 +112,10 @@ def resolve_checkpoint(
     """
     if name_or_path in _MODEL_CKPTS.checkpoints:
         checkpoint_path = pretrained_checkpoint_path_from_name(name_or_path)
-        atom_refs = get_reference_energies(name_or_path, "atom_refs", cache_dir)
+        if _MODEL_CKPTS.checkpoints[name_or_path].atom_refs is not None:
+            atom_refs = get_reference_energies(name_or_path, "atom_refs", cache_dir)
+        else:
+            atom_refs = None
         if _MODEL_CKPTS.checkpoints[name_or_path].form_elem_refs is not None:
             form_elem_refs = get_reference_energies(
                 name_or_path, "form_elem_refs", cache_dir
@@ -144,11 +147,15 @@ def get_predict_unit(
     Args:
         model_name: Name of the model to load from available pretrained models, or a
             path to a checkpoint file. Paths are loaded without reference energies.
-        inference_settings: Settings for inference. Both "default" and "turbo" use the
-            merge_mole + compile fast path, with automatic fallback if its fixed-input
-            contract is broken. "turbo" additionally enables TF32. "batch" keeps MOLE
-            unmerged for heterogeneous inputs. More advanced use cases can use a custom
-            InferenceSettings object.
+        inference_settings: Settings for inference. "default" (the same as "nitro") runs
+            UMA Nitro for uma-s-1p2p1, uma-s-1p2p1-ft-d4rev and uma-s-1p2p1-ft-r2scan
+            on CUDA capability 8.x/9.x/10.x and "multigpu" otherwise. "nitro" and
+            "multigpu" are reduced-precision modes; "multigpu" uses merge_mole +
+            compile with TF32 matrix multiplies on CUDA. "high-precision" uses
+            merge_mole + compile in full FP32. "multigpu" and "high-precision" fall
+            back automatically if their fixed-input contract is broken. "batch" keeps
+            MOLE unmerged for heterogeneous inputs. More advanced use cases can use a
+            custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"

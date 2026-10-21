@@ -279,6 +279,11 @@ class WandBSingletonLogger:
         table = wandb.Table(dataframe=dataframe)
         wandb.log({name: table}, step=step, commit=commit)
 
+    def log_plots(self, plots: list, caption: str = "") -> None:
+        """Log plots as W&B images so they are visible in the run workspace."""
+        images = [wandb.Image(plot, caption=caption) for plot in plots]
+        wandb.log({"data": images})
+
     def log_summary(self, summary_dict: dict[str, Any]):
         for k, v in summary_dict.items():
             wandb.run.summary[k] = v

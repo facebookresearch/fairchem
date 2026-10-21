@@ -22,7 +22,7 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
-    inference_settings_default,
+    inference_settings_high_precision,
 )
 
 
@@ -158,7 +158,7 @@ def test_conserving_mole_inference_mode_default(
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -173,7 +173,7 @@ def test_conserving_mole_inference_mode_md(
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -185,7 +185,7 @@ def test_direct_mole_inference_mode_default(
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         direct_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -197,7 +197,7 @@ def test_direct_mole_inference_mode_md(
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         direct_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cpu",
@@ -212,9 +212,9 @@ def test_conserving_mole_inference_mode_default_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
-    # inference_settings_default() uses TF32=False, so tight tolerances are fine
+    # inference_settings_high_precision() uses TF32=False, so tight tolerances are fine
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",
@@ -228,9 +228,9 @@ def test_conserving_mole_inference_mode_md_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
-    # inference_settings_default() uses TF32=False, so tight tolerances are fine
+    # inference_settings_high_precision() uses TF32=False, so tight tolerances are fine
     mole_inference(
-        inference_settings_default(),
+        inference_settings_high_precision(),
         conserving_mole_checkpoint_pt,
         fake_uma_dataset,
         device="cuda",

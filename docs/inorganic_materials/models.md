@@ -20,7 +20,7 @@ The UMA model has a number of nice features over the previous checkpoints:
 
 :::{note}
 These checkpoints are included here for baselining and model reproducibility. For new projects, we recommend using UMA.
-::: 
+:::
 
 * All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24) directory.
 * All models are equiformerV2 S2EFS models

@@ -135,7 +135,9 @@ class ModelSpec:
     """
 
     checkpoint: str
-    inference_settings: InferenceSettings | str = "default"
+    # The server batches requests from different systems, so the default is the
+    # batch preset rather than the single-system fast paths.
+    inference_settings: InferenceSettings | str = "batch"
     device: str | None = None
     overrides: dict | None = None
     # ``"auto"`` is an input convenience only; it is resolved to ``"path"`` or

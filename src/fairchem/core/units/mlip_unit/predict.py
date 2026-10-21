@@ -8,6 +8,8 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+import dataclasses
+import enum
 import gc
 import logging
 import math
@@ -44,12 +46,18 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.components.serve_utils import get_app_handle_with_retry
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
+from fairchem.core.models.uma.compat import get_uma_version
 from fairchem.core.models.uma.nn.execution_backends import (
     ExecutionMode,
     maybe_update_settings_backend,
 )
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.api.inference import MergeMoleConsistencyError
+from fairchem.core.units.mlip_unit.api.inference import (
+    NITRO_CHECKPOINT,
+    NITRO_MODEL_ID,
+    MergeMoleConsistencyError,
+    UMANitroNotSupportedError,
+)
 from fairchem.core.units.mlip_unit.api.model_spec import ModelSpec
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -107,6 +115,75 @@ def _prepare_inference_gradients(backbone, data: AtomicData) -> None:
         data["cell"].requires_grad_(True)
 
 
+_REDUCED_PRECISION_WARNING = (
+    "Running in a reduced-precision mode: some values, such as higher-order "
+    "derivatives and phonon calculations, will be less accurate. For standard "
+    "FP32 precision, use inference_settings='high-precision'."
+)
+
+
+def _uses_reduced_precision(settings: InferenceSettings, device: str) -> bool:
+    """
+    Whether inference runs below standard FP32 precision: TF32 or UMA Nitro on a
+    CUDA device (TF32 does not apply on the CPU).
+    """
+    if torch.device(device).type != "cuda":
+        return False
+    return settings.nitro or (
+        settings.tf32 and settings.base_precision_dtype == torch.float32
+    )
+
+
+def _describe_settings_change(
+    before: InferenceSettings, after: InferenceSettings, device: str
+) -> str:
+    """
+    Name the settings a fallback changed and the precision now in effect.
+    """
+    changed = []
+    for field in dataclasses.fields(after):
+        value = getattr(after, field.name)
+        if value != getattr(before, field.name):
+            if isinstance(value, enum.Enum):  # e.g. ExecutionMode
+                value = value.value
+            changed.append(f"{field.name}={value!r}")
+    if _uses_reduced_precision(after, device):
+        precision = "TF32"
+    elif after.base_precision_dtype in (torch.float64, "float64"):
+        precision = "FP64"
+    else:
+        precision = "FP32"
+    return (
+        f"Now running with {', '.join(changed) or 'unchanged settings'} ({precision})."
+    )
+
+
+def _checkpoint_model_name(model_config: dict) -> str:
+    """
+    Name a checkpoint's model for messages, e.g. "UMA 1.1" or "UMA-S-1.2".
+    """
+    version = get_uma_version(model_config)
+    if version == "1.1":
+        return "UMA 1.1"
+    if version == "tagged":
+        return model_config["model_id"]
+    return "This checkpoint"
+
+
+class _ModelWrapper(torch.nn.Module):
+    """
+    Expose a model as ``.module``, like the ``AveragedModel`` that
+    ``load_inference_model`` returns.
+    """
+
+    def __init__(self, module: torch.nn.Module) -> None:
+        super().__init__()
+        self.module = module
+
+    def forward(self, data: AtomicData) -> dict:
+        return self.module(data)
+
+
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
@@ -137,8 +214,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if inference_settings is None:
             inference_settings = InferenceSettings()
 
-        # Named inference modes (e.g., default, turbo) are shared module-level instances. We keep a
-        # private copy so a change driven by a contract break does not alter other predictors.
+        # Named inference modes (e.g., default, multigpu) are shared module-level
+        # instances. We keep a private copy so a change driven by a contract break
+        # does not alter other predictors.
         self.inference_settings = copy.deepcopy(inference_settings)
         self._inference_model_path = inference_model_path
         self._overrides = copy.deepcopy(overrides)
@@ -152,6 +230,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self._load_model()
         self._setup_device(device)
+        # After _load_model, so a request UMA Nitro could not serve is judged by
+        # the mode that actually runs.
+        if _uses_reduced_precision(self.inference_settings, device):
+            logging.warning(_REDUCED_PRECISION_WARNING)
 
         self.model.eval()
         self.lazy_model_intialized = False
@@ -172,37 +254,17 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             self._inference_model_path, map_location="cpu", weights_only=False
         )
 
-        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
-        # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
-        if torch.device(self._requested_device).type == "cuda":
-            self.inference_settings = maybe_update_settings_backend(
-                self.inference_settings, checkpoint.model_config
-            )
-
-        # Build model-specific overrides
-        final_overrides = self._build_overrides_from_settings(
-            checkpoint, self._overrides, self.inference_settings
-        )
-
-        # Set default dtype during model construction so that non-persistent
-        # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
-        # requested precision rather than being cast from float32 later.
-        prev_dtype = torch.get_default_dtype()
-        torch.set_default_dtype(self.inference_settings.base_precision_dtype)
-
-        try:
-            # Load model with overrides, passing pre-loaded checkpoint
-            self.model, checkpoint = load_inference_model(
-                self._inference_model_path,
-                use_ema=True,
-                overrides=final_overrides,
-                preloaded_checkpoint=checkpoint,
-            )
-
-            # Model sets up tasks
-            self.model.module.setup_tasks(checkpoint.tasks_config)
-        finally:
-            torch.set_default_dtype(prev_dtype)
+        if self.inference_settings.nitro:
+            before = copy.deepcopy(self.inference_settings)
+            try:
+                self._load_nitro_model(checkpoint)
+            except UMANitroNotSupportedError as error:
+                logging.warning(f"UMA Nitro cannot serve this request: {error}.")
+                self.inference_settings.nitro = False
+                self._load_hydra_model(checkpoint)
+                self._log_settings_change(before)
+        else:
+            self._load_hydra_model(checkpoint)
 
         # Get backbone's default untrained tasks (if supported and enabled)
         default_backbone_tasks = []
@@ -236,6 +298,133 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
             self.model.module.add_tasks(untrained_tasks)
         self.model.eval()
+
+    def _load_nitro_model(self, checkpoint: MLIPInferenceCheckpoint) -> None:
+        """
+        Build the standalone UMA Nitro model from the checkpoint weights.
+
+        Raises:
+            UMANitroNotSupportedError: If Nitro cannot serve this request.
+        """
+        # Checked here, before importing Nitro, so these requests get a clear
+        # reason even where its kernels cannot be imported (e.g. no Triton). A
+        # fine-tune added to Nitro's MD5 allowlist must keep model_id
+        # UMA-S-1.2.1, or this check rejects it before the allowlist is read.
+        model_name = _checkpoint_model_name(checkpoint.model_config)
+        if model_name != NITRO_MODEL_ID:
+            raise UMANitroNotSupportedError(
+                f"{model_name} is not supported in nitro mode; use UMA 1.2.1 "
+                f"({NITRO_CHECKPOINT}) for the nitro speedup"
+            )
+        if torch.device(self._requested_device).type != "cuda":
+            raise UMANitroNotSupportedError("nitro mode requires a CUDA device")
+        try:
+            from fairchem.core.models.uma.uma_nitro import UMANitroModel
+        except ImportError as error:
+            raise UMANitroNotSupportedError(
+                f"nitro mode's kernels could not be imported ({error})"
+            ) from error
+
+        UMANitroModel.validate(
+            self.inference_settings, self._inference_model_path, self._requested_device
+        )
+        self.model = _ModelWrapper(UMANitroModel.from_checkpoint(checkpoint))
+
+    def _fall_back_with(self, reason: str, **changes) -> None:
+        """
+        Warn with the reason, change settings, reload, and warn with what runs.
+
+        The reason is logged first so it survives a reload that fails.
+
+        Args:
+            reason: Why the current model cannot serve the request.
+            changes: The ``InferenceSettings`` fields to change.
+        """
+        logging.warning(reason)
+        before = copy.deepcopy(self.inference_settings)
+        for name, value in changes.items():
+            setattr(self.inference_settings, name, value)
+        release = getattr(self.model.module, "release_inference_resources", None)
+        if release is not None:
+            release()
+        self.lazy_model_intialized = False
+        del self.model
+        gc.collect()
+        if torch.device(self._requested_device).type == "cuda":
+            torch.cuda.empty_cache()
+        self._load_model()
+        self._log_settings_change(before)
+
+    def _log_settings_change(self, before: InferenceSettings) -> None:
+        """
+        Warn with the settings a fallback changed and the precision now in use.
+        """
+        logging.warning(
+            _describe_settings_change(
+                before, self.inference_settings, self._requested_device
+            )
+        )
+
+    def _fall_back(self, error: Exception) -> None:
+        """
+        Take the next step down: nitro to multigpu, or multigpu to the general model.
+        """
+        if self.inference_settings.nitro:
+            # The same settings without nitro: multigpu, for the default preset.
+            self._fall_back_with(
+                f"UMA Nitro cannot serve this request: {error}.", nitro=False
+            )
+        else:
+            self._fall_back_from_fast_path(error)
+
+    def _initialize(self, data: AtomicData) -> None:
+        """
+        Lazily initialize, falling back until a model accepts ``data``.
+
+        A heterogeneous batch, for example, falls back from nitro to multigpu,
+        whose MOLE merge rejects it too, and then to the general model.
+        """
+        for _ in range(2):  # nitro -> multigpu -> general
+            try:
+                self._lazy_init(data)
+                return
+            except (MergeMoleConsistencyError, UMANitroNotSupportedError) as error:
+                self._fall_back(error)
+        self._lazy_init(data)
+
+    def _load_hydra_model(self, checkpoint: MLIPInferenceCheckpoint) -> None:
+        """Build the composable HydraModel from the checkpoint."""
+        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
+        # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
+        if torch.device(self._requested_device).type == "cuda":
+            self.inference_settings = maybe_update_settings_backend(
+                self.inference_settings, checkpoint.model_config
+            )
+
+        # Build model-specific overrides
+        final_overrides = self._build_overrides_from_settings(
+            checkpoint, self._overrides, self.inference_settings
+        )
+
+        # Set default dtype during model construction so that non-persistent
+        # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
+        # requested precision rather than being cast from float32 later.
+        prev_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(self.inference_settings.base_precision_dtype)
+
+        try:
+            # Load model with overrides, passing pre-loaded checkpoint
+            self.model, checkpoint = load_inference_model(
+                self._inference_model_path,
+                use_ema=True,
+                overrides=final_overrides,
+                preloaded_checkpoint=checkpoint,
+            )
+
+            # Model sets up tasks
+            self.model.module.setup_tasks(checkpoint.tasks_config)
+        finally:
+            torch.set_default_dtype(prev_dtype)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -442,7 +631,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def _fall_back_from_fast_path(
         self, consistency_error: MergeMoleConsistencyError
     ) -> None:
-        logging.warning(
+        reason = (
             "The UMA fast path (merge_mole + compile) is only available for "
             "fixed composition, task, charge, and spin. This is optimized for "
             "MD applications. Falling back to a less optimized version for "
@@ -450,21 +639,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             f"Reason: '{consistency_error}'.\n"
             "Use inference_settings='batch' for heterogeneous batched evaluations."
         )
-
-        # Fall back to unmerged and uncompiled model:
-        # 1. change flags
-        self.inference_settings.merge_mole = False
-        self.inference_settings.compile = False
+        # Fall back to the unmerged and uncompiled model.
+        changes = {"merge_mole": False, "compile": False}
         if self.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU:
-            self.inference_settings.execution_mode = ExecutionMode.GENERAL
-        self.lazy_model_intialized = False
-        # 2. clear old model and relative memory
-        del self.model
-        gc.collect()
-        if torch.device(self._requested_device).type == "cuda":
-            torch.cuda.empty_cache()
-        # 3. reload model with the new settings
-        self._load_model()
+            changes["execution_mode"] = ExecutionMode.GENERAL
+        self._fall_back_with(reason, **changes)
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
@@ -482,11 +661,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            try:
-                self._lazy_init(data)
-            except MergeMoleConsistencyError as error:
-                self._fall_back_from_fast_path(error)
-                self._lazy_init(data)
+            self._initialize(data)
 
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms
@@ -518,11 +693,20 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         try:
             self.model.module.on_predict_check(data_device)
         except MergeMoleConsistencyError as error:
-            self._fall_back_from_fast_path(error)
-            self._lazy_init(data)
+            self._fall_back(error)
+            # The multigpu model re-merges for this input, or falls back further. The
+            # reloaded model is on the CPU until _lazy_init moves it, and data.to()
+            # above moved ``data`` in place, so merge from a CPU copy.
+            self._initialize(data.clone().cpu())
             self.model.module.on_predict_check(data_device)
 
-        return self._run_inference(data_device, undo_element_references)
+        try:
+            return self._run_inference(data_device, undo_element_references)
+        except UMANitroNotSupportedError as error:
+            # e.g. a geometry whose radius graph outgrows Nitro's capacity.
+            self._fall_back(error)
+            self._initialize(data.clone().cpu())
+            return self._run_inference(data_device, undo_element_references)
 
     def _lazy_init(self, data: AtomicData) -> None:
         """
@@ -537,7 +721,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self.move_to_device()
 
-        if self.inference_settings.compile:
+        # torch.compile is for the HydraModel; Nitro has its own kernels.
+        if self.inference_settings.compile and not self.inference_settings.nitro:
             logging.warning(
                 "Model is being compiled this might take a while for the first time"
             )
@@ -569,6 +754,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         pred_output = {}
         for task_name, task in self.model.module.tasks.items():
+            # A model may omit tasks for datasets outside the current batch.
+            if task_name not in output:
+                continue
             pred_output[task_name] = task.normalizer.denorm(
                 output[task_name][task.property]
             )
@@ -712,6 +900,17 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         super().__init__()
 
         gp_config = gp_utils.resolve_gp_config_for_workers(gp_config, num_workers)
+
+        if inference_settings is not None and inference_settings.nitro:
+            without_nitro = dataclasses.replace(inference_settings, nitro=False)
+            change = _describe_settings_change(
+                inference_settings, without_nitro, device
+            )
+            logging.warning(
+                "UMA Nitro does not support multi-worker or graph-parallel "
+                f"inference. {change}"
+            )
+            inference_settings = without_nitro
 
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,

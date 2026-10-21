@@ -39,18 +39,21 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 base_calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Use "pbe" for PBE-trained models such as UMA's OMat head, or "r2scan"
-# for models fine-tuned on r2SCAN data.
+# for models fine-tuned on r2SCAN data such as uma-s-1p2p1-ft-r2scan.
 calc = DFTD3Calculator(base_calc, functional="pbe", device="cuda")
 atoms.calc = calc
 ```
 
 The wrapper adds the D3 energy, forces, and analytic stress to the base
-calculator. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
+calculator, computed on the GPU with the `nvalchemiops` DFT-D3 kernels, so it
+adds little cost to UMA Nitro MD. Do not add D3 to models whose training labels
+already include dispersion, such as the `omol` task (ωB97M-V) or
+`uma-s-1p2p1-ft-d4rev`. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
 cutoff, and C5 smoothing over the outer 20% of the cutoff.
 Pass `param_file` and `auto_download=False` to use a
 local D3 parameter table without network access.
@@ -106,9 +109,39 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
-## Default mode
+## Default mode (nitro)
 
-UMA defaults to the `merge_mole + compile` fast mode with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+The default mode is `nitro`, and we recommend it for MD and other standard single-system workflows such as relaxations. For `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on an Ampere, Hopper or Blackwell GPU (compute capability 8.x, 9.x or 10.x), it runs UMA Nitro, a standalone model with fused Triton and CuTe kernels for single-system energy, force, and stress evaluation. Nitro is much faster than turbo (now `multigpu`) for single-GPU MD and relaxations. Anything Nitro cannot serve (another checkpoint, the CPU, an older GPU, multi-worker inference with `workers > 1`, a batch, a change in composition, task, charge, or spin, Hessians) falls back to different inference settings. Every fallback prints a warning naming the settings now in use.
+
+```{code-cell} python3
+:tags: [skip-execution]
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
+print(predictor.inference_settings.nitro)  # True when Nitro runs
+```
+
+On Hopper and Blackwell GPUs, Nitro computes with TF32 matrix multiplies (multigpu does so on every GPU), so the predictor warns once that higher-order derivatives such as phonons are less accurate. Use `inference_settings="high-precision"` for standard FP32 precision.
+
+Nitro sizes its graph buffers to the number of edges measured on the first evaluation times an edge margin, 1.3 by default (`UMA_NITRO_EDGE_MARGIN`). The margin leaves room for the graph to grow as atoms move; if it overflows, Nitro measures the graph again and retries, which is slow. A smaller margin is faster per step but overflows more often.
+
+:::{admonition} Acknowledgement
+:class: tip
+Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
+:::
+
+:::{note}
+The `turbo` mode is no longer available. Please use `nitro` (the default) instead; for multi-worker inference, use `multigpu`, which has turbo's former settings.
+:::
+
+## High-precision mode
+
+High-precision mode uses the `merge_mole + compile` fast path with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="high-precision"
+)
+```
 
 ## Batch mode
 
@@ -120,19 +153,19 @@ predictor = pretrained_mlip.get_predict_unit(
 )
 ```
 
-## Turbo mode
+## Multigpu mode
 
-Turbo mode uses the same `merge_mole + compile` fast path as default mode and additionally enables TF32. TF32 can improve performance on compatible hardware at a small precision trade-off. Similar to default mode, any changes in composition, task, charge, and spin across different evaluations trigger a fallback to the unoptimized execution path.
+Like Nitro, multigpu mode (formerly `turbo`) is a reduced-precision mode: merged MOLE weights and `torch.compile`, with TF32 matrix multiplies for speed. Use it with `workers > 1`: Nitro runs on a single GPU, so multi-worker inference uses these settings. It falls back to the slower path if composition, task, charge, or spin changes.
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 ```
 
 ## Custom modes for advanced users
 
-The advanced user might quickly see that **default**, **batch**, and **turbo** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
+The advanced user might quickly see that **default**, **high-precision**, **batch**, and **multigpu** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
 
 | Setting Flag  | Description |
 | ----- | ----- |
@@ -210,7 +243,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2p1", inference_settings="multigpu", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
