@@ -123,6 +123,16 @@ _REDUCED_PRECISION_WARNING = (
     "FP32 precision, use inference_settings='high-precision'."
 )
 
+_NITRO_BANNER = r"""
+    _   ________________  ____
+   / | / /  _/_  __/ __ \/ __ \
+  /  |/ // /  / / / /_/ / / / /
+ / /|  // /  / / / _, _/ /_/ /
+/_/ |_/___/ /_/ /_/ |_|\____/
+
+          >>> ENGAGED >>>
+"""
+
 
 def _uses_reduced_precision(settings: InferenceSettings, device: str) -> bool:
     """
@@ -241,6 +251,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.lazy_model_intialized = False
         self.assert_on_nans = assert_on_nans
         self._warned_upcast = False
+        self._nitro_announced = False
 
         if self.model.module.backbone.regress_config.direct_forces:
             logging.warning(
@@ -753,7 +764,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         )
         with inference_context, tf32_context_manager(self.inference_settings.tf32):
             output = self.model(data)
-            return self._process_outputs(data, output, undo_refs)
+            predictions = self._process_outputs(data, output, undo_refs)
+
+        if self.inference_settings.nitro and not self._nitro_announced:
+            print(_NITRO_BANNER, file=sys.stderr, flush=True)
+            self._nitro_announced = True
+        return predictions
 
     def _process_outputs(self, data: AtomicData, output: dict, undo_refs: bool) -> dict:
         """

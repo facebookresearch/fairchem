@@ -10445,7 +10445,8 @@ def _geometry_key(data):
         )
     periodic = bool(getattr(data, "pbc", None) is not None and data.pbc.any())
     if not periodic or volume <= 0.0:
-        pos = data.pos
+        # Density only sizes graph buffers; keep it out of the derivative graph.
+        pos = data.pos.detach()
         step = max(1, pos.shape[0] // GEOM_SAMPLES)
         sample = pos[::step]
         extent = (sample.amax(0) - sample.amin(0)).clamp_min(1e-6)
