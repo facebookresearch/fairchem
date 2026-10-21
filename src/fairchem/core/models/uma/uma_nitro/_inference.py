@@ -124,9 +124,9 @@ def _kernel_policy(capability: tuple[int, int]) -> _KernelPolicy:
     """
     major, _ = capability
     use_hopper_gemm = major == 9
-    use_blackwell_hybrid = major == 10
+    use_blackwell_hybrid = major in (10, 11, 12)
     use_cute_kernels = use_hopper_gemm or use_blackwell_hybrid
-    use_tf32 = major in (9, 10)
+    use_tf32 = major in (9, 10, 11, 12)
     if use_hopper_gemm:
         name = "native_sm90_plus"
     elif use_blackwell_hybrid:
@@ -15669,16 +15669,16 @@ def _validate_device(device) -> None:
     Check that ``device`` supports Nitro and matches the selected kernel policy.
 
     Raises:
-        UMANitroNotSupportedError: Off CUDA, outside compute capability 8.x/9.x/10.x,
+        UMANitroNotSupportedError: Off CUDA, outside compute capability 8.x-12.x,
             or on a GPU other than the one the kernels were chosen for.
     """
     device = torch.device(device)
     if device.type != "cuda":
         raise UMANitroNotSupportedError("nitro mode requires a CUDA device")
     capability = torch.cuda.get_device_capability(device)
-    if capability[0] not in (8, 9, 10):
+    if capability[0] not in (8, 9, 10, 11, 12):
         raise UMANitroNotSupportedError(
-            "nitro mode supports only CUDA compute capability 8.x, 9.x, or 10.x, "
+            "nitro mode supports only CUDA compute capability 8.x-12.x, "
             f"not {capability[0]}.{capability[1]}"
         )
     if capability != _CUDA_CAPABILITY:

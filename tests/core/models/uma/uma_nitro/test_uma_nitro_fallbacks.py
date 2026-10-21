@@ -180,7 +180,7 @@ def test_falls_back_on_an_unvalidated_gpu(
             nitro_random_checkpoint_path, "cuda", inference_settings=nitro_settings()
         )
     _assert_on_multigpu(
-        predictor, caplog, "supports only CUDA compute capability 8.x, 9.x, or 10.x"
+        predictor, caplog, "supports only CUDA compute capability 8.x-12.x"
     )
     assert "not 7.5" in caplog.text
 

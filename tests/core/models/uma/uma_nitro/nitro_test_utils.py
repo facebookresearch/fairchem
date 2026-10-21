@@ -221,23 +221,25 @@ UNSUPPORTED_SETTINGS = [
 
 def nitro_gpu() -> bool:
     """
-    Whether this machine has a GPU Nitro runs on (compute capability 8.x, 9.x or
-    10.x). On any other GPU, such as CI's T4s, nitro mode runs multigpu.
+    Whether this machine has a GPU Nitro runs on (compute capability 8.x-12.x).
+    On any other GPU, such as CI's T4s, nitro mode runs multigpu.
     """
     return torch.cuda.is_available() and torch.cuda.get_device_capability()[0] in (
         8,
         9,
         10,
+        11,
+        12,
     )
 
 
 # Skips tests that only make sense once Nitro itself runs.
 requires_nitro_gpu = pytest.mark.skipif(
-    not nitro_gpu(), reason="UMA Nitro runs only on compute capability 8.x/9.x/10.x"
+    not nitro_gpu(), reason="UMA Nitro runs only on compute capability 8.x-12.x"
 )
 
 # The load-time reason on any other GPU, checked before settings and the file.
-UNVALIDATED_GPU = "supports only CUDA compute capability 8.x, 9.x, or 10.x"
+UNVALIDATED_GPU = "supports only CUDA compute capability 8.x-12.x"
 
 
 def load_time_reason(reason: str) -> str:

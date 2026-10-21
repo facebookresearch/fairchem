@@ -8,7 +8,7 @@ UMA Nitro: a standalone UMA-small model for energy, force, and stress inference.
 
 Select it with ``inference_settings="nitro"``. The model is built directly
 from the weights of uma-s-1p2p1, or of a fine-tune of it on Nitro's MD5
-allowlist, and requires CUDA compute capability 8.x, 9.x, or 10.x. Capability
+allowlist, and requires CUDA compute capability 8.x-12.x. Capability
 8.x uses portable IEEE matmul with Triton primitives; Hopper uses CuTe GEMM,
 and Blackwell uses CuTe gather/scatter with cuBLAS GEMM.
 """

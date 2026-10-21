@@ -135,7 +135,7 @@ class FAIRChemCalculator(Calculator):
             task_name: Task name
             inference_settings: Settings for inference. "default" (the same as "nitro")
                 runs UMA Nitro for uma-s-1p2p1 and its fine-tunes on Nitro's
-                checkpoint allowlist on CUDA capability 8.x/9.x/10.x and "multigpu"
+                checkpoint allowlist on CUDA capability 8.x-12.x and "multigpu"
                 otherwise. "nitro" and "multigpu" are reduced-precision modes;
                 "multigpu" uses merge_mole + compile with TF32 matrix multiplies on
                 CUDA. "high-precision" uses merge_mole + compile in full FP32.

@@ -149,7 +149,7 @@ def get_predict_unit(
             path to a checkpoint file. Paths are loaded without reference energies.
         inference_settings: Settings for inference. "default" (the same as "nitro") runs
             UMA Nitro for uma-s-1p2p1, uma-s-1p2p1-ft-d4rev and uma-s-1p2p1-ft-r2scan
-            on CUDA capability 8.x/9.x/10.x and "multigpu" otherwise. "nitro" and
+            on CUDA capability 8.x-12.x and "multigpu" otherwise. "nitro" and
             "multigpu" are reduced-precision modes; "multigpu" uses merge_mole +
             compile with TF32 matrix multiplies on CUDA. "high-precision" uses
             merge_mole + compile in full FP32. "multigpu" and "high-precision" fall

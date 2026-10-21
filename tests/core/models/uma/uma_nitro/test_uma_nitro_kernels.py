@@ -226,7 +226,8 @@ def test_uma_nitro_reuses_graph_for_same_key(monkeypatch):
         ((9, 0), "native_sm90_plus", True, True, True),
         ((10, 0), "blackwell_cute_cublas", True, False, True),
         ((10, 3), "blackwell_cute_cublas", True, False, True),
-        ((12, 0), "portable_pytorch_ieee", False, False, False),
+        ((11, 0), "blackwell_cute_cublas", True, False, True),
+        ((12, 0), "blackwell_cute_cublas", True, False, True),
     ],
 )
 def test_uma_nitro_kernel_policy(

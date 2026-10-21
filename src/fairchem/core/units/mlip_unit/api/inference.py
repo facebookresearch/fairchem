@@ -190,7 +190,7 @@ class InferenceSettings:
     base_precision_dtype: torch.dtype | str = torch.float32
 
     # Run the standalone UMA Nitro model (UMA-S-1.2.1 checkpoints on Nitro's MD5
-    # allowlist, CUDA capability 8.x/9.x/10.x, one system per call) instead of the
+    # allowlist, CUDA capability 8.x-12.x, one system per call) instead of the
     # HydraModel. Nitro requires tf32=True to allow its reduced-precision kernels;
     # compute capability 8.x uses IEEE matmul to meet the numerical limits.
     # execution_mode does not apply, and compile only affects the HydraModel: a

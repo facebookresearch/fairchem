@@ -111,7 +111,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ## Default mode (nitro)
 
-The default mode is `nitro`, and we recommend it for MD and other standard single-system workflows such as relaxations. For `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on an Ampere, Hopper or Blackwell GPU (compute capability 8.x, 9.x or 10.x), it runs UMA Nitro, a standalone model with fused Triton and CuTe kernels for single-system energy, force, and stress evaluation. Nitro is much faster than turbo (now `multigpu`) for single-GPU MD and relaxations. Anything Nitro cannot serve (another checkpoint, the CPU, an older GPU, multi-worker inference with `workers > 1`, a batch, a change in composition, task, charge, or spin, Hessians) falls back to different inference settings. Every fallback prints a warning naming the settings now in use.
+The default mode is `nitro`, and we recommend it for MD and other standard single-system workflows such as relaxations. For `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on an Ampere, Hopper or Blackwell GPU (compute capability 8.x-12.x), it runs UMA Nitro, a standalone model with fused Triton and CuTe kernels for single-system energy, force, and stress evaluation. Nitro is much faster than turbo (now `multigpu`) for single-GPU MD and relaxations. Anything Nitro cannot serve (another checkpoint, the CPU, an older GPU, multi-worker inference with `workers > 1`, a batch, a change in composition, task, charge, or spin, Hessians) falls back to different inference settings. Every fallback prints a warning naming the settings now in use.
 
 ```{code-cell} python3
 :tags: [skip-execution]

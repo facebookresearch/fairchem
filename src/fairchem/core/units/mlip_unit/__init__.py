@@ -38,7 +38,7 @@ def load_predict_unit(
     Args:
         path: Path to the checkpoint file
         inference_settings: Settings for inference. "default" (the same as "nitro") runs
-            UMA Nitro for uma-s-1p2p1 on CUDA capability 8.x/9.x/10.x and "multigpu"
+            UMA Nitro for uma-s-1p2p1 on CUDA capability 8.x-12.x and "multigpu"
             otherwise. "multigpu" is a reduced-precision mode (merge_mole + compile with
             TF32 matrix multiplies on CUDA); "high-precision" uses merge_mole + compile
             in full FP32. Both fall back automatically if their fixed-input contract is
