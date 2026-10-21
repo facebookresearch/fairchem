@@ -91,9 +91,9 @@ def _line(digest: str, path: Path) -> str:
 def _write_atomically(path: Path, text: str) -> None:
     temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
     try:
-        # O_EXCL never opens an existing file; 0o666 leaves permissions to the
-        # umask, so a shared cache stays readable.
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        # O_EXCL never opens an existing file; 0o644 keeps a shared cache readable
+        # without letting other users rewrite the cached checksum.
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         with os.fdopen(
             descriptor, "w", encoding="utf-8", errors="surrogateescape"
         ) as handle:
