@@ -5,7 +5,8 @@
 This benchmark compares official ASE calculators on molecular force accuracy
 and MD throughput. Force MAE is measured on all 2,720,091 unique ωB97M-V
 structures in the public OMol25 validation set. Runtime is the mean wall time
-of an ASE `VelocityVerlet` NVE step for a 1,000-atom diamond Si cell.
+of an ASE `VelocityVerlet` NVE step for a 1,000-atom diamond Si cell, shown as
+MD speed in ns/day at a 1 fs timestep.
 
 The timing runs used one NVIDIA H200 per model. The initial force evaluation
 and 200 warm-up steps are excluded. Each result is the mean of the following

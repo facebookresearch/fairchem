@@ -44,8 +44,8 @@ demos, and application efforts for materials science and quantum chemistry.
 </p>
 
 The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
-horizontal axis is mean runtime (ms/step) for an ASE NVE step on a 1000-atom silicon
-cell using an NVIDIA H200. See the
+horizontal axis is MD speed (ns/day at a 1 fs timestep) from the mean runtime of an ASE
+NVE step on a 1000-atom silicon cell using an NVIDIA H200. See the
 [benchmark details and reproduction scripts](benchmarks/omol/README.md)
 for the full setup.
 
