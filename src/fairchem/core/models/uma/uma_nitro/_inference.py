@@ -85,6 +85,13 @@ from fairchem.core.units.mlip_unit.api.inference import (
     UMANitroNotSupportedError,
 )
 
+# This will catch the warning despite its C++ origin
+# torch.Tensor.index_reduce is in beta
+warnings.filterwarnings(
+    "ignore",
+    message="index_reduce\\(\\) is in beta",
+    category=UserWarning,
+)
 
 _CUDA_CAPABILITY = (
     torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
