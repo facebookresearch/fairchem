@@ -294,5 +294,5 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
     assert run_args["lammps_input_path"] == "lammps_in_example.file"
     assert run_args["task_name"] == "omol"
     assert run_args["charge"] == 0
-    assert run_args["spin"] == 0
+    assert run_args["spin"] == 1
     assert not hasattr(lammps_state["lmp"], "_predictor")
