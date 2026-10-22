@@ -42,7 +42,7 @@ See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations 
 
 ## UMA Nitro and D3 dispersion — October 2026
 
-- **UMA Nitro** is the default inference mode and is much faster than turbo for single-GPU MD and relaxations. It runs `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on Ampere, Hopper and Blackwell GPUs. Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
+- **UMA Nitro** is the default inference mode and is much faster than turbo for single-GPU MD and relaxations. It runs `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on Ampere, Hopper and Blackwell GPUs. Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
   On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
   and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
   with support for systems up to **15,000 atoms**.

@@ -414,7 +414,7 @@ class AtomicData:
             nedges = torch.tensor([0], dtype=torch.long)
 
         # initialized to torch.zeros(natoms) if tags missing.
-        # https://wiki.fysik.dtu.dk/ase/_modules/ase/atoms.html#Atoms.get_tags
+        # https://docs.ase-lib.org/ase/atoms.html#ase.Atoms.get_tags
         tags = torch.from_numpy(atoms.get_tags()).long()
         fixed = torch.zeros(natoms, dtype=torch.long)
         if hasattr(atoms, "constraints"):
