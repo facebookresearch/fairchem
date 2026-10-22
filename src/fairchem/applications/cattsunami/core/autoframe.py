@@ -5,7 +5,7 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 
-Home of the AutoFrame classes which facillitate the generation of initial
+Home of the AutoFrame classes which facilitate the generation of initial
 and final frames for NEB calculations.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ class AutoFrame:
     def reorder_adsorbate(self, frame: ase.Atoms, idx_mapping: dict):
         """
         Given the adsorbate mapping, reorder the adsorbate atoms in the final frame so that
-        they match the initial frame to facillitate proper interpolation.
+        they match the initial frame to facilitate proper interpolation.
 
         Args:
             frame (ase.Atoms): the atoms object for which the adsorbate will be reordered
@@ -320,7 +320,7 @@ class AutoFrameDissociation(AutoFrame):
                     converged_final_frames.append(frame)
 
         # Correct the adsorbate index order of the final frame to match the initial.
-        # Once corrected, interpolate between the intial and final state, to be returned
+        # Once corrected, interpolate between the initial and final state, to be returned
         neb_frame_sets = []
         map_idx_list = []
 
@@ -580,7 +580,7 @@ class AutoFrameTransfer(AutoFrame):
                 final frames.
             n_frames (int): the number of frames per reaction trajectory
             n_initial_frames (int): The number of initial frames to consider
-            n_final_frames_per_initial (int): The number of final frames per inital frame to consider
+            n_final_frames_per_initial (int): The number of final frames per initial frame to consider
             fmax (float): force convergence criterion for final frame optimization
             steps (int): step number termination criterion for final frame optimization
 
@@ -609,7 +609,7 @@ class AutoFrameTransfer(AutoFrame):
             opt = BFGS(frame_now)
             converged = opt.run(fmax=fmax, steps=steps)
 
-            # Check for anomolous behavior
+            # Check for anomalous behavior
             dt = DetectTrajAnomaly(
                 initial_frames[pseudoenergies_sort[idx]],
                 frame_now,
@@ -623,7 +623,7 @@ class AutoFrameTransfer(AutoFrame):
                 ]
             )
 
-            # If there are no anomalies and the adsorbates are bonded in the way we expect, we will procede with the system
+            # If there are no anomalies and the adsorbates are bonded in the way we expect, we will proceed with the system
             if (
                 converged
                 and is_edge_list_respected(frame_now, self.reaction.edge_list_initial)
@@ -708,7 +708,7 @@ class AutoFrameTransfer(AutoFrame):
             idx += 1
 
         # Correct the adsorbate index order of the final frame to match the initial
-        # Once corrected, interpolate between the intial and final state and save the
+        # Once corrected, interpolate between the initial and final state and save the
         # NEB frame set.
         neb_frame_sets = []
         map_idx_list = []
@@ -964,7 +964,7 @@ class AutoFrameDesorption(AutoFrame):
             list[lists]: the initial reaction coordinates
 
         """
-        # Get proposed intitial frames
+        # Get proposed initial frames
         ## Check that the reactant has the bonds we expect
         initial_frames = []
         initial_adsorbates = []
@@ -1157,7 +1157,7 @@ def traverse_adsorbate_transfer(
     """
     Traverse reactant 1, reactant 2, product 1 and product 2 in a depth first search of
     the bond graph. Unwrap the atoms to minimize the distance over the bonds. This ensures
-    that when we perform the linear interpolation, the adsorbate moves as a single moity
+    that when we perform the linear interpolation, the adsorbate moves as a single moiety
     and avoids accidental bond breaking events over pbc.
 
     Args:
@@ -1266,7 +1266,7 @@ def traverse_adsorbate_dissociation(
     """
     Traverse reactant 1, product 1 and product 2 in a depth first search of
     the bond graph. Unwrap the atoms to minimize the distance over the bonds. This ensures
-    that when we perform the linear interpolation, the adsorbate moves as a single moity
+    that when we perform the linear interpolation, the adsorbate moves as a single moiety
     and avoids accidental bond breaking events over pbc.
 
     Args:
@@ -1358,7 +1358,7 @@ def traverse_adsorbate_desorption(
     """
     Traverse reactant 1 and  product 1 in a depth first search of
     the bond graph. Unwrap the atoms to minimize the distance over the bonds. This ensures
-    that when we perform the linear interpolation, the adsorbate moves as a single moity
+    that when we perform the linear interpolation, the adsorbate moves as a single moiety
     and avoids accidental bond breaking events over pbc.
 
     Args:
@@ -1485,8 +1485,8 @@ def unwrap_atoms(
 ):
     """
     Make corrections to the final frame so it is no longer wrapped around the cell,
-    if it has jumpped over the pbc. Ensure that for each adsorbate moity, absolute bond distances
-    for all edges that exist in the initial and final frames are minimize regardles of cell location.
+    if it has jumped over the pbc. Ensure that for each adsorbate moiety, absolute bond distances
+    for all edges that exist in the initial and final frames are minimized regardless of cell location.
     This enforces the traversal of the adsorbates happens along the same path, which is not
     necessarily the minimum distance path for each atom. Changes are made in place.
 

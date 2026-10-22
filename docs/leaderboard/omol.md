@@ -98,7 +98,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
 * Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
-For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
+For a detailed description of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:

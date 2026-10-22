@@ -27,7 +27,7 @@ from inquirer.render import ConsoleRender
 from readchar import key
 
 
-# Function used to generate a new adslab instance. This filles the minimum
+# Function used to generate a new adslab instance. This fills the minimum
 # set of required fields with default values. Inputs allow for overriding
 # those defaults.
 def _new_adslab(

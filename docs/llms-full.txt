@@ -2876,7 +2876,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
 * Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
-For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
+For a detailed description of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
@@ -3292,7 +3292,7 @@ As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)
 
-The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the forseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.
+The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a baseline for models trained only on OMol25.
 
 ## Citing
 
@@ -3383,7 +3383,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure lable in the intitial or relaxed structures of the  WBM datset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
@@ -3459,7 +3459,7 @@ For example to read the **rattled-relax** subdataset,
 from fairchem.core.datasets import AseDBDataset
 
 dataset_path = "/path/to/omat24/train/rattled-relax"
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 
 dataset = AseDBDataset(config=dict(src=dataset_path, **config_kwargs))
 
@@ -3471,7 +3471,7 @@ To read more than one subdataset you can simply pass a list of subdataset paths,
 ```python
 from fairchem.core.datasets import AseDBDataset
 
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 dataset_paths = [
     "/path/to/omat24/train/rattled-relax",
     "/path/to/omat24/train/rattled-1000-subsampled",
@@ -4707,7 +4707,7 @@ Source: `docs/catalysts/datasets/oc20dense.md`
 
 ## Overview
 
-The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so aquisition of it is an important task.
+The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so acquisition of it is an important task.
 
 ## File Contents and Download
 |Splits |Size of compressed version (in bytes)  |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -4770,11 +4770,11 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 
 1. `desorption` indicates the reaction type (dissociation and transfer are the other possibilities)
 2. `id` identifies that the material belongs to the validation in domain split (ood - out of domain is th e other possibility)
-3. `83` is the task id. This does not provide relavent information
+3. `83` is the task id. This does not provide relevant information
 4. `2409` is the bulk index of the bulk used in the ocdata bulk pickle file
 5. `9` is the reaction index. for each reaction type there is a reaction pickle file in the repository. In this case it is the 9th entry to that pickle file
-6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number cooresponds to the shift value. In this case the 4th shift enumerated was the one used.
-7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distiguish any of the trajectories from one another.
+6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number corresponds to the shift value. In this case the 4th shift enumerated was the one used.
+7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distinguish any of the trajectories from one another.
 
 
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
@@ -4864,7 +4864,7 @@ Source: `docs/catalysts/datasets/ocx24.md`
 In this work, we seek to directly bridge the gap between computational descriptors and experimental outcomes for heterogeneous catalysis. We consider two important green chemistries: the hydrogen evolution reaction and the electrochemical reduction of carbon dioxide. To do this, we created a curated dataset of experimental results with materials synthesized and tested in a reproducible manner under industrially relevant conditions. We used this data to build models to directly predict experimental outcomes using computational features. For more information, please read the manuscript [paper](http://arxiv.org/abs/2411.11783).
 
 ## Experimental datasets
-To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data is all publically available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
+To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data are all publicly available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
 
 ## Computational datasets
 |Splits |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -5963,7 +5963,7 @@ As a post-processing step we check to see if:
 3. the adsorbate intercalated
 4. the surface has changed
 
-We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
+We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will omit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
 To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
 
@@ -5992,7 +5992,7 @@ for file_outer in glob("data/adslabs/*"):
         rx_id = file.split("/")[-1].split(".")[0]
         traj = ase.io.read(file, ":")
 
-        # Check to see if the trajectory is anomolous
+        # Check to see if the trajectory is anomalous
         detector = DetectTrajAnomaly(traj[0], traj[-1], traj[0].get_tags())
         anom = (
             detector.is_adsorbate_dissociated()
@@ -6568,7 +6568,7 @@ To generalize an interactive visualization, use `ase gui` from the command line 
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-# Make an interative html file of the optimized neb trajectory
+# Make an interactive html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
 ```
@@ -6843,7 +6843,7 @@ print(ase_atoms)
 
 ### Converting to other structure formats
 
-From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
+From an `ase.Atoms` object (see previous section), it is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
 :tags: ["skip-execution"]
@@ -7008,7 +7008,7 @@ For IS2RE / IS2RS training, validation and test sets, we provide precomputed LMD
 
 ## DDEC Charges
 
-We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calcuations failed for them.
+We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calculations failed for them.
 
 |Size of compressed version (in bytes)    |Size of uncompressed version (in bytes)    | MD5 checksum (download link)    |
 |---    |---    |---    |
@@ -7256,7 +7256,7 @@ To account for this deformation, it is vital to use the most energetically favor
 
 1. The MOF does not deform, so the energies of the relaxed empty MOF and the MOF in the adsorbed state are the same
 2. The MOF deforms to a less energetically favorable geometry than its ground state
-3. The MOF locates a new energetically favorable geoemtry relative to the empty MOF relaxation
+3. The MOF locates a new energetically favorable geometry relative to the empty MOF relaxation
 
 The first outcome requires no additional computation because the MOF rigidity assumption is valid. The second outcome represents physical and reversible deformation where the MOF returns to its empty ground state upon removal of the guest molecule. The third outcome is often the result of the guest molecule breaking local symmetry. We also found cases in ODAC in which both outcomes 2 and 3 occur within the same MOF.
 
@@ -7334,7 +7334,7 @@ $$ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MO
 $$ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}$$
 
 
-$E_{\mathrm{int}}$ describes host host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
+$E_{\mathrm{int}}$ describes host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
 
 $$ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}$$
 

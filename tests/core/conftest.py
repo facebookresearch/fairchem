@@ -125,7 +125,7 @@ class ApproxExtension(AmberSnapshotExtension):
     if we have a snapshot with a float value of 0.1, and the actual value is 0.10000000000000001,
     then the strings will not match, even though the values are effectively equal.
 
-    To work around this, we override the serialize method to seralize the expected value
+    To work around this, we override the serialize method to serialize the expected value
     into a special representation. Then, we override the matches function (which originally does a
     simple string comparison) to parse the expected and actual values into numpy arrays.
     Finally, we compare the arrays using np.allclose.

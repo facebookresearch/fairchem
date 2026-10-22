@@ -149,7 +149,7 @@ def test_conserving_mole_inference_modes_gpu(
     )
 
 
-# Test the two main modes inference and MD on CPU for direct and convserving
+# Test the two main modes inference and MD on CPU for direct and conserving
 def test_conserving_mole_inference_mode_default(
     conserving_mole_checkpoint,
     fake_uma_dataset,

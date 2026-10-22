@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from fairchem.core.components.runner import Runner
 
-# this effects the cli only since the actual job will be run in subprocesses or remoe
+# this affects the cli only since the actual job will be run in subprocesses or remotely
 logging.basicConfig(level=logging.INFO)
 
 
@@ -116,12 +116,12 @@ def main(
         ), "SLURM DID NOT SUBMIT JOB!! Please do not submit jobs from an active slurm job (srun or otherwise)"
 
         if scheduler_cfg.use_ray:
-            logging.info("Lauching job on Ray + Slurm cluster")
+            logging.info("Launching job on Ray + Slurm cluster")
             from fairchem.core.launchers import ray_on_slurm_launch
 
             ray_on_slurm_launch.ray_on_slurm_launch(cfg, log_dir)
         else:
-            logging.info("Lauching job on directly on Slurm cluster")
+            logging.info("Launching job directly on Slurm cluster")
             from fairchem.core.launchers import slurm_launch
 
             slurm_launch.slurm_launch(cfg, log_dir)

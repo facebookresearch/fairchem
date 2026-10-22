@@ -19,7 +19,7 @@ def set_context_var(
     value: Any,
 ) -> Generator[None, None, None]:
     """
-    Sets the input convext variable to the input value and yields control
+    Sets the input context variable to the input value and yields control
     back to the caller. When control returns to this function, the context
     variable is reset to its original value.
 
