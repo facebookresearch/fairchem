@@ -213,7 +213,7 @@ atoms.calc = calc
 dyn = Langevin(
     atoms,
     timestep=0.1 * units.fs,
-    temperature_K=400,
+    temperature_K=300,
     friction=0.001 / units.fs,
 )
 trajectory = Trajectory("my_md.traj", "w", atoms)
@@ -289,7 +289,7 @@ atoms.calc = calc
 dyn = Langevin(
     atoms,
     timestep=0.1 * units.fs,
-    temperature_K=400,
+    temperature_K=300,
     friction=0.001 / units.fs,
 )
 # warmup 10 steps
