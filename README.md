@@ -43,7 +43,7 @@ demos, and application efforts for materials science and quantum chemistry.
   </a>
 </p>
 
-Uma-nitro brings blazing speedups to UMA. Currently it is only supported on Nvidia Ampere GPUs and above. Speed is heavily optimized on Hopper series and above for single-gpu single-system mode. Stay tuned as bring nitro support for multi-gpu and batch modes.
+Uma-nitro brings blazing speedups to UMA. Currently it is only supported on Nvidia Ampere GPUs and above. Speed is heavily optimized on Hopper series and above for single-gpu single-system mode. On unsupported GPU types, the system will fallback to other non-nitro modes. Stay tuned as we bring nitro support for multi-gpu and batch modes. In the sub 5-10 ms/step regime, ASE integrators starts to become a bottleneck. To achieve the true performance capabilities of these models, we recommend moving to non-python/GPU based integrators.
 
 The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
 horizontal axis is MD speed (ns/day at a 1 fs timestep) from the mean runtime of an ASE
@@ -213,7 +213,7 @@ atoms.calc = calc
 dyn = Langevin(
     atoms,
     timestep=0.1 * units.fs,
-    temperature_K=400,
+    temperature_K=300,
     friction=0.001 / units.fs,
 )
 trajectory = Trajectory("my_md.traj", "w", atoms)
@@ -289,7 +289,7 @@ atoms.calc = calc
 dyn = Langevin(
     atoms,
     timestep=0.1 * units.fs,
-    temperature_K=400,
+    temperature_K=300,
     friction=0.001 / units.fs,
 )
 # warmup 10 steps
