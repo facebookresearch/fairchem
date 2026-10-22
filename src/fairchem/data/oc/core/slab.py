@@ -365,7 +365,7 @@ def find_surface_atoms_by_height(surface_atoms):
     atom is close to the surface. This function will figure that out.
 
     Specifically:  We consider an atom a surface atom if it is within 2
-    Angstroms of the heighest atom in the z-direction (or more accurately, the
+    Angstroms of the highest atom in the z-direction (or more accurately, the
     direction of the 3rd unit cell vector).
 
     Arguments

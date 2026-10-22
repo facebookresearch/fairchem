@@ -117,7 +117,7 @@ To account for this deformation, it is vital to use the most energetically favor
 
 1. The MOF does not deform, so the energies of the relaxed empty MOF and the MOF in the adsorbed state are the same
 2. The MOF deforms to a less energetically favorable geometry than its ground state
-3. The MOF locates a new energetically favorable geoemtry relative to the empty MOF relaxation
+3. The MOF locates a new energetically favorable geometry relative to the empty MOF relaxation
 
 The first outcome requires no additional computation because the MOF rigidity assumption is valid. The second outcome represents physical and reversible deformation where the MOF returns to its empty ground state upon removal of the guest molecule. The third outcome is often the result of the guest molecule breaking local symmetry. We also found cases in ODAC in which both outcomes 2 and 3 occur within the same MOF.
 
@@ -195,7 +195,7 @@ $$ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MO
 $$ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}$$
 
 
-$E_{\mathrm{int}}$ describes host host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
+$E_{\mathrm{int}}$ describes host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
 
 $$ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}$$
 

@@ -297,7 +297,7 @@ class WandBSingletonLogger:
         art.save()
 
 
-# convienience function for logging stats with WandBSingletonLogger
+# convenience function for logging stats with WandBSingletonLogger
 def log_stats(x: torch.Tensor, prefix: str):
     if distutils.is_master() and WandBSingletonLogger._instance is not None:
         WandBSingletonLogger.get_instance().log(

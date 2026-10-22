@@ -104,7 +104,7 @@ def create_normalizer(
         )
         if rmsd is not None:
             logging.warning(
-                "Both 'stdev' and 'rmsd' values where given to create a normalizer, rmsd values will be used."
+                "Both 'stdev' and 'rmsd' values were given to create a normalizer, rmsd values will be used."
             )
 
     # old configs called it stdev, using this in the function signature reduces overhead code elsewhere

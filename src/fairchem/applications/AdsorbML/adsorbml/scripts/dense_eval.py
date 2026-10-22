@@ -112,7 +112,7 @@ def compute_hybrid_success(ml_data, dft_data, k):
     """
     Computes AdsorbML success rates at varying top-k values.
     Here, results are generated for the hybrid method, where the top-k ML
-    energies are used to to run DFT on the corresponding ML structures. The
+    energies are used to run DFT on the corresponding ML structures. The
     resulting energies are then compared to the ground truth DFT energies.
 
     Return success rates and DFT compute usage at varying k.
@@ -133,7 +133,7 @@ def compute_hybrid_success(ml_data, dft_data, k):
         for kk in success_rates:
             # For each k value, collect the top k systems
             # ML_data is insertion sorted created from a sorted list,
-            # gauranteeing the first k are the lowest energies.
+            # guaranteeing the first k are the lowest energies.
             sorted_site_idx = ml_adslabs[:kk]
             # Sanity check to ensure they are sorted
             if len(ml_energies) > kk:

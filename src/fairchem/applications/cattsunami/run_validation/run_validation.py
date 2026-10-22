@@ -218,7 +218,7 @@ def is_failed_sp(row):
         row: the dataframe row which the function is applied to
 
     Returns:
-        bool: True if ths single point failed, otherwise False
+        bool: True if this single point failed, otherwise False
     """
     if not row.barrierless_ml and np.isnan(row.E_TS_SP):
         return True
@@ -281,7 +281,7 @@ def get_single_point(
             f_vasp = atoms.get_forces()
         except:
             print(
-                "Single point calculation terminated in error. Unfortunately, this is a normal occurance despite the"
+                "Single point calculation terminated in error. Unfortunately, this is a normal occurrence despite the"
                 "DFT calculation running fine."
             )
             atoms = read(f"{vasp_dir}/vasprun.xml")

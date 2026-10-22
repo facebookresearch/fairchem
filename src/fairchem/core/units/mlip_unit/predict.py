@@ -742,7 +742,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # torch.compile is for the HydraModel; Nitro has its own kernels.
         if self.inference_settings.compile and not self.inference_settings.nitro:
             logging.warning(
-                "Model is being compiled this might take a while for the first time"
+                "Model is being compiled. This might take a while the first time."
             )
             torch._dynamo.config.recompile_limit = 32
             # Bake float literals in as constants rather than symbolic floats.
@@ -848,7 +848,7 @@ class MLIPWorkerLocal:
         self,
     ):
         # initialize distributed environment
-        # TODO, this wont work for multi-node, need to fix master addr
+        # TODO, this won't work for multi-node, need to fix master addr
         logging.info(f"Initializing worker {self.worker_id}...")
         setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
 
@@ -972,7 +972,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         logging.getLogger("ray").setLevel(log_level)
         logging.getLogger("uvicorn").setLevel(log_level)
         if not ray.is_initialized():
-            # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
+            # in CI environment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
             if os.environ.get("CI"):
                 logging.info(
                     f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"

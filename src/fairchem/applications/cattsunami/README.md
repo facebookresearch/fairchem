@@ -9,7 +9,7 @@ This repository contains the validation dataset, framework for enumeration, and 
 ### Getting started
 Configured for use:
 1. Install fairchem-core and fairchem-data-oc [instructions](https://facebookresearch.github.io/fairchem/install)
-2. Pip innstall fairchem-applications-cattsunami
+2. Pip install fairchem-applications-cattsunami
 3. Check out the [tutorial notebook](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/cattsunami/tutorial/workbook.ipynb)
 ```
 pip install fairchem-applications-cattsunami

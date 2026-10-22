@@ -97,7 +97,7 @@ class TestAutoframe:
     def test_reactant_connectedness_check(self):
         """
         If the input is modified, be sure to have examples where the
-        reactant isnt connected and examples where it is but across a
+        reactant isn't connected and examples where it is but across a
         periodic boundary.
         """
         inputs = self.inputs

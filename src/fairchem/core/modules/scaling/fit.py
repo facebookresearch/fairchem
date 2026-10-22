@@ -66,7 +66,7 @@ def compute_scaling_factors(config, num_batches: int = 16) -> None:
         if ckpt_file.exists():
             trainer.load_checkpoint(checkpoint_path=str(ckpt_file))
 
-        # region reoad scale file contents if necessary
+        # region reload scale file contents if necessary
         # unwrap module from DP/DDP
         unwrapped_model = model
         while isinstance(unwrapped_model, DistributedDataParallel):
