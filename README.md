@@ -43,6 +43,8 @@ demos, and application efforts for materials science and quantum chemistry.
   </a>
 </p>
 
+Uma-nitro brings blazing speedups to UMA. Currently it is only supported on Nvidia Ampere GPUs and above. Speed is heavily optimized on Hopper series and above for single-gpu single-system mode. Stay tuned as bring nitro support for multi-gpu and batch modes.
+
 The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
 horizontal axis is MD speed (ns/day at a 1 fs timestep) from the mean runtime of an ASE
 NVE step on a 1000-atom silicon cell using an NVIDIA H200. See the
