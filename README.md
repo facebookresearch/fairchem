@@ -72,8 +72,7 @@ Please use this logo for references to [UMA](docs/assets/uma-diagram-light-mode.
 ### September 2026
 
 Read our new paper on
-[quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293). Also, UMA inference is now much faster with
-[`fairchem-core` 2.22.0](https://github.com/facebookresearch/fairchem/releases/tag/fairchem_core-2.22.0).
+[quantum-accurate atomistic modeling of enzyme catalysis using a machine-learned potential](https://arxiv.org/abs/2609.09293).
 
 <img src="https://gist.githubusercontent.com/rayg1234/bc9c41122ee5faa546b561923ec5d477/raw/75fdb26063309f31514a6ddf3ba39fd87776a3e7/ndpk_atp_to_adp_3dmol_1200px.gif" alt="NDPK-catalyzed ATP-to-ADP reaction" width="1000">
 
