@@ -10,6 +10,8 @@ Tests:  pretrained_mlip.resolve_checkpoint name-vs-path dispatch without
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
 
 from fairchem.core.calculate import pretrained_mlip
@@ -71,3 +73,34 @@ def test_resolve_checkpoint_registry_wins_over_file(tmp_path, monkeypatch):
     )
 
     assert resolve_checkpoint("uma-s-1p1").path == "/downloaded/uma-s-1p1.pt"
+
+
+@pytest.mark.parametrize(
+    "model_name", ["uma-s-1p2p1-ft-d4rev", "uma-s-1p2p1-ft-r2scan"]
+)
+def test_get_predict_unit_finetune_has_no_refs(tmp_path, monkeypatch, model_name):
+    downloads = []
+
+    def fake_hf_hub_download(filename, **kwargs):
+        downloads.append(filename)
+        return str(tmp_path / filename)
+
+    load_predict_unit = Mock()
+    monkeypatch.setattr(pretrained_mlip, "hf_hub_download", fake_hf_hub_download)
+    monkeypatch.setattr(pretrained_mlip, "load_predict_unit", load_predict_unit)
+
+    predictor = pretrained_mlip.get_predict_unit(model_name, device="cpu")
+
+    assert downloads == [f"{model_name}.pt"]
+    assert predictor is load_predict_unit.return_value
+    load_predict_unit.assert_called_once_with(
+        str(tmp_path / f"{model_name}.pt"),
+        "default",
+        None,
+        "cpu",
+        None,
+        None,
+        1,
+        41,
+        gp_config=None,
+    )

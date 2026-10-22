@@ -333,7 +333,9 @@ def test_relaxation_final_energy(slab_atoms, all_models_predict_unit):
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
-@pytest.mark.parametrize("inference_settings", ["default", "turbo"])
+@pytest.mark.parametrize(
+    "inference_settings", ["default", "high-precision", "multigpu"]
+)
 def test_calculator_configurations(
     inference_settings,
     slab_atoms,
@@ -347,7 +349,11 @@ def test_calculator_configurations(
 
     assert predict_unit.inference_settings.merge_mole is True
     assert predict_unit.inference_settings.compile is True
-    assert predict_unit.inference_settings.tf32 is (inference_settings == "turbo")
+    # The default (nitro) runs multigpu for checkpoints other than uma-s-1p2p1.
+    assert predict_unit.inference_settings.nitro is False
+    assert predict_unit.inference_settings.tf32 is (
+        inference_settings != "high-precision"
+    )
 
     datasets = list(predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(

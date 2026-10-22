@@ -31,6 +31,7 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
 )
 from tests.conftest import (
     excluded_models,
+    fixture_inference_settings,
     get_predict_unit_for_test,
     sweep_model,
     sweep_refs_from,
@@ -437,7 +438,9 @@ def uma_predict_unit(request):
             "No UMA model available outside --exclude-models — sweep jobs "
             "should be used instead."
         )
-    return pretrained_mlip.get_predict_unit(candidates[0], device=device)
+    return pretrained_mlip.get_predict_unit(
+        candidates[0], device=device, inference_settings=fixture_inference_settings()
+    )
 
 
 @pytest.fixture(scope="session")
@@ -464,7 +467,9 @@ def uma_predict_unit_alt(request):
     if not candidates:
         pytest.skip("No UMA model available that differs from sweep model")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pretrained_mlip.get_predict_unit(candidates[0], device=device)
+    return pretrained_mlip.get_predict_unit(
+        candidates[0], device=device, inference_settings=fixture_inference_settings()
+    )
 
 
 @pytest.fixture(scope="module")
