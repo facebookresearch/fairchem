@@ -13,7 +13,6 @@ import types
 import warnings
 from typing import TYPE_CHECKING
 
-import numpy as np
 import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
@@ -25,6 +24,7 @@ from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_map
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEGlobals,
+    set_padded_segments,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
     MOLEInterface,
@@ -184,7 +184,11 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 device=batch_full[edge_index[1]].device,
             ).scatter_(0, batch_full[edge_index[1]], 1, reduce="add")
 
-            self.global_mole_tensors.mole_sizes = mole_sizes.cpu()
+            mole_sizes = mole_sizes.cpu()
+            self.global_mole_tensors.mole_sizes = mole_sizes
+            set_padded_segments(
+                self.global_mole_tensors, mole_sizes.tolist(), batch_full.device
+            )
 
     def log_MOLE_stats(self):
         if not self.training or self.num_experts == 0:
@@ -420,6 +424,44 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         return self
 
 
+def split_head_outputs_by_dataset(
+    head_output: dict[str, torch.Tensor],
+    dataset_names: list[str],
+    data,
+    wrap_property: bool,
+) -> dict[str, torch.Tensor]:
+    """
+    Route every head output to its dataset key, zeros for the other datasets.
+
+    Same values as zero-filling and masked copying, but done with torch.where
+    on device masks so that no boolean-mask indexing (a host sync per index)
+    and no batch_full.cpu() copy is needed.
+    """
+    present = set(data.dataset)
+    num_systems = len(data.dataset)
+    device = data.batch_full.device
+    system_dataset = torch.tensor(
+        [dataset_names.index(name) for name in data.dataset], device=device
+    )
+    atom_dataset = system_dataset[data.batch_full]
+    full_output = {}
+    for idx, dataset_name in enumerate(dataset_names):
+        if dataset_name in present:
+            system_mask = system_dataset == idx
+            atom_mask = atom_dataset == idx
+        for key, tensor in head_output.items():
+            if dataset_name not in present:
+                output_tensor = tensor.new_zeros(tensor.shape)
+            else:
+                mask = system_mask if tensor.shape[0] == num_systems else atom_mask
+                mask = mask.view(-1, *([1] * (tensor.dim() - 1)))
+                output_tensor = torch.where(mask, tensor, 0.0)
+            full_output[f"{dataset_name}_{key}"] = (
+                {key: output_tensor} if wrap_property else output_tensor
+            )
+    return full_output
+
+
 class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
@@ -561,8 +603,11 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.global_mole_tensors.mole_sizes = torch.zeros(
             data.natoms.shape[0], dtype=torch.int, device=emb["batch"].device
         ).scatter(0, emb["batch"], 1, reduce="add")  # data.natoms.cpu()
+        # sizes changed under the MOLE layers: drop the batched index maps
+        self.global_mole_tensors.pad_index = None
+        self.global_mole_tensors.unpad_index = None
+        self.global_mole_tensors.pad_shape = None
         self.global_mole_tensors.natoms = emb["batch"].shape[0]
-        data_batch_full = data.batch_full.cpu()
 
         # generate a one hot mask based on dataset , one for each system
         self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
@@ -586,28 +631,9 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         head_output = self.head(data, emb)
 
         # breakout the outputs to correct heads named by datasetname
-        np_dataset_names = np.array(data.dataset)
-        full_output = {}
-        for dataset_name in self.dataset_names:
-            dataset_mask = np_dataset_names == dataset_name
-            for key, mole_output_tensor in head_output.items():
-                # TODO cant we use torch.zeros here?
-                output_tensor = mole_output_tensor.new_zeros(
-                    mole_output_tensor.shape
-                )  # float('inf'))
-                if dataset_mask.any():
-                    if output_tensor.shape[0] == dataset_mask.shape[0]:
-                        output_tensor[dataset_mask] = mole_output_tensor[dataset_mask]
-                    else:  # assume atoms are the first dimension
-                        atoms_mask = torch.isin(
-                            data_batch_full,
-                            torch.where(torch.from_numpy(dataset_mask))[0],
-                        )
-                        output_tensor[atoms_mask] = mole_output_tensor[atoms_mask]
-                full_output[f"{dataset_name}_{key}"] = (
-                    {key: output_tensor} if self.wrap_property else output_tensor
-                )
-        return full_output
+        return split_head_outputs_by_dataset(
+            head_output, self.dataset_names, data, self.wrap_property
+        )
 
 
 class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
@@ -644,7 +670,6 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        data_batch_full = data.batch_full.cpu()
         # run the internal head
         head_output = self.head(data, emb)
 
@@ -671,27 +696,6 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
             set(data.dataset) <= set(self.dataset_names)
         ), f"Input dataset names: {set(data.dataset)} must be a strict subset of model's valid datset names: {set(self.dataset_names)} "
         # breakout the outputs to correct heads named by datasetname
-        np_dataset_names = np.array(data.dataset)
-
-        full_output = {}
-        for dataset_name in self.dataset_names:
-            dataset_mask = np_dataset_names == dataset_name
-            for key, head_output_tensor in head_output.items():
-                # TODO cant we use torch.zeros here?
-                output_tensor = head_output_tensor.new_zeros(
-                    head_output_tensor.shape
-                )  # float('inf'))
-                if dataset_mask.any():
-                    if output_tensor.shape[0] == dataset_mask.shape[0]:
-                        output_tensor[dataset_mask] = head_output_tensor[dataset_mask]
-                    else:  # assume atoms are the first dimension
-                        atoms_mask = torch.isin(
-                            data_batch_full,
-                            torch.where(torch.from_numpy(dataset_mask))[0],
-                        )
-                        output_tensor[atoms_mask] = head_output_tensor[atoms_mask]
-                full_output[f"{dataset_name}_{key}"] = (
-                    {key: output_tensor} if self.wrap_property else output_tensor
-                )
-
-        return full_output
+        return split_head_outputs_by_dataset(
+            head_output, self.dataset_names, data, self.wrap_property
+        )
