@@ -21,7 +21,7 @@ As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)
 
-The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.
+The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a baseline for models trained only on OMol25.
 
 ## Citing
 
