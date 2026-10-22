@@ -20,7 +20,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure label in the initial or relaxed structures of the  WBM dataset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
