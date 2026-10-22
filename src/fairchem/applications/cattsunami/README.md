@@ -2,7 +2,7 @@
 
 ![summary](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/applications/cattsunami/summary_fig.png)
 
-CatTSunami is a framework for high-throughput enumeration of nudged elastic band (NEB) frame sets. It was built for use with machine learned (ML) models trained on [OC20](https://arxiv.org/abs/2010.09990), which were demonstrated to be performant on this auxiliary task. To train your own model or obtain pre-trained checkpoints, please see [`fairchem-core`](https://github.com/facebookresearch/fairchem/tree/cattsunami-package/src/fairchem/core).
+CatTSunami is a framework for high-throughput enumeration of nudged elastic band (NEB) frame sets. It was built for use with machine learned (ML) models trained on [OC20](https://arxiv.org/abs/2010.09990), which were demonstrated to be performant on this auxiliary task. To train your own model or obtain pre-trained checkpoints, please see [`fairchem-core`](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/core).
 
 This repository contains the validation dataset, framework for enumeration, and accompanying code to run ML-accelerated NEBs and validate new models. For more information, please read the manuscript [paper](https://arxiv.org/abs/2405.02078).
 
@@ -10,7 +10,7 @@ This repository contains the validation dataset, framework for enumeration, and 
 Configured for use:
 1. Install fairchem-core and fairchem-data-oc [instructions](https://facebookresearch.github.io/fairchem/install)
 2. Pip install fairchem-applications-cattsunami
-3. Check out the [tutorial notebook](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/cattsunami/tutorial/workbook.ipynb)
+3. Check out the [tutorial notebook](https://facebookresearch.github.io/fairchem/cattsunami-tutorial)
 ```
 pip install fairchem-applications-cattsunami
 ```
@@ -19,7 +19,7 @@ Configured for local development:
 1. Clone the [fairchem repo](https://github.com/facebookresearch/fairchem/tree/main)
 2. Install `fairchem-data-oc` and `fairchem-core`:  [instructions](https://facebookresearch.github.io/fairchem/install)
 3. Install this repository `pip install -e packages/fairchem-applications-cattsunami`
-4. Check out the [tutorial notebook](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/cattsunami/tutorial/workbook.ipynb)
+4. Check out the [tutorial notebook](https://facebookresearch.github.io/fairchem/cattsunami-tutorial)
 
 
 ### Validation Dataset

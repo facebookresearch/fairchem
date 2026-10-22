@@ -177,7 +177,7 @@ class AseReadDataset(AseAtomsDataset):
     such as LMDB.
 
     For a full list of ASE-readable filetypes, see
-    https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+    https://docs.ase-lib.org/ase/io/io.html
 
     args:
         config (dict):
@@ -266,7 +266,7 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
     such as LMDB.
 
     For a full list of ASE-readable filetypes, see
-    https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+    https://docs.ase-lib.org/ase/io/io.html
 
     args:
         config (dict):
@@ -388,7 +388,7 @@ class AseDBDataset(AseAtomsDataset):
     with a variety of backends including JSON, SQLite, and database server options.
 
     For more information, see:
-    https://databases.fysik.dtu.dk/ase/ase/db/db.html
+    https://docs.ase-lib.org/ase/db/db.html
 
     args:
         config (dict):

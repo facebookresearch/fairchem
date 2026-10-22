@@ -26,7 +26,7 @@ The codebase supports the following workflow to generate adsorbate-catalyst inpu
     - By its index in the database, or
     - By selecting randomly.
 3. Enumerate slabs from the `Bulk` class.<br>
-This internally uses [`pymatgen.core.surface.SlabGenerator`](https://pymatgen.org/pymatgen.core.surface.html#pymatgen.core.surface.SlabGenerator) and supports the following:
+This internally uses [`pymatgen.core.surface.SlabGenerator`](https://pymatgen.org/pymatgen.core.html#pymatgen.core.surface.SlabGenerator) and supports the following:
     - All slabs up to a specified miller index, or
     - A random slab among those enumerated by the previous method, or
     - A specific miller index.
@@ -47,14 +47,18 @@ bulk_src_id = "mp-30"
 adsorbate_smiles = "*CO"
 
 bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="your-path-here.pkl")
-adsorbate = Adsorbate(adsorbate_smiles_from_db=adsorbate_smiles, adsorbate_db_path="your-path-here.pkl")
-slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1,1,1))
+adsorbate = Adsorbate(
+    adsorbate_smiles_from_db=adsorbate_smiles, adsorbate_db_path="your-path-here.pkl"
+)
+slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
 
 # Perform heuristic placements
 heuristic_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="heuristic")
 
 # Perform random site, heuristic placements
-random_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="random_site_heuristic_placement", num_sites=100)
+random_adslabs = AdsorbateSlabConfig(
+    slabs[0], adsorbate, mode="random_site_heuristic_placement", num_sites=100
+)
 ```
 
 If you want to use a bulk and/or adsorbate that is not in the database here, you may supply your own `ase.Atoms` object:
