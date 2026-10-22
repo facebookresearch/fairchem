@@ -126,7 +126,7 @@ Nitro sizes its graph buffers to the number of edges measured on the first evalu
 
 :::{admonition} Acknowledgement
 :class: tip
-Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
+Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
 :::
 
 :::{note}
