@@ -300,7 +300,7 @@ def tag_surface_atoms(
     atom will have a tag of 0, and any atom that we consider a "surface" atom
     will have a tag of 1. We use a combination of Voronoi neighbor algorithms
     (adapted from `pymatgen.core.surface.Slab.get_surface_sites`; see
-    https://pymatgen.org/pymatgen.core.surface.html) and a distance cutoff.
+    https://pymatgen.org/pymatgen.core.html#module-pymatgen.core.surface) and a distance cutoff.
 
     Arguments
     ---------

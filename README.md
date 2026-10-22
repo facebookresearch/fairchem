@@ -62,10 +62,10 @@ Please use this logo for references to [UMA](docs/assets/uma-diagram-light-mode.
   On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
   and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
   with support for systems up to **15,000 atoms**.
-  Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
-  See [UMA Nitro](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html#default-mode-nitro).
+  Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
+  See [UMA Nitro](https://facebookresearch.github.io/fairchem/ase-calculator#default-mode-nitro).
 - **Two new UMA-S-1.2.1 models**: `uma-s-1p2p1-ft-d4rev` for molecules (ωB97M-D4rev) and
-  `uma-s-1p2p1-ft-r2scan` for materials (r²SCAN, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089)). These improve a wide range of observables compared to experiments. Please be aware of their [limitations](https://facebookresearch.github.io/fairchem/core/uma.html#uma-s-1p2p1-fine-tunes).
+  `uma-s-1p2p1-ft-r2scan` for materials (r²SCAN, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089)). These improve a wide range of observables compared to experiments. Please be aware of their [limitations](https://facebookresearch.github.io/fairchem/uma#uma-s-1p2p1-fine-tunes).
 - **DFT-D3(BJ) dispersion (including GPU support)** for any ASE calculator, with PBE and r²SCAN presets. These make the respective materials tasks significantly more transferable outside of solid-state systems. See
   [D3 dispersion corrections](#d3-dispersion-corrections).
 
@@ -127,8 +127,8 @@ Models are referenced by their name, below are the currently supported models:
 | Model Name | Description |
 |---|---|
 | uma-s-1p2p1 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params) |
-| uma-s-1p2p1-ft-d4rev | UMA-S-1.2.1 fine-tuned to ωB97M-D4rev for molecular systems; `omol` task only. See [new models](https://facebookresearch.github.io/fairchem/core/uma.html#uma-s-1p2p1-fine-tunes) |
-| uma-s-1p2p1-ft-r2scan | UMA-S-1.2.1 fine-tuned on r²SCAN data ([MAD-1.6](https://arxiv.org/abs/2603.02089)) for inorganic materials and beyond; `omat` task only, not spin-polarized. See [new models](https://facebookresearch.github.io/fairchem/core/uma.html#uma-s-1p2p1-fine-tunes) |
+| uma-s-1p2p1-ft-d4rev | UMA-S-1.2.1 fine-tuned to ωB97M-D4rev for molecular systems; `omol` task only. See [new models](https://facebookresearch.github.io/fairchem/uma#uma-s-1p2p1-fine-tunes) |
+| uma-s-1p2p1-ft-r2scan | UMA-S-1.2.1 fine-tuned on r²SCAN data ([MAD-1.6](https://arxiv.org/abs/2603.02089)) for inorganic materials and beyond; `omat` task only, not spin-polarized. See [new models](https://facebookresearch.github.io/fairchem/uma#uma-s-1p2p1-fine-tunes) |
 | uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
 
 ### Set the task for your application and calculate
@@ -252,7 +252,7 @@ calc = DFTD3Calculator(
 )
 ```
 
-See the [D3 docs](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html) for the
+See the [D3 docs](https://facebookresearch.github.io/fairchem/ase-calculator#adding-a-dft-d3-bj-dispersion-correction) for the
 parameters and references.
 
 #### Multi-GPU Inference and LAMMPs
