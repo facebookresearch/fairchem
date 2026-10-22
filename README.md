@@ -62,7 +62,7 @@ Please use this logo for references to [UMA](docs/assets/uma-diagram-light-mode.
   On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
   and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
   with support for systems up to **15,000 atoms**.
-  Special thanks to Max Zhdanov, Emanuele Arcelli ([FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain who contributed and helped improve UMA Nitro.
+  Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
   See [UMA Nitro](https://facebookresearch.github.io/fairchem/ase-calculator#default-mode-nitro).
 - **Two new UMA-S-1.2.1 models**: `uma-s-1p2p1-ft-d4rev` for molecules (ωB97M-D4rev) and
   `uma-s-1p2p1-ft-r2scan` for materials (r²SCAN, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089)). These improve a wide range of observables compared to experiments. Please be aware of their [limitations](https://facebookresearch.github.io/fairchem/uma#uma-s-1p2p1-fine-tunes).
