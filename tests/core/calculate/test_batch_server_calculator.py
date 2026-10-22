@@ -77,7 +77,7 @@ def batch_server_handle(served_predict_unit):
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_batch_server_predict_unit_with_calculator(
     batch_server_handle, served_predict_unit
 ):
@@ -106,7 +106,7 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
     """
     Test BatchServerPredictUnit with multiple concurrent requests.

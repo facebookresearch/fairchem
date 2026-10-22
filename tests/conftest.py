@@ -234,6 +234,30 @@ def uma_models() -> list[str]:
     return [name for name in pretrained_mlip.available_models if "uma" in name]
 
 
+# Fine-tunes run their base model's tests, except tests that need tasks or
+# reference energies the fine-tune does not have. Tests declare those on their
+# marker: @pytest.mark.pretrained(..., tasks=("omat",), refs=True).
+FINETUNES = {
+    "uma-s-1p2p1-ft-d4rev": ("uma-s-1p2p1", frozenset({"omol"})),
+    "uma-s-1p2p1-ft-r2scan": ("uma-s-1p2p1", frozenset({"omat"})),
+}
+
+
+def _serves(model: str, marker) -> bool:
+    """
+    Whether a fine-tune has the tasks and reference energies a test declares.
+    """
+    if model not in FINETUNES:
+        return True
+    from fairchem.core.calculate.pretrained_mlip import _MODEL_CKPTS
+
+    _, tasks = FINETUNES[model]
+    has_refs = _MODEL_CKPTS.checkpoints[model].atom_refs is not None
+    return set(marker.kwargs.get("tasks", ())) <= tasks and (
+        has_refs or not marker.kwargs.get("refs", False)
+    )
+
+
 def _pretrained_model_values(metafunc) -> list[str]:
     """
     Resolve pretrained model names for parametrization.
@@ -415,8 +439,13 @@ def pytest_collection_modifyitems(config, items):
                         deselect.append(item)
                         continue
                 else:
-                    # Name-style: strict match.
-                    if sweep_override not in declared:
+                    # Name-style: strict match; a fine-tune also runs its base
+                    # model's tests that it can serve.
+                    base = FINETUNES.get(sweep_override, (sweep_override,))[0]
+                    if not (
+                        (sweep_override in declared or base in declared)
+                        and _serves(sweep_override, marker)
+                    ):
                         deselect.append(item)
                         continue
             keep.append(item)

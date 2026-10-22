@@ -30,7 +30,7 @@ from tests.conftest import get_predict_unit_for_test
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
 
-pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")]
 
 
 def get_numerical_hessian(
@@ -107,6 +107,7 @@ def get_numerical_hessian(
     return hessian
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
 def test_hessian(vmap, pretrained_checkpoint):
@@ -184,6 +185,7 @@ def test_hessian_vs_numerical(pretrained_checkpoint):
     )
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 @pytest.mark.gpu()
 def test_hessian_symmetry(pretrained_checkpoint):
     """Test that the Hessian matrix is symmetric."""

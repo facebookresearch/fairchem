@@ -89,6 +89,7 @@ def test_matches_general(pretrained_model_name, general, system):
         assert_close(output, general.predict(batch(moved_system)))
 
 
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 def test_matches_general_without_element_references(pretrained_model_name, general):
     predictor = MLIPPredictUnit(
         checkpoint_path(pretrained_model_name),
@@ -102,6 +103,7 @@ def test_matches_general_without_element_references(pretrained_model_name, gener
     assert_close(output, expected)
 
 
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omol",))
 @pytest.mark.parametrize(
     "change",
     [
@@ -141,6 +143,7 @@ def test_runs_with_settings_it_ignores_or_supports(pretrained_model_name, change
     assert ("stress" in output) == ("omol_stress" in task_names(predictor)["omol"])
 
 
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat", "omol"))
 def test_default_settings_run_nitro(pretrained_model_name):
     """
     The default inference settings run Nitro for uma-s-1p2p1, through both the
@@ -160,6 +163,7 @@ def test_default_settings_run_nitro(pretrained_model_name):
     _assert_runs_nitro(calc.predictor)
 
 
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 def test_calculator(pretrained_model_name, caplog):
     """
     The ASE calculator drop-in returns finite energy, forces and stress.
@@ -181,6 +185,7 @@ def test_calculator(pretrained_model_name, caplog):
     _assert_runs_nitro(calc.predictor)
 
 
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 def test_recovers_from_stale_edge_capacity(pretrained_model_name, monkeypatch):
     """
     Discard an undersized graph and replay with a remeasured capacity.

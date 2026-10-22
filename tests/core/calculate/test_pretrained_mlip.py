@@ -30,7 +30,7 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from tests.conftest import get_predict_unit_for_test
 
-pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")]
 
 
 # Every test in this file exercises the name-vs-path dispatch infrastructure
@@ -49,6 +49,7 @@ def _skip_under_path_sweep(pretrained_checkpoint):
         )
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", refs=True)
 def test_get_predict_unit_by_name(pretrained_checkpoint):
     """Registered name → predictor with populated external refs."""
     predictor = pretrained_mlip.get_predict_unit(pretrained_checkpoint, device="cpu")
@@ -72,6 +73,7 @@ def test_get_predict_unit_for_test_by_path(pretrained_checkpoint):
     assert predictor.form_elem_refs == {}, "path-load should leave form_elem_refs empty"
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_name_and_path_forward_match(pretrained_checkpoint):
     """
     Forward pass on a multi-atom system must agree between name-load and
@@ -103,6 +105,7 @@ def test_get_predict_unit_unknown_name_raises_keyerror():
         pretrained_mlip.get_predict_unit("definitely-not-a-real-model", device="cpu")
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", refs=True)
 def test_get_predict_unit_for_test_dispatches_on_path(pretrained_checkpoint):
     """
     get_predict_unit_for_test dispatches path-vs-name: a real filesystem
@@ -135,6 +138,7 @@ def test_get_predict_unit_for_test_symlink(tmp_path, pretrained_checkpoint):
     assert predictor.form_elem_refs == {}
 
 
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_from_model_checkpoint_path_behavior_unchanged(pretrained_checkpoint):
     """
     Regression guard: FAIRChemCalculator.from_model_checkpoint with a path
