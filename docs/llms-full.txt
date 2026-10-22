@@ -3292,7 +3292,7 @@ As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)
 
-The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.
+The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a baseline for models trained only on OMol25.
 
 ## Citing
 
@@ -3383,7 +3383,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure label in the initial or relaxed structures of the  WBM dataset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
