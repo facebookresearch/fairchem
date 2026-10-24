@@ -20,20 +20,20 @@ As part of the ODAC25 release, we released two sets of models:
 2. eSEN models trained only on ODAC25, available at the [ODAC25 HuggingFace site](https://huggingface.co/facebook/ODAC25)
 
 The UMA models were only trained on CO₂ and H₂O adsorbates, and are competitive with
-the eSEN models for these adsorbates. Since the UMA models were not trained on 
+the eSEN models for these adsorbates. Since the UMA models were not trained on
 N₂ and O₂, we strongly recommend using the eSEN models for these.
 
 If you use the ODAC25 trained models, please cite the following paper:
 
 ```bib
 @misc{sriram2025odac25,
-    title={The Open DAC 2025 Dataset for Sorbent Discovery in Direct Air Capture}, 
+    title={The Open DAC 2025 Dataset for Sorbent Discovery in Direct Air Capture},
     author={Anuroop Sriram and Logan M. Brabson and Xiaohan Yu and Sihoon Choi and Kareem Abdelmaqsoud and Elias Moubarak and Pim de Haan and Sindy Löwe and Johann Brehmer and John R. Kitchin and Max Welling and C. Lawrence Zitnick and Zachary Ulissi and Andrew J. Medford and David S. Sholl},
     year={2025},
     eprint={},
     archivePrefix={arXiv},
     primaryClass={},
-    url={}, 
+    url={},
 }
 ```
 

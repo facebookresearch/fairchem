@@ -665,7 +665,7 @@ def worker_script(
 # TODO have a ray autoscaler nodeprovider based on this, e.g. https://github.com/TingkaiLiu/Ray-SLURM-autoscaler/blob/main/slurm/node_provider.py
 class RayCluster:
     """
-    A RayCluster offers tools to start a Ray cluster (head and wokers) on slurm with the correct settings.
+    A RayCluster offers tools to start a Ray cluster (head and workers) on slurm with the correct settings.
 
     args:
 

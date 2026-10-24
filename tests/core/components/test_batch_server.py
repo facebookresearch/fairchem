@@ -67,8 +67,9 @@ def test_batch_config_rejects_max_concurrent_batches():
 
 
 def test_model_spec_default_preset_has_canonical_identity():
+    # The server batches requests from different systems: the default is batch.
     implicit = ModelSpec("x")
-    explicit = ModelSpec("x", "default")
+    explicit = ModelSpec("x", "batch")
 
     assert implicit.inference_settings == explicit.inference_settings
     assert implicit.model_id == explicit.model_id
@@ -120,7 +121,10 @@ def test_model_spec_rejects_unknown_preset_at_construction():
 
 
 def test_model_spec_model_id_is_stable():
-    assert ModelSpec("x").model_id == "x-7aea04de3f8a"
+    # model_id hashes every InferenceSettings field, so this value changes
+    # intentionally whenever a setting or the default preset changes (here:
+    # ModelSpec's default became the batch preset).
+    assert ModelSpec("x").model_id == "x-7c7bf9215488"
 
 
 def test_model_spec_auto_source_does_not_alias_registry_model():

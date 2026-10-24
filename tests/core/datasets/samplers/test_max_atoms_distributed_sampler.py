@@ -125,7 +125,7 @@ def test_sampler_multi_rank(
 
     # assert all ranks have more than 0 sample
     assert all(len(x) > 0 for x in rank_samples)
-    # assert all ranks have identical nubmer of batches
+    # assert all ranks have identical number of batches
     assert len(set(len(x) for x in rank_samples)) == 1
     # assert all ranks have unique sample indices, only if drop_last is true
     if drop_last:

@@ -35,11 +35,11 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 
 1. `desorption` indicates the reaction type (dissociation and transfer are the other possibilities)
 2. `id` identifies that the material belongs to the validation in domain split (ood - out of domain is th e other possibility)
-3. `83` is the task id. This does not provide relavent information
+3. `83` is the task id. This does not provide relevant information
 4. `2409` is the bulk index of the bulk used in the ocdata bulk pickle file
 5. `9` is the reaction index. for each reaction type there is a reaction pickle file in the repository. In this case it is the 9th entry to that pickle file
-6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number cooresponds to the shift value. In this case the 4th shift enumerated was the one used.
-7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distiguish any of the trajectories from one another.
+6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number corresponds to the shift value. In this case the 4th shift enumerated was the one used.
+7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distinguish any of the trajectories from one another.
 
 
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:

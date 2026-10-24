@@ -177,7 +177,7 @@ class AseReadDataset(AseAtomsDataset):
     such as LMDB.
 
     For a full list of ASE-readable filetypes, see
-    https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+    https://docs.ase-lib.org/ase/io/io.html
 
     args:
         config (dict):
@@ -241,7 +241,7 @@ class AseReadDataset(AseAtomsDataset):
             file_path = self.ids[idx]
             atoms = ase.io.read(file_path, **self.ase_read_args)
         except Exception as err:
-            warnings.warn(f"{err} occured for: {idx}", stacklevel=2)
+            warnings.warn(f"{err} occurred for: {idx}", stacklevel=2)
             raise err
 
         if "sid" not in atoms.info:
@@ -266,7 +266,7 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
     such as LMDB.
 
     For a full list of ASE-readable filetypes, see
-    https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+    https://docs.ase-lib.org/ase/io/io.html
 
     args:
         config (dict):
@@ -349,7 +349,7 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
             try:
                 structures = ase.io.read(filename, **self.ase_read_args)
             except Exception as err:
-                warnings.warn(f"{err} occured for: {filename}", stacklevel=2)
+                warnings.warn(f"{err} occurred for: {filename}", stacklevel=2)
             else:
                 for i, _ in enumerate(structures):
                     ids.append(f"{filename} {i}")
@@ -364,7 +364,7 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
                 int(identifiers[-1])
             ]
         except Exception as err:
-            warnings.warn(f"{err} occured for: {idx}", stacklevel=2)
+            warnings.warn(f"{err} occurred for: {idx}", stacklevel=2)
             raise err
 
         if "sid" not in atoms.info:
@@ -388,7 +388,7 @@ class AseDBDataset(AseAtomsDataset):
     with a variety of backends including JSON, SQLite, and database server options.
 
     For more information, see:
-    https://databases.fysik.dtu.dk/ase/ase/db/db.html
+    https://docs.ase-lib.org/ase/db/db.html
 
     args:
         config (dict):

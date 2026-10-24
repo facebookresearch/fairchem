@@ -66,10 +66,13 @@ def get_model(
     if not released:
         uma_pred = pretrained_mlip.load_predict_unit(
             model_name,
+            inference_settings="high-precision",
             device="cuda",
         )
     else:
-        uma_pred = pretrained_mlip.get_predict_unit(model_name, device="cuda")
+        uma_pred = pretrained_mlip.get_predict_unit(
+            model_name, inference_settings="high-precision", device="cuda"
+        )
     return uma_pred
 
 
