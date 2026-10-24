@@ -27,7 +27,7 @@ VASP_FLAGS = {
     "xc": "PBE",
     "pp_version": "54",
 }
-# This is the setting for bulk optmization.
+# This is the setting for bulk optimization.
 # Only use when expanding the bulk_db with other crystal structures.
 BULK_VASP_FLAGS = {
     "ibrion": 1,

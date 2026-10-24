@@ -18,7 +18,7 @@ _test_db = {
     1: (ase.Atoms(symbols="C", pbc="False"), "*C", np.array([0]), "rxn_2"),
 }
 
-# Used to test backwards compatability with old database formats
+# Used to test backwards compatibility with old database formats
 _test_db_old = {
     0: (ase.Atoms(symbols="H", pbc="False"), "*H", np.array([0])),
 }

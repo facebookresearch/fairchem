@@ -746,6 +746,43 @@ Choose your task based on the application domain. Each task corresponds to a spe
 *OC20 was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.
 :::
 
+(uma-s-1p2p1-fine-tunes)=
+## UMA-S-1.2.1 fine-tunes: D4rev and r²SCAN
+
+`uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` are two fine-tuned variants of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro. Each has a single task with a different level of theory than the corresponding task of `uma-s-1p2p1`.
+
+| Model name | Task | Level of theory | Training data | Use it for |
+|------|------|------|------|------|
+| `uma-s-1p2p1-ft-d4rev` | `omol` | ωB97M-D4rev, dispersion included | OMol25-4M | molecules, noncovalent interactions, molecular liquids and crystals |
+| `uma-s-1p2p1-ft-r2scan` | `omat` | r²SCAN, not spin-polarized, no dispersion | [MAD-1.6](https://arxiv.org/abs/2603.02089) | most inorganic and mixed chemical systems, add dispersion with `DFTD3Calculator(..., functional="r2scan")` |
+
+`uma-s-1p2p1-ft-d4rev` was fine-tuned on approximately 4 million structures from the OMol25 dataset, whose labels were recomputed at the ωB97M-D4rev level of theory.
+
+`uma-s-1p2p1-ft-r2scan` was trained on [MAD-1.6](https://arxiv.org/abs/2603.02089), an r²SCAN dataset from the Laboratory of Computational Science and Modelling (COSMO), EPFL. We thank the MAD authors for making it available.
+
+Do not add dispersion to `uma-s-1p2p1-ft-d4rev`. We recommend using `uma-s-1p2p1-ft-r2scan` with `DFTD3Calculator(..., functional="r2scan")`.
+
+```python
+from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
+
+# molecules: wB97M-D4rev (dispersion is already included, do not add D3)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-d4rev", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omol")
+
+# materials: r2SCAN + D3(BJ)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-r2scan", device="cuda")
+calc = DFTD3Calculator(
+    FAIRChemCalculator(predictor, task_name="omat"), functional="r2scan", device="cuda"
+)
+```
+
+:::{warning}
+- `uma-s-1p2p1-ft-r2scan` **is not spin-polarized** and describes every system as non-magnetic. Do not use it for magnetic systems or for cohesive energies, as isolated atoms are also often strongly magnetic; use `uma-s-1p2p1` with the `omat` task for those instead.
+- Each model has only one task (`omat` or `omol`). Charge and spin multiplicity work in `uma-s-1p2p1-ft-d4rev` as in `uma-s-1p2p1`'s `omol` task.
+- Both models are fine-tuned on less data than the original UMA-S-1.2.1 model. Often the latter is more accurate at predicting DFT labels at its corresponding levels of theory.
+- No isolated-atom reference energies are shipped; single-atom energies from the model might be unreliable.
+:::
+
 ---
 
 Source: `docs/core/uma_changelog.md`
@@ -761,6 +798,42 @@ This page documents the release history of UMA models, including new features, i
 UMA 1.0 checkpoints are no longer supported (their MoE `include_self` behavior diverges from later releases); loading one raises a `RuntimeError`. To use a 1.0 checkpoint, `pip install 'fairchem-core<=2.21.0'`.
 
 Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without one) is auto-tagged `model_id = "UMA-1.1"` in memory; UMA 1.2+ already carry `model_id`; a checkpoint with neither `model_id` nor `backbone.model_version` is rejected. When training, set `model_id` on the model config (e.g. `model_id: UMA-1.2.1`).
+
+---
+
+## UMA-S-1.2.1-FT-D4rev and UMA-S-1.2.1-FT-r2SCAN — October 2026
+
+:::{admonition} New models
+:class: tip
+
+**Two fine-tunes of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro.**
+:::
+
+- `uma-s-1p2p1-ft-d4rev`: `omol` task at the ωB97M-D4rev level of theory, fine-tuned on approximately 4 million OMol25 structures recomputed with ωB97M-D4rev labels.
+- `uma-s-1p2p1-ft-r2scan`: `omat` task at the r²SCAN level of theory, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089).
+
+See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations and acknowledgements.
+
+---
+
+## UMA Nitro and D3 dispersion — October 2026
+
+- **UMA Nitro** is the default inference mode and is much faster than turbo for single-GPU MD and relaxations. It runs `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on Ampere, Hopper and Blackwell GPUs. Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
+  On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
+  and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
+  with support for systems up to **15,000 atoms**.
+- **`DFTD3Calculator`** adds GPU DFT-D3(BJ) energies, forces and analytic stresses to any ASE calculator, with `pbe` and `r2scan` presets. See [Adding a DFT-D3(BJ) dispersion correction](common_tasks/ase_calculator.md#adding-a-dft-d3-bj-dispersion-correction).
+
+---
+
+## Library change — the default inference mode is nitro, and turbo is no longer available
+
+- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (and the fine-tunes of it on Nitro's checkpoint allowlist) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
+- The previous default (full FP32 with `merge_mole + compile`) is now `inference_settings="high-precision"`.
+- **Breaking:** `turbo` is no longer available; please use `nitro` (the default). Its former settings are `inference_settings="multigpu"`, which multi-worker inference (`workers > 1`) uses.
+- The batch server's `ModelSpec` and the torch-sim interface default to `"batch"`.
+- Fallback warnings name the settings that replace the requested ones.
+- On Linux x86_64 and aarch64, `nvidia-cutlass-dsl` and `cuda-python` are now installed with `fairchem-core`.
 
 ---
 
@@ -1059,18 +1132,21 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 base_calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Use "pbe" for PBE-trained models such as UMA's OMat head, or "r2scan"
-# for models fine-tuned on r2SCAN data.
+# for models fine-tuned on r2SCAN data such as uma-s-1p2p1-ft-r2scan.
 calc = DFTD3Calculator(base_calc, functional="pbe", device="cuda")
 atoms.calc = calc
 ```
 
 The wrapper adds the D3 energy, forces, and analytic stress to the base
-calculator. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
+calculator, computed on the GPU with the `nvalchemiops` DFT-D3 kernels, so it
+adds little cost to UMA Nitro MD. Do not add D3 to models whose training labels
+already include dispersion, such as the `omol` task (ωB97M-V) or
+`uma-s-1p2p1-ft-d4rev`. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
 cutoff, and C5 smoothing over the outer 20% of the cutoff.
 Pass `param_file` and `auto_download=False` to use a
 local D3 parameter table without network access.
@@ -1126,9 +1202,39 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
-## Default mode
+## Default mode (nitro)
 
-UMA defaults to the `merge_mole + compile` fast mode with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+The default mode is `nitro`, and we recommend it for MD and other standard single-system workflows such as relaxations. For `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on an Ampere, Hopper or Blackwell GPU (compute capability 8.x-12.x), it runs UMA Nitro, a standalone model with fused Triton and CuTe kernels for single-system energy, force, and stress evaluation. Nitro is much faster than turbo (now `multigpu`) for single-GPU MD and relaxations. Anything Nitro cannot serve (another checkpoint, the CPU, an older GPU, multi-worker inference with `workers > 1`, a batch, a change in composition, task, charge, or spin, Hessians) falls back to different inference settings. Every fallback prints a warning naming the settings now in use.
+
+```{code-cell} python3
+:tags: [skip-execution]
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
+print(predictor.inference_settings.nitro)  # True when Nitro runs
+```
+
+On Hopper and Blackwell GPUs, Nitro computes with TF32 matrix multiplies (multigpu does so on every GPU), so the predictor warns once that higher-order derivatives such as phonons are less accurate. Use `inference_settings="high-precision"` for standard FP32 precision.
+
+Nitro sizes its graph buffers to the number of edges measured on the first evaluation times an edge margin, 1.3 by default (`UMA_NITRO_EDGE_MARGIN`). The margin leaves room for the graph to grow as atoms move; if it overflows, Nitro measures the graph again and retries, which is slow. A smaller margin is faster per step but overflows more often.
+
+:::{admonition} Acknowledgement
+:class: tip
+Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
+:::
+
+:::{note}
+The `turbo` mode is no longer available. Please use `nitro` (the default) instead; for multi-worker inference, use `multigpu`, which has turbo's former settings.
+:::
+
+## High-precision mode
+
+High-precision mode uses the `merge_mole + compile` fast path with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="high-precision"
+)
+```
 
 ## Batch mode
 
@@ -1140,19 +1246,19 @@ predictor = pretrained_mlip.get_predict_unit(
 )
 ```
 
-## Turbo mode
+## Multigpu mode
 
-Turbo mode uses the same `merge_mole + compile` fast path as default mode and additionally enables TF32. TF32 can improve performance on compatible hardware at a small precision trade-off. Similar to default mode, any changes in composition, task, charge, and spin across different evaluations trigger a fallback to the unoptimized execution path.
+Like Nitro, multigpu mode (formerly `turbo`) is a reduced-precision mode: merged MOLE weights and `torch.compile`, with TF32 matrix multiplies for speed. Use it with `workers > 1`: Nitro runs on a single GPU, so multi-worker inference uses these settings. It falls back to the slower path if composition, task, charge, or spin changes.
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 ```
 
 ## Custom modes for advanced users
 
-The advanced user might quickly see that **default**, **batch**, and **turbo** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
+The advanced user might quickly see that **default**, **high-precision**, **batch**, and **multigpu** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
 
 | Setting Flag  | Description |
 | ----- | ----- |
@@ -1230,7 +1336,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2p1", inference_settings="multigpu", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
@@ -2770,7 +2876,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
 * Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
-For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
+For a detailed description of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
@@ -3057,12 +3163,12 @@ orca.gbw.zstd0      : 9462880 bytes
 import numpy as np
 
 # Load the NPZ file
-with np.load('density_mat.npz') as loaded_data:
-    dens_vector = loaded_data['orca.scfp']
+with np.load("density_mat.npz") as loaded_data:
+    dens_vector = loaded_data["orca.scfp"]
 
 # Re-inflate the symmetric matrix
 n = (np.sqrt(8 * len(dens_vector) + 1) - 1) // 2
-mat = np.zeros((n,n))
+mat = np.zeros((n, n))
 mat[np.triu_indices(n)] = dens_vector
 mat = mat + mat.T - np.diag(mat.diagonal())
 ```
@@ -3083,9 +3189,9 @@ for idx in indices:
     # Check if this is a system you care about.
     is_relevant = is_atoms_object_relevant(atoms)
     if is_relevant:
-	# Extract the relative path that matches the Argonne cluster
-       relative_dir = os.path.dirname(atoms.info["source"])
-	argonne_paths.append(relative_dir)
+        # Extract the relative path that matches the Argonne cluster
+        relative_dir = os.path.dirname(atoms.info["source"])
+        argonne_paths.append(relative_dir)
 ```
 
 ## How to Access the Data
@@ -3186,7 +3292,7 @@ As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)
 
-The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the forseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.
+The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a baseline for models trained only on OMol25.
 
 ## Citing
 
@@ -3277,7 +3383,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure lable in the intitial or relaxed structures of the  WBM datset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
@@ -3353,7 +3459,7 @@ For example to read the **rattled-relax** subdataset,
 from fairchem.core.datasets import AseDBDataset
 
 dataset_path = "/path/to/omat24/train/rattled-relax"
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 
 dataset = AseDBDataset(config=dict(src=dataset_path, **config_kwargs))
 
@@ -3365,7 +3471,7 @@ To read more than one subdataset you can simply pass a list of subdataset paths,
 ```python
 from fairchem.core.datasets import AseDBDataset
 
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 dataset_paths = [
     "/path/to/omat24/train/rattled-relax",
     "/path/to/omat24/train/rattled-1000-subsampled",
@@ -4601,7 +4707,7 @@ Source: `docs/catalysts/datasets/oc20dense.md`
 
 ## Overview
 
-The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so aquisition of it is an important task.
+The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so acquisition of it is an important task.
 
 ## File Contents and Download
 |Splits |Size of compressed version (in bytes)  |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -4664,11 +4770,11 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 
 1. `desorption` indicates the reaction type (dissociation and transfer are the other possibilities)
 2. `id` identifies that the material belongs to the validation in domain split (ood - out of domain is th e other possibility)
-3. `83` is the task id. This does not provide relavent information
+3. `83` is the task id. This does not provide relevant information
 4. `2409` is the bulk index of the bulk used in the ocdata bulk pickle file
 5. `9` is the reaction index. for each reaction type there is a reaction pickle file in the repository. In this case it is the 9th entry to that pickle file
-6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number cooresponds to the shift value. In this case the 4th shift enumerated was the one used.
-7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distiguish any of the trajectories from one another.
+6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number corresponds to the shift value. In this case the 4th shift enumerated was the one used.
+7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distinguish any of the trajectories from one another.
 
 
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
@@ -4758,7 +4864,7 @@ Source: `docs/catalysts/datasets/ocx24.md`
 In this work, we seek to directly bridge the gap between computational descriptors and experimental outcomes for heterogeneous catalysis. We consider two important green chemistries: the hydrogen evolution reaction and the electrochemical reduction of carbon dioxide. To do this, we created a curated dataset of experimental results with materials synthesized and tested in a reproducible manner under industrially relevant conditions. We used this data to build models to directly predict experimental outcomes using computational features. For more information, please read the manuscript [paper](http://arxiv.org/abs/2411.11783).
 
 ## Experimental datasets
-To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data is all publically available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
+To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data are all publicly available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
 
 ## Computational datasets
 |Splits |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -5857,7 +5963,7 @@ As a post-processing step we check to see if:
 3. the adsorbate intercalated
 4. the surface has changed
 
-We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
+We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will omit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
 To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
 
@@ -5886,7 +5992,7 @@ for file_outer in glob("data/adslabs/*"):
         rx_id = file.split("/")[-1].split(".")[0]
         traj = ase.io.read(file, ":")
 
-        # Check to see if the trajectory is anomolous
+        # Check to see if the trajectory is anomalous
         detector = DetectTrajAnomaly(traj[0], traj[-1], traj[0].get_tags())
         anom = (
             detector.is_adsorbate_dissociated()
@@ -6462,7 +6568,7 @@ To generalize an interactive visualization, use `ase gui` from the command line 
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-# Make an interative html file of the optimized neb trajectory
+# Make an interactive html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
 ```
@@ -6737,7 +6843,7 @@ print(ase_atoms)
 
 ### Converting to other structure formats
 
-From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
+From an `ase.Atoms` object (see previous section), it is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
 :tags: ["skip-execution"]
@@ -6902,7 +7008,7 @@ For IS2RE / IS2RS training, validation and test sets, we provide precomputed LMD
 
 ## DDEC Charges
 
-We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calcuations failed for them.
+We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calculations failed for them.
 
 |Size of compressed version (in bytes)    |Size of uncompressed version (in bytes)    | MD5 checksum (download link)    |
 |---    |---    |---    |
@@ -7150,7 +7256,7 @@ To account for this deformation, it is vital to use the most energetically favor
 
 1. The MOF does not deform, so the energies of the relaxed empty MOF and the MOF in the adsorbed state are the same
 2. The MOF deforms to a less energetically favorable geometry than its ground state
-3. The MOF locates a new energetically favorable geoemtry relative to the empty MOF relaxation
+3. The MOF locates a new energetically favorable geometry relative to the empty MOF relaxation
 
 The first outcome requires no additional computation because the MOF rigidity assumption is valid. The second outcome represents physical and reversible deformation where the MOF returns to its empty ground state upon removal of the guest molecule. The third outcome is often the result of the guest molecule breaking local symmetry. We also found cases in ODAC in which both outcomes 2 and 3 occur within the same MOF.
 
@@ -7228,7 +7334,7 @@ $$ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MO
 $$ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}$$
 
 
-$E_{\mathrm{int}}$ describes host host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
+$E_{\mathrm{int}}$ describes host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
 
 $$ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}$$
 

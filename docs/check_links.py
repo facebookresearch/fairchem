@@ -1,5 +1,10 @@
-#!/usr/bin/env python3
-"""Check links in the documentation sources and fail on broken ones.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
+Check links in the documentation sources and fail on broken ones.
 
 The checker is split into two tiers so the per-PR gate is deterministic and the
 flaky part (reaching the public internet) runs as a scheduled monitor instead:
@@ -39,6 +44,7 @@ Usage:
     python docs/check_links.py --no-external    # internal only (CI PR gate, offline)
     python docs/check_links.py --workers 16     # concurrency for external fetches
 """
+
 from __future__ import annotations
 
 import argparse
@@ -155,9 +161,7 @@ def is_checkable_internal(target: str) -> bool:
     if target.startswith(("http://", "https://", "mailto:", "tel:", "#")):
         return False
     # template placeholders / role syntax we cannot resolve on disk
-    if target.startswith(("{", "%")) or "{{" in target or " " in target:
-        return False
-    return True
+    return not (target.startswith(("{", "%")) or "{{" in target or " " in target)
 
 
 def _display_path(src: Path, docs_dir: Path) -> str:
@@ -238,7 +242,11 @@ def check_external(url: str, timeout: int, retries: int) -> tuple[str, str]:
     # No clear 2xx/3xx and no authoritative GET 404. A hard DNS/connection
     # failure is fatal; anything else (timeouts, HEAD-only 404, gated) is a warn.
     low = last.lower()
-    if "name or service not known" in low or "nodename nor servname" in low or "no address" in low:
+    if (
+        "name or service not known" in low
+        or "nodename nor servname" in low
+        or "no address" in low
+    ):
         return "error", f"{last} (DNS failure)"
     return "warn", f"{last} (unverified)"
 
@@ -250,7 +258,9 @@ def main() -> int:
     ap.add_argument("--no-external", dest="external", action="store_false")
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--retries", type=int, default=2)
-    ap.add_argument("--workers", type=int, default=16, help="concurrent external fetches")
+    ap.add_argument(
+        "--workers", type=int, default=16, help="concurrent external fetches"
+    )
     args = ap.parse_args()
 
     docs_dir = Path(args.docs_dir).resolve()
@@ -295,6 +305,7 @@ def main() -> int:
 
     ext_ok = ext_warn = ext_err = 0
     if args.external:
+
         def _probe(item: tuple[str, list[Path]]) -> tuple[str, str, str]:
             url, srcs = item
             level, msg = check_external(url, args.timeout, args.retries)

@@ -51,7 +51,7 @@ class Geometry(ABC):
             point (np.array): point in plane
 
         Returns:
-            (np.array) Paramterization of plane
+            (np.array) Parameterization of plane
         """
         return np.array((*vec, np.dot(vec, point)))
 

@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 Script to generate gifs from traj
 
 Note:
-This is just a quick way to generate gifs and visalizations from traj, there are many parameters and settings in the code that people can vary to make visualizations better. We have chosen these settings as this seem to work fine for most of our systems.
+This is just a quick way to generate gifs and visualizations from traj, there are many parameters and settings in the code that people can vary to make visualizations better. We have chosen these settings as this seem to work fine for most of our systems.
 
 Requirements:
 

@@ -145,8 +145,12 @@ def compare_checkpoints(stage1_path: str, stage2_path: str):
 
     all_match = True
     for task in ["oc20", "oc22", "oc25", "omat", "odac", "omc", "omol"]:
-        calc1 = FAIRChemCalculator.from_model_checkpoint(stage1_path, task_name=task)
-        calc2 = FAIRChemCalculator.from_model_checkpoint(stage2_path, task_name=task)
+        calc1 = FAIRChemCalculator.from_model_checkpoint(
+            stage1_path, task_name=task, inference_settings="high-precision"
+        )
+        calc2 = FAIRChemCalculator.from_model_checkpoint(
+            stage2_path, task_name=task, inference_settings="high-precision"
+        )
 
         for sys_name, atoms in systems.items():
             atoms1 = atoms.copy()
