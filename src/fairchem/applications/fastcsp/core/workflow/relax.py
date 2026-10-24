@@ -326,10 +326,10 @@ def relax_structures(
                 traj_path = traj_folder / f"{structure_id}.traj"
                 atoms.info["traj_path"] = str(traj_path)
 
-        # Special handling for OMol tasks - setting spin and charge
+        # Special handling for OMol tasks - setting spin multiplicity and charge
         if "omol" in relax_config["calculator"]:
             for atoms in atoms_list:
-                atoms.info.update({"spin": 1, "charge": 0})
+                atoms.info.update({"spin_multiplicity": 1, "charge": 0})
 
         # Perform relaxation for all structures
         if relax_config["optimizer"] == "batch_lbfgs":
