@@ -55,10 +55,15 @@ class UMANitroNotSupportedError(RuntimeError):
 
 def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
     """
-    UMA-specific validation: handle charge/spin for OMOL task.
+    UMA-specific validation: handle charge/spin multiplicity for OMOL task.
 
-    Sets default values for charge and spin in atoms.info and validates
-    they are within acceptable ranges.
+    Sets default values for charge and spin multiplicity in atoms.info and
+    validates they are within acceptable ranges.
+
+    The spin multiplicity (2S+1) may be set as ``spin_multiplicity``
+    (preferred) or the legacy ``spin`` key in ``atoms.info``. If both
+    are set they must agree. The resolved value is written back to
+    both ``spin_multiplicity`` and ``spin``.
 
     Args:
         atoms: ASE Atoms object
@@ -68,6 +73,8 @@ def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
     import logging as log_module
 
     import numpy as np
+
+    from fairchem.core.datasets.atomic_data import resolve_spin_multiplicity
 
     _logger = logger if logger is not None else log_module
 
@@ -81,17 +88,24 @@ def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
             )
         atoms.info["charge"] = DEFAULT_CHARGE
 
-    # Set spin defaults (OMOL uses spin=1, others use spin=0)
-    if "spin" not in atoms.info:
+    # Resolve the spin multiplicity (2S+1) from its aliases. Raises if
+    # e.g. ``spin`` and ``spin_multiplicity`` are both set and disagree.
+    spin = resolve_spin_multiplicity(atoms.info)
+    if spin is None:
         if task_name == UMATask.OMOL.value:
-            atoms.info["spin"] = DEFAULT_SPIN_OMOL
+            spin = DEFAULT_SPIN_OMOL
             _logger.warning(
                 "task_name='omol' detected, but spin multiplicity is not set in "
-                "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
-                "representing the spin multiplicity from 0 to 100."
+                "atoms.info. Defaulting to spin_multiplicity=1 (spin=1). Ensure "
+                "spin_multiplicity is an integer representing the spin "
+                "multiplicity (2S+1) from 1 to 100."
             )
         else:
-            atoms.info["spin"] = DEFAULT_SPIN
+            spin = DEFAULT_SPIN
+    # Canonicalize: downstream code reads ``spin``; keep the unambiguous
+    # ``spin_multiplicity`` in sync with it.
+    atoms.info["spin"] = spin
+    atoms.info["spin_multiplicity"] = spin
 
     # Validate charge range
     charge = atoms.info["charge"]
@@ -106,17 +120,40 @@ def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
             f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
         )
 
-    # Validate spin range
-    spin = atoms.info["spin"]
+    # Validate spin multiplicity range. 0 is the model's null spin token,
+    # used for non-omol tasks; a physical multiplicity (2S+1) is >= 1.
     if not isinstance(spin, (int, np.integer)):
         raise TypeError(
-            f"Invalid type for spin: {type(spin)}. "
-            "Spin must be an integer representing the spin multiplicity."
+            f"Invalid type for spin_multiplicity: {type(spin)}. "
+            "Spin multiplicity (set as 'spin_multiplicity' or the legacy "
+            "'spin') must be an integer representing the "
+            "spin multiplicity (2S+1)."
         )
     if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
         raise ValueError(
-            f"Invalid value for spin: {spin}. "
-            f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            f"Invalid value for spin_multiplicity: {spin}. "
+            f"Spin multiplicity must be within the range {SPIN_RANGE[0]} "
+            f"to {SPIN_RANGE[1]} (1 to 100 for the omol task; 0 is the "
+            "null spin token used for non-omol tasks)."
+        )
+
+    if task_name == UMATask.OMOL.value:
+        if spin == 0:
+            _logger.warning(
+                "task_name='omol' detected, but spin multiplicity is 0. "
+                "0 is not a valid spin multiplicity (2S+1 >= 1); it is the "
+                "model's null spin token, which the omol task never saw in "
+                "training. Set spin_multiplicity (or the legacy spin) in "
+                "atoms.info to an integer from 1 to 100, e.g. 1 for a "
+                "singlet, 2 for a doublet, 3 for a triplet."
+            )
+    elif charge != 0 or spin != 0:
+        _logger.warning(
+            f"task_name={task_name!r} detected with charge={charge} and "
+            f"spin_multiplicity={spin} (spin={spin}). Non-omol tasks were "
+            "trained only with charge=0 and spin=0 (the null spin token), "
+            "so nonzero values are an untrained input rather than ignored. "
+            "Set charge and spin_multiplicity/spin to 0 for non-omol tasks."
         )
 
 

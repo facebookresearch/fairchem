@@ -67,6 +67,38 @@ _REQUIRED_KEYS = [
 
 _OPTIONAL_KEYS = ["energy", "forces", "stress", "dataset"]
 
+# ``atoms.info`` keys for the spin multiplicity (2S+1). ``spin_multiplicity``
+# is the preferred, unambiguous name; ``spin`` is kept for backwards
+# compatibility. The internal ``AtomicData`` field remains ``spin`` so
+# existing datasets and checkpoints keep working.
+SPIN_MULTIPLICITY_KEYS = ("spin_multiplicity", "spin")
+
+
+def resolve_spin_multiplicity(info: dict) -> int | None:
+    """
+    Resolve the spin multiplicity (2S+1) from an ``atoms.info``-like dict.
+
+    Checks ``spin_multiplicity`` and the legacy ``spin`` key.
+    Returns ``None`` if neither is set.
+
+    Raises:
+        ValueError: If more than one key is set and they disagree.
+    """
+    present = {key: info[key] for key in SPIN_MULTIPLICITY_KEYS if key in info}
+    if not present:
+        return None
+    values = list(present.values())
+    if any(value != values[0] for value in values[1:]):
+        details = ", ".join(f"{key}={value!r}" for key, value in present.items())
+        raise ValueError(
+            f"Conflicting spin multiplicity values in atoms.info: {details}. "
+            "'spin_multiplicity' and 'spin' are aliases for "
+            "the spin multiplicity (2S+1); set only one of them, or make "
+            "them agree."
+        )
+    return values[0]
+
+
 # TODO: potential future keys
 # ["virials", "atom_attr", "edge_attr"]
 
@@ -477,19 +509,22 @@ class AtomicData:
                 )
             ]
         )
-        spin = torch.LongTensor(
-            [
-                (
-                    atoms.info.get("spin", 0)
-                    if r_data_keys is not None and "spin" in r_data_keys
-                    else 0
-                )
-            ]
+        # The spin multiplicity (2S+1) may be given as ``spin_multiplicity``
+        # (preferred) or the legacy ``spin`` key. Read it
+        # when any of those names is requested via ``r_data_keys``, or when
+        # an unambiguous alias is present in ``atoms.info``.
+        spin_requested = r_data_keys is not None and any(
+            key in r_data_keys for key in SPIN_MULTIPLICITY_KEYS
         )
+        if spin_requested or any(key in atoms.info for key in ("spin_multiplicity",)):
+            spin_value = resolve_spin_multiplicity(atoms.info)
+            if spin_value is None:
+                spin_value = 0
+        else:
+            spin_value = 0
+        spin = torch.LongTensor([spin_value])
 
         # NOTE: code assumes these are ints.. not tensors
-        # charge = atoms.info.get("charge", 0)
-        # spin = atoms.info.get("spin", 0)
         data = cls(
             pos=pos,
             atomic_numbers=atomic_numbers,
@@ -541,7 +576,10 @@ class AtomicData:
 
         atoms.info = {
             "charge": self.charge.item(),
+            # ``spin`` is the legacy name for the spin multiplicity (2S+1);
+            # write the unambiguous ``spin_multiplicity`` alongside it.
             "spin": self.spin.item(),
+            "spin_multiplicity": self.spin.item(),
         }
 
         if self.sid is not None:

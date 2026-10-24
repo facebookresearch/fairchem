@@ -123,9 +123,17 @@ class GSCDBRunner(CalculateRunner):
         for species in tqdm(chunk):
             atoms = self.input_data[species].copy()
             atoms.info["charge"] = int(atoms.info["charge"])
-            atoms.info["spin"] = int(
-                atoms.info.get("multiplicity", atoms.info.get("spin"))
+            # GSCDB inputs store the spin multiplicity (2S+1) as
+            # ``multiplicity``; normalize it to ``spin_multiplicity``
+            # (and its legacy alias ``spin``, kept in sync).
+            spin_multiplicity = int(
+                atoms.info.get(
+                    "spin_multiplicity",
+                    atoms.info.get("multiplicity", atoms.info.get("spin")),
+                )
             )
+            atoms.info["spin_multiplicity"] = spin_multiplicity
+            atoms.info["spin"] = spin_multiplicity
             atoms.calc = self.calculator
             try:
                 results[species] = {"energy": float(atoms.get_potential_energy())}

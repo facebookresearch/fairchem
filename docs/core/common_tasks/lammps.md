@@ -72,6 +72,8 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
+Charge and spin multiplicity are set in `lammps_fc_config.yaml` via `charge` and `spin_multiplicity`. `spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 = singlet, 2 = doublet, 3 = triplet); for the `omol` task it must be in the range 1–100 and defaults to 1 in the example config. For non-`omol` tasks, use `charge: 0` and `spin_multiplicity: 0` (the model's null spin token). The legacy config key `spin` is still accepted as a deprecated alias for `spin_multiplicity` (existing config files keep working; on the Hydra CLI, use `+spin=` since the key is no longer in the shipped config).
+
 ## Multi-GPU Parallelism
 
 Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.

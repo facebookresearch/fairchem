@@ -595,18 +595,20 @@ system supplies the domain-specific task.
 
 ## Example 1: calculate a molecular spin gap
 
-For the `omol` task, set the molecule's total charge and spin multiplicity in
-`atoms.info`. Here we compare singlet and triplet states of CH₂.
+For the `omol` task, set the molecule's total charge and spin multiplicity
+(2S+1) in `atoms.info`, using the `spin_multiplicity` key (`spin` is accepted
+as a legacy alias). For non-`omol` tasks, keep charge and spin at 0. Here we
+compare singlet and triplet states of CH₂.
 
 ```{code-cell} ipython3
 from ase.build import molecule
 
 singlet = molecule("CH2_s1A1d")
-singlet.info.update({"charge": 0, "spin": 1})
+singlet.info.update({"charge": 0, "spin_multiplicity": 1})
 singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 triplet = molecule("CH2_s3B1d")
-triplet.info.update({"charge": 0, "spin": 3})
+triplet.info.update({"charge": 0, "spin_multiplicity": 3})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 spin_gap = triplet.get_potential_energy() - singlet.get_potential_energy()
@@ -648,7 +650,7 @@ from ase.io import read
 atoms = read("my-structure.xyz")
 
 # Required for molecules evaluated with the omol task.
-atoms.info.update({"charge": 0, "spin": 1})
+atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 
 atoms.calc = FAIRChemCalculator(predictor, task_name="omol")
 energy = atoms.get_potential_energy()
@@ -714,7 +716,7 @@ Total known charge of the system (only used for `omol` task, defaults to 0)
 :::
 
 :::{card} Spin
-Total spin multiplicity of the system (only used for `omol` task, defaults to 1)
+Total spin multiplicity (2S+1) of the system, set as `spin_multiplicity` in `atoms.info` (`spin` is a legacy alias). Only varying for the `omol` task, where it defaults to 1; for all other tasks it must be 0, the model's null spin token (not a physical multiplicity).
 :::
 
 :::{card} Elemental Composition
@@ -735,12 +737,12 @@ Choose your task based on the application domain. Each task corresponds to a spe
 | Task | Dataset | DFT Level of Theory | Relevant Applications | Usage Notes |
 |------|---------|---------------------|----------------------|-------------|
 | **omol** | [OMol25](https://arxiv.org/abs/2505.08762) | wB97M-V/def2-TZVPD as implemented in ORCA6, including non-local dispersion. All solvation should be explicit. | Biology, organic chemistry, protein folding, small-molecule pharmaceuticals, organic liquid properties, homogeneous catalysis, polymers | Requires total charge and spin multiplicity. If you don't know what these are, you should be very careful if modeling charged or open-shell systems. This can be used to study radical chemistry or understand the impact of magnetic states on the structure of a molecule. All training data is aperiodic, so any periodic systems should be treated with some caution. Probably won't work well for inorganic materials. |
-| **omc** | [OMC25](https://arxiv.org/abs/2508.02651) | PBE+D3 as implemented in VASP. | Pharmaceutical packaging, bio-inspired materials, organic electronics, organic LEDs | UMA has not seen varying charge or spin multiplicity for the OMC task, and expects total_charge=0 and spin multiplicity=0 as model inputs. |
-| **omat** | [OMat24](https://arxiv.org/abs/2410.12771) | PBE/PBE+U as implemented in VASP using Materials Project suggested settings, except with VASP 54 pseudopotentials. No dispersion. | Inorganic materials discovery, solar photovoltaics, advanced alloys, superconductors, electronic materials, optical materials | UMA has not seen varying charge or spin multiplicity for the OMat task, and expects total_charge=0 and spin multiplicity=0 as model inputs. Spin polarization effects are included, but you can't select the magnetic state. Further, OMat24 did not fully sample possible spin states in the training data. |
-| **oc20** | [OC20*](https://arxiv.org/abs/2010.09990) | RPBE as implemented in VASP, with VASP5.4 pseudopotentials. No dispersion. | Renewable energy, catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC20 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. No oxides or explicit solvents are included in OC20. The model works surprisingly well for transition state searches given the nature of the training data, but you should be careful. RPBE works well for small molecules, but dispersion will be important for larger molecules on surfaces. |
-| **odac** | [ODAC23](https://arxiv.org/abs/2311.00341) | PBE+D3 as implemented in VASP, with VASP5.4 pseudopotentials. | Direct air capture, carbon capture and storage, CO2 conversion, catalysis | UMA has not seen varying charge or spin multiplicity for the ODAC task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The ODAC23 dataset only contains CO2/H2O water absorption, so anything more than might be inaccurate (e.g. hydrocarbons in MOFs). Further, there is a limited number of bare-MOF structures in the training data, so you should be careful if you are using a new MOF structure. |
-| **oc25** | [OC25](https://arxiv.org/abs/2509.17862) | RPBE+D3 as implemented in VASP, with VASP6.4 pseudopotentials, and dipole corrections. | Renewable energy, (electro)catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC25 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The model works surprisingly well for charged systems despite not being explicitly provided that information, but one should be careful. Work functions are not provided by UMA, subsequent DFT calculations are required to extract such information, if desired. Only available in UMA-1.2 |
- | **oc22** | [OC22](https://arxiv.org/abs/2206.08917) | PBE+U as implemented in VASP with VASP5.4 pseudopotentials and spin-polarization | Oxide catalysis or supports, energy conversion and storage | UMA has not seen varying charge or spin multiplicity for the OC22 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. No explicit solvents are included in OC22. Only available in UMA-1.2 |
+| **omc** | [OMC25](https://arxiv.org/abs/2508.02651) | PBE+D3 as implemented in VASP. | Pharmaceutical packaging, bio-inspired materials, organic electronics, organic LEDs | UMA has not seen varying charge or spin multiplicity for the OMC task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). |
+| **omat** | [OMat24](https://arxiv.org/abs/2410.12771) | PBE/PBE+U as implemented in VASP using Materials Project suggested settings, except with VASP 54 pseudopotentials. No dispersion. | Inorganic materials discovery, solar photovoltaics, advanced alloys, superconductors, electronic materials, optical materials | UMA has not seen varying charge or spin multiplicity for the OMat task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). Spin polarization effects are included, but you can't select the magnetic state. Further, OMat24 did not fully sample possible spin states in the training data. |
+| **oc20** | [OC20*](https://arxiv.org/abs/2010.09990) | RPBE as implemented in VASP, with VASP5.4 pseudopotentials. No dispersion. | Renewable energy, catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC20 task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). No oxides or explicit solvents are included in OC20. The model works surprisingly well for transition state searches given the nature of the training data, but you should be careful. RPBE works well for small molecules, but dispersion will be important for larger molecules on surfaces. |
+| **odac** | [ODAC23](https://arxiv.org/abs/2311.00341) | PBE+D3 as implemented in VASP, with VASP5.4 pseudopotentials. | Direct air capture, carbon capture and storage, CO2 conversion, catalysis | UMA has not seen varying charge or spin multiplicity for the ODAC task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). The ODAC23 dataset only contains CO2/H2O water absorption, so anything more than might be inaccurate (e.g. hydrocarbons in MOFs). Further, there is a limited number of bare-MOF structures in the training data, so you should be careful if you are using a new MOF structure. |
+| **oc25** | [OC25](https://arxiv.org/abs/2509.17862) | RPBE+D3 as implemented in VASP, with VASP6.4 pseudopotentials, and dipole corrections. | Renewable energy, (electro)catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC25 task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). The model works surprisingly well for charged systems despite not being explicitly provided that information, but one should be careful. Work functions are not provided by UMA, subsequent DFT calculations are required to extract such information, if desired. Only available in UMA-1.2 |
+ | **oc22** | [OC22](https://arxiv.org/abs/2206.08917) | PBE+U as implemented in VASP with VASP5.4 pseudopotentials and spin-polarization | Oxide catalysis or supports, energy conversion and storage | UMA has not seen varying charge or spin multiplicity for the OC22 task, and expects total_charge=0 and spin=0 as model inputs (0 is the model's null spin token, not a physical spin multiplicity, which is >= 1). No explicit solvents are included in OC22. Only available in UMA-1.2 |
 
 :::{note}
 *OC20 was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.
@@ -1558,7 +1560,8 @@ atoms:
 ```
 
 For molecular tasks, set `task_name: omol` and ensure total charge and spin
-multiplicity are present as `atoms.info["charge"]` and `atoms.info["spin"]`.
+multiplicity (2S+1) are present as `atoms.info["charge"]` and
+`atoms.info["spin_multiplicity"]` (the legacy key `spin` is also accepted).
 
 ## Outputs, checkpoints, and resume
 
@@ -1718,6 +1721,8 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
+Charge and spin multiplicity are set in `lammps_fc_config.yaml` via `charge` and `spin_multiplicity`. `spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 = singlet, 2 = doublet, 3 = triplet); for the `omol` task it must be in the range 1–100 and defaults to 1 in the example config. For non-`omol` tasks, use `charge: 0` and `spin_multiplicity: 0` (the model's null spin token). The legacy config key `spin` is still accepted as a deprecated alias for `spin_multiplicity` (existing config files keep working; on the Hydra CLI, use `+spin=` since the key is no longer in the shipped config).
+
 ## Multi-GPU Parallelism
 
 Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.
@@ -1842,7 +1847,7 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 
 # a molecule
 h2o = molecule("H2O")
-h2o.info.update({"charge": 0, "spin": 1})
+h2o.info.update({"charge": 0, "spin_multiplicity": 1})
 
 # a bulk
 pt = bulk("Pt")
@@ -1855,7 +1860,10 @@ add_adsorbate(slab, adsorbate, 2.0, "bridge")
 atomic_data_list = [
     # note that we put the molecule in a large box
     AtomicData.from_ase(
-        h2o, task_name="omol", r_data_keys=["spin", "charge"], molecule_cell_size=12
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin_multiplicity", "charge"],
+        molecule_cell_size=12,
     ),
     AtomicData.from_ase(pt, task_name="omat"),
     AtomicData.from_ase(slab, task_name="oc20"),
@@ -7489,11 +7497,11 @@ When using UMA, remember these key steps:
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
 :::{tip} OMOL Task Requirements
-For molecular calculations with the `omol` task, you must set spin and charge in `atoms.info`:
+For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as an alias for `spin_multiplicity`):
 ```python
-atoms.info.update({"spin": 1, "charge": 0})
+atoms.info.update({"spin_multiplicity": 1, "charge": 0})
 ```
-Spin is the multiplicity (1 for singlet, 2 for doublet, 3 for triplet, etc.).
+`spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 for singlet, 2 for doublet, 3 for triplet, etc.).
 :::
 
 We don't set a device here, so we get a warning about using a CPU device. You can ignore that. If a CUDA environment is available, a GPU may be used to speed up the calculations.
@@ -7509,12 +7517,12 @@ from ase.build import molecule
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
-singlet.info.update({"spin": 1, "charge": 0})
+singlet.info.update({"spin_multiplicity": 1, "charge": 0})
 singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 #  triplet CH2
 triplet = molecule("CH2_s3B1d")
-triplet.info.update({"spin": 3, "charge": 0})
+triplet.info.update({"spin_multiplicity": 3, "charge": 0})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 print(triplet.get_potential_energy() - singlet.get_potential_energy())
@@ -7590,7 +7598,7 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
-atoms.info.update(charge=0, spin=1)  # For omol
+atoms.info.update(charge=0, spin_multiplicity=1)  # For omol
 
 atoms.calc = calc
 
@@ -7738,7 +7746,7 @@ calc = FAIRChemCalculator(predictor, task_name="omol")
 from ase.vibrations import Vibrations
 
 n2 = Atoms("N2", [(0, 0, 0), (0, 0, 1.1)])
-n2.info.update({"spin": 1, "charge": 0})
+n2.info.update({"spin_multiplicity": 1, "charge": 0})
 n2.calc = calc
 
 BFGS(n2).run(fmax=0.01)
@@ -10959,11 +10967,13 @@ when one of those training domains matches your system.
 :::{admonition} How do I specify molecular charge and spin?
 :class: dropdown
 
-For `omol`, set total charge and spin multiplicity on the ASE object:
+For `omol`, set total charge and spin multiplicity (2S+1) on the ASE object:
 
 ```python
-atoms.info.update({"charge": 0, "spin": 1})
+atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 ```
+
+The legacy key `spin` is accepted as an alias for `spin_multiplicity`.
 
 Other tasks expect the values documented in the [UMA model guide](./core/uma.md).
 :::

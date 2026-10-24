@@ -47,18 +47,20 @@ system supplies the domain-specific task.
 
 ## Example 1: calculate a molecular spin gap
 
-For the `omol` task, set the molecule's total charge and spin multiplicity in
-`atoms.info`. Here we compare singlet and triplet states of CH₂.
+For the `omol` task, set the molecule's total charge and spin multiplicity
+(2S+1) in `atoms.info`, using the `spin_multiplicity` key (`spin` is accepted
+as a legacy alias). For non-`omol` tasks, keep charge and spin at 0. Here we
+compare singlet and triplet states of CH₂.
 
 ```{code-cell} ipython3
 from ase.build import molecule
 
 singlet = molecule("CH2_s1A1d")
-singlet.info.update({"charge": 0, "spin": 1})
+singlet.info.update({"charge": 0, "spin_multiplicity": 1})
 singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 triplet = molecule("CH2_s3B1d")
-triplet.info.update({"charge": 0, "spin": 3})
+triplet.info.update({"charge": 0, "spin_multiplicity": 3})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 spin_gap = triplet.get_potential_energy() - singlet.get_potential_energy()
@@ -100,7 +102,7 @@ from ase.io import read
 atoms = read("my-structure.xyz")
 
 # Required for molecules evaluated with the omol task.
-atoms.info.update({"charge": 0, "spin": 1})
+atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 
 atoms.calc = FAIRChemCalculator(predictor, task_name="omol")
 energy = atoms.get_potential_energy()
