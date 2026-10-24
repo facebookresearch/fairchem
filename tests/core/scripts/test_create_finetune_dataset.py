@@ -15,13 +15,18 @@ import tempfile
 import numpy as np
 import pytest
 import torch
+import yaml
 from ase import Atoms
 from ase.build import bulk, molecule
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import write
 from sklearn.model_selection import train_test_split
 
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 from fairchem.core.common.utils import get_timestamp_uid
+from fairchem.core.datasets import AseDBDataset
+from fairchem.core.scripts.create_finetune_dataset import write_ase_db
+from fairchem.core.scripts.create_uma_finetune_dataset import create_yaml
 from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 
@@ -240,6 +245,65 @@ def test_create_finetune_dataset(type, random_state):
         assert os.path.exists(
             os.path.join(tmpdirname, "dataset", "val", "data.0000.aselmdb")
         )
+
+
+def test_write_ase_db_preserves_charge_and_spin(tmp_path):
+    """
+    Charge/spin in atoms.info must survive xyz -> aselmdb -> training data.
+    """
+    atoms = molecule("H2O")
+    atoms.info["charge"] = -1
+    atoms.info["spin"] = 2
+    atoms.calc = SinglePointCalculator(
+        atoms, energy=-10.0, forces=np.zeros((len(atoms), 3))
+    )
+    xyz_path = tmp_path / "mol.xyz"
+    write(str(xyz_path), atoms, format="extxyz")
+
+    db_path = tmp_path / "data.0000.aselmdb"
+    _, _, successful, failed = write_ase_db((db_path, [xyz_path], 0))
+    assert successful
+    assert not failed
+
+    # The generated omol finetune config reads charge/spin from atoms.info.
+    dataset = AseDBDataset(
+        {"src": str(db_path), "a2g_args": {"r_data_keys": ["spin", "charge"]}}
+    )
+    assert dataset.get_atoms(0).info["charge"] == -1
+    assert dataset.get_atoms(0).info["spin"] == 2
+    data = dataset[0]
+    assert data.charge.item() == -1
+    assert data.spin.item() == 2
+
+
+@pytest.mark.parametrize(
+    "dataset_name, expect_r_data_keys",
+    [("omol", True), ("omat", False)],
+)
+def test_create_yaml_omol_reads_charge_and_spin(
+    tmp_path, dataset_name, expect_r_data_keys
+):
+    """
+    Only the generated omol config should ask from_ase to read charge/spin.
+    """
+    create_yaml(
+        train_path="train",
+        val_path="val",
+        force_rms=1.0,
+        linref_coeff=[0.0],
+        output_dir=tmp_path,
+        dataset_name=dataset_name,
+        regression_tasks="ef",
+        base_model_name="uma-s-1p1",
+    )
+    with open(tmp_path / "data" / "uma_conserving_data_task_energy_force.yaml") as f:
+        template = yaml.safe_load(f)
+    for split in ("train_dataset", "val_dataset"):
+        r_data_keys = template[split].get("a2g_args", {}).get("r_data_keys")
+        if expect_r_data_keys:
+            assert r_data_keys == ["spin", "charge"]
+        else:
+            assert r_data_keys is None
 
 
 def assert_efs_valid(energy, forces, stress):
