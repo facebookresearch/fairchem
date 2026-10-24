@@ -94,7 +94,7 @@ class DDPMTLoss(nn.Module):
         corrected_loss = loss * distutils.get_world_size() / global_samples
 
         if gp_utils.initialized():
-            # make this explict so its easier to reason about loss here
+            # make this explicit so its easier to reason about loss here
             # calling fix_gp_grad in non-gp has no affect
             return gp_utils.scale_backward_grad(corrected_loss)
         return corrected_loss

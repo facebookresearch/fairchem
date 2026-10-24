@@ -388,7 +388,7 @@ def compute_metrics(
 def mt_collater_adapter(
     tasks: list[Task], exclude_keys: list[str] = DEFAULT_EXCLUDE_KEYS
 ):
-    # this is required because the MTCollater needs the old json formated task config so we need to convert it here
+    # this is required because the MTCollater needs the old json formatted task config so we need to convert it here
     task_config_old = {}
     tasks = filter_inference_only_tasks(tasks)
     for task in tasks:
@@ -1040,7 +1040,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         for task in self.tasks:
             # This filters out all the datasets.splits that are in the current batch and
             # and are also included in the task. Remove the dataset.splits not in the task, since we
-            # wont compute metrics for those.
+            # won't compute metrics for those.
             # TODO overhaul the dataset names in task to avoid this filter?
             for dataset in filter(
                 lambda x: any(dset_name in x for dset_name in task.datasets),

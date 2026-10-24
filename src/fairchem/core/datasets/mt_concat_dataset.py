@@ -63,7 +63,7 @@ class ConcatDataset(Dataset[T_co]):
         # TODO setting data_object.dataset to dataset.split breaks the collater due to the task map
         #  we should clean that up by using a .dataset and .split keys for all data objects
         data_object.dataset_name = self.dataset_names[dataset_idx]
-        # TODO this should be ensured in the datasets themselves, rather than casting/redifining here?
+        # TODO this should be ensured in the datasets themselves, rather than casting/redefining here?
         data_object.fixed = data_object.fixed.long()
         data_object.atomic_numbers = data_object.atomic_numbers.long()
 

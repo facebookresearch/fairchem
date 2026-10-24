@@ -1,5 +1,10 @@
-#!/usr/bin/env python3
-"""Check links in the documentation sources and fail on broken ones.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
+Check links in the documentation sources and fail on broken ones.
 
 The checker is split into two tiers so the per-PR gate is deterministic and the
 flaky part (reaching the public internet) runs as a scheduled monitor instead:
@@ -17,8 +22,12 @@ flaky part (reaching the public internet) runs as a scheduled monitor instead:
   (e.g. HuggingFace gated models). These run on a schedule
   (``.github/workflows/check_links_external.yml``), not on every PR.
 
-Link syntaxes understood (over all ``docs/**/*.md`` sources, ignoring fenced
-code and ``{code-cell}`` blocks so example URLs inside code are not flagged):
+Sources scanned: all ``docs/**/*.md`` pages plus the user-facing READMEs that
+link into the published site (the repo-root ``README.md`` and every
+``src/**/README.md``), so a stale absolute link there is caught too.
+
+Link syntaxes understood (ignoring fenced code and ``{code-cell}`` blocks so
+example URLs inside code are not flagged):
 
 * inline links / images ``[text](target)`` / ``![alt](target)`` -- with
   balanced-parenthesis-aware target capture (so URLs like
@@ -35,6 +44,7 @@ Usage:
     python docs/check_links.py --no-external    # internal only (CI PR gate, offline)
     python docs/check_links.py --workers 16     # concurrency for external fetches
 """
+
 from __future__ import annotations
 
 import argparse
@@ -151,9 +161,22 @@ def is_checkable_internal(target: str) -> bool:
     if target.startswith(("http://", "https://", "mailto:", "tel:", "#")):
         return False
     # template placeholders / role syntax we cannot resolve on disk
-    if target.startswith(("{", "%")) or "{{" in target or " " in target:
-        return False
-    return True
+    return not (target.startswith(("{", "%")) or "{{" in target or " " in target)
+
+
+def _display_path(src: Path, docs_dir: Path) -> str:
+    """Repo-relative path for messages.
+
+    Files under ``docs/`` print relative to ``docs_dir`` (unchanged); files
+    scanned outside it (the repo ``README.md`` and ``src/**/README.md``) print
+    relative to the repo root so the reference does not crash or go absolute.
+    """
+    for base in (docs_dir, docs_dir.parent):
+        try:
+            return str(src.relative_to(base))
+        except ValueError:
+            continue
+    return str(src)
 
 
 # --- checks ----------------------------------------------------------------
@@ -176,7 +199,7 @@ def check_internal(docs_dir: Path, src: Path, target: str) -> str | None:
         return None
     if (candidate.parent / (candidate.name + ".ipynb")).exists():
         return None
-    return f"{src.relative_to(docs_dir)} -> {target} (no file at {candidate})"
+    return f"{_display_path(src, docs_dir)} -> {target} (no file at {candidate})"
 
 
 def check_external(url: str, timeout: int, retries: int) -> tuple[str, str]:
@@ -219,7 +242,11 @@ def check_external(url: str, timeout: int, retries: int) -> tuple[str, str]:
     # No clear 2xx/3xx and no authoritative GET 404. A hard DNS/connection
     # failure is fatal; anything else (timeouts, HEAD-only 404, gated) is a warn.
     low = last.lower()
-    if "name or service not known" in low or "nodename nor servname" in low or "no address" in low:
+    if (
+        "name or service not known" in low
+        or "nodename nor servname" in low
+        or "no address" in low
+    ):
         return "error", f"{last} (DNS failure)"
     return "warn", f"{last} (unverified)"
 
@@ -231,12 +258,21 @@ def main() -> int:
     ap.add_argument("--no-external", dest="external", action="store_false")
     ap.add_argument("--timeout", type=int, default=20)
     ap.add_argument("--retries", type=int, default=2)
-    ap.add_argument("--workers", type=int, default=16, help="concurrent external fetches")
+    ap.add_argument(
+        "--workers", type=int, default=16, help="concurrent external fetches"
+    )
     args = ap.parse_args()
 
     docs_dir = Path(args.docs_dir).resolve()
-    md_files = sorted(docs_dir.rglob("*.md"))
-    print(f"Scanning {len(md_files)} markdown files under {docs_dir}")
+    # Scan docs/**/*.md plus the user-facing READMEs that link into the docs
+    # site (repo root + each src/** package). Those READMEs live outside docs/
+    # and so were historically unchecked -- yet they carry absolute links to the
+    # published site that break when a page's URL changes (e.g. the mystmd slug
+    # migration turned `core/common_tasks/summary.html` into `/summary`).
+    repo_root = docs_dir.parent
+    extra_readmes = [repo_root / "README.md", *(repo_root / "src").rglob("README.md")]
+    md_files = sorted(docs_dir.rglob("*.md")) + [p for p in extra_readmes if p.exists()]
+    print(f"Scanning {len(md_files)} markdown files under {repo_root}")
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -246,11 +282,16 @@ def main() -> int:
     for src in md_files:
         if "_build" in src.parts:
             continue
+        # Deterministic on-disk (internal) checks are scoped to docs/ pages,
+        # where the resolution base is well-defined. The extra READMEs are
+        # scanned for external site links only -- their relative links render
+        # against different bases (GitHub vs PyPI) and are out of scope here.
+        is_docs_page = docs_dir in src.parents
         text = src.read_text(encoding="utf-8", errors="ignore")
         for target in extract_links(text):
             if target.startswith(("http://", "https://")):
                 external.setdefault(target, []).append(src)
-            elif is_checkable_internal(target):
+            elif is_docs_page and is_checkable_internal(target):
                 internal_checked += 1
                 err = check_internal(docs_dir, src, target)
                 if err:
@@ -264,10 +305,11 @@ def main() -> int:
 
     ext_ok = ext_warn = ext_err = 0
     if args.external:
+
         def _probe(item: tuple[str, list[Path]]) -> tuple[str, str, str]:
             url, srcs = item
             level, msg = check_external(url, args.timeout, args.retries)
-            where = ", ".join(sorted({str(s.relative_to(docs_dir)) for s in srcs}))
+            where = ", ".join(sorted({_display_path(s, docs_dir) for s in srcs}))
             return level, msg, where
 
         with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
