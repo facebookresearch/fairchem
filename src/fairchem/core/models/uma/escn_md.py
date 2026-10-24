@@ -1054,7 +1054,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
-        UMA-specific validation: handle charge/spin for OMOL task.
+        UMA-specific validation: handle charge/spin multiplicity for OMOL task.
 
         Uses the shared validation logic from the api.inference module.
         """

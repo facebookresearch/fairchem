@@ -19,7 +19,32 @@ from ase import Atoms
 pytest.importorskip("lammps")
 
 from fairchem.lammps import lammps_fc  # noqa: E402
-from fairchem.lammps.lammps_fc import restricted_cell_from_lammps_box  # noqa: E402
+from fairchem.lammps.lammps_fc import (  # noqa: E402
+    resolve_spin_multiplicity_value,
+    restricted_cell_from_lammps_box,
+    spin_multiplicity_from_config,
+)
+
+
+def test_resolve_spin_multiplicity_value():
+    # Defaults: omol gets a physical multiplicity, others the null token.
+    assert resolve_spin_multiplicity_value(task_name="omol") == 1
+    assert resolve_spin_multiplicity_value(task_name="omat") == 0
+    # Preferred name and deprecated shorthand both work, and must agree.
+    assert resolve_spin_multiplicity_value(spin_multiplicity=3) == 3
+    assert resolve_spin_multiplicity_value(spin=3) == 3
+    assert resolve_spin_multiplicity_value(spin=3, spin_multiplicity=3) == 3
+    with pytest.raises(ValueError, match="Conflicting spin multiplicity"):
+        resolve_spin_multiplicity_value(spin=1, spin_multiplicity=3)
+
+
+def test_spin_multiplicity_from_config():
+    assert spin_multiplicity_from_config({"task_name": "omol"}) == 1
+    assert (
+        spin_multiplicity_from_config({"task_name": "omol", "spin_multiplicity": 2})
+        == 2
+    )
+    assert spin_multiplicity_from_config({"task_name": "omol", "spin": 2}) == 2
 
 
 def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
@@ -254,7 +279,8 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
         lammps_input_path,
         task_name,
         charge=0,
-        spin=0,
+        spin=None,
+        spin_multiplicity=None,
     ):
         run_args.update(
             {
@@ -263,6 +289,7 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
                 "task_name": task_name,
                 "charge": charge,
                 "spin": spin,
+                "spin_multiplicity": spin_multiplicity,
             }
         )
 
@@ -294,5 +321,5 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
     assert run_args["lammps_input_path"] == "lammps_in_example.file"
     assert run_args["task_name"] == "omol"
     assert run_args["charge"] == 0
-    assert run_args["spin"] == 1
+    assert run_args["spin_multiplicity"] == 1
     assert not hasattr(lammps_state["lmp"], "_predictor")
