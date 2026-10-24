@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from fairchem.core.models.uma.escn_md import GradRegressConfig
 
-pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")]
 
 
 def apply_strain(atoms: Atoms, strain: np.ndarray) -> Atoms:

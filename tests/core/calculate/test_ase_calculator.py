@@ -212,7 +212,7 @@ def large_bulk_atoms() -> Atoms:
 # ---- UMA-only tests (locked to specific models) ----
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 def test_calculator_from_checkpoint(pretrained_checkpoint):
     calc = FAIRChemCalculator.from_model_checkpoint(
         pretrained_checkpoint, task_name="omol"
@@ -221,7 +221,7 @@ def test_calculator_from_checkpoint(pretrained_checkpoint):
     assert "forces" in calc.implemented_properties
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 def test_calculator_with_task_names_matches_uma_task(
     aperiodic_atoms, pretrained_checkpoint
 ):
@@ -263,7 +263,7 @@ def test_no_task_name_single_task(request):
             assert calc.task_name == datasets[0]
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")
 def test_calculator_unknown_task_raises_error(pretrained_checkpoint):
     with pytest.raises(ValueError):
         FAIRChemCalculator.from_model_checkpoint(
@@ -374,7 +374,7 @@ def test_calculator_configurations(
         assert isinstance(stress, np.ndarray)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_large_bulk_system(large_bulk_atoms, declared_predict_unit):
     """Test a bulk system with 1000 atoms using the small model."""
     calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
@@ -444,7 +444,7 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
         ), "Energy values are not unique for different charge/spin combinations"
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat", "omol"))
 def test_single_atom_systems(declared_predict_unit):
     """
     Test a system with a single atom.
@@ -467,7 +467,7 @@ def test_single_atom_systems(declared_predict_unit):
             assert (forces == 0.0).all()
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")
 def test_single_atom_system_errors(declared_predict_unit):
     """Test that a charged system with a single atom does not work."""
     if declared_predict_unit.model.module.supports_single_atoms:
@@ -485,7 +485,7 @@ def test_single_atom_system_errors(declared_predict_unit):
         atom.get_potential_energy()
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1")
 @pytest.mark.skip(
     reason="the wigner matrices should be dependent on the RNG, but the energies"
     "are not actually different using the above seed setting code."
@@ -514,7 +514,7 @@ def test_random_seed_final_energy(declared_predict_unit):
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 @pytest.mark.gpu()
 def test_external_graph_generation_molecular_system(pretrained_checkpoint):
     inference_settings = InferenceSettings(external_graph_gen=True)
@@ -540,7 +540,7 @@ def test_external_graph_generation_molecular_system(pretrained_checkpoint):
     assert forces.shape == (len(atoms), 3)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 @pytest.mark.gpu()
 def test_external_graph_gen_vs_internal(pretrained_checkpoint):
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
@@ -615,7 +615,7 @@ def test_simple_md(pretrained_checkpoint):
     run_md_simulation(calc, steps=10)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 def test_formation_energy_calculator_correctness(
     aperiodic_atoms, declared_predict_unit
 ):
@@ -644,7 +644,7 @@ def test_formation_energy_calculator_correctness(
     assert np.isclose(formation_energy, expected_formation_energy, atol=1e-6)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",))
 def test_formation_energy_calculator_missing_element_raises_error(
     declared_predict_unit,
 ):
@@ -668,7 +668,9 @@ def test_formation_energy_calculator_missing_element_raises_error(
         water_molecule.get_potential_energy()
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained(
+    "uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",), refs=True
+)
 def test_formation_energy_calculator_mp_corrections_omat_task(declared_predict_unit):
     """Test MP corrections with FormationEnergyCalculator for OMat task."""
     base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omat")
@@ -695,7 +697,9 @@ def test_formation_energy_calculator_mp_corrections_omat_task(declared_predict_u
         pytest.skip("fairchem.data.omat not available for MP corrections")
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained(
+    "uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",), refs=True
+)
 def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
     declared_predict_unit,
 ):
@@ -707,7 +711,9 @@ def test_formation_energy_calculator_non_omat_mp_corrections_raises_error(
         FormationEnergyCalculator(base_calc, apply_corrections=True)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained(
+    "uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omol",), refs=True
+)
 def test_formation_energy_calculator_auto_loads_references(declared_predict_unit):
     base_calc = FAIRChemCalculator(declared_predict_unit, task_name="omol")
 
@@ -749,7 +755,7 @@ def test_formation_energy_calculator_non_fairchemcalculator():
     assert np.isclose(formation_energy, expected, atol=1e-6)
 
 
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", refs=True)
 def test_formation_energy_calculator_different_task_types(declared_predict_unit):
     for task_name in ["omol", "omat", "oc20"]:
         if task_name in declared_predict_unit.dataset_to_tasks:

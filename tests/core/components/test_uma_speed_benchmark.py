@@ -14,7 +14,7 @@ import pytest
 
 from tests.core.testing_utils import launch_main
 
-pytestmark = pytest.mark.pretrained("uma-s-1p2")
+pytestmark = pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1")
 
 COMMON_ARGS = [
     "job.device_type=CPU",
