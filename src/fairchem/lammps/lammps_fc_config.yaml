@@ -33,5 +33,5 @@ charge: 0
 # Spin multiplicity (2S+1), not the spin S: 1 = singlet, 2 = doublet,
 # 3 = triplet, etc. For the omol task this must be in the range 1-100.
 # For non-omol tasks use 0 (the model's null spin token), with charge: 0.
-# ``spin`` is accepted as a deprecated alias for ``spin_multiplicity``.
+# ``spin`` is accepted as a deprecated shorthand for ``spin_multiplicity``.
 spin_multiplicity: 1

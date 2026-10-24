@@ -46,7 +46,7 @@ def test_to_ase_single(ase_atoms):
         ({"spin_multiplicity": 3, "spin": 3}, ["spin", "charge"], 3),
     ],
 )
-def test_from_ase_spin_multiplicity_alias(info, r_data_keys, expected):
+def test_from_ase_spin_multiplicity_shorthand(info, r_data_keys, expected):
     atoms = molecule("H2O")
     atoms.info.update(info)
     data = AtomicData.from_ase(atoms, r_data_keys=r_data_keys)
@@ -78,7 +78,7 @@ def test_to_ase_writes_spin_multiplicity():
     assert out.info["spin"] == 3
 
 
-def test_validate_uma_atoms_data_spin_multiplicity_alias(caplog):
+def test_validate_uma_atoms_data_spin_multiplicity_shorthand(caplog):
     atoms = molecule("H2O")
     atoms.info["spin_multiplicity"] = 3
     validate_uma_atoms_data(atoms, "omol")

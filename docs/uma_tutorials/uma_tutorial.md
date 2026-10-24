@@ -104,7 +104,7 @@ When using UMA, remember these key steps:
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
 :::{tip} OMOL Task Requirements
-For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as an alias for `spin_multiplicity`):
+For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as a shorthand for `spin_multiplicity`):
 ```python
 atoms.info.update({"spin_multiplicity": 1, "charge": 0})
 ```

@@ -47,7 +47,7 @@ class FAIRChemCalculator(Calculator):
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
               and `spin_multiplicity` are pulled from `atoms.info` during calculations. The legacy `spin`
-              is accepted as an alias for `spin_multiplicity`; if both are set they must agree.
+              is accepted as a shorthand for `spin_multiplicity`; if both are set they must agree.
                 - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
                 - `spin_multiplicity` must be an integer representing the spin multiplicity (2S+1), not the spin S,
                   and can range from 1 to 100 for the omol task.
@@ -209,7 +209,7 @@ class FAIRChemCalculator(Calculator):
             - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
             - `spin_multiplicity` must be an integer representing the spin multiplicity (2S+1), not the spin S,
               and can range from 1 to 100 for the omol task. The legacy `spin` in `atoms.info` is
-              accepted as an alias; if both are set they must agree.
+              accepted as a shorthand; if both are set they must agree.
             - If `task_name="omol"`, and `charge` or `spin_multiplicity` are not set in `atoms.info`, they will
               default to charge=`0` and spin_multiplicity=`1`. For non-omol tasks they default to `0`.
             - `charge` and `spin_multiplicity` embeddings are applied for every task. Non-omol tasks were

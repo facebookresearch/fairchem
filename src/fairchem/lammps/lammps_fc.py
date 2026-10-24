@@ -42,7 +42,7 @@ def resolve_spin_multiplicity_value(
     Resolve the spin multiplicity (2S+1) from LAMMPS spin arguments.
 
     ``spin_multiplicity`` is the preferred name; ``spin`` is kept as a
-    deprecated alias. If both are given they must agree. If none is given, defaults to 1 for the omol
+    deprecated shorthand. If both are given they must agree. If none is given, defaults to 1 for the omol
     task (a physical multiplicity, 2S+1 >= 1) and 0 otherwise (the
     model's null spin token, which non-omol tasks were trained with).
 
@@ -64,8 +64,8 @@ def resolve_spin_multiplicity_value(
         details = ", ".join(f"{name}={value!r}" for name, value in values.items())
         raise ValueError(
             f"Conflicting spin multiplicity values: {details}. "
-            "'spin_multiplicity' and 'spin' are aliases "
-            "for the spin multiplicity (2S+1); set only one of them, or "
+            "'spin' is shorthand for 'spin_multiplicity', the "
+            "spin multiplicity (2S+1); set only one of them, or "
             "make them agree."
         )
     if "spin" in values and "spin_multiplicity" not in values:
@@ -132,7 +132,7 @@ def atomic_data_from_lammps_data(
     spin: int | None = None,
     spin_multiplicity: int | None = None,
 ):
-    # ``spin`` is the deprecated alias for the spin multiplicity (2S+1).
+    # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
     spin = resolve_spin_multiplicity_value(
         task_name=task_name,
         spin=spin,
@@ -253,7 +253,7 @@ class FixExternalCallback:
         task_name: str | None = None,
     ):
         self.charge = charge
-        # ``spin`` is the deprecated alias for the spin multiplicity (2S+1).
+        # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
         self.spin = resolve_spin_multiplicity_value(
             task_name=task_name,
             spin=spin,
@@ -263,7 +263,7 @@ class FixExternalCallback:
     @property
     def spin_multiplicity(self) -> int:
         """
-        The spin multiplicity (2S+1); alias for the legacy ``spin``.
+        The spin multiplicity (2S+1), i.e. the legacy ``spin``.
         """
         return self.spin
 
@@ -320,7 +320,7 @@ def run_lammps_with_fairchem(
 ):
     from lammps import lammps
 
-    # ``spin`` is the deprecated alias for the spin multiplicity (2S+1).
+    # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
     spin = resolve_spin_multiplicity_value(
         task_name=task_name,
         spin=spin,

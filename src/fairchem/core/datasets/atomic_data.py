@@ -92,8 +92,8 @@ def resolve_spin_multiplicity(info: dict) -> int | None:
         details = ", ".join(f"{key}={value!r}" for key, value in present.items())
         raise ValueError(
             f"Conflicting spin multiplicity values in atoms.info: {details}. "
-            "'spin_multiplicity' and 'spin' are aliases for "
-            "the spin multiplicity (2S+1); set only one of them, or make "
+            "'spin' is shorthand for 'spin_multiplicity', the spin "
+            "multiplicity (2S+1); set only one of them, or make "
             "them agree."
         )
     return values[0]
@@ -512,7 +512,7 @@ class AtomicData:
         # The spin multiplicity (2S+1) may be given as ``spin_multiplicity``
         # (preferred) or the legacy ``spin`` key. Read it
         # when any of those names is requested via ``r_data_keys``, or when
-        # an unambiguous alias is present in ``atoms.info``.
+        # ``spin_multiplicity`` is present in ``atoms.info``.
         spin_requested = r_data_keys is not None and any(
             key in r_data_keys for key in SPIN_MULTIPLICITY_KEYS
         )

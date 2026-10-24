@@ -125,7 +125,7 @@ class GSCDBRunner(CalculateRunner):
             atoms.info["charge"] = int(atoms.info["charge"])
             # GSCDB inputs store the spin multiplicity (2S+1) as
             # ``multiplicity``; normalize it to ``spin_multiplicity``
-            # (and its legacy alias ``spin``, kept in sync).
+            # (and its legacy shorthand ``spin``, kept in sync).
             spin_multiplicity = int(
                 atoms.info.get(
                     "spin_multiplicity",

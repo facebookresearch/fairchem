@@ -597,7 +597,7 @@ system supplies the domain-specific task.
 
 For the `omol` task, set the molecule's total charge and spin multiplicity
 (2S+1) in `atoms.info`, using the `spin_multiplicity` key (`spin` is accepted
-as a legacy alias). For non-`omol` tasks, keep charge and spin at 0. Here we
+as a legacy shorthand). For non-`omol` tasks, keep charge and spin at 0. Here we
 compare singlet and triplet states of CH₂.
 
 ```{code-cell} ipython3
@@ -716,7 +716,7 @@ Total known charge of the system (only used for `omol` task, defaults to 0)
 :::
 
 :::{card} Spin
-Total spin multiplicity (2S+1) of the system, set as `spin_multiplicity` in `atoms.info` (`spin` is a legacy alias). Only varying for the `omol` task, where it defaults to 1; for all other tasks it must be 0, the model's null spin token (not a physical multiplicity).
+Total spin multiplicity (2S+1) of the system, set as `spin_multiplicity` in `atoms.info` (`spin` is a legacy shorthand). Only varying for the `omol` task, where it defaults to 1; for all other tasks it must be 0, the model's null spin token (not a physical multiplicity).
 :::
 
 :::{card} Elemental Composition
@@ -1721,7 +1721,7 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
-Charge and spin multiplicity are set in `lammps_fc_config.yaml` via `charge` and `spin_multiplicity`. `spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 = singlet, 2 = doublet, 3 = triplet); for the `omol` task it must be in the range 1–100 and defaults to 1 in the example config. For non-`omol` tasks, use `charge: 0` and `spin_multiplicity: 0` (the model's null spin token). The legacy config key `spin` is still accepted as a deprecated alias for `spin_multiplicity` (existing config files keep working; on the Hydra CLI, use `+spin=` since the key is no longer in the shipped config).
+Charge and spin multiplicity are set in `lammps_fc_config.yaml` via `charge` and `spin_multiplicity`. `spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 = singlet, 2 = doublet, 3 = triplet); for the `omol` task it must be in the range 1–100 and defaults to 1 in the example config. For non-`omol` tasks, use `charge: 0` and `spin_multiplicity: 0` (the model's null spin token). The legacy config key `spin` is still accepted as a deprecated shorthand for `spin_multiplicity` (existing config files keep working; on the Hydra CLI, use `+spin=` since the key is no longer in the shipped config).
 
 ## Multi-GPU Parallelism
 
@@ -7497,7 +7497,7 @@ When using UMA, remember these key steps:
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
 :::{tip} OMOL Task Requirements
-For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as an alias for `spin_multiplicity`):
+For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as a shorthand for `spin_multiplicity`):
 ```python
 atoms.info.update({"spin_multiplicity": 1, "charge": 0})
 ```
@@ -10973,7 +10973,7 @@ For `omol`, set total charge and spin multiplicity (2S+1) on the ASE object:
 atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 ```
 
-The legacy key `spin` is accepted as an alias for `spin_multiplicity`.
+The legacy key `spin` is accepted as a shorthand for `spin_multiplicity`.
 
 Other tasks expect the values documented in the [UMA model guide](./core/uma.md).
 :::

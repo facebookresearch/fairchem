@@ -49,7 +49,7 @@ system supplies the domain-specific task.
 
 For the `omol` task, set the molecule's total charge and spin multiplicity
 (2S+1) in `atoms.info`, using the `spin_multiplicity` key (`spin` is accepted
-as a legacy alias). For non-`omol` tasks, keep charge and spin at 0. Here we
+as a legacy shorthand). For non-`omol` tasks, keep charge and spin at 0. Here we
 compare singlet and triplet states of CH₂.
 
 ```{code-cell} ipython3

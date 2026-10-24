@@ -40,7 +40,7 @@ Total known charge of the system (only used for `omol` task, defaults to 0)
 :::
 
 :::{card} Spin
-Total spin multiplicity (2S+1) of the system, set as `spin_multiplicity` in `atoms.info` (`spin` is a legacy alias). Only varying for the `omol` task, where it defaults to 1; for all other tasks it must be 0, the model's null spin token (not a physical multiplicity).
+Total spin multiplicity (2S+1) of the system, set as `spin_multiplicity` in `atoms.info` (`spin` is a legacy shorthand). Only varying for the `omol` task, where it defaults to 1; for all other tasks it must be 0, the model's null spin token (not a physical multiplicity).
 :::
 
 :::{card} Elemental Composition

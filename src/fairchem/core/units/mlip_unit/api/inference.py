@@ -88,7 +88,7 @@ def validate_uma_atoms_data(atoms, task_name: str, logger=None) -> None:
             )
         atoms.info["charge"] = DEFAULT_CHARGE
 
-    # Resolve the spin multiplicity (2S+1) from its aliases. Raises if
+    # Resolve the spin multiplicity (2S+1). Raises if
     # e.g. ``spin`` and ``spin_multiplicity`` are both set and disagree.
     spin = resolve_spin_multiplicity(atoms.info)
     if spin is None:

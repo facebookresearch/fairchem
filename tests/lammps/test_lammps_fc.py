@@ -30,7 +30,7 @@ def test_resolve_spin_multiplicity_value():
     # Defaults: omol gets a physical multiplicity, others the null token.
     assert resolve_spin_multiplicity_value(task_name="omol") == 1
     assert resolve_spin_multiplicity_value(task_name="omat") == 0
-    # Preferred name and deprecated alias both work, and must agree.
+    # Preferred name and deprecated shorthand both work, and must agree.
     assert resolve_spin_multiplicity_value(spin_multiplicity=3) == 3
     assert resolve_spin_multiplicity_value(spin=3) == 3
     assert resolve_spin_multiplicity_value(spin=3, spin_multiplicity=3) == 3

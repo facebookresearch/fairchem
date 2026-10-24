@@ -63,7 +63,7 @@ For `omol`, set total charge and spin multiplicity (2S+1) on the ASE object:
 atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 ```
 
-The legacy key `spin` is accepted as an alias for `spin_multiplicity`.
+The legacy key `spin` is accepted as a shorthand for `spin_multiplicity`.
 
 Other tasks expect the values documented in the [UMA model guide](./core/uma.md).
 :::
