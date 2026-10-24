@@ -143,7 +143,7 @@ def test_create_dataset(key, value, max_atoms, structures, lmdb_database):
         )
 
 
-# make sure we cant sample more than the number of elements in the dataset with sample_n
+# make sure we can't sample more than the number of elements in the dataset with sample_n
 def test_sample_n_dataset(lmdb_database):
     with pytest.raises(ValueError):
         _ = create_dataset(

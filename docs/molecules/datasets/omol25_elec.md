@@ -23,7 +23,7 @@ The OMol25 dataset is broken into several training splits - All and 4M. The 4M s
 
 For each calculation, the following data is available:
 
-* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
+* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, `orca.xyz`). To open:
 
 ```
 >> tar --zstd -xvf orca.tar.zst
@@ -49,12 +49,12 @@ orca.gbw.zstd0      : 9462880 bytes
 import numpy as np
 
 # Load the NPZ file
-with np.load('density_mat.npz') as loaded_data:
-    dens_vector = loaded_data['orca.scfp']
+with np.load("density_mat.npz") as loaded_data:
+    dens_vector = loaded_data["orca.scfp"]
 
 # Re-inflate the symmetric matrix
 n = (np.sqrt(8 * len(dens_vector) + 1) - 1) // 2
-mat = np.zeros((n,n))
+mat = np.zeros((n, n))
 mat[np.triu_indices(n)] = dens_vector
 mat = mat + mat.T - np.diag(mat.diagonal())
 ```
@@ -75,15 +75,15 @@ for idx in indices:
     # Check if this is a system you care about.
     is_relevant = is_atoms_object_relevant(atoms)
     if is_relevant:
-	# Extract the relative path that matches the Argonne cluster
-       relative_dir = os.path.dirname(atoms.info["source"])
-	argonne_paths.append(relative_dir)
+        # Extract the relative path that matches the Argonne cluster
+        relative_dir = os.path.dirname(atoms.info["source"])
+        argonne_paths.append(relative_dir)
 ```
 
 ## How to Access the Data
 
 The data are stored and accessible via storage on the Eagle cluster at Argonne National Laboratory. For free access to the data, you will need to do the following:
-1. Follow the access instructions here: [OMol25 Electronic Structure Spotlight Dataset](https://www.materialsdatafacility.org/spotlight/omol25). After group approval (this step requires human validation, so may take some time), you will be able to access the data via the same page. 
+1. Follow the access instructions here: [OMol25 Electronic Structure Spotlight Dataset](https://www.materialsdatafacility.org/spotlight/omol25). After group approval (this step requires human validation, so may take some time), you will be able to access the data via the same page.
 2. To download the data, you can access via HTTPS calls (slower) or by downloading the [Globus Connect Personal client](https://www.globus.org/globus-connect-personal) (preferred method) and creating a local endpoint.
 
 
@@ -92,8 +92,8 @@ The data are stored and accessible via storage on the Eagle cluster at Argonne N
 [General Issues](https://github.com/facebookresearch/fairchem)
 
 Dataset questions?
-* [Muhammed Shuaibi](mshuaibi@meta.com)
-* [Daniel Levine](levineds@meta.com)
+* [Muhammed Shuaibi](mailto:mshuaibi@meta.com)
+* [Daniel Levine](mailto:levineds@meta.com)
 
 Cluster/Access questions?
-* [Ben Blaiszik](blaiszik@uchicago.edu)
+* [Ben Blaiszik](mailto:blaiszik@uchicago.edu)

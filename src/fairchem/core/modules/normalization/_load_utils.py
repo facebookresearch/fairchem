@@ -55,12 +55,12 @@ def _load_check_duplicates(config: dict, name: str) -> dict[str, torch.nn.Module
     if len(duplicates) > 0:
         logging.warning(
             f"{name} values for the following targets {duplicates} have been specified to be fit and also read"
-            f" from a file. The files read from file will be used instead of fitting."
+            f" from a file. The values read from the file will be used instead of fitting."
         )
     duplicates = list(filter(lambda x: x in modules, config))
     if len(duplicates) > 0:
         logging.warning(
-            f"Duplicate {name} values for the following targets {duplicates} where specified in the file "
+            f"Duplicate {name} values for the following targets {duplicates} were specified in the file "
             f"{config['file']} and an explicitly set file. The normalization values read from "
             f"{config['file']} will be used."
         )

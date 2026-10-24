@@ -42,11 +42,11 @@ ignore = [
   "G004",   # f-string in Logging statement
   "RUF015", # Prefer next(iter())
   "RET505", # Unnecessary `elif` after `return`
-  "PT004",  # Fixture does not return anthing
+  "PT004",  # Fixture does not return anything
   "B017",   # pytest.raises
   "PT011",  # pytest.raises
   "PT012",  # pytest.raises"
-  "E741",  # ambigous variable naming, i.e. one letter
+  "E741",  # ambiguous variable naming, i.e. one letter
   "FBT003",  # boolean positional variable in function call
   "PERF203",  # `try`-`except` within a loop incurs performance overhead (no overhead in Py 3.11+)
   "EXE002",  # The file is executable but no shebang is present (not sure why some files come up as this)

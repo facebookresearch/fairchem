@@ -50,7 +50,7 @@ def create_yaml(
         template["elem_refs"] = linref_coeff
         template["train_dataset"]["splits"]["train"]["src"] = train_path
         template["val_dataset"]["splits"]["val"]["src"] = val_path
-        # add extra large vaccum box for molecules
+        # add extra large vacuum box for molecules
         # if dataset_name == str(UMATask.OMOL):
         #     template["train_dataset"]["a2g_args"]["molecule_cell_size"] = 1000.0
         os.makedirs(output_dir / DATA_YAML_DIR, exist_ok=True)

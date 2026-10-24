@@ -5,14 +5,14 @@
 
 `fairchem` provides training and evaluation code for tasks and models that take arbitrary chemical structures as input to predict energies, forces, positions, and stresses. It can be used as a base scaffold for research projects. For an overview of tasks, data, and metrics, please read the documentation and respective papers:
 
-- [OC20](catalysts/datasets/oc20)
-- [OC22](catalysts/datasets/oc22)
-- [ODAC23](dac/datasets/odac)
-- [OC20Dense](catalysts/datasets/oc20dense)
-- [OC20NEB](catalysts/datasets/oc20neb)
-- [OMat24](inorganic_materials/datasets/omat24)
+- [OC20](../../catalysts/datasets/oc20.md)
+- [OC22](../../catalysts/datasets/oc22.md)
+- [ODAC23](../../dac/datasets/odac23.md)
+- [OC20Dense](../../catalysts/datasets/oc20dense.md)
+- [OC20NEB](../../catalysts/datasets/oc20neb.md)
+- [OMat24](../../inorganic_materials/datasets/omat24.md)
 - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
-- [OMC25](molecules/datasets/omc25)
+- [OMC25](../../molecules/datasets/omc25.md)
 
 :::{note}
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
@@ -20,7 +20,7 @@ There are multiple ways to train and evaluate FAIRChem models on data other than
 
 ## Custom ASE Databases
 
-If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
+If your data is already in an [ASE Database](https://docs.ase-lib.org/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
 
 :::{tip}
 Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effectively utilize more resources than this, consider writing your data to an LMDB.

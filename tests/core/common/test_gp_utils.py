@@ -393,7 +393,7 @@ def simple_layer(x, edge_index, node_offset, natoms, n=3):
         local_atoms = x.shape[0]
 
     # make sure different ddp ranks have different outputs
-    # similar to seeing diffferent data batches
+    # similar to seeing different data batches
     x_source = x_source + dp_rank * 0.1
     x_target = x_target + dp_rank * 0.1
 

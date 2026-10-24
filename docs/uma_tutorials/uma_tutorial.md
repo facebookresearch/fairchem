@@ -230,6 +230,12 @@ plt.xlabel("Time (fs)")
 plt.ylabel("Energy (eV)");
 ```
 
+:::{seealso}
+For tested NVT and NPT examples, velocity initialization, Hydra configurations,
+checkpointing, and cluster submission, see the
+[molecular dynamics guide](../core/common_tasks/molecular_dynamics.md).
+:::
+
 # [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
 
 The basic approach in computing an adsorption energy is to compute this energy difference:
@@ -361,7 +367,7 @@ vib.summary()
 
 # Bulk alloy phase behavior
 
-Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/dft.html#orgheadline29
+Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/notebooks/04-bulk-systems/10-bulk-reaction-energies.html
 
 We manually compute the formation energy of pure compounds and some alloy compositions to assess stability.
 
@@ -463,7 +469,7 @@ These indicate that cupd-1 and cupd-2 are both more stable than phase separated 
 
 ## Phonon calculation
 
-This takes 4-10 minutes. Adapted from https://wiki.fysik.dtu.dk/ase/ase/phonons.html#example.
+This takes 4-10 minutes. Adapted from https://docs.ase-lib.org/ase/phonons.html.
 
 Phonons have applications in computing the stability and free energy of solids. See:
 

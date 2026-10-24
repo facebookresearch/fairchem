@@ -216,6 +216,171 @@ Copyright © Meta Platforms, Inc | [Terms of Use](https://opensource.fb.com/lega
 
 ---
 
+Source: `docs/core/introduction.md`
+
+# Introduction to FAIR Chemistry
+
+FAIR Chemistry is Meta FAIR's open ecosystem for machine learning in
+atomistic simulation. It brings together large quantum-chemistry datasets,
+pretrained models, and tools that connect those models to familiar simulation
+workflows.
+
+The central idea is simple: expensive density functional theory (DFT)
+calculations can be used to train machine-learned interatomic potentials. Once
+trained, those models estimate energies and forces much faster, making it
+possible to explore more structures and longer trajectories before confirming
+the most important results with higher-fidelity methods.
+
+## How the pieces fit together
+
+```{image} ../assets/uma-diagram-light-mode.png
+:alt: UMA connects several chemistry domains through one universal model.
+:width: 700px
+:align: center
+:class: dark:hidden
+```
+
+```{image} ../assets/uma-diagram-dark-mode.png
+:alt: UMA connects several chemistry domains through one universal model.
+:width: 700px
+:align: center
+:class: hidden dark:block
+```
+
+FAIR Chemistry provides three connected pieces:
+
+1. **Open datasets** contain atomistic structures and DFT labels for distinct
+   chemistry domains.
+2. **UMA** is a family of Universal Models for Atoms pretrained across those
+   domains.
+3. **`fairchem`** connects UMA to tools such as ASE, LAMMPS, and quacc for
+   calculations and simulations.
+
+## One model, several tasks
+
+Each dataset was calculated with a particular scientific method and set of
+approximations. UMA preserves those distinctions through a **task** input. You
+select the task that matches your system and the level of theory you want UMA
+to emulate.
+
+| Domain | Representative training data | UMA task | Example uses |
+| --- | --- | --- | --- |
+| Organic molecules and polymers | OMol25 | `omol` | Conformers, reactions, molecular dynamics |
+| Inorganic materials | OMat24 | `omat` | Relaxations, phonons, elastic properties |
+| Heterogeneous catalysts | OC20, OC22, OC25 | `oc20`, `oc22`, `oc25` | Adsorption, surfaces, reaction pathways |
+| Molecular crystals | OMC25 | `omc` | Crystal packing and polymorph ranking |
+| MOFs and direct air capture | ODAC23 | `odac` | CO₂ and H₂O adsorption |
+
+Task selection matters because predictions from different tasks generally
+represent different DFT levels of theory. They should not be mixed in one
+energy comparison without careful validation. See the [UMA model
+guide](./uma.md) for task-specific caveats.
+
+## What you can do with UMA
+
+UMA provides energies, forces, and—for supported periodic tasks—stresses
+through the standard ASE calculator interface. Those predictions can drive
+many atomistic workflows without changing models as you move between domains.
+
+:::{tip}
+Start with [`uma-s-1p2p1`](./uma.md) and choose the task that matches the
+dataset and level of theory relevant to your system.
+:::
+
+::::{grid} 1 2 2 2
+:::{card} Molecules and polymers · `omol`
+Calculate conformer energies, spin gaps, vibrations, and molecular dynamics.
+
+[Explore molecular data →](../molecules/datasets/summary.md)
+:::
+
+:::{card} Inorganic materials · `omat`
+Relax atomic positions and cells, calculate elastic properties, and construct
+phonon spectra.
+
+[Explore materials tutorials →](../inorganic_materials/examples_tutorials/summary.md)
+:::
+
+:::{card} Heterogeneous catalysts · `oc20`, `oc22`, `oc25`
+Study adsorption, surface stability, reaction thermochemistry, and transition
+states with the task appropriate to the interface.
+
+[Explore catalysis tutorials →](../catalysts/examples_tutorials/summary.md)
+:::
+
+:::{card} Molecular crystals · `omc`
+Score periodic molecular crystals and support crystal-structure prediction
+workflows.
+
+[Explore OMC25 →](../molecules/datasets/omc25.md)
+:::
+
+:::{card} MOFs and direct air capture · `odac`
+Estimate adsorption energies and study framework deformation for CO₂ and H₂O.
+
+[Explore the adsorption tutorial →](../dac/examples_tutorials/adsorption_energy.md)
+:::
+
+:::{card} Scaled simulation
+Use batched inference, multiple GPUs, LAMMPS, or workflow engines for larger
+and more numerous simulations.
+
+[Browse common workflows →](./common_tasks/summary.md)
+:::
+::::
+
+## A typical workflow
+
+1. Install `fairchem-core` and obtain access to the gated UMA repository.
+2. Create or load an atomic structure as an ASE `Atoms` object.
+3. Load `uma-s-1p2p1` and select the appropriate task.
+4. Attach a `FAIRChemCalculator` to the structure.
+5. Run an energy, force, relaxation, dynamics, or downstream-property
+   calculation.
+6. Inspect the structure and validate important conclusions against reference
+   data or higher-fidelity calculations.
+
+:::{important}
+UMA accelerates atomistic modeling; it does not remove the need to check the
+training domain, level of theory, physical constraints, and uncertainty for
+your application.
+:::
+
+## Try UMA without writing code
+
+The [Meta AI Demo Lab UMA playground](https://aidemos.atmeta.com/uma?view=playground)
+is the recommended browser-based experience. Use it to manipulate structures
+and build intuition before setting up a local workflow.
+
+The separate [guided UMA demo](https://facebook-fairchem-uma-demo.hf.space/)
+contains additional worked examples and is maintained outside this repository.
+
+## Where to go next
+
+::::{grid} 1 2 2 2
+:::{card} Install
+:link: ./install.md
+Prepare Python and Hugging Face access.
+:::
+
+:::{card} Hello World
+:link: ./quickstart.md
+Run two small end-to-end calculations.
+:::
+
+:::{card} Common workflows
+:link: ./common_tasks/summary.md
+Scale from ASE calculations to training and batched inference.
+:::
+
+:::{card} Playground
+:link: https://aidemos.atmeta.com/uma?view=playground
+Explore UMA interactively in a browser.
+:::
+::::
+
+---
+
 Source: `docs/core/install.md`
 
 # Installation & License
@@ -512,172 +677,9 @@ across tasks as though they came from one reference calculation.
   domain.
 - Review task limitations in the [UMA model guide](./uma.md).
 - Learn about inference settings in the [ASE calculator guide](./common_tasks/ase_calculator.md).
+- Run NVT and NPT simulations with the
+  [molecular dynamics guide](./common_tasks/molecular_dynamics.md).
 - Try the [playground](https://aidemos.atmeta.com/uma?view=playground).
-
----
-
-Source: `docs/core/introduction.md`
-
-# Introduction to FAIR Chemistry
-
-FAIR Chemistry is Meta FAIR's open ecosystem for machine learning in
-atomistic simulation. It brings together large quantum-chemistry datasets,
-pretrained models, and tools that connect those models to familiar simulation
-workflows.
-
-The central idea is simple: expensive density functional theory (DFT)
-calculations can be used to train machine-learned interatomic potentials. Once
-trained, those models estimate energies and forces much faster, making it
-possible to explore more structures and longer trajectories before confirming
-the most important results with higher-fidelity methods.
-
-## How the pieces fit together
-
-```{image} ../assets/uma-diagram-light-mode.png
-:alt: UMA connects several chemistry domains through one universal model.
-:width: 700px
-:align: center
-:class: dark:hidden
-```
-
-```{image} ../assets/uma-diagram-dark-mode.png
-:alt: UMA connects several chemistry domains through one universal model.
-:width: 700px
-:align: center
-:class: hidden dark:block
-```
-
-FAIR Chemistry provides three connected pieces:
-
-1. **Open datasets** contain atomistic structures and DFT labels for distinct
-   chemistry domains.
-2. **UMA** is a family of Universal Models for Atoms pretrained across those
-   domains.
-3. **`fairchem`** connects UMA to tools such as ASE, LAMMPS, and quacc for
-   calculations and simulations.
-
-## One model, several tasks
-
-Each dataset was calculated with a particular scientific method and set of
-approximations. UMA preserves those distinctions through a **task** input. You
-select the task that matches your system and the level of theory you want UMA
-to emulate.
-
-| Domain | Representative training data | UMA task | Example uses |
-| --- | --- | --- | --- |
-| Organic molecules and polymers | OMol25 | `omol` | Conformers, reactions, molecular dynamics |
-| Inorganic materials | OMat24 | `omat` | Relaxations, phonons, elastic properties |
-| Heterogeneous catalysts | OC20, OC22, OC25 | `oc20`, `oc22`, `oc25` | Adsorption, surfaces, reaction pathways |
-| Molecular crystals | OMC25 | `omc` | Crystal packing and polymorph ranking |
-| MOFs and direct air capture | ODAC23 | `odac` | CO₂ and H₂O adsorption |
-
-Task selection matters because predictions from different tasks generally
-represent different DFT levels of theory. They should not be mixed in one
-energy comparison without careful validation. See the [UMA model
-guide](./uma.md) for task-specific caveats.
-
-## What you can do with UMA
-
-UMA provides energies, forces, and—for supported periodic tasks—stresses
-through the standard ASE calculator interface. Those predictions can drive
-many atomistic workflows without changing models as you move between domains.
-
-:::{tip}
-Start with [`uma-s-1p2p1`](./uma.md) and choose the task that matches the
-dataset and level of theory relevant to your system.
-:::
-
-::::{grid} 1 2 2 2
-:::{card} Molecules and polymers · `omol`
-Calculate conformer energies, spin gaps, vibrations, and molecular dynamics.
-
-[Explore molecular data →](../molecules/datasets/summary.md)
-:::
-
-:::{card} Inorganic materials · `omat`
-Relax atomic positions and cells, calculate elastic properties, and construct
-phonon spectra.
-
-[Explore materials tutorials →](../inorganic_materials/examples_tutorials/summary.md)
-:::
-
-:::{card} Heterogeneous catalysts · `oc20`, `oc22`, `oc25`
-Study adsorption, surface stability, reaction thermochemistry, and transition
-states with the task appropriate to the interface.
-
-[Explore catalysis tutorials →](../catalysts/examples_tutorials/summary.md)
-:::
-
-:::{card} Molecular crystals · `omc`
-Score periodic molecular crystals and support crystal-structure prediction
-workflows.
-
-[Explore OMC25 →](../molecules/datasets/omc25.md)
-:::
-
-:::{card} MOFs and direct air capture · `odac`
-Estimate adsorption energies and study framework deformation for CO₂ and H₂O.
-
-[Explore the adsorption tutorial →](../dac/examples_tutorials/adsorption_energy.md)
-:::
-
-:::{card} Scaled simulation
-Use batched inference, multiple GPUs, LAMMPS, or workflow engines for larger
-and more numerous simulations.
-
-[Browse common workflows →](./common_tasks/summary.md)
-:::
-::::
-
-## A typical workflow
-
-1. Install `fairchem-core` and obtain access to the gated UMA repository.
-2. Create or load an atomic structure as an ASE `Atoms` object.
-3. Load `uma-s-1p2p1` and select the appropriate task.
-4. Attach a `FAIRChemCalculator` to the structure.
-5. Run an energy, force, relaxation, dynamics, or downstream-property
-   calculation.
-6. Inspect the structure and validate important conclusions against reference
-   data or higher-fidelity calculations.
-
-:::{important}
-UMA accelerates atomistic modeling; it does not remove the need to check the
-training domain, level of theory, physical constraints, and uncertainty for
-your application.
-:::
-
-## Try UMA without writing code
-
-The [Meta AI Demo Lab UMA playground](https://aidemos.atmeta.com/uma?view=playground)
-is the recommended browser-based experience. Use it to manipulate structures
-and build intuition before setting up a local workflow.
-
-The separate [guided UMA demo](https://facebook-fairchem-uma-demo.hf.space/)
-contains additional worked examples and is maintained outside this repository.
-
-## Where to go next
-
-::::{grid} 1 2 2 2
-:::{card} Install
-:link: ./install.md
-Prepare Python and Hugging Face access.
-:::
-
-:::{card} Hello World
-:link: ./quickstart.md
-Run two small end-to-end calculations.
-:::
-
-:::{card} Common workflows
-:link: ./common_tasks/summary.md
-Scale from ASE calculations to training and batched inference.
-:::
-
-:::{card} Playground
-:link: https://aidemos.atmeta.com/uma?view=playground
-Explore UMA interactively in a browser.
-:::
-::::
 
 ---
 
@@ -744,6 +746,43 @@ Choose your task based on the application domain. Each task corresponds to a spe
 *OC20 was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.
 :::
 
+(uma-s-1p2p1-fine-tunes)=
+## UMA-S-1.2.1 fine-tunes: D4rev and r²SCAN
+
+`uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` are two fine-tuned variants of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro. Each has a single task with a different level of theory than the corresponding task of `uma-s-1p2p1`.
+
+| Model name | Task | Level of theory | Training data | Use it for |
+|------|------|------|------|------|
+| `uma-s-1p2p1-ft-d4rev` | `omol` | ωB97M-D4rev, dispersion included | OMol25-4M | molecules, noncovalent interactions, molecular liquids and crystals |
+| `uma-s-1p2p1-ft-r2scan` | `omat` | r²SCAN, not spin-polarized, no dispersion | [MAD-1.6](https://arxiv.org/abs/2603.02089) | most inorganic and mixed chemical systems, add dispersion with `DFTD3Calculator(..., functional="r2scan")` |
+
+`uma-s-1p2p1-ft-d4rev` was fine-tuned on approximately 4 million structures from the OMol25 dataset, whose labels were recomputed at the ωB97M-D4rev level of theory.
+
+`uma-s-1p2p1-ft-r2scan` was trained on [MAD-1.6](https://arxiv.org/abs/2603.02089), an r²SCAN dataset from the Laboratory of Computational Science and Modelling (COSMO), EPFL. We thank the MAD authors for making it available.
+
+Do not add dispersion to `uma-s-1p2p1-ft-d4rev`. We recommend using `uma-s-1p2p1-ft-r2scan` with `DFTD3Calculator(..., functional="r2scan")`.
+
+```python
+from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
+
+# molecules: wB97M-D4rev (dispersion is already included, do not add D3)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-d4rev", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omol")
+
+# materials: r2SCAN + D3(BJ)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-r2scan", device="cuda")
+calc = DFTD3Calculator(
+    FAIRChemCalculator(predictor, task_name="omat"), functional="r2scan", device="cuda"
+)
+```
+
+:::{warning}
+- `uma-s-1p2p1-ft-r2scan` **is not spin-polarized** and describes every system as non-magnetic. Do not use it for magnetic systems or for cohesive energies, as isolated atoms are also often strongly magnetic; use `uma-s-1p2p1` with the `omat` task for those instead.
+- Each model has only one task (`omat` or `omol`). Charge and spin multiplicity work in `uma-s-1p2p1-ft-d4rev` as in `uma-s-1p2p1`'s `omol` task.
+- Both models are fine-tuned on less data than the original UMA-S-1.2.1 model. Often the latter is more accurate at predicting DFT labels at its corresponding levels of theory.
+- No isolated-atom reference energies are shipped; single-atom energies from the model might be unreliable.
+:::
+
 ---
 
 Source: `docs/core/uma_changelog.md`
@@ -759,6 +798,42 @@ This page documents the release history of UMA models, including new features, i
 UMA 1.0 checkpoints are no longer supported (their MoE `include_self` behavior diverges from later releases); loading one raises a `RuntimeError`. To use a 1.0 checkpoint, `pip install 'fairchem-core<=2.21.0'`.
 
 Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without one) is auto-tagged `model_id = "UMA-1.1"` in memory; UMA 1.2+ already carry `model_id`; a checkpoint with neither `model_id` nor `backbone.model_version` is rejected. When training, set `model_id` on the model config (e.g. `model_id: UMA-1.2.1`).
+
+---
+
+## UMA-S-1.2.1-FT-D4rev and UMA-S-1.2.1-FT-r2SCAN — October 2026
+
+:::{admonition} New models
+:class: tip
+
+**Two fine-tunes of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro.**
+:::
+
+- `uma-s-1p2p1-ft-d4rev`: `omol` task at the ωB97M-D4rev level of theory, fine-tuned on approximately 4 million OMol25 structures recomputed with ωB97M-D4rev labels.
+- `uma-s-1p2p1-ft-r2scan`: `omat` task at the r²SCAN level of theory, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089).
+
+See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations and acknowledgements.
+
+---
+
+## UMA Nitro and D3 dispersion — October 2026
+
+- **UMA Nitro** is the default inference mode and is much faster than turbo for single-GPU MD and relaxations. It runs `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on Ampere, Hopper and Blackwell GPUs. Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
+  On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
+  and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
+  with support for systems up to **15,000 atoms**.
+- **`DFTD3Calculator`** adds GPU DFT-D3(BJ) energies, forces and analytic stresses to any ASE calculator, with `pbe` and `r2scan` presets. See [Adding a DFT-D3(BJ) dispersion correction](common_tasks/ase_calculator.md#adding-a-dft-d3-bj-dispersion-correction).
+
+---
+
+## Library change — the default inference mode is nitro, and turbo is no longer available
+
+- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (and the fine-tunes of it on Nitro's checkpoint allowlist) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
+- The previous default (full FP32 with `merge_mole + compile`) is now `inference_settings="high-precision"`.
+- **Breaking:** `turbo` is no longer available; please use `nitro` (the default). Its former settings are `inference_settings="multigpu"`, which multi-worker inference (`workers > 1`) uses.
+- The batch server's `ModelSpec` and the torch-sim interface default to `"batch"`.
+- Fallback warnings name the settings that replace the requested ones.
+- On Linux x86_64 and aarch64, `nvidia-cutlass-dsl` and `cuda-python` are now installed with `fairchem-core`.
 
 ---
 
@@ -970,7 +1045,12 @@ This section provides practical guides for common tasks you will encounter when 
 
 :::{card} ASE Calculator
 :link: ase_calculator
-Use FAIRChem models with ASE for single-point calculations, relaxations, and molecular dynamics.
+Use FAIRChem models with ASE for single-point calculations and relaxations.
+:::
+
+:::{card} Molecular Dynamics
+:link: ./molecular_dynamics.md
+Run NVT and NPT simulations directly with ASE or through reproducible Hydra configurations.
 :::
 
 :::{card} Batch Inference
@@ -1029,7 +1109,10 @@ Source: `docs/core/common_tasks/ase_calculator.md`
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
 :::{tip}
-For simple cases such as demos or education, the ASE calculator is very easy to use. For more complex cases such as running MD or batched inference, we recommend using the predictor directly for better performance.
+For simple cases such as demos or education, the ASE calculator is very easy to
+use. See [Molecular Dynamics with ASE](molecular_dynamics.md) for direct ASE and
+Hydra-configured NVT/NPT examples. For batched inference, use the predictor
+directly for better performance.
 :::
 
 ```{code-cell} python3
@@ -1049,18 +1132,21 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 base_calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Use "pbe" for PBE-trained models such as UMA's OMat head, or "r2scan"
-# for models fine-tuned on r2SCAN data.
+# for models fine-tuned on r2SCAN data such as uma-s-1p2p1-ft-r2scan.
 calc = DFTD3Calculator(base_calc, functional="pbe", device="cuda")
 atoms.calc = calc
 ```
 
 The wrapper adds the D3 energy, forces, and analytic stress to the base
-calculator. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
+calculator, computed on the GPU with the `nvalchemiops` DFT-D3 kernels, so it
+adds little cost to UMA Nitro MD. Do not add D3 to models whose training labels
+already include dispersion, such as the `omol` task (ωB97M-V) or
+`uma-s-1p2p1-ft-d4rev`. The `pbe` and `r2scan` presets both use Becke-Johnson damping, a 15 Å
 cutoff, and C5 smoothing over the outer 20% of the cutoff.
 Pass `param_file` and `auto_download=False` to use a
 local D3 parameter table without network access.
@@ -1116,9 +1202,39 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
-## Default mode
+## Default mode (nitro)
 
-UMA defaults to the `merge_mole + compile` fast mode with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+The default mode is `nitro`, and we recommend it for MD and other standard single-system workflows such as relaxations. For `uma-s-1p2p1`, `uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` on an Ampere, Hopper or Blackwell GPU (compute capability 8.x-12.x), it runs UMA Nitro, a standalone model with fused Triton and CuTe kernels for single-system energy, force, and stress evaluation. Nitro is much faster than turbo (now `multigpu`) for single-GPU MD and relaxations. Anything Nitro cannot serve (another checkpoint, the CPU, an older GPU, multi-worker inference with `workers > 1`, a batch, a change in composition, task, charge, or spin, Hessians) falls back to different inference settings. Every fallback prints a warning naming the settings now in use.
+
+```{code-cell} python3
+:tags: [skip-execution]
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
+print(predictor.inference_settings.nitro)  # True when Nitro runs
+```
+
+On Hopper and Blackwell GPUs, Nitro computes with TF32 matrix multiplies (multigpu does so on every GPU), so the predictor warns once that higher-order derivatives such as phonons are less accurate. Use `inference_settings="high-precision"` for standard FP32 precision.
+
+Nitro sizes its graph buffers to the number of edges measured on the first evaluation times an edge margin, 1.3 by default (`UMA_NITRO_EDGE_MARGIN`). The margin leaves room for the graph to grow as atoms move; if it overflows, Nitro measures the graph again and retries, which is slow. A smaller margin is faster per step but overflows more often.
+
+:::{admonition} Acknowledgement
+:class: tip
+Special thanks to Emanuele Arcelli and Max Zhdanov (for their [FlashUMA work](https://github.com/ArcelliEmanuele/flash-uma)), Carole-Jean Wu, Christian Puhrsch, Zachary DeVito, Aditya Venkataraman, Michael Lazos, and Animesh Jain, all of whom contributed to and helped improve UMA Nitro.
+:::
+
+:::{note}
+The `turbo` mode is no longer available. Please use `nitro` (the default) instead; for multi-worker inference, use `multigpu`, which has turbo's former settings.
+:::
+
+## High-precision mode
+
+High-precision mode uses the `merge_mole + compile` fast path with TF32 disabled. This fast path requires fixed composition, task, charge, and spin across repeated evaluations. If a later evaluation changes any of these, the calculator prints a warning and permanently falls back to the unmerged, uncompiled model. Batching is supported; a mixed batch across any of the same parameters triggers the same fallback.
+
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings="high-precision"
+)
+```
 
 ## Batch mode
 
@@ -1130,19 +1246,19 @@ predictor = pretrained_mlip.get_predict_unit(
 )
 ```
 
-## Turbo mode
+## Multigpu mode
 
-Turbo mode uses the same `merge_mole + compile` fast path as default mode and additionally enables TF32. TF32 can improve performance on compatible hardware at a small precision trade-off. Similar to default mode, any changes in composition, task, charge, and spin across different evaluations trigger a fallback to the unoptimized execution path.
+Like Nitro, multigpu mode (formerly `turbo`) is a reduced-precision mode: merged MOLE weights and `torch.compile`, with TF32 matrix multiplies for speed. Use it with `workers > 1`: Nitro runs on a single GPU, so multi-worker inference uses these settings. It falls back to the slower path if composition, task, charge, or spin changes.
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2p1", device="cuda", inference_settings="multigpu"
 )
 ```
 
 ## Custom modes for advanced users
 
-The advanced user might quickly see that **default**, **batch**, and **turbo** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
+The advanced user might quickly see that **default**, **high-precision**, **batch**, and **multigpu** modes are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
 
 | Setting Flag  | Description |
 | ----- | ----- |
@@ -1220,7 +1336,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p2p1", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2p1", inference_settings="multigpu", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
@@ -1252,6 +1368,293 @@ This will automatically create a Ray server on your local machine and use a loca
 
 ---
 
+Source: `docs/core/common_tasks/molecular_dynamics.md`
+
+# Molecular Dynamics with ASE
+
+FAIRChem models implement the standard
+[ASE calculator interface](https://docs.ase-lib.org/ase/calculators/calculators.html).
+You can therefore use them with ASE molecular dynamics directly, or use
+FAIRChem's Hydra-configured `MDRunner` when you need reproducible configuration,
+structured output, checkpointing, or cluster submission.
+
+This guide uses a 32-atom periodic FCC Cu crystal for both NVT and NPT. The
+system is small enough to run as an example, while still exercising periodic
+boundaries and stress prediction. The checked-in examples use UMA's `omat`
+task; their configuration and MD behavior are also tested in CI with ASE's EMT
+calculator, without downloading a model.
+
+:::{danger} Security warning
+FAIRChem uses Hydra to instantiate Python objects named by `_target_` in YAML.
+Only run configurations that you wrote yourself or obtained from a trusted
+source.
+:::
+
+## Prerequisites
+
+The Hydra runner writes Parquet trajectories with PyArrow, which is included in
+the `extras` installation:
+
+```bash
+pip install "fairchem-core[extras]"
+```
+
+Request access to the gated [UMA model repository](https://huggingface.co/facebook/UMA)
+and authenticate with `huggingface-cli login` before the first model download.
+See the [installation guide](../install.md) for complete environment and access
+instructions.
+
+The checked-in configurations target a CUDA GPU. To run one on CPU, override
+both the launcher device and calculator device (CPU inference is much slower):
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml \
+  job.device_type=CPU runner.calculator.device=cpu
+```
+
+The examples select `inference_settings: turbo`, which enables TF32. Hardware-
+accelerated TF32 requires an NVIDIA GPU with compute capability 8.0 or newer
+(Ampere or a later architecture). On older GPUs, or when the TF32 precision
+trade-off is not appropriate, use `inference_settings="default"` in Python or
+the Hydra override `runner.calculator.inference_settings=default`.
+
+## Run NVT directly with ASE
+
+An MD calculator must provide energy and forces. Initialize momenta before
+using a deterministic thermostat; doing so is also preferable for stochastic
+thermostats because it avoids an artificial heating transient.
+
+```python
+import numpy as np
+from ase import units
+from ase.build import bulk
+from ase.constraints import FixCom
+from ase.io import Trajectory
+from ase.md import MDLogger
+from ase.md.langevin import Langevin
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+
+# A 2 x 2 x 2 conventional FCC cell: 32 atoms with periodic boundaries.
+atoms = bulk("Cu", "fcc", a=3.61, cubic=True) * (2, 2, 2)
+atoms.set_constraint(FixCom())
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2p1", device="cuda", inference_settings="turbo"
+)
+atoms.calc = FAIRChemCalculator(predictor, task_name="omat")
+
+rng = np.random.RandomState(42)
+MaxwellBoltzmannDistribution(atoms, temperature_K=300, rng=rng)
+
+dyn = Langevin(
+    atoms,
+    timestep=1.0 * units.fs,
+    temperature_K=300,
+    friction=0.01 / units.fs,
+    fixcm=False,
+)
+trajectory = Trajectory("cu-nvt.traj", "w", atoms)
+logger = MDLogger(dyn, atoms, "cu-nvt.log", header=True, mode="w")
+dyn.attach(trajectory.write, interval=10)
+dyn.attach(logger, interval=10)
+dyn.run(1000)
+trajectory.close()
+```
+
+`turbo` inference is a good fit for MD because composition, task, charge, and
+spin normally remain fixed throughout a trajectory. It enables TF32 in
+addition to the compiled fast path; the hardware requirement and fallback are
+described in [Prerequisites](#prerequisites).
+
+The explicit `FixCom` constraint with `fixcm=False` follows ASE's recommended
+Langevin behavior. ASE's legacy internal `fixcm=True` correction does not
+strictly sample the correct NVT position and momentum distributions, with a
+larger effect for small systems. The Hydra NVT example selects the same
+constraint-based behavior through `use_fix_com_constraint: true`.
+
+## Run with Hydra
+
+MD can also by run through a CLI which utilizes a Hydra configuration file.  The repository contains two example configurations:
+
+- [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
+  uses Langevin NVT at 300 K.
+- [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
+  uses Berendsen NPT at 300 K and 1 bar.
+
+Either configuration from the repository root:
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml
+fairchem -c configs/uma/md/npt.yaml
+```
+
+### Choose an ensemble
+
+The Hydra configurations instantiate `MDRunner`, which provides the following
+ASE dynamics adapters:
+
+| Ensemble | Adapter | Important parameters |
+| --- | --- | --- |
+| NVE | `VelocityVerletThermostat` | Initial velocities and `timestep_fs` |
+| NVT | `NoseHooverNVT` | `temperature_K`, `tdamp_fs` |
+| NVT | `BussiThermostat` | `temperature_K`, `taut_fs` |
+| NVT | `LangevinThermostat` | `temperature_K`, `friction_per_fs`, `use_fix_com_constraint` |
+| NPT | `BerendsenNPT` | Temperature, pressure, damping, and compressibility |
+
+NPT additionally requires a fully periodic system with a nonzero cell and a
+calculator that implements stress. UMA's `omat` task supplies stress. Do not
+assume that every UMA task or third-party ASE calculator does so.
+
+Berendsen coupling is useful for bringing a system toward a target temperature
+and pressure, but it does not generate the exact NPT ensemble. Use an integrator
+appropriate to the property being measured for production sampling.
+
+The NPT example's `compressibility_bar: 7.14e-7` is an approximate Cu
+isothermal compressibility in reciprocal bar. It is calculated from an
+illustrative Cu bulk modulus of 140 GPa using
+`1 / (140 GPa * 10,000 bar/GPa)`. This is a material-specific physical input,
+not a value inferred by the calculator. Replace it with an appropriate
+isothermal compressibility whenever you replace the example system.
+
+Hydra overrides let you reuse the configuration without editing it:
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml \
+  temperature_K=500 runner.steps=10000 runner.trajectory_interval=100
+```
+
+The important pieces of each configuration are:
+
+```yaml
+runner:
+  _target_: fairchem.core.components.calculate.MDRunner
+  calculator:
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: uma-s-1p2p1
+    task_name: omat
+    inference_settings: turbo
+    device: cuda
+    workers: 1
+  atoms:
+    _target_: fairchem.core.datasets.common_structures.get_fcc_crystal_by_num_cells
+    n_cells: 2
+  velocity_seed: 42
+  initialization_temperature_K: 300.0
+```
+
+`velocity_seed` and `initialization_temperature_K` must be specified together.
+They initialize Maxwell-Boltzmann momenta for a new run and remove net linear
+momentum by default. A resumed run restores its saved momenta and does not
+initialize them again.
+
+For your own structure, replace the `atoms` block with any Hydra-instantiable
+ASE structure factory. For example:
+
+```yaml
+atoms:
+  _target_: ase.io.read
+  filename: /path/to/structure.extxyz
+```
+
+For molecular tasks, set `task_name: omol` and ensure total charge and spin
+multiplicity are present as `atoms.info["charge"]` and `atoms.info["spin"]`.
+
+## Outputs, checkpoints, and resume
+
+Each CLI invocation creates a timestamped directory below `job.run_dir`. Its
+`results` directory contains:
+
+- `init_atoms.extxyz`: the structure and initialized velocities at step zero;
+- `trajectory.parquet`: trajectory frames written at `trajectory_interval`;
+- `thermo.log`: thermodynamic output written at `log_interval`; and
+- `metadata.json`: run and output metadata.
+
+The Parquet trajectory uses the following units and conventions:
+
+| Field | Unit or convention |
+| --- | --- |
+| `step`, `natoms`, `atomic_numbers` | Unitless integers |
+| `time` | Femtoseconds |
+| `positions`, `cell` | Å |
+| `pbc`, `fixed` | Boolean arrays |
+| `velocities` | Raw `Atoms.get_velocities()` values in ASE internal velocity units; multiply by `ase.units.fs` for Å/fs |
+| `energy`, `kinetic_energy` | eV |
+| `forces` | eV/Å |
+| `stress` | eV/Å³ in ASE Voigt order `(xx, yy, zz, yz, xz, xy)` |
+| `pressure` | Bar, computed as `-trace(stress) / 3`; this is configurational pressure and excludes kinetic stress |
+| `temperature` | K |
+| `tags`, `charge`, `spin`, `sid` | Unmodified ASE metadata |
+
+`checkpoint_interval` writes a rolling checkpoint containing atoms, velocities,
+thermostat state, step count, and generated `resume_config.yaml` and
+`portable_config.yaml` files. Full restart output handling is under active
+development. Currently, resuming into the same results directory recreates
+`trajectory.parquet`, replacing its pre-checkpoint frames, while appending to
+`thermo.log`. Preserve the trajectory before using a generated resume
+configuration.
+
+When `heartbeat_interval` is enabled, creating a file named `STOPFAIR` alongside
+the run's `checkpoints` directory requests a checkpoint and graceful stop.
+
+## Adapt the configuration to a cluster
+
+SLURM clusters differ in scheduler policies, hardware, and filesystem layout,
+so the repository does not provide a default cluster YAML. Start with either
+local example configuration and supply values appropriate to your site. For a
+single-GPU SLURM job, the required overrides typically look like:
+
+```bash
+fairchem -c configs/uma/md/nvt.yaml \
+  job.run_dir=/shared/path/md-runs \
+  job.scheduler.mode=SLURM \
+  job.scheduler.num_nodes=1 \
+  job.scheduler.ranks_per_node=1 \
+  job.scheduler.slurm.account=my-account \
+  job.scheduler.slurm.partition=gpu \
+  job.scheduler.slurm.qos=normal \
+  job.scheduler.slurm.mem_gb=80 \
+  job.scheduler.slurm.cpus_per_task=8 \
+  job.scheduler.slurm.timeout_hr=24
+```
+
+Account, partition, QoS, filesystem paths, memory, CPU count, and wall time are
+site-specific. Omit optional scheduler values such as QoS when your cluster
+does not use them. The submission host must have access to the environment and
+Hugging Face credentials; multi-node runs also need a shared `run_dir` and
+model cache.
+
+To split one large atomic graph across multiple GPUs, install
+`fairchem-core[ray]`, request a Ray-backed allocation, and make the calculator
+worker count equal the total allocated GPUs. For example, on one eight-GPU
+node, add these overrides:
+
+```bash
+job.scheduler.use_ray=true \
+job.scheduler.num_nodes=1 \
+job.scheduler.ranks_per_node=8 \
+runner.calculator.workers=8
+```
+
+Do not set `ranks_per_node` greater than one without the Ray-backed runner for a
+single trajectory: the regular SPMD launcher would start an independent copy of
+`MDRunner` on every rank. To run many independent small simulations, use
+[InferenceBatcher](inference_batcher.md). For very large or established MD
+workflows, consider the [LAMMPS integration](lammps.md).
+
+## Validate a simulation
+
+The short examples demonstrate the interface; they are not converged
+production calculations. Before using a trajectory scientifically:
+
+- choose a timestep appropriate to the fastest motion in the system;
+- equilibrate before collecting observables;
+- monitor energy drift, temperature, pressure, and cell volume;
+- verify that the structure remains within the model's training domain; and
+- test system-size, timestep, thermostat, and sampling convergence.
+
+---
+
 Source: `docs/core/common_tasks/lammps.md`
 
 # LAMMPS Integration
@@ -1268,7 +1671,7 @@ The main advantage is that we can optimize UMA for distributed parallel inferenc
 
 There is some Python overhead, but for very fast empirical force fields where Python would be a limiting factor, this is negligible at the speeds of current MLIPs (10s - 100s of ms per step). This is the same reason nearly all modern LLM inference uses Python engines. Additionally, to easily scale to multi-node parallelism regimes, we designed the architecture using a client-server interface so LAMMPS would only see the client and the server code running inference can be optimized completely independently later.
 
-Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
+Since the `fix external` integration simply wraps the UMA predictor interface, the way inference is run is identical to using the [MLIPPredictUnit, ASE Calculator or ParallelMLIPPredictUnit for Multi-GPU inference](./ase_calculator.md).
 
 ## Usage Notes
 
@@ -1372,7 +1775,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 If your application requires predictions over many systems, you can run batch inference using UMA models to use compute more efficiently and improve GPU utilization.
 
 :::{tip}
-To learn more about the different inference settings supported, see the [Prediction interface documentation](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
+To learn more about the different inference settings supported, see the [Prediction interface documentation](./ase_calculator.md).
 :::
 
 ## Generate Batches at Runtime
@@ -1668,14 +2071,14 @@ Source: `docs/core/common_tasks/ase_dataset_creation.md`
 
 `fairchem` provides training and evaluation code for tasks and models that take arbitrary chemical structures as input to predict energies, forces, positions, and stresses. It can be used as a base scaffold for research projects. For an overview of tasks, data, and metrics, please read the documentation and respective papers:
 
-- [OC20](catalysts/datasets/oc20)
-- [OC22](catalysts/datasets/oc22)
-- [ODAC23](dac/datasets/odac)
-- [OC20Dense](catalysts/datasets/oc20dense)
-- [OC20NEB](catalysts/datasets/oc20neb)
-- [OMat24](inorganic_materials/datasets/omat24)
+- [OC20](../../catalysts/datasets/oc20.md)
+- [OC22](../../catalysts/datasets/oc22.md)
+- [ODAC23](../../dac/datasets/odac23.md)
+- [OC20Dense](../../catalysts/datasets/oc20dense.md)
+- [OC20NEB](../../catalysts/datasets/oc20neb.md)
+- [OMat24](../../inorganic_materials/datasets/omat24.md)
 - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
-- [OMC25](molecules/datasets/omc25)
+- [OMC25](../../molecules/datasets/omc25.md)
 
 :::{note}
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
@@ -1683,7 +2086,7 @@ There are multiple ways to train and evaluate FAIRChem models on data other than
 
 ## Custom ASE Databases
 
-If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
+If your data is already in an [ASE Database](https://docs.ase-lib.org/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
 
 :::{tip}
 Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effectively utilize more resources than this, consider writing your data to an LMDB.
@@ -1812,7 +2215,7 @@ The FAIRChem training framework currently uses a simple SPMD (Single Program Mul
 
 3. **Runner Interface** - The core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs. Runners are distinct user functions that run on a single rank (i.e., GPU). They describe separate high-level tasks such as Train, Eval, Predict, Relaxations, MD, etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.
 
-4. **Trainer** - We use [TorchTNT](https://docs.pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
+4. **Trainer** - We use [TorchTNT](https://meta-pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
 
 :::{note}
 TNT is PyTorch's replacement for PyTorch Lightning - which has become severely bloated and difficult to use over the years; so we opted for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation, and prediction. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, e.g., training a Multitask-MLIP is one unit, training a diffusion model should be another unit.
@@ -2068,7 +2471,7 @@ This repo provides a number of scripts to quickly fine-tune a model using a cust
 :::
 
 :::{note}
-Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
+Training datasets must be in the [ASE-lmdb format](https://docs.ase-lib.org/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
 
 ## Generating Training/Fine-tuning Datasets
@@ -2473,7 +2876,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
 * Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
-For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
+For a detailed description of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
@@ -2734,7 +3137,7 @@ The OMol25 dataset is broken into several training splits - All and 4M. The 4M s
 
 For each calculation, the following data is available:
 
-* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
+* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, `orca.xyz`). To open:
 
 ```
 >> tar --zstd -xvf orca.tar.zst
@@ -2760,12 +3163,12 @@ orca.gbw.zstd0      : 9462880 bytes
 import numpy as np
 
 # Load the NPZ file
-with np.load('density_mat.npz') as loaded_data:
-    dens_vector = loaded_data['orca.scfp']
+with np.load("density_mat.npz") as loaded_data:
+    dens_vector = loaded_data["orca.scfp"]
 
 # Re-inflate the symmetric matrix
 n = (np.sqrt(8 * len(dens_vector) + 1) - 1) // 2
-mat = np.zeros((n,n))
+mat = np.zeros((n, n))
 mat[np.triu_indices(n)] = dens_vector
 mat = mat + mat.T - np.diag(mat.diagonal())
 ```
@@ -2786,9 +3189,9 @@ for idx in indices:
     # Check if this is a system you care about.
     is_relevant = is_atoms_object_relevant(atoms)
     if is_relevant:
-	# Extract the relative path that matches the Argonne cluster
-       relative_dir = os.path.dirname(atoms.info["source"])
-	argonne_paths.append(relative_dir)
+        # Extract the relative path that matches the Argonne cluster
+        relative_dir = os.path.dirname(atoms.info["source"])
+        argonne_paths.append(relative_dir)
 ```
 
 ## How to Access the Data
@@ -2803,11 +3206,11 @@ The data are stored and accessible via storage on the Eagle cluster at Argonne N
 [General Issues](https://github.com/facebookresearch/fairchem)
 
 Dataset questions?
-* [Muhammed Shuaibi](mshuaibi@meta.com)
-* [Daniel Levine](levineds@meta.com)
+* [Muhammed Shuaibi](mailto:mshuaibi@meta.com)
+* [Daniel Levine](mailto:levineds@meta.com)
 
 Cluster/Access questions?
-* [Ben Blaiszik](blaiszik@uchicago.edu)
+* [Ben Blaiszik](mailto:blaiszik@uchicago.edu)
 
 ---
 
@@ -2889,7 +3292,7 @@ As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)
 
-The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the forseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.
+The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the foreseeable future. The OMol25-only eSEN models are provided mostly as a baseline for models trained only on OMol25.
 
 ## Citing
 
@@ -2980,7 +3383,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure lable in the intitial or relaxed structures of the  WBM datset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
@@ -3046,7 +3449,7 @@ please see the manuscript.
 
 
 ## Getting ASE atoms objects
-Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://wiki.fysik.dtu.dk/ase/ase/db/db.html),
+Dataset files are written as `AseLMDBDatabase` objects which are an implementation of an [ASE Database](https://docs.ase-lib.org/ase/db/db.html),
 in LMDB format. A single **.aselmdb* file can be read and queried like any other ASE DB.
 
 You can also read many DB files at once and access atoms objects using the `AseDBDataset` class.
@@ -3056,7 +3459,7 @@ For example to read the **rattled-relax** subdataset,
 from fairchem.core.datasets import AseDBDataset
 
 dataset_path = "/path/to/omat24/train/rattled-relax"
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 
 dataset = AseDBDataset(config=dict(src=dataset_path, **config_kwargs))
 
@@ -3068,7 +3471,7 @@ To read more than one subdataset you can simply pass a list of subdataset paths,
 ```python
 from fairchem.core.datasets import AseDBDataset
 
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 dataset_paths = [
     "/path/to/omat24/train/rattled-relax",
     "/path/to/omat24/train/rattled-1000-subsampled",
@@ -3133,7 +3536,7 @@ The UMA model has a number of nice features over the previous checkpoints:
 These checkpoints are included here for baselining and model reproducibility. For new projects, we recommend using UMA.
 :::
 
-* All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24) directory.
+* All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24) directory.
 * All models are equiformerV2 S2EFS models
 
 **Note** in order to download any of the model checkpoints from the links below, you will need to first request access
@@ -3143,9 +3546,9 @@ These checkpoints are trained on OMat24 only. Note that predictions are *not* Ma
 
 | Model Name            | Checkpoint	| Config                                                                                      |
 |-----------------------|--------------|---------------------------------------------------------------------------------------------|
-| EquiformerV2-31M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_31M.yml)   |
-| EquiformerV2-86M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_86M.yml)   |
-| EquiformerV2-153M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_153M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/all/eqV2_153M.yml)  |
+| EquiformerV2-31M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_31M.yml)   |
+| EquiformerV2-86M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_86M.yml)   |
+| EquiformerV2-153M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_153M_omat.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/all/eqV2_153M.yml)  |
 
 
 ## MPTrj only models
@@ -3153,10 +3556,10 @@ These models are trained only on the [MPTrj](https://figshare.com/articles/datas
 
 | Model Name                | Checkpoint	| Config                                                                          |
 |---------------------------|--------------|---------------------------------------------------------------------------------|
-| EquiformerV2-31M-MP       | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_31M_mptrj.yml) |
-| EquiformerV2-31M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_31M_dens_mptrj.yml) |
-| EquiformerV2-86M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_86M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_86M_dens_mptrj.yml) |
-| EquiformerV2-153M-DeNS-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_153M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/mptrj/eqV2_153M_dens_mptrj.yml) |
+| EquiformerV2-31M-MP       | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_31M_mptrj.yml) |
+| EquiformerV2-31M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_31M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_31M_dens_mptrj.yml) |
+| EquiformerV2-86M-DeNS-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_86M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_86M_dens_mptrj.yml) |
+| EquiformerV2-153M-DeNS-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_153M_mp.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/mptrj/eqV2_153M_dens_mptrj.yml) |
 
 
 ## Finetuned OMat models
@@ -3165,9 +3568,9 @@ from the 3D PBE Alexandria dataset, which we call Alex.
 
 | Model Name                     | Checkpoint	| Config                                                                             |
 |--------------------------------|--------------|------------------------------------------------------------------------------------|
-| EquiformerV2-31M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_31M_ft_salexmptrj.yml) |
-| EquiformerV2-86M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_86M_ft_salexmptrj.yml) |
-| EquiformerV2-153M-OMat-Alex-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24/finetune/eqV2_153M_ft_salexmptrj.yml) |
+| EquiformerV2-31M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_31M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_31M_ft_salexmptrj.yml) |
+| EquiformerV2-86M-OMat-Alex-MP  | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_86M_omat_mp_salex.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_86M_ft_salexmptrj.yml) |
+| EquiformerV2-153M-OMat-Alex-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/omat24/finetune/eqV2_153M_ft_salexmptrj.yml) |
 
 
 Please consider citing the following work if you use OMat24 models in your work,
@@ -3201,7 +3604,7 @@ Learn how to use FAIRChem models for inorganic materials property prediction and
 ::::{grid} 1 2 2 3
 
 :::{card} Formation Energy
-:link: formation-energy
+:link: formation_energy
 
 Calculate formation energies for inorganic materials using UMA and MP-compatible corrections.
 :::
@@ -3418,7 +3821,7 @@ We don't have to change much code from above, we just use a built-in recipe to c
 3. For each deformation, a relaxation using the MLIP and (optionally) a single point calculation is run
 4. Finally, all of the above calculations are used to calculate the elastic properties of the material
 
-For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/mlp/elastic.html#quacc.recipes.mlp.elastic.elastic_tensor_flow)
+For more documentation, see the quacc docs for the [`elastic_tensor_flow` recipe](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html). The example below uses the MLP-specific wrapper `quacc.recipes.mlp.elastic.elastic_tensor_flow`, which drives this flow with MLIP relax/static jobs.
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -3573,7 +3976,7 @@ Data files for all tasks/splits were updated on Feb 10, 2021 due to minor bugs (
 IS2* datasets are stored as LMDB files and are ready to be used upon download.
 S2EF train+val datasets require an additional preprocessing step.
 
-For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/main/configs/oc20).
+For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
 
 For IS2*, run the script as:
 
@@ -3613,7 +4016,7 @@ python scripts/download_data.py --task s2ef --split test
 
 To download and process the dataset in a directory other than your local `fairchem/data` folder, add the following command line argument `--data-path`.
 
-Note that the baseline [configs](https://github.com/facebookresearch/fairchem/tree/main/configs/oc20).
+Note that the baseline [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
 expect the data to be found in `fairchem/data`, make sure you symlink your directory or
 modify the paths in the configs accordingly.
 
@@ -3804,7 +4207,7 @@ where:
 * `reference_energy` - Energy used to reference system energies to bare catalyst+gas reference energies. Used for adsorption energy calculations.
 
 
-The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://wiki.fysik.dtu.dk/ase/dev/ase/io/formatoptions.html#extxyz .
+The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://docs.ase-lib.org/ase/io/formatoptions.html#extxyz .
 
 In order to uncompress the files, `uncompress.py` provides a multi-core implementation which could be used.
 
@@ -4104,7 +4507,7 @@ where:
 * `reference_energy` - Energy used to reference system energies to bare catalyst+gas reference energies. Used for adsorption energy calculations.
 
 
-The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz.
+The `.extxyz.xz` files are LZMA compressed `.extxyz` trajectory files. Each trajectory corresponds to a relaxation trajectory of a different adsorbate+catalyst system. Information about the `.extxyz` trajectory file format may be found at https://docs.ase-lib.org/ase/io/formatoptions.html#extxyz.
 
 In order to uncompress the files, `uncompress.py` provides a multi-core implementation which could be used.
 
@@ -4304,7 +4707,7 @@ Source: `docs/catalysts/datasets/oc20dense.md`
 
 ## Overview
 
-The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so aquisition of it is an important task.
+The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so acquisition of it is an important task.
 
 ## File Contents and Download
 |Splits |Size of compressed version (in bytes)  |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -4367,11 +4770,11 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 
 1. `desorption` indicates the reaction type (dissociation and transfer are the other possibilities)
 2. `id` identifies that the material belongs to the validation in domain split (ood - out of domain is th e other possibility)
-3. `83` is the task id. This does not provide relavent information
+3. `83` is the task id. This does not provide relevant information
 4. `2409` is the bulk index of the bulk used in the ocdata bulk pickle file
 5. `9` is the reaction index. for each reaction type there is a reaction pickle file in the repository. In this case it is the 9th entry to that pickle file
-6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number cooresponds to the shift value. In this case the 4th shift enumerated was the one used.
-7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distiguish any of the trajectories from one another.
+6. `111-4` the first 3 numbers are the miller indices (i.e. the (1,1,1) surface), and the last number corresponds to the shift value. In this case the 4th shift enumerated was the one used.
+7. `neb1.0` the number here indicates the k value used. For the full dataset, 1.0 was used so this does not distinguish any of the trajectories from one another.
 
 
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
@@ -4461,7 +4864,7 @@ Source: `docs/catalysts/datasets/ocx24.md`
 In this work, we seek to directly bridge the gap between computational descriptors and experimental outcomes for heterogeneous catalysis. We consider two important green chemistries: the hydrogen evolution reaction and the electrochemical reduction of carbon dioxide. To do this, we created a curated dataset of experimental results with materials synthesized and tested in a reproducible manner under industrially relevant conditions. We used this data to build models to directly predict experimental outcomes using computational features. For more information, please read the manuscript [paper](http://arxiv.org/abs/2411.11783).
 
 ## Experimental datasets
-To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data is all publically available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
+To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data are all publicly available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
 
 ## Computational datasets
 |Splits |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
@@ -4575,54 +4978,54 @@ This page summarizes all the pretrained models released as part of the [Open Cat
 
 
 * All configurations for these models are available in the [`configs/`](https://github.com/facebookresearch/fairchem/tree/main/configs) directory.
-* All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
+* All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/02d83f5f/DATASET.md.
 * All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://facebookresearch.github.io/fairchem/oc20).
 
 ### S2EF models: optimized for EFwT
 
 | Model Name                          | Model	              | Split  |Download	|val ID force MAE (eV / Å)	|val ID EFwT	|
 |-------------------------------------|---------------------|--------|---	|---	|---	|
-| CGCNN-S2EF-OC20-200k               | CGCNN               | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/cgcnn/cgcnn.yml)	|0.08	|0%	|
-| CGCNN-S2EF-OC20-2M                 | CGCNN               | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/cgcnn/cgcnn.yml)	|0.0673	|0.01%	|
-| CGCNN-S2EF-OC20-20M                | CGCNN               | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/cgcnn/cgcnn.yml)	|0.065	|0%	|
-| CGCNN-S2EF-OC20-All                | CGCNN               | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/cgcnn/cgcnn.yml)	|0.0684	|0.01%	|
+| CGCNN-S2EF-OC20-200k               | CGCNN               | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/200k/cgcnn/cgcnn.yml)	|0.08	|0%	|
+| CGCNN-S2EF-OC20-2M                 | CGCNN               | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/2M/cgcnn/cgcnn.yml)	|0.0673	|0.01%	|
+| CGCNN-S2EF-OC20-20M                | CGCNN               | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/20M/cgcnn/cgcnn.yml)	|0.065	|0%	|
+| CGCNN-S2EF-OC20-All                | CGCNN               | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/all/cgcnn/cgcnn.yml)	|0.0684	|0.01%	|
 | DimeNet-S2EF-OC20-200k             | DimeNet             | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenet_200k.pt)	|0.0693	|0.01%	|
 | DimeNet-S2EF-OC20-2M               | DimeNet             | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenet_2M.pt)	|0.0576	|0.02%	|
-| SchNet-S2EF-OC20-200k              | SchNet              | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/schnet/schnet.yml)	|0.0743	|0%	|
-| SchNet-S2EF-OC20-2M                | SchNet              | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/schnet/schnet.yml)	|0.0737	|0%	|
-| SchNet-S2EF-OC20-20M               | SchNet              | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/schnet/schnet.yml)	|0.0568	|0.03%	|
-| SchNet-S2EF-OC20-All               | SchNet              | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_large.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/schnet/schnet.yml)	|0.0494	|0.12%	|
-| DimeNet++-S2EF-OC20-200k           | DimeNet++           | 200k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/200k/dimenet_plus_plus/dpp.yml)	|0.0741	|0%	|
-| DimeNet++-S2EF-OC20-2M             | DimeNet++           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/dimenet_plus_plus/dpp.yml)	|0.0595	|0.01%	|
-| DimeNet++-S2EF-OC20-20M            | DimeNet++           | 20M    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/20M/dimenet_plus_plus/dpp.yml)	|0.0511	|0.06%	|
-| DimeNet++-S2EF-OC20-All            | DimeNet++           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp.yml)	|0.0444	|0.12%	|
-| SpinConv-S2EF-OC20-2M              | SpinConv            | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/spinconv_force_centric_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/spinconv/spinconv_force.yml)	|0.0329	|0.18%	|
-| SpinConv-S2EF-OC20-All             | SpinConv            | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/spinconv_force_centric_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/spinconv/spinconv_force.yml)	|0.0267	|1.02%	|
-| GemNet-dT-S2EF-OC20-2M             | GemNet-dT           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/gemnet_t_direct_h512_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/gemnet/gemnet-dT.yml)	|0.0257	|1.10%	|
-| GemNet-dT-S2EF-OC20-All            | GemNet-dT           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/gemnet_t_direct_h512_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-dT.yml)	|0.0211	|2.21%	|
-| PaiNN-S2EF-OC20-All                | PaiNN               | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/s2ef/painn_h512_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_h512.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.0294 |0.91%   |
-| GemNet-OC-S2EF-OC20-2M             | GemNet-OC           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt)  |0.0225 |2.12%  |
-| GemNet-OC-S2EF-OC20-All            | GemNet-OC           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0179 |4.56%  |
-| GemNet-OC-S2EF-OC20-All+MD         | GemNet-OC           | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/gemnet_oc_base_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0173 |4.72%  |
-| GemNet-OC-Large-S2EF-OC20-All+MD   | GemNet-OC-Large     | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_large_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/gemnet/gemnet-oc-large.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/481f3a5a92dc787384ddae9fe3f50f5d932712fd/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc-large.pt) |0.0164 |5.34%  |
-| SCN-S2EF-OC20-2M                   | SCN                 | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t1_b1_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/scn/scn-t1-b1.yml) |0.0216 |1.68%  |
-| SCN-t4-b2-S2EF-OC20-2M             | SCN-t4-b2           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t4_b2_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/scn/scn-t4-b2.yml) |0.0193 |2.68%  |
-| SCN-S2EF-OC20-All+MD               | SCN                 | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/scn/scn-all-md.yml) |0.0160 |5.08%  |
-| eSCN-L4-M2-Lay12-S2EF-OC20-2M      | eSCN-L4-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l4_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/escn/eSCN-L4-M2-Lay12.yml) |0.0191 |2.55%  |
-| eSCN-L6-M2-Lay12-S2EF-OC20-2M      | eSCN-L6-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/escn/eSCN-L6-M2-Lay12.yml) \| [exported](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef_export_cuda_9182024.pt2) |0.0186 |2.66%  |
-| eSCN-L6-M2-Lay12-S2EF-OC20-All+MD  | eSCN-L6-M2-Lay12    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/escn/eSCN-L6-M2-Lay12-All-MD.yml) |0.0161 |4.28%  |
-| eSCN-L6-M3-Lay20-S2EF-OC20-All+MD  | eSCN-L6-M3-Lay20    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m3_lay20_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/escn/eSCN-L6-M3-Lay20-All-MD.yml) |0.0139 |6.64%  |
-| EquiformerV2-83M-S2EF-OC20-2M      | EquiformerV2 (83M)  | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_83M_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/2M/equiformer_v2/equiformer_v2_N@12_L@6_M@2.yml) |0.0167 |4.26%  |
-| EquiformerV2-31M-S2EF-OC20-All+MD  | EquiformerV2 (31M)  | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_31M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@8_L@4_M@2_31M.yml) |0.0142  |6.20%  |
-| EquiformerV2-153M-S2EF-OC20-All+MD | EquiformerV2 (153M) | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_153M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@20_L@6_M@3_153M.yml)   |0.0126     |8.90%  |
+| SchNet-S2EF-OC20-200k              | SchNet              | 200k	  |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/200k/schnet/schnet.yml)	|0.0743	|0%	|
+| SchNet-S2EF-OC20-2M                | SchNet              | 2M	    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/schnet/schnet.yml)	|0.0737	|0%	|
+| SchNet-S2EF-OC20-20M               | SchNet              | 20M	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/20M/schnet/schnet.yml)	|0.0568	|0.03%	|
+| SchNet-S2EF-OC20-All               | SchNet              | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_large.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/schnet/schnet.yml)	|0.0494	|0.12%	|
+| DimeNet++-S2EF-OC20-200k           | DimeNet++           | 200k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_200k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/200k/dimenet_plus_plus/dpp.yml)	|0.0741	|0%	|
+| DimeNet++-S2EF-OC20-2M             | DimeNet++           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/dimenet_plus_plus/dpp.yml)	|0.0595	|0.01%	|
+| DimeNet++-S2EF-OC20-20M            | DimeNet++           | 20M    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/20M/dimenet_plus_plus/dpp.yml)	|0.0511	|0.06%	|
+| DimeNet++-S2EF-OC20-All            | DimeNet++           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp.yml)	|0.0444	|0.12%	|
+| SpinConv-S2EF-OC20-2M              | SpinConv            | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/spinconv_force_centric_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/2M/spinconv/spinconv_force.yml)	|0.0329	|0.18%	|
+| SpinConv-S2EF-OC20-All             | SpinConv            | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/spinconv_force_centric_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/s2ef/all/spinconv/spinconv_force.yml)	|0.0267	|1.02%	|
+| GemNet-dT-S2EF-OC20-2M             | GemNet-dT           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_12/s2ef/gemnet_t_direct_h512_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/gemnet/gemnet-dT.yml)	|0.0257	|1.10%	|
+| GemNet-dT-S2EF-OC20-All            | GemNet-dT           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_08/s2ef/gemnet_t_direct_h512_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-dT.yml)	|0.0211	|2.21%	|
+| PaiNN-S2EF-OC20-All                | PaiNN               | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/s2ef/painn_h512_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_h512.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.0294 |0.91%   |
+| GemNet-OC-S2EF-OC20-2M             | GemNet-OC           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt)  |0.0225 |2.12%  |
+| GemNet-OC-S2EF-OC20-All            | GemNet-OC           | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_base_s2ef_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0179 |4.56%  |
+| GemNet-OC-S2EF-OC20-All+MD         | GemNet-OC           | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/gemnet_oc_base_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc.pt) |0.0173 |4.72%  |
+| GemNet-OC-Large-S2EF-OC20-All+MD   | GemNet-OC-Large     | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_07/s2ef/gemnet_oc_large_s2ef_all_md.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/gemnet-oc-large.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/gemnet/scaling_factors/gemnet-oc-large.pt) |0.0164 |5.34%  |
+| SCN-S2EF-OC20-2M                   | SCN                 | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t1_b1_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/scn/scn-t1-b1.yml) |0.0216 |1.68%  |
+| SCN-t4-b2-S2EF-OC20-2M             | SCN-t4-b2           | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_t4_b2_s2ef_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/scn/scn-t4-b2.yml) |0.0193 |2.68%  |
+| SCN-S2EF-OC20-All+MD               | SCN                 | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/scn_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/scn/scn-all-md.yml) |0.0160 |5.08%  |
+| eSCN-L4-M2-Lay12-S2EF-OC20-2M      | eSCN-L4-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l4_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/escn/eSCN-L4-M2-Lay12.yml) |0.0191 |2.55%  |
+| eSCN-L6-M2-Lay12-S2EF-OC20-2M      | eSCN-L6-M2-Lay12    | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/escn/eSCN-L6-M2-Lay12.yml) \| [exported](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_2M_s2ef_export_cuda_9182024.pt2) |0.0186 |2.66%  |
+| eSCN-L6-M2-Lay12-S2EF-OC20-All+MD  | eSCN-L6-M2-Lay12    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m2_lay12_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/escn/eSCN-L6-M2-Lay12-All-MD.yml) |0.0161 |4.28%  |
+| eSCN-L6-M3-Lay20-S2EF-OC20-All+MD  | eSCN-L6-M3-Lay20    | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_03/s2ef/escn_l6_m3_lay20_all_md_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/escn/eSCN-L6-M3-Lay20-All-MD.yml) |0.0139 |6.64%  |
+| EquiformerV2-83M-S2EF-OC20-2M      | EquiformerV2 (83M)  | 2M     |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_83M_2M.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/2M/equiformer_v2/equiformer_v2_N@12_L@6_M@2.yml) |0.0167 |4.26%  |
+| EquiformerV2-31M-S2EF-OC20-All+MD  | EquiformerV2 (31M)  | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_31M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@8_L@4_M@2_31M.yml) |0.0142  |6.20%  |
+| EquiformerV2-153M-S2EF-OC20-All+MD | EquiformerV2 (153M) | All+MD |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_06/oc20/s2ef/eq2_153M_ec4_allmd.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/equiformer_v2/equiformer_v2_N@20_L@6_M@3_153M.yml)   |0.0126     |8.90%  |
 
 ### S2EF models: optimized for force only
 
 | Model Name                           |Model	|Split	|Download	|val ID force MAE	|
 |--------------------------------------|---	|---	|---	|---	|
 | SchNet-S2EF-force-only-OC20-All            |SchNet	|All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/schnet_all_forceonly.pt)	|0.0443	|
-| DimeNet++-force-only-OC20-All              | DimeNet++	                |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenetpp_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp_forceonly.yml)	|0.0334	|
-| DimeNet++-Large-S2EF-force-only-OC20-All   | DimeNet++-Large	          |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_large_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/dimenet_plus_plus/dpp10.7M_forceonly.yml)	|0.02825	|
+| DimeNet++-force-only-OC20-All              | DimeNet++	                |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/s2ef/dimenetpp_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp_forceonly.yml)	|0.0334	|
+| DimeNet++-Large-S2EF-force-only-OC20-All   | DimeNet++-Large	          |All	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_large_all_forceonly.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/dimenet_plus_plus/dpp10.7M_forceonly.yml)	|0.02825	|
 | DimeNet++-S2EF-force-only-OC20-20M+Rattled | DimeNet++	                |20M+Rattled    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M_rattled_forceonly.pt)	|0.0614	|
 | DimeNet++-S2EF-force-only-OC20-20M+MD      | DimeNet++	                |20M+MD         |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/s2ef/dimenetpp_20M_md_forceonly.pt)	|0.0594	|
 
@@ -4630,19 +5033,19 @@ This page summarizes all the pretrained models released as part of the [Open Cat
 
 | Model Name                | Model	     | Split	 |Download	|val ID energy MAE	|
 |---------------------------|------------|--------|---	|---	|
-| CGCNN-IS2RE-OC20-10k      | CGCNN      | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/cgcnn/cgcnn.yml)	|0.9881	|
-| CGCNN-IS2RE-OC20-100k     | CGCNN      | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/cgcnn/cgcnn.yml)	|0.682	|
-| CGCNN-IS2RE-OC20-All      | CGCNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/cgcnn/cgcnn.yml)	|0.6199	|
+| CGCNN-IS2RE-OC20-10k      | CGCNN      | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/10k/cgcnn/cgcnn.yml)	|0.9881	|
+| CGCNN-IS2RE-OC20-100k     | CGCNN      | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/100k/cgcnn/cgcnn.yml)	|0.682	|
+| CGCNN-IS2RE-OC20-All      | CGCNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/cgcnn_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/b154639d/configs/is2re/all/cgcnn/cgcnn.yml)	|0.6199	|
 | DimeNet-IS2RE-OC20-10k    | DimeNet    | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_10k.pt)	|1.0117	|
 | DimeNet-IS2RE-OC20-100k   | DimeNet    | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_100k.pt)	|0.6658	|
 | DimeNet-IS2RE-OC20-all    | DimeNet    | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2020_11/is2re/dimenet_all.pt)	|0.5999	|
-| SchNet-IS2RE-OC20-10k     | SchNet     | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/schnet/schnet.yml)	|1.059	|
-| SchNet-IS2RE-OC20-100k    | SchNet     | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/schnet/schnet.yml)	|0.7137	|
-| SchNet-IS2RE-OC20-All     | SchNet     | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/schnet/schnet.yml)	|0.6458	|
-| DimeNet++-IS2RE-OC20-10k  | DimeNet++	 | 10k	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/10k/dimenet_plus_plus/dpp.yml)	|0.8837	|
-| DimeNet++-IS2RE-OC20-100k | DimeNet++	 | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/100k/dimenet_plus_plus/dpp.yml)	|0.6388	|
-| DimeNet++-IS2RE-OC20-All  | DimeNet++	 | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/dimenet_plus_plus/dpp.yml)	|0.5639	|
-| PaiNN-IS2RE-OC20-All      | PaiNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/is2re/painn_h1024_bs4x8_is2re_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/is2re/all/painn/painn_h1024_bs8x4.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/main/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.5728 |
+| SchNet-IS2RE-OC20-10k     | SchNet     | 10k    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/10k/schnet/schnet.yml)	|1.059	|
+| SchNet-IS2RE-OC20-100k    | SchNet     | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/100k/schnet/schnet.yml)	|0.7137	|
+| SchNet-IS2RE-OC20-All     | SchNet     | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/schnet_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/schnet/schnet.yml)	|0.6458	|
+| DimeNet++-IS2RE-OC20-10k  | DimeNet++	 | 10k	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_10k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/10k/dimenet_plus_plus/dpp.yml)	|0.8837	|
+| DimeNet++-IS2RE-OC20-100k | DimeNet++	 | 100k   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_100k.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/100k/dimenet_plus_plus/dpp.yml)	|0.6388	|
+| DimeNet++-IS2RE-OC20-All  | DimeNet++	 | All	   |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2021_02/is2re/dimenetpp_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/dimenet_plus_plus/dpp.yml)	|0.5639	|
+| PaiNN-IS2RE-OC20-All      | PaiNN      | All    |[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_05/is2re/painn_h1024_bs4x8_is2re_all.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/is2re/all/painn/painn_h1024_bs8x4.yml) \| [scale file](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc20/s2ef/all/painn/painn_nb6_scaling_factors.pt)     |0.5728 |
 
 The Open Catalyst 2020 (OC20) dataset is licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
 
@@ -4661,8 +5064,8 @@ OC20 dataset or pretrained models, as well as the original paper for each model:
 
 ## Open Catalyst 2022 (OC22)
 
-* All configurations for these models are available in the [`configs/oc22`](https://github.com/facebookresearch/fairchem/tree/main/configs/oc22) directory.
-* All of these models are trained on various splits of the OC22 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2206.08917](https://arxiv.org/abs/2206.08917) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
+* All configurations for these models are available in the [`configs/oc22`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc22) directory.
+* All of these models are trained on various splits of the OC22 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2206.08917](https://arxiv.org/abs/2206.08917) and https://github.com/facebookresearch/fairchem/blob/02d83f5f/DATASET.md.
 * All OC22 models released here are trained on DFT total energies, in contrast to the OC20 models listed above, which are trained on adsorption energies.
 
 
@@ -4670,12 +5073,12 @@ OC20 dataset or pretrained models, as well as the original paper for each model:
 
 | Model Name                        |Model	|Training	|Download	|val ID force MAE	|val ID energy MAE	|
 |-----------------------------------|---	|---	|---	|---	|---	|
-| GemNet-dT-S2EFS-OC22              |GemNet-dT | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gndt_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-dt/gemnet-dT.yml)	|0.032	|1.127	|
-| GemNet-OC-S2EFS-OC22              | GemNet-OC                                                                                                                                                | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc.yml)	|0.030	|0.563	|
-| GemNet-OC-S2EFS-OC20+OC22         | GemNet-OC                                                                                                                                                | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22.yml)	|0.027	|0.483	|
-| GemNet-OC-S2EFS-nsn-OC20+OC22     | GemNet-OC <br><sub><sup>(trained with `enforce_max_neighbors_strictly=False`, [#467](https://github.com/facebookresearch/fairchem/pull/467))</sup></sub> | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22_degen_edges.yml)	|0.027	|0.458	|
-| GemNet-OC-S2EFS-OC20->OC22        | GemNet-OC                                                                                                                                                | OC20->OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/gemnet-oc/gemnet_oc_finetune.yml)	|0.030	|0.417	|
-| EquiformerV2-lE4-lF100-S2EFS-OC22 | EquiformerV2 ($\lambda_E$=4, $\lambda_F$=100)                                                                                                            | OC22  | [checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_10/oc22/s2ef/eq2_121M_e4_f100_oc22_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/main/configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml) | 0.023 | 0.447
+| GemNet-dT-S2EFS-OC22              |GemNet-dT | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gndt_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-dt/gemnet-dT.yml)	|0.032	|1.127	|
+| GemNet-OC-S2EFS-OC22              | GemNet-OC                                                                                                                                                | OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc.yml)	|0.030	|0.563	|
+| GemNet-OC-S2EFS-OC20+OC22         | GemNet-OC                                                                                                                                                | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22.yml)	|0.027	|0.483	|
+| GemNet-OC-S2EFS-nsn-OC20+OC22     | GemNet-OC <br><sub><sup>(trained with `enforce_max_neighbors_strictly=False`, [#467](https://github.com/facebookresearch/fairchem/pull/467))</sup></sub> | OC20+OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_oc20_oc22_degen_edges.yml)	|0.027	|0.458	|
+| GemNet-OC-S2EFS-OC20->OC22        | GemNet-OC                                                                                                                                                | OC20->OC22	|[checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/gemnet-oc/gemnet_oc_finetune.yml)	|0.030	|0.417	|
+| EquiformerV2-lE4-lF100-S2EFS-OC22 | EquiformerV2 ($\lambda_E$=4, $\lambda_F$=100)                                                                                                            | OC22  | [checkpoint](https://dl.fbaipublicfiles.com/opencatalystproject/models/2023_10/oc22/s2ef/eq2_121M_e4_f100_oc22_s2ef.pt) \| [config](https://github.com/facebookresearch/fairchem/blob/977a80328f2b/configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml) | 0.023 | 0.447
 
 The Open Catalyst 2022 (OC22) dataset is licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
 
@@ -5129,7 +5532,7 @@ plt.legend(["DFT (PBE)", "UMA-OC20"]);
 
 ## Next steps
 
-In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./NRR/NRR_example-gemnet).
+In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./adsorption_energies/adsorption_energies.md).
 
 +++
 
@@ -5560,7 +5963,7 @@ As a post-processing step we check to see if:
 3. the adsorbate intercalated
 4. the surface has changed
 
-We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
+We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will omit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
 To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
 
@@ -5589,7 +5992,7 @@ for file_outer in glob("data/adslabs/*"):
         rx_id = file.split("/")[-1].split(".")[0]
         traj = ase.io.read(file, ":")
 
-        # Check to see if the trajectory is anomolous
+        # Check to see if the trajectory is anomalous
         detector = DetectTrajAnomaly(traj[0], traj[-1], traj[0].get_tags())
         anom = (
             detector.is_adsorbate_dissociated()
@@ -6165,7 +6568,7 @@ To generalize an interactive visualization, use `ase gui` from the command line 
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-# Make an interative html file of the optimized neb trajectory
+# Make an interactive html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
 ```
@@ -6413,11 +6816,11 @@ print([
 ```
 
 
-### Converting to [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects
+### Converting to [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects
 
 **Important! The `to_ase_atoms()` method described below will fail with an import error if [ase](https://wiki.fysik.dtu.dk/ase) is not installed.**
 
-Two classes have support for generating [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects:
+Two classes have support for generating [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects:
 * `ocpapi.Atoms.to_ase_atoms()`: Adds unit cell, atomic positions, and other structural information to the returned `ase.Atoms` object.
 * `ocpapi.AdsorbateSlabRelaxationResult.to_ase_atoms()`: Adds the same structure information to the `ase.Atoms` object. Also adds the predicted forces and energy of the relaxed structure, which can be accessed with the `ase.Atoms.get_potential_energy()` and `ase.Atoms.get_forces()` methods.
 
@@ -6440,7 +6843,7 @@ print(ase_atoms)
 
 ### Converting to other structure formats
 
-From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
+From an `ase.Atoms` object (see previous section), it is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
 :tags: ["skip-execution"]
@@ -6605,7 +7008,7 @@ For IS2RE / IS2RS training, validation and test sets, we provide precomputed LMD
 
 ## DDEC Charges
 
-We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calcuations failed for them.
+We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calculations failed for them.
 
 |Size of compressed version (in bytes)    |Size of uncompressed version (in bytes)    | MD5 checksum (download link)    |
 |---    |---    |---    |
@@ -6678,27 +7081,27 @@ If you use the ODAC25 trained models, please cite the following paper:
 **Deprecated**: These models are superseded by ODAC25 models and UMA. They are provided here for reproducibility only.
 :::
 
-* All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/main/configs/odac) directory.
+* All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac) directory.
 
 ### S2EF models
 
 | Model Name                   |Model	|Checkpoint	| Config |
 |------------------------------|---	|---	|---	|
-| SchNet-S2EF-ODAC             | SchNet               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Schnet.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/schnet.yml) |
-| DimeNet++-S2EF-ODAC          | DimeNet++           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/DimenetPP.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/dpp.yml) |
-| PaiNN-S2EF-ODAC              | PaiNN               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/PaiNN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/painn.yml) |
-| GemNet-OC-S2EF-ODAC          | GemNet-OC           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/gemnet-oc.yml) |
-| eSCN-S2EF-ODAC               | eSCN                | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eSCN.yml) |
-| EquiformerV2-S2EF-ODAC       | EquiformerV2        | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/eqv2_31M.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eqv2_31M.yml) |
-| EquiformerV2-Large-S2EF-ODAC | EquiformerV2 (Large) | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Large.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/s2ef/eqv2_153M.yml) |
+| SchNet-S2EF-ODAC             | SchNet               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Schnet.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/schnet.yml) |
+| DimeNet++-S2EF-ODAC          | DimeNet++           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/DimenetPP.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/dpp.yml) |
+| PaiNN-S2EF-ODAC              | PaiNN               | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/PaiNN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/painn.yml) |
+| GemNet-OC-S2EF-ODAC          | GemNet-OC           | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/gemnet-oc.yml) |
+| eSCN-S2EF-ODAC               | eSCN                | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eSCN.yml) |
+| EquiformerV2-S2EF-ODAC       | EquiformerV2        | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/eqv2_31M.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eqv2_31M.yml) |
+| EquiformerV2-Large-S2EF-ODAC | EquiformerV2 (Large) | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Large.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/s2ef/eqv2_153M.yml) |
 
 ### IS2RE Direct models
 
 | Model Name              | Model        |Checkpoint	| Config |
 |-------------------------|--------------|---	| --- |
-| Gemnet-OC-IS2RE-ODAC    | Gemnet-OC    | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/gemnet-oc.yml) |
-| eSCN-IS2RE-ODAC         | eSCN         | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/eSCN.yml) |
-| EquiformerV2-IS2RE-ODAC | EquiformerV2 | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/main/configs/odac/is2re/eqv2_31M.yml) |
+| Gemnet-OC-IS2RE-ODAC    | Gemnet-OC    | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/Gemnet-OC_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/gemnet-oc.yml) |
+| eSCN-IS2RE-ODAC         | eSCN         | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231018/eSCN_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/eSCN.yml) |
+| EquiformerV2-IS2RE-ODAC | EquiformerV2 | [checkpoint](https://dl.fbaipublicfiles.com/dac/checkpoints_20231116/Equiformer_V2_Direct.pt) | [config](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/odac/is2re/eqv2_31M.yml) |
 
 The models in the table above were trained to predict relaxed energy directly. Relaxed energies can also be predicted by running structural relaxations using the S2EF models from the previous section.
 
@@ -6737,7 +7140,7 @@ Learn how to use FAIRChem models for Direct Air Capture (DAC) applications with 
 ::::{grid} 1 2 2 2
 
 :::{card} Adsorption Energy
-:link: adsorption-energy
+:link: adsorption_energy
 
 Calculate CO2 and H2O adsorption energies in MOFs, including flexible framework effects.
 :::
@@ -6853,7 +7256,7 @@ To account for this deformation, it is vital to use the most energetically favor
 
 1. The MOF does not deform, so the energies of the relaxed empty MOF and the MOF in the adsorbed state are the same
 2. The MOF deforms to a less energetically favorable geometry than its ground state
-3. The MOF locates a new energetically favorable geoemtry relative to the empty MOF relaxation
+3. The MOF locates a new energetically favorable geometry relative to the empty MOF relaxation
 
 The first outcome requires no additional computation because the MOF rigidity assumption is valid. The second outcome represents physical and reversible deformation where the MOF returns to its empty ground state upon removal of the guest molecule. The third outcome is often the result of the guest molecule breaking local symmetry. We also found cases in ODAC in which both outcomes 2 and 3 occur within the same MOF.
 
@@ -6931,7 +7334,7 @@ $$ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MO
 $$ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}$$
 
 
-$E_{\mathrm{int}}$ describes host host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
+$E_{\mathrm{int}}$ describes host–guest interactions for the MOF in the adsorbed state only. $E_{\mathrm{MOF,deform}}$ quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that
 
 $$ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}$$
 
@@ -7212,6 +7615,12 @@ plt.xlabel("Time (fs)")
 plt.ylabel("Energy (eV)");
 ```
 
+:::{seealso}
+For tested NVT and NPT examples, velocity initialization, Hydra configurations,
+checkpointing, and cluster submission, see the
+[molecular dynamics guide](../core/common_tasks/molecular_dynamics.md).
+:::
+
 # [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
 
 The basic approach in computing an adsorption energy is to compute this energy difference:
@@ -7343,7 +7752,7 @@ vib.summary()
 
 # Bulk alloy phase behavior
 
-Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/dft.html#orgheadline29
+Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/notebooks/04-bulk-systems/10-bulk-reaction-energies.html
 
 We manually compute the formation energy of pure compounds and some alloy compositions to assess stability.
 
@@ -7445,7 +7854,7 @@ These indicate that cupd-1 and cupd-2 are both more stable than phase separated 
 
 ## Phonon calculation
 
-This takes 4-10 minutes. Adapted from https://wiki.fysik.dtu.dk/ase/ase/phonons.html#example.
+This takes 4-10 minutes. Adapted from https://docs.ase-lib.org/ase/phonons.html.
 
 Phonons have applications in computing the stability and free energy of solids. See:
 
@@ -7874,7 +8283,7 @@ a_opt = a_optimized
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni bulk structure](example_configs/ni_bulk.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
+[Download the example Ni bulk input structure](example_configs/ni_bulk.xyz) (unrelaxed; this is the pre-optimization geometry) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
 ```
 
 ```{admonition} Understanding the Results
@@ -8124,7 +8533,7 @@ for facet in facets:
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example Ni(111) slab structure](example_configs/ni111_slab.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
+[Download the example Ni(111) slab input structure](example_configs/ni111_slab.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
 ```
 
 ```{admonition} Comparison with Paper (Table 1)
@@ -8546,7 +8955,7 @@ view(slab_with_h, viewer='x3d')
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example H on Ni(111) structure](example_configs/h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
+[Download the example H on Ni(111) input structure](example_configs/h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
 ```
 
 ```{code-cell} ipython3
@@ -8817,7 +9226,7 @@ print("\n✓ Coverage dependence analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example multiple H on Ni(111) structure](example_configs/4h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
+[Download the example multiple-H on Ni(111) input structure](example_configs/4h_on_ni111.xyz) (unrelaxed) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
 ```
 
 ```{admonition} Comparison with Paper
@@ -9552,7 +9961,7 @@ print("\n✓ NEB analysis complete!")
 
 Don't have access to UMA yet? You can still explore this calculation!
 
-[Download example CO on Ni(111) structure](example_configs/co_on_ni111.xyz) and [Download C+O on Ni(111) structure](example_configs/c_o_on_ni111.xyz) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
+[Download the example CO on Ni(111) input structure](example_configs/co_on_ni111.xyz) (unrelaxed) and [Download the C+O on Ni(111) input structure](example_configs/c_o_on_ni111.xyz) (unrelaxed) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
 ```
 
 ```{admonition} Comparison with Paper (Tables 4 & 5)
@@ -11045,7 +11454,7 @@ You can still find these in the v1 version of fairchem github. However, many of 
 ::::{grid} 1 2 2 3
 
 :::{card} GemNet-dT
-[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/gemnet)
+[[arXiv]](https://arxiv.org/abs/2106.08903) | [[code]](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/gemnet)
 :::
 
 :::{card} PaiNN

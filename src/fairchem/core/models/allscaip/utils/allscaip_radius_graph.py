@@ -568,7 +568,7 @@ def build_radius_graph(
         env = torch.amax(env, dim=0)
     # set the envelope to zero for self-loops
     env.masked_fill_(dist == 0.0, 0.0)
-    # sort the distances of source and destintion neighbors
+    # sort the distances of source and destination neighbors
     index = torch.arange(N, device=device)[:, None]
     ranks = torch.arange(M * N, device=device)[None, :]
     # ranks are the ranks of the atoms within the neighbors, i.e. the j-th source
@@ -711,7 +711,7 @@ def batched_radius_graph(
     # flag if the number of neighbors is larger than the maximum number of neighbors
     elif (index1_rank >= knn_pad_size).any() or (index2_rank >= knn_pad_size).any():
         warnings.warn(
-            "The number of neighbors is larger than the maximum number of neighbors."
+            "The number of neighbors is larger than the maximum number of neighbors. "
             "Removing the excess neighbors."
         )
         # filter the neighbors to the maximum number of neighbors

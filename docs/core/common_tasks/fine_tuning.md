@@ -20,7 +20,7 @@ This repo provides a number of scripts to quickly fine-tune a model using a cust
 :::
 
 :::{note}
-Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
+Training datasets must be in the [ASE-lmdb format](https://docs.ase-lib.org/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
 
 ## Generating Training/Fine-tuning Datasets

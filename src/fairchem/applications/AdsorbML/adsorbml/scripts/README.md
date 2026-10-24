@@ -4,7 +4,7 @@
 **Step 0**: Setup: LMDBs, trajectories, and metadata files should be downloaded.
 
 **Step 1**: Run ML relaxations on the LMDB to generate predictions of relaxed energy and relaxed structures.
-For example, see [these instructions](https://github.com/Open-Catalyst-Project/ocp/blob/main/TRAIN.md#initial-structure-to-relaxed-structure-is2rs). We will be using the trajectory files.
+For example, see [these instructions](https://github.com/facebookresearch/fairchem/blob/8f20f8ece4e4ae2f273e9fc6668ccfe9fe014884/TRAIN.md#initial-structure-to-relaxed-structure-is2rs). We will be using the trajectory files.
 
 **Step 2**: Process ML relaxed structures (MLRS), group by system, and sort configurations by energy.
 ```

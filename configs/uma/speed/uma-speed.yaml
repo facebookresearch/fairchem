@@ -21,7 +21,7 @@ runner:
     # uma_s_1p1: ${uma_s_1p1}
     uma_s_1p2: ${uma_s_1p2}
   # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
-  # for profiling, we substract the graph generation time by using external_graph_gen=True
+  # for profiling, we subtract the graph generation time by using external_graph_gen=True
   inference_settings:
     _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
     tf32: True

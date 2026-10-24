@@ -252,6 +252,23 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Tests that download registered checkpoints must declare their models with a
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
+- The core CI workflow uses explicit shard path lists rather than discovering
+  every directory under `tests/core`; add new test directories to the relevant
+  shard or CI will silently omit them.
+- External model tests intentionally run through the privileged `workflow_run`
+  path after `contributor check`, allowing approved PRs to access `HF_TOKEN`.
+  Keep `allow-unsafe-pr-checkout` paired with the repository's maintainer
+  approval gate, and include active targets such as `main` and `uma_dev` in the
+  contributor-check branch filter.
+- Branch-sync pushes authenticated with `GITHUB_TOKEN` do not trigger downstream
+  `push` workflows. Use a PAT or GitHub App token when a synchronized `uma_dev`
+  push must start its test workflow.
+- A workflow triggered by pushes to `main` must exist on `main`; keeping it only
+  on `uma_dev` will not make it run when `main` changes.
+- `fairchem_cpp` is optional in normal installations, but its supported source
+  builds must pass the required CPU/Python and GPU compatibility matrix. A CUDA
+  build request must fail if the toolkit or driver is unavailable; an
+  importable schema-only extension does not prove that the CUDA kernels exist.
 - Freeze inference parameters after inference-specific module replacement.
   Main's folded-batch linear path removes the former general-backend regression:
   on one H100, freezing improved compiled general inference by 15-17% and cut
@@ -268,6 +285,11 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - `graph_parallel_group_size=None` disables graph-parallel setup. A value of
   `1` intentionally initializes singleton graph- and data-parallel groups and
   is used to exercise those paths in tests; do not treat it as disabled.
+- Name-or-path checkpoint resolution belongs in
+  `pretrained_mlip.resolve_checkpoint` (registry names win over same-named
+  files). The batch server's `ModelSpec(source="auto")` is path-first instead,
+  so do not reroute its explicit `source` branches through the resolver
+  without reconciling that precedence.
 - Keep the full `AtomicData.clone()` boundary in prediction unless benchmarks
   justify changing it and every model-side mutation has been audited. Graph
   parallelism, MOLE preparation, and conservative gradients can replace or
@@ -294,8 +316,27 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Training FLOPs profiling invokes the model from `on_train_start`; scoped
   execution settings must cover profiling as well as train/eval step methods.
 
+## Optimal Efficiency with UMA Nitro
+
+- Nitro's edge buffers hold the edge count measured on the first evaluation times
+  `EDGE_MARGIN` (`UMA_NITRO_EDGE_MARGIN`, default 1.30, in
+  `models/uma/uma_nitro/_inference.py`). A capacity overflow discards the cached
+  graph, remeasures and retries, which is slow. For optimal speed, this parameter needs to be tuned. Attempt tuning of this parameter for any inference speed benchmark of any UMA model that supports nitro.
+
 ## Cluster Validation Gotchas
 
+- `torch.utils.collect_env.get_env_info()` runs multiple external tools without
+  subprocess timeouts. Do not invoke it directly on a distributed job's critical
+  startup path; isolate the collector and enforce a timeout.
+- PyTorch's environment collector can report no pip packages in environments
+  created without a `pip` executable, including isolated `uv` environments. Use
+  `importlib.metadata` inside the bounded collector process as the authoritative
+  package inventory.
+- In Slurm processes, prefer `SLURM_LOCALID` over `LOCAL_RANK`. Slurm's value is
+  authoritative, while an inherited `LOCAL_RANK` may be stale.
+- CLI telemetry must be installed in every launcher entry point. The top-level
+  CLI runs on the submission host for Slurm jobs, so compute-node reports belong
+  in direct-Slurm and Ray node entry points rather than only in `_cli.py`.
 - H100 compute nodes do not have PyPI egress. Provision Python environments on
   the submission host before launching validation jobs.
 - Imports from home-backed virtual environments are extremely slow on H100
@@ -356,10 +397,10 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   not depend on enumeration order, seeded random coordinates, or atom counts
   unless those values are part of the public contract; prefer composition,
   Miller index, shift, placement, and cell invariants that survive upgrades.
-
-Anytime we learn something that could be beneficial in future coding sessions, automatically add it to CLAUDE.md.
-
-This includes:
-- Gotchas that are not obvious
-- Subtle bugs that manifest under specific conditions
-- Repeat corrections I make to the output of coding agents
+- Core compatibility variants are alternate builds of the `fairchem-core`
+  distribution and must keep their manifests synchronized with
+  `packages/fairchem-core/pyproject.toml`, except for their intentional
+  dependency pins. Use explicit source link farms rather than linking the
+  entire repository `src` directory: the base and NumPy 1.26 link farms must
+  not expose GemNet-OC at all, while only the Torch 2.12
+  `fairchem-core-geometric` link farm adds GemNet-OC and its PyG dependency.
