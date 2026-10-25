@@ -38,14 +38,19 @@ class ElementReferences(nn.Module):
     def compute_references(batch, tensor, elem_refs, operation):
         assert tensor.shape[0] == len(batch.natoms)
         with torch.autocast(elem_refs.device.type, enabled=False):
+            # Element references can be huge atomic baselines, so adding
+            # them to the small network output in float32 can cause loss
+            # of precision in the total energy.
+            # Hence, cast both operands to float64 for the addition.
             refs = torch.zeros(
-                tensor.shape, dtype=elem_refs.dtype, device=tensor.device
+                tensor.shape, dtype=torch.float64, device=tensor.device
             ).scatter_reduce(
                 0,
                 batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
+                elem_refs[batch.atomic_numbers_full].to(torch.float64),
                 reduce="sum",
             )
+            tensor = tensor.to(torch.float64)
             if operation == "subtract":
                 return tensor - refs
             elif operation == "add":
@@ -125,12 +130,14 @@ class LinearReferences(nn.Module):
         indices = batch.atomic_numbers.to(
             dtype=torch.int, device=self.element_references.device
         )
-        elemrefs = self.element_references[indices].to(dtype=target.dtype)
+        # As in ElementReferences, do the baseline arithmetic in float64:
+        # the references can be ~1e6 eV/atom, dwarfing the target residual.
+        elemrefs = self.element_references[indices].to(dtype=torch.float64)
         # this option should not exist, all tensors should have compatible shapes in dataset and trainer outputs
         if reshaped:
             elemrefs = elemrefs.view(batch.natoms.sum(), -1)
 
-        return target.index_add(0, batch.batch, elemrefs, alpha=sign)
+        return target.to(torch.float64).index_add(0, batch.batch, elemrefs, alpha=sign)
 
     @torch.autocast(device_type="cuda", enabled=False)
     @torch.autocast(device_type="cpu", enabled=False)
