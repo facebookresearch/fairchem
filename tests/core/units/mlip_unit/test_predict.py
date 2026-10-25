@@ -48,6 +48,7 @@ from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
 from tests.conftest import get_predict_unit_for_test, seed_everywhere
+from tests.core.models.uma.uma_nitro.nitro_test_utils import random_checkpoint
 
 
 def _resolve_checkpoint_path(name_or_path: str) -> str:
@@ -364,6 +365,230 @@ def test_parallel_predict_unit_cpu(
 ):
     _test_parallel_predict_unit_impl(
         workers, "cpu", checkpointing, graph_gen_version, pretrained_checkpoint, gp_mode
+    )
+
+
+@pytest.fixture()
+def parallel_state_checkpoint(tmp_path):
+    checkpoint = random_checkpoint(
+        num_layers=1,
+        sphere_channels=8,
+        hidden_channels=8,
+        edge_channels=8,
+        num_experts=2,
+        num_distance_basis=8,
+        cutoff=2.0,
+    )
+    path = tmp_path / "parallel_state.pt"
+    torch.save(checkpoint, path)
+    return str(path)
+
+
+def _parallel_state_batch(atoms, task="omol", charge=0, spin=1):
+    atoms = atoms.copy()
+    atoms.info.update(charge=charge, spin=spin)
+    return atomicdata_list_to_batch(
+        [
+            AtomicData.from_ase(
+                atoms,
+                task_name=task,
+                radius=2.0,
+                r_edges=False,
+                r_data_keys=["charge", "spin"],
+            )
+        ]
+    )
+
+
+def _assert_parallel_state_predictions(
+    checkpoint_path,
+    batches,
+    merged_after,
+    *,
+    device="cpu",
+    reuse_input=False,
+    reject_invalid=False,
+):
+    settings = InferenceSettings(
+        merge_mole=False,
+        compile=False,
+        activation_checkpointing=False,
+        external_graph_gen=False,
+        auto_add_default_untrained_tasks=False,
+        execution_mode="general",
+    )
+    reference = MLIPPredictUnit(
+        checkpoint_path, device=device, inference_settings=settings
+    )
+    # Compute references before graph-parallel setup changes process-wide state.
+    expected = [
+        {
+            name: value.detach().cpu()
+            for name, value in reference.predict(batch.clone()).items()
+        }
+        for batch in batches
+    ]
+    parallel_settings = deepcopy(settings)
+    parallel_settings.merge_mole = True
+    parallel = ParallelMLIPPredictUnit(
+        checkpoint_path,
+        device=device,
+        inference_settings=parallel_settings,
+        num_workers=2,
+        num_workers_per_node=2,
+    )
+    try:
+        request = batches[0].clone() if reuse_input else None
+        for index, (batch, prediction, merged) in enumerate(
+            zip(batches, expected, merged_after)
+        ):
+            if reuse_input:
+                # Exercise callers that edit the same AtomicData tensors in place.
+                request.charge.copy_(batch.charge)
+                request.pos.copy_(batch.pos)
+            else:
+                request = batch
+            before = request.clone()
+            output = parallel.predict(request)
+            for name in ("energy", "forces"):
+                torch.testing.assert_close(
+                    output[name], prediction[name], atol=1e-5, rtol=1e-5
+                )
+            assert parallel.inference_settings.merge_mole is merged
+            for name in (
+                "pos",
+                "cell",
+                "cell_offsets",
+                "atomic_numbers",
+                "natoms",
+                "pbc",
+                "charge",
+                "spin",
+                "fixed",
+                "tags",
+                "batch",
+            ):
+                torch.testing.assert_close(request[name], before[name], atol=0, rtol=0)
+            assert request.dataset == before.dataset
+            if reject_invalid and index == 0:
+                invalid = request.clone()
+                invalid.natoms[0] += 1
+                with pytest.raises(AssertionError):
+                    parallel.predict(invalid)
+    finally:
+        distutils.cleanup_gp_ray()
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    ("change", "stay_merged"),
+    [
+        ("geometry", True),
+        ("geometry_dtype", True),
+        ("atom_order", True),
+        ("pbc", True),
+        ("atom_count", True),
+        ("species", False),
+        ("charge", False),
+        ("spin", False),
+        ("task", False),
+    ],
+)
+def test_parallel_predict_refreshes_changed_atomic_data(
+    parallel_state_checkpoint, change, stay_merged
+):
+    _test_parallel_predict_refreshes_changed_atomic_data(
+        parallel_state_checkpoint, change, stay_merged
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.serial()
+@pytest.mark.skipif(torch.cuda.device_count() < 2, reason="Requires two CUDA devices")
+@pytest.mark.parametrize(
+    ("change", "stay_merged"), [("atom_order", True), ("charge", False)]
+)
+def test_parallel_predict_refreshes_changed_atomic_data_gpu(
+    parallel_state_checkpoint, change, stay_merged
+):
+    _test_parallel_predict_refreshes_changed_atomic_data(
+        parallel_state_checkpoint, change, stay_merged, device="cuda"
+    )
+
+
+def _test_parallel_predict_refreshes_changed_atomic_data(
+    checkpoint_path, change, stay_merged, device="cpu"
+):
+    atoms = Atoms(
+        "OH2",
+        positions=[[0.4, 0.4, 0.4], [1.34, 0.5, 0.4], [0.28, 1.23, 0.63]],
+        cell=[2.1, 2.3, 2.5],
+    )
+    changed = atoms.copy()
+    batch_kwargs = {}
+    if change == "geometry":
+        changed.positions[1] += [0.07, -0.03, 0.02]
+        changed.cell[0, 0] += 0.1
+    elif change == "atom_order":
+        changed = atoms[[1, 0, 2]]
+    elif change == "pbc":
+        changed.pbc = True
+    elif change == "atom_count":
+        # The reduced composition stays H2O, so MOLE can remain merged.
+        changed = atoms.repeat((2, 1, 1))
+    elif change == "species":
+        changed.numbers[0] = 6
+    elif change == "charge":
+        batch_kwargs["charge"] = 1
+    elif change == "spin":
+        batch_kwargs["spin"] = 3
+    elif change == "task":
+        batch_kwargs["task"] = "omat"
+
+    following = changed.copy()
+    following.positions[0] += [0.05, -0.02, 0.03]
+    batches = [
+        _parallel_state_batch(atoms),
+        _parallel_state_batch(changed, **batch_kwargs),
+        _parallel_state_batch(following, **batch_kwargs),
+    ]
+    if change == "geometry_dtype":
+        for batch in batches[1:]:
+            for name in ("pos", "cell", "cell_offsets"):
+                batch[name] = batch[name].double()
+    _assert_parallel_state_predictions(
+        checkpoint_path,
+        batches,
+        merged_after=[True, stay_merged, stay_merged],
+        device=device,
+        reuse_input=change == "charge",
+        reject_invalid=change == "geometry",
+    )
+
+
+@pytest.mark.serial()
+def test_parallel_predict_continues_after_heterogeneous_first_batch(
+    parallel_state_checkpoint,
+):
+    atoms = Atoms(
+        "OH2",
+        positions=[[0.4, 0.4, 0.4], [1.34, 0.5, 0.4], [0.28, 1.23, 0.63]],
+        cell=[2.1, 2.3, 2.5],
+    )
+    batches = []
+    for displacement in (0.0, 0.06, 0.11):
+        moved = atoms.copy()
+        moved.positions[1, 0] += displacement
+        batches.append(
+            atomicdata_list_to_batch(
+                [
+                    _parallel_state_batch(moved, charge=0),
+                    _parallel_state_batch(moved, charge=1),
+                ]
+            )
+        )
+    _assert_parallel_state_predictions(
+        parallel_state_checkpoint, batches, merged_after=[False, False, False]
     )
 
 
