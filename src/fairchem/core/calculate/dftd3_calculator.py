@@ -15,7 +15,7 @@ import tarfile
 from dataclasses import dataclass
 from hashlib import md5
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import requests
@@ -417,7 +417,8 @@ class _NValChemiDFTD3Calculator(Calculator):
 
 
 class DFTD3Calculator(Calculator):
-    """Add an nvalchemiops DFT-D3(BJ) correction to an ASE calculator.
+    """
+    Add an nvalchemiops DFT-D3(BJ) correction to an ASE calculator.
 
     The named functional selects the damping parameters associated with the
     level of theory used to train the wrapped calculator. The default 15 Å
@@ -436,6 +437,12 @@ class DFTD3Calculator(Calculator):
         param_file: Optional local D3 parameter-table file.
         auto_download: Allow FairChem to download and cache the parameter
             table when ``param_file`` is not supplied.
+
+    Attributes:
+        contributions: Per-property component values, where
+            ``contributions[prop] == (base, dispersion)``. Empty initially and
+            refreshed on every ``calculate()`` call. Summed ASE properties are
+            stored in ``results``.
     """
 
     def __init__(
@@ -450,6 +457,7 @@ class DFTD3Calculator(Calculator):
         auto_download: bool = True,
     ) -> None:
         super().__init__()
+        self.contributions: dict[str, tuple[Any, Any]] = {}
         self.base_calculator = calculator
         self.dispersion_calculator = _NValChemiDFTD3Calculator(
             functional,
@@ -472,8 +480,11 @@ class DFTD3Calculator(Calculator):
         properties: list[str] | None = None,
         system_changes: list[str] = all_changes,
     ) -> None:
-        """Evaluate each calculator once and directly add common results."""
+        """
+        Evaluate each calculator once and directly add common results.
+        """
 
+        self.contributions = {}
         super().calculate(atoms, properties, system_changes)
         if self.atoms is None:
             raise ValueError("An Atoms object is required.")
@@ -500,10 +511,7 @@ class DFTD3Calculator(Calculator):
                 if np.shape(dispersion_result) == (3, 3):
                     dispersion_result = full_3x3_to_voigt_6_stress(dispersion_result)
             self.results[prop] = base_result + dispersion_result
-            self.results[f"{prop}_contributions"] = [
-                base_result,
-                dispersion_result,
-            ]
+            self.contributions[prop] = (base_result, dispersion_result)
 
     @property
     def functional(self) -> str:
