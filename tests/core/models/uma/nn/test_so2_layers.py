@@ -10,6 +10,7 @@ from __future__ import annotations
 import unittest
 
 import torch
+from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.models.uma.common.so3 import CoefficientMapping
 from fairchem.core.models.uma.nn.activation import GateActivation
@@ -531,3 +532,16 @@ class TestSO2_Convolution(unittest.TestCase):
         x_message = torch.randn(self.edges, self.sum_ls, self.m_output_channels)
         x_message_pp = self.so2_conv_2(x_message)
         assert x_message_pp.shape == (self.edges, self.sum_ls, self.sphere_channels)
+
+    def test_frozen_conv2_without_autograd_matches_force_inference(self):
+        # conv2 receives strided per-order views of its input; with frozen weights
+        # they must fold into one GEMM even when autograd records nothing.
+        self.so2_conv_2.requires_grad_(False)
+        x_message = torch.randn(self.edges, self.sum_ls, self.m_output_channels)
+        reference = self.so2_conv_2(x_message.clone().requires_grad_())
+
+        with profile(activities=[ProfilerActivity.CPU]) as prof, torch.no_grad():
+            output = self.so2_conv_2(x_message)
+
+        assert "aten::bmm" not in {event.key for event in prof.key_averages()}
+        torch.testing.assert_close(output, reference.detach())

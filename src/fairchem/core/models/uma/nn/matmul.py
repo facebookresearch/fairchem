@@ -7,8 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING
+
 from torch.nn import functional as F
+
+if TYPE_CHECKING:
+    import torch
 
 
 def linear_with_folded_batch(
@@ -17,16 +21,16 @@ def linear_with_folded_batch(
     bias: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
-    Apply a linear operation after folding batch dimensions for input gradients.
+    Apply a linear operation with the leading input dimensions folded into one.
 
-    PyTorch can route a non-contiguous, rank-three activation multiplied by a frozen
-    weight through broadcast BMM. UMA force inference differentiates with respect to
-    positions while model parameters are frozen, so this path can retain a
-    batch-expanded weight for backward. Folding the leading dimensions produces one
-    two-dimensional GEMM instead, reducing backward memory and improving latency for
-    representative UMA edge counts. When weights require gradients or input
-    gradients are not being recorded, the original shape is preserved because the
-    native linear path can be faster and has no frozen-weight expansion to avoid.
+    PyTorch folds the leading dimensions of a rank-three or higher input into one
+    GEMM only when the fold is a free view or the weight requires gradients.
+    Otherwise, as for an order-m slice of the SO(2) edge features multiplied by a
+    frozen weight, it runs a broadcast BMM with one small GEMM per leading index,
+    whether or not autograd records the operation. Folding copies such an input
+    once and runs a single two-dimensional GEMM; for a viewable input the fold is a
+    free view. Frozen weights therefore always fold, while weights that require
+    gradients keep the native path, which already folds them.
 
     Args:
         x: Input to the linear operation.
@@ -36,12 +40,7 @@ def linear_with_folded_batch(
     Returns:
         The linear result with the original leading dimensions restored.
     """
-    should_fold = (
-        x.ndim > 2
-        and torch.is_grad_enabled()
-        and x.requires_grad
-        and not weight.requires_grad
-    )
+    should_fold = x.ndim > 2 and not weight.requires_grad
     x_shape = x.shape
     linear_input = x.flatten(0, -2) if should_fold else x
     output = F.linear(linear_input, weight, bias)
