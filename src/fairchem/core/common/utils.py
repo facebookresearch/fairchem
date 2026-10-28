@@ -492,6 +492,30 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
     )
 
 
+def get_subdirectories_sorted_by_step(directory: str) -> list:
+    """
+    Get the ``step_N`` subdirectories of a directory sorted by their step.
+
+    Unlike modification times, the step in a checkpoint directory's name does
+    not change when files are later added to or removed from it.
+
+    Args:
+        directory (str): The path to the directory to search.
+    Returns:
+        list: A list of tuples containing the subdirectory path and its step,
+            lowest step first.
+    """
+    if not os.path.isdir(directory):
+        return []
+
+    steps = []
+    for d in pathlib.Path(directory).iterdir():
+        step = d.name.removeprefix("step_")
+        if d.name.startswith("step_") and step.isdigit() and d.is_dir():
+            steps.append((str(d), int(step)))
+    return sorted(steps, key=lambda x: x[1])
+
+
 def os_arch_for_download() -> tuple[str, str]:
     """Return (os_type, arch) strings as used in typical release download URLs."""
     os_type = platform.system().lower()  # 'linux' / 'darwin'

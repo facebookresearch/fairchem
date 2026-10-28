@@ -140,6 +140,36 @@ def test_get_most_recent_viable_checkpoint_path():
     assert result is None
 
 
+def _make_checkpoint(path, complete=True):
+    os.makedirs(path)
+    if complete:
+        with open(os.path.join(path, ".metadata"), "w") as f:
+            f.write("")
+    return str(path)
+
+
+def test_get_most_recent_viable_checkpoint_path_orders_by_step(tmp_path):
+    _make_checkpoint(tmp_path / "step_9")
+    newest = _make_checkpoint(tmp_path / "step_100")
+    _make_checkpoint(tmp_path / "step_200", complete=False)
+    old = _make_checkpoint(tmp_path / "step_10")
+    _make_checkpoint(tmp_path / "other")
+    # Writing into an old checkpoint (e.g. an exported inference artifact)
+    # makes it the most recently modified directory.
+    with open(os.path.join(old, "inference_ckpt.pt"), "w") as f:
+        f.write("")
+    os.utime(newest, (1_700_000_000, 1_700_000_000))
+    os.symlink(old, tmp_path / "preemption_state")
+
+    assert get_most_recent_viable_checkpoint_path(str(tmp_path)) == newest
+
+    final = _make_checkpoint(tmp_path / "final", complete=False)
+    assert get_most_recent_viable_checkpoint_path(str(tmp_path)) == newest
+    with open(os.path.join(final, ".metadata"), "w") as f:
+        f.write("")
+    assert get_most_recent_viable_checkpoint_path(str(tmp_path)) == final
+
+
 class _Unit:
     pass
 
@@ -231,6 +261,40 @@ def test_train_checkpoint_callback_saves_step_zero(tmp_path):
         os.path.join(tmp_path, "step_0"),
         os.path.join(tmp_path, "step_5"),
     ]
+
+
+def test_train_checkpoint_callback_rotates_by_step(tmp_path):
+    for step in (9, 10, 20):
+        _make_checkpoint(tmp_path / f"step_{step}")
+    # step_20 is the oldest by modification time; rotation must go by step.
+    os.utime(tmp_path / "step_20", (1_700_000_000, 1_700_000_000))
+    _make_checkpoint(tmp_path / "other")
+    os.symlink(tmp_path / "step_9", tmp_path / "step_1")
+
+    callback = TrainCheckpointCallback(
+        checkpoint_every_n_steps=5, max_saved_checkpoints=2
+    )
+    callback.set_runner_callbacks(_make_checkpoint, lambda _: None, str(tmp_path))
+    unit = _CheckpointUnit()
+    unit.train_progress.num_steps_completed = 25
+    callback.on_train_step_start(None, unit)
+
+    assert sorted(os.listdir(tmp_path)) == ["other", "step_1", "step_20", "step_25"]
+
+
+def test_train_checkpoint_callback_removes_stale_final(tmp_path):
+    # A finished run that is extended: its new steps must outrank the old final.
+    _make_checkpoint(tmp_path / "final")
+    callback = TrainCheckpointCallback(checkpoint_every_n_steps=5)
+    callback.set_runner_callbacks(_make_checkpoint, lambda _: None, str(tmp_path))
+    unit = _CheckpointUnit()
+    unit.train_progress.num_steps_completed = 55
+    callback.on_train_step_start(None, unit)
+
+    assert os.listdir(tmp_path) == ["step_55"]
+    assert get_most_recent_viable_checkpoint_path(str(tmp_path)) == str(
+        tmp_path / "step_55"
+    )
 
 
 def test_stop_before_timeout_callback_requests_graceful_stop():
