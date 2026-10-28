@@ -23,7 +23,18 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
+import backoff
+import torch
 import yaml
+from monty.dev import requires
+
+try:
+    import ray
+    from ray import serve
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common.utils import recursive_dict_merge
 from fairchem.core.components.batch_server import (
@@ -67,8 +78,6 @@ def _resolve_serve_configs(
       ``deployment_config.logging_config`` unless the caller already set
       ``logging_config`` explicitly.
     """
-    from ray import serve as _serve
-
     deployment_config = dict(cluster_config.get("deployment_config") or {})
     batch_config = dict(cluster_config.get("batch_config") or {})
 
@@ -103,7 +112,7 @@ def _resolve_serve_configs(
 
     serve_log_level = cluster_config.get("serve_log_level")
     if serve_log_level and "logging_config" not in deployment_config:
-        deployment_config["logging_config"] = _serve.schema.LoggingConfig(
+        deployment_config["logging_config"] = serve.schema.LoggingConfig(
             log_level=serve_log_level
         )
 
@@ -301,6 +310,7 @@ def _build_slurm_requirements(config: dict[str, Any]) -> dict[str, Any]:
 
 
 # TODO move this and other setup somewhere else
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def start_ray_cluster(
     config: dict[str, Any],
     return_cluster: bool = False,
@@ -362,6 +372,7 @@ def start_ray_cluster(
 
 
 @contextmanager
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def get_slurm_inference_raycluster(
     config: str | Path | None = None,
     num_workers: int = 1,
@@ -464,8 +475,6 @@ def get_slurm_inference_raycluster(
             )
 
             if cluster_config.get("start_inference_server", False):
-                import ray
-
                 client_address = (
                     f"ray://{head_info['hostname']}:" f"{head_info['client_port']}"
                 )
@@ -484,8 +493,6 @@ def get_slurm_inference_raycluster(
                         f"Connecting to Ray cluster at {client_address} "
                         "to start inference server..."
                     )
-                    import backoff
-
                     max_tries = int(
                         os.environ.get("FAIRCHEM_RAY_INIT_MAX_ATTEMPTS", "8")
                     )
@@ -598,8 +605,6 @@ def get_slurm_inference_raycluster(
         yield head_file
     finally:
         if ray_client_owned:
-            import ray
-
             try:
                 ray.shutdown()
                 logger.info("Released Ray client connection.")
@@ -615,6 +620,7 @@ def get_slurm_inference_raycluster(
 
 
 @contextmanager
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def get_local_inference_raycluster(
     head_file: str | Path | None = None,
     num_cpus: int | None = None,
@@ -651,9 +657,11 @@ def get_local_inference_raycluster(
     Args:
         head_file: Path where head.json will be written. If None, creates
             a temp file.
-        num_cpus: Number of CPUs for Ray. Defaults to 8.
-        num_gpus: Number of GPUs for Ray. If None, auto-detects via
-            torch.cuda.
+        num_cpus: CPUs to give the single local node. Defaults to 8.
+        num_gpus: GPUs to give the single local node. The cluster started here
+            is always single-node, so this is a per-node count, not a
+            cluster-wide one. If None, defaults to every GPU visible to this
+            process (``torch.cuda.device_count()``).
         start_inference_server: If True (default), start FAIRChem Ray Serve
             inference server. Requires ``predict_unit`` to be provided.
         predict_unit: Predict unit to serve. Required when
@@ -664,20 +672,12 @@ def get_local_inference_raycluster(
     Yields:
         Path to head.json file.
     """
-    import ray
-    from ray import serve
-
     # Set defaults
     if num_cpus is None:
         num_cpus = 8
 
     if num_gpus is None:
-        try:
-            import torch
-
-            num_gpus = torch.cuda.device_count()
-        except ImportError:
-            num_gpus = 0
+        num_gpus = torch.cuda.device_count()
 
     if head_file is None:
         cluster_id = str(uuid.uuid4())

@@ -121,7 +121,7 @@ The inference benchmark compares a candidate inference configuration against a h
 
 **How it works:**
 
-1. Loads a pretrained checkpoint (default: `uma-s-1p2`)
+1. Loads a pretrained checkpoint (default: `uma-s-1p2p1`)
 2. Runs inference in fp64 with conservative settings to establish a baseline (cached for reuse)
 3. Runs inference with the candidate settings you provide
 4. Compares predictions and reports error metrics in a formatted table
@@ -164,7 +164,7 @@ fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
 | `runner.inference_settings.activation_checkpointing` | `True` | Enable activation checkpointing |
 | `runner.inference_settings.merge_mole` | `False` | Merge MOLE experts |
 | `runner.inference_settings.execution_mode` | `general` | Inference execution mode |
-| `checkpoint.model_name` | `uma-s-1p2` | Pretrained model to benchmark |
+| `checkpoint.model_name` | `uma-s-1p2p1` | Pretrained model to benchmark |
 
 ### Training Benchmark
 

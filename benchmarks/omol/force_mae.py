@@ -34,7 +34,17 @@ MODELS = (
     "uma_s",
     "uma_m",
     "mace_omol_0",
+    "mace_polar_1_s",
     "mace_polar_1_m",
+    "mace_polar_1_l",
+    "sevennet_omni",
+    "sevennet_omni_i8",
+    "sevennet_omni_i12",
+    "dpa4_nano",
+    "dpa4_mini",
+    "dpa4_neo",
+    "dpa4_air",
+    "dpa4_plus",
 )
 SOURCE_COLUMNS = [
     "structure_hash",
@@ -106,6 +116,7 @@ def make_atoms(row: dict) -> Atoms:
         spin=spin,
         spin_multiplicity=spin,
         multiplicity=spin,
+        charge_spin=np.array([charge, spin]),
     )
     return atoms
 
@@ -127,6 +138,14 @@ def evaluate(
     manifest = json.loads((data_dir / "manifest.json").read_text())
     shard_names = manifest["shards"][part::parts]
     calculator = make_calculator(model, checkpoint_dir, for_speed=False)
+    high_spin_calculator = None
+    if model.startswith("sevennet_"):
+        high_spin_calculator = make_calculator(
+            model,
+            checkpoint_dir,
+            for_speed=False,
+            sevennet_modal="omol25_high",
+        )
 
     absolute_error = 0.0
     force_components = 0
@@ -139,7 +158,19 @@ def evaluate(
                     skipped += 1
                     continue  # MACE-MH-1 (OMol head) only supports neutral singlets
                 atoms = make_atoms(row)
-                atoms.calc = calculator
+                if model.startswith("sevennet_"):
+                    if row["charge"] != 0:
+                        skipped += 1
+                        continue  # SevenNet-Omni excludes charged OMol25 structures
+                    electrons = sum(row["atomic_numbers"])
+                    minimum_multiplicity = 1 + electrons % 2
+                    atoms.calc = (
+                        calculator
+                        if row["spin"] == minimum_multiplicity
+                        else high_spin_calculator
+                    )
+                else:
+                    atoms.calc = calculator
                 reference = np.asarray(row["atomic_forces"])
                 prediction = atoms.get_forces()
                 error = np.abs(prediction - reference)

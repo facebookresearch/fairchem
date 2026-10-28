@@ -50,9 +50,11 @@ def create_yaml(
         template["elem_refs"] = linref_coeff
         template["train_dataset"]["splits"]["train"]["src"] = train_path
         template["val_dataset"]["splits"]["val"]["src"] = val_path
-        # add extra large vaccum box for molecules
-        # if dataset_name == str(UMATask.OMOL):
-        #     template["train_dataset"]["a2g_args"]["molecule_cell_size"] = 1000.0
+        # OMOL training uses total charge and spin multiplicity, which
+        # write_ase_db stores from atoms.info; read them back in from_ase.
+        if dataset_name == UMATask.OMOL.value:
+            for split in ("train_dataset", "val_dataset"):
+                template[split]["a2g_args"] = {"r_data_keys": ["spin", "charge"]}
         os.makedirs(output_dir / DATA_YAML_DIR, exist_ok=True)
         with open(
             output_dir / REGRESSION_LABEL_TO_TASK_YAML[regression_tasks], "w"

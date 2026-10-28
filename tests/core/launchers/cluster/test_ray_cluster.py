@@ -13,7 +13,7 @@ import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import submitit
@@ -379,6 +379,25 @@ class TestCheckpointableRayJob:
             temp_dir_template=None,
         )
         mock_head.assert_not_called()
+
+    @patch("fairchem.core.launchers.cluster.ray_cluster.os_environ_get_or_throw")
+    @patch("fairchem.core.launchers.cluster.ray_cluster._ray_head_script")
+    def test_node_start_callback_runs_before_head(self, mock_head, mock_env):
+        mock_env.return_value = "0"
+        events = []
+        callback = Mock(side_effect=lambda: events.append("environment"))
+        mock_head.side_effect = lambda **kwargs: events.append("head")
+        job = CheckpointableRayJob(
+            cluster_state=RayClusterState(cluster_id="test"),
+            worker_wait_timeout_seconds=60,
+            payload=None,
+            node_start_callback=callback,
+        )
+
+        job()
+
+        callback.assert_called_once_with()
+        assert events == ["environment", "head"]
 
     def test_checkpoint(self):
         """Test checkpointing functionality"""

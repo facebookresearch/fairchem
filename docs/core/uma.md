@@ -15,6 +15,10 @@ kernelspec:
 
 [UMA](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/) is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to achieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis. [arXiv Paper](https://arxiv.org/abs/2506.23971)
 
+For most applications, start with `uma-s-1p2p1`. It is the latest patch release
+of the small UMA 1.2 model and offers the best default balance of speed,
+accuracy, and memory use.
+
 ![UMA model architecture](uma.svg "UMA model architecture")
 
 ## The UMA Mixture-of-Linear-Experts routing function
@@ -66,4 +70,41 @@ Choose your task based on the application domain. Each task corresponds to a spe
 
 :::{note}
 *OC20 was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.
+:::
+
+(uma-s-1p2p1-fine-tunes)=
+## UMA-S-1.2.1 fine-tunes: D4rev and r²SCAN
+
+`uma-s-1p2p1-ft-d4rev` and `uma-s-1p2p1-ft-r2scan` are two fine-tuned variants of UMA-S-1.2.1 at higher levels of theory, both served by UMA Nitro. Each has a single task with a different level of theory than the corresponding task of `uma-s-1p2p1`.
+
+| Model name | Task | Level of theory | Training data | Use it for |
+|------|------|------|------|------|
+| `uma-s-1p2p1-ft-d4rev` | `omol` | ωB97M-D4rev, dispersion included | OMol25-4M | molecules, noncovalent interactions, molecular liquids and crystals |
+| `uma-s-1p2p1-ft-r2scan` | `omat` | r²SCAN, not spin-polarized, no dispersion | [MAD-1.6](https://arxiv.org/abs/2603.02089) | most inorganic and mixed chemical systems, add dispersion with `DFTD3Calculator(..., functional="r2scan")` |
+
+`uma-s-1p2p1-ft-d4rev` was fine-tuned on approximately 4 million structures from the OMol25 dataset, whose labels were recomputed at the ωB97M-D4rev level of theory.
+
+`uma-s-1p2p1-ft-r2scan` was trained on [MAD-1.6](https://arxiv.org/abs/2603.02089), an r²SCAN dataset from the Laboratory of Computational Science and Modelling (COSMO), EPFL. We thank the MAD authors for making it available.
+
+Do not add dispersion to `uma-s-1p2p1-ft-d4rev`. We recommend using `uma-s-1p2p1-ft-r2scan` with `DFTD3Calculator(..., functional="r2scan")`.
+
+```python
+from fairchem.core import DFTD3Calculator, FAIRChemCalculator, pretrained_mlip
+
+# molecules: wB97M-D4rev (dispersion is already included, do not add D3)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-d4rev", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omol")
+
+# materials: r2SCAN + D3(BJ)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1-ft-r2scan", device="cuda")
+calc = DFTD3Calculator(
+    FAIRChemCalculator(predictor, task_name="omat"), functional="r2scan", device="cuda"
+)
+```
+
+:::{warning}
+- `uma-s-1p2p1-ft-r2scan` **is not spin-polarized** and describes every system as non-magnetic. Do not use it for magnetic systems or for cohesive energies, as isolated atoms are also often strongly magnetic; use `uma-s-1p2p1` with the `omat` task for those instead.
+- Each model has only one task (`omat` or `omol`). Charge and spin multiplicity work in `uma-s-1p2p1-ft-d4rev` as in `uma-s-1p2p1`'s `omol` task.
+- Both models are fine-tuned on less data than the original UMA-S-1.2.1 model. Often the latter is more accurate at predicting DFT labels at its corresponding levels of theory.
+- No isolated-atom reference energies are shipped; single-atom energies from the model might be unreliable.
 :::

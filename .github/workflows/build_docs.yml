@@ -92,10 +92,12 @@ jobs:
         # Must match repo name: https://mystmd.org/guide/deployment#deploy-base-url
         BASE_URL: "/fairchem"
       run: |
+        python docs/generate_llms.py --check
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
         jupytext --to ipynb ./docs/uma_tutorials/*.md
         find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
         cd docs && jupyter-book build --html --execute --execute-parallel 1
+        cp llms.txt llms-full.txt _build/html/
 
     - name: Upload documentation artifact
       uses: actions/upload-artifact@v7

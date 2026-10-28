@@ -141,7 +141,7 @@ class StructureGenerator:
 
     def _write_adslabs(self, adslab_obj, mode_str):
         """
-        Write one set of adslabs (called separately for random and heurstic placements)
+        Write one set of adslabs (called separately for random and heuristic placements)
         """
         for adslab_ind, adslab_atoms in enumerate(adslab_obj.atoms_list):
             adslab_dir = os.path.join(

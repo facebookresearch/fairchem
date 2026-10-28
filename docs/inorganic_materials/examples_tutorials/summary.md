@@ -12,7 +12,7 @@ Learn how to use FAIRChem models for inorganic materials property prediction and
 ::::{grid} 1 2 2 3
 
 :::{card} Formation Energy
-:link: formation-energy
+:link: formation_energy
 
 Calculate formation energies for inorganic materials using UMA and MP-compatible corrections.
 :::

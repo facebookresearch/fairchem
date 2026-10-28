@@ -174,7 +174,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "job.device_type=CUDA",
-        # "+job.deterministic=True", # this doesnt work because it requires setting CUBLAS_WORKSPACE_CONFIG beforehand
+        # "+job.deterministic=True", # this doesn't work because it requires setting CUBLAS_WORKSPACE_CONFIG beforehand
         "+expected_loss=13.66177",
     ]
     launch_main(sys_args)
@@ -276,7 +276,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
                 .to(float)
                 .mean()
             )
-            assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
+            assert percent_within_tolerance > 0.999, "Failed percent within tolerance"
 
 
 # @pytest.mark.gpu()
@@ -365,7 +365,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
                 .to(float)
                 .mean()
             )
-            assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
+            assert percent_within_tolerance > 0.999, "Failed percent within tolerance"
 
 
 @pytest.mark.serial()
@@ -466,7 +466,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
                 )
                 assert (
                     percent_within_tolerance > 0.9
-                ), "Failed percent withing 10% tolerance"
+                ), "Failed percent within 10% tolerance"
 
 
 @pytest.mark.parametrize("mode", ["gp", "no_gp"])

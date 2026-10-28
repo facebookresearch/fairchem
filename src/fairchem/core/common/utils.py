@@ -413,7 +413,7 @@ def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
-    # this assumes the checkpont also contains the config with the full model in it
+    # this assumes the checkpoint also contains the config with the full model in it
     # TODO: need to schematize how we save and load the config from checkpoint
     config = checkpoint["config"]["model"]
     name = config.pop("name")
