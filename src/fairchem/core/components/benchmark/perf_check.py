@@ -24,7 +24,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
-    inference_settings_default,
+    inference_settings_high_precision,
 )
 
 if TYPE_CHECKING:
@@ -350,7 +350,7 @@ class PerfCheckRunner(Runner):
         warmup_iters: int = 10,
         timed_iters: int = 50,
         seed: int = 42,
-        inference_settings: InferenceSettings = inference_settings_default(),  # noqa: B008
+        inference_settings: InferenceSettings = inference_settings_high_precision(),  # noqa: B008
     ):
         from fairchem.core.components.benchmark.systems import (
             get_default_benchmark_systems,
@@ -820,7 +820,7 @@ class MixedPerfCheckRunner(Runner):
         pool_n_per_bucket: int = 2,
         pool_tasks: tuple[str, ...] = ("oc20", "omat", "omol", "odac", "omc"),
         oom_policy: str = "skip",
-        inference_settings: InferenceSettings = inference_settings_default(),  # noqa: B008
+        inference_settings: InferenceSettings = inference_settings_high_precision(),  # noqa: B008
     ):
         from fairchem.core.components.benchmark.systems import (
             get_diverse_benchmark_pool,

@@ -84,7 +84,7 @@ def write_vasp_input_files(
         outdir      A string indicating where you want to save the input files.
                     Defaults to '.'
         vasp_flags  A dictionary of settings we want to pass to the `Vasp`
-                    calculator. Defaults to a standerd set of values if `None`
+                    calculator. Defaults to a standard set of values if `None`
         pp_setups   Pseudopotential setups to use - https://gitlab.com/ase/ase/-/blob/master/ase/calculators/vasp/setups.py
         pp_env      Environment variable to read for pseudopotentials.
     """

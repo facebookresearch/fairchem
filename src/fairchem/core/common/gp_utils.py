@@ -450,8 +450,8 @@ def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
 # correct loss but the grad is wrong by a factor of gp_group_size
 # dL/d_a1 = 1/6 but it should be dL/da = 1/2 (for the equivalanet non GP run
 # with 2 ranks)
-# we coud perform an extra round of all_reduce, but this would increase
-# communication overhead, instead we can just upscsale the gradient only and
+# we could perform an extra round of all_reduce, but this would increase
+# communication overhead, instead we can just upscale the gradient only and
 # avoid over head communication
 class ScaleBackwardGrad(torch.autograd.Function):
     @staticmethod

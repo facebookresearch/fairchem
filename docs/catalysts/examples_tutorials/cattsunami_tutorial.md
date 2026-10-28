@@ -141,7 +141,7 @@ product2_configs = AdsorbateSlabConfig(
 
 ```{code-cell} ipython3
 # Instantiate the calculator
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -295,7 +295,7 @@ To generalize an interactive visualization, use `ase gui` from the command line 
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-# Make an interative html file of the optimized neb trajectory
+# Make an interactive html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
 ```

@@ -19,6 +19,9 @@ from ase.md import MDLogger
 from monty.json import jsanitize
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
+from fairchem.core.components.calculate.simulation_tools.initialization import (
+    initialize_momenta,
+)
 from fairchem.core.components.calculate.simulation_tools.trajectory import (
     ParquetTrajectoryWriter,
     TrajectoryFrame,
@@ -63,6 +66,9 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         trajectory_writer: Callable[
             ..., ParquetTrajectoryWriter
         ] = ParquetTrajectoryWriter,
+        velocity_seed: int | None = None,
+        initialization_temperature_K: float | None = None,
+        remove_center_of_mass_momentum: bool = True,
     ):
         """
         Initialize the MDRunner for single-structure MD.
@@ -90,6 +96,10 @@ class MDRunner(PreemptableMixin, CalculateRunner):
                 Defaults to ParquetTrajectoryWriter. Use Hydra
                 ``_partial_: true`` in config to bind extra kwargs (e.g.
                 flush_interval) while leaving the path argument for runtime.
+            velocity_seed: Seed for deterministic initial momentum generation.
+            initialization_temperature_K: Temperature used to initialize momenta.
+                Both this value and velocity_seed are required to initialize.
+            remove_center_of_mass_momentum: Remove net momentum after initialization.
         """
         self._atoms = atoms
         self.thermostat = thermostat
@@ -100,6 +110,9 @@ class MDRunner(PreemptableMixin, CalculateRunner):
         self.checkpoint_interval = checkpoint_interval
         self.heartbeat_interval = heartbeat_interval
         self._trajectory_writer_fn = trajectory_writer
+        self.velocity_seed = velocity_seed
+        self.initialization_temperature_K = initialization_temperature_K
+        self.remove_center_of_mass_momentum = remove_center_of_mass_momentum
 
         # State tracking
         self._dyn: MolecularDynamics | None = None
@@ -129,6 +142,22 @@ class MDRunner(PreemptableMixin, CalculateRunner):
 
         results_dir = Path(self.job_config.metadata.results_dir)
         sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
+
+        if self._start_step == 0 and (
+            self.velocity_seed is not None
+            or self.initialization_temperature_K is not None
+        ):
+            if self.velocity_seed is None or self.initialization_temperature_K is None:
+                raise ValueError(
+                    "velocity_seed and initialization_temperature_K must be set "
+                    "together."
+                )
+            initialize_momenta(
+                self._atoms,
+                self.initialization_temperature_K,
+                self.velocity_seed,
+                remove_center_of_mass_momentum=self.remove_center_of_mass_momentum,
+            )
 
         # Save the initial atoms before MD begins.
         init_atoms_file = results_dir / "init_atoms.extxyz"

@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,15 +32,28 @@ from fairchem.core.common.distutils import (
     assign_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
+from fairchem.core.common.environment import write_environment_report
 from fairchem.core.common.utils import setup_env_vars
 from fairchem.core.components.runner import Runner
-from fairchem.core.launchers.api import DeviceType
+from fairchem.core.launchers.api import DeviceType, RunType
 from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
+
+
+def write_ray_environment_report(job_config: DictConfig) -> None:
+    """
+    Write an environment report for a local or Slurm-backed Ray node.
+    """
+    write_environment_report(
+        log_dir=job_config.metadata.log_dir,
+        run_type=RunType.RUN.value,
+        timestamp_id=job_config.timestamp_id,
+        submission_commit=job_config.metadata.commit,
+    )
 
 
 class SPMDWorker:
@@ -243,4 +257,5 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         job_config=config.job,
         runner_config=config.runner,
         metrics_config=metrics_config,
+        node_start_callback=partial(write_ray_environment_report, config.job),
     )

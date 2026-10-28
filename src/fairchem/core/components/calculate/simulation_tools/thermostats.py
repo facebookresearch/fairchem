@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from ase import units
+from ase.constraints import FixAtoms, FixCom, FixSubsetCom
 from ase.md.bussi import Bussi
 from ase.md.langevin import Langevin
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
@@ -176,13 +177,33 @@ class LangevinThermostat(Thermostat):
 
     temperature_K: float  # Kelvin
     friction_per_fs: float  # 1/femtoseconds
+    use_fix_com_constraint: bool = False
 
     def build(self, atoms: Atoms, timestep_fs: float) -> MolecularDynamics:
+        if self.use_fix_com_constraint and not any(
+            isinstance(constraint, FixCom) for constraint in atoms.constraints
+        ):
+            mobile = np.ones(len(atoms), dtype=bool)
+            for constraint in atoms.constraints:
+                if isinstance(constraint, FixAtoms):
+                    mobile[constraint.get_indices()] = False
+            if mobile.sum() < 2:
+                raise ValueError(
+                    "FixCom requires at least two mobile atoms in Langevin dynamics."
+                )
+            fix_com = (
+                FixCom()
+                if mobile.all()
+                else FixSubsetCom(indices=np.flatnonzero(mobile))
+            )
+            atoms.set_constraint([*atoms.constraints, fix_com])
+
         return Langevin(
             atoms=atoms,
             timestep=timestep_fs * units.fs,
             temperature_K=self.temperature_K,
             friction=self.friction_per_fs / units.fs,
+            fixcm=not self.use_fix_com_constraint,
         )
 
     def save_state(self, dyn: MolecularDynamics) -> dict[str, Any]:

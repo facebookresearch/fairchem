@@ -32,6 +32,10 @@ dependencies = [
     "wandb",
     "websockets",
     "nvalchemi-toolkit-ops>=0.4.1",
+    # UMA Nitro's CuTe kernels, imported only on Hopper and Blackwell GPUs. The
+    # marker matches NVIDIA's wheels: other platforms skip these.
+    "nvidia-cutlass-dsl==4.7.1; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "cuda-python>=12.8; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]

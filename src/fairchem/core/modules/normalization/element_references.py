@@ -158,14 +158,14 @@ def create_element_references(
     Args:
         type (str): type of reference (only linear implemented)
         file (str or Path): path to pt or npz file
-        state_dict (dict): a state dict of a element reference module
+        state_dict (dict): a state dict of an element reference module
 
     Returns:
         LinearReference
     """
     if file is not None and state_dict is not None:
         logging.warning(
-            "Both a file and a state_dict for element references was given."
+            "Both a file and a state_dict for element references were given. "
             "The references will be read from the file and the provided state_dict will be ignored."
         )
 

@@ -1,0 +1,5 @@
+model_name: uma-s-1p1
+ckpt_path: uma-s-1p1
+# Keep the cluster group referenced for FairChem's top-level config validation.
+# This checkpoint uses the packaged model alias, so the value is not otherwise needed.
+checkpoint_root_dir: ${cluster.checkpoint_root_dir}

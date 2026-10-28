@@ -39,7 +39,7 @@ def create_df(metadata_lst, df_name=None):
     Args:
                 metadata_lst  A list of adslab properties in tuple form, each tuple should
                               contain (mpid, miller index, shift, top, adsorbate smile string,
-                              adsorption cartesion coordinates tuple, and which split the data belongs to).
+                              adsorption cartesian coordinates tuple, and which split the data belongs to).
                               Ex: ('mp-126', (1,1,1), 0.025, True, '*OH', (0,0,0), 'val_ood_ads')
     Returns:
                 df            A pandas DataFrame
@@ -113,7 +113,7 @@ def is_adsorbate_placed_correct(adslab_input, atoms_tag):
     Make sure all adsorbate atoms are connected after placement.
     False means there is at least one isolated adsorbate atom.
     It should be used after input generation but before DFT to avoid
-    unneccessarily computations.
+    unnecessary computations.
     Args:
             adslab_input        `ase.Atoms` of the structure in its initial state
             atoms_tag (list)    0=bulk, 1=surface, 2=adsorbate
