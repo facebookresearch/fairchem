@@ -10,7 +10,7 @@ torchtnt==0.2.4
 numba==0.68.0
 numpy==2.4.6
 scikit-learn==1.9.1
-lmdb==1.6.2
+lmdb==3.0.0
 pymatgen==v2026.10.24
 ray[serve]==2.59.0
 # Ray Serve 2.55.1 declares `protobuf>=3.20.3` with no upper bound, but is
