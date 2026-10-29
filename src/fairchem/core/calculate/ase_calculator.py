@@ -215,7 +215,7 @@ class FAIRChemCalculator(Calculator):
             raise ValueError("Atoms object has no atoms inside.")
 
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
-        if np.all(atoms.pbc) and np.allclose(atoms.cell, 0):
+        if np.all(np.asarray(atoms.pbc)) and np.allclose(atoms.cell, 0):
             raise AllZeroUnitCellError
 
         # Validate input data

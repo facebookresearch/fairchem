@@ -361,9 +361,9 @@ class AtomicData:
             # create a molecule box with the molecule centered on it if specified
             atoms.center(vacuum=(molecule_cell_size))
             atoms.pbc = np.array([True, True, True])
-        elif np.all(~atoms.pbc):
+        elif np.all(~np.asarray(atoms.pbc)):
             pass  # This is fine
-        elif not np.all(atoms.pbc) and atoms.cell.volume < 0.1:
+        elif not np.all(np.asarray(atoms.pbc)) and atoms.cell.volume < 0.1:
             raise ValueError(
                 "atoms must either have a cell or have a cell created by setting <molecule_cell_size>."
             )
@@ -415,7 +415,7 @@ class AtomicData:
 
         # initialized to torch.zeros(natoms) if tags missing.
         # https://docs.ase-lib.org/ase/atoms.html#ase.Atoms.get_tags
-        tags = torch.from_numpy(atoms.get_tags()).long()
+        tags = torch.as_tensor(atoms.get_tags()).long()
         fixed = torch.zeros(natoms, dtype=torch.long)
         if hasattr(atoms, "constraints"):
             for constraint in atoms.constraints:
