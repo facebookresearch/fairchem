@@ -169,6 +169,35 @@ class TestReduceNodeToSystem:
         )
         assert torch.allclose(reduced, expected)
 
+    @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+    def test_noncontiguous_values(self, dtype):
+        """Reduce transposed trailing dimensions and preserve gradients."""
+        values = torch.arange(24, dtype=dtype).reshape(4, 2, 3).requires_grad_()
+        node_values = values.transpose(1, 2)
+        assert not node_values.is_contiguous()
+        batch = torch.tensor([1, 0, 1, 0])
+
+        reduced, unreduced = reduce_node_to_system(node_values, batch, num_systems=3)
+
+        expected = torch.stack(
+            [
+                node_values[1] + node_values[3],
+                node_values[0] + node_values[2],
+                torch.zeros_like(node_values[0]),
+            ]
+        ).to(torch.float64)
+        torch.testing.assert_close(reduced, expected)
+        torch.testing.assert_close(unreduced, expected)
+
+        weights = torch.arange(18, dtype=torch.float64).reshape(3, 3, 2)
+        for result in (reduced, unreduced):
+            (gradient,) = torch.autograd.grad(
+                (result * weights).sum(), values, retain_graph=True
+            )
+            torch.testing.assert_close(
+                gradient, weights[batch].transpose(1, 2).to(dtype)
+            )
+
     def test_empty_system(self):
         """Test that systems with no nodes have zero values."""
         node_values = torch.tensor([1.0, 2.0], dtype=torch.float64)
