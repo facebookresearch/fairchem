@@ -811,7 +811,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
 @pytest.mark.gpu()
 @pytest.mark.compile_gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_compiled_backends_match_baseline(pretrained_model_name, compile_reset_state):
     """
     Test compiled execution modes produce same results as non-compiled baseline.
