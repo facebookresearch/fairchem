@@ -1,7 +1,11 @@
 defaults:
   - cluster: v100
   - checkpoint: uma_sm_mpa
+  - calculator: uma
   - _self_
+
+calculator:
+  task_name: omat
 
 benchmark_name: matbench-discovery
 
@@ -28,10 +32,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.calculate.RelaxationRunner
-  calculator:
-    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
-    name_or_path: ${checkpoint.ckpt_path}
-    task_name: omat
+  calculator: ${calculator}
   input_data:
     _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
     dataset:

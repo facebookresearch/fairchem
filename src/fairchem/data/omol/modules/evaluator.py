@@ -501,7 +501,7 @@ def compute_distance_scaling_metrics(
 
     :param pes_curve: specification of points on PES in the short or
                       long range regime only, also contains ORCA data
-    :param mlip_results: results from all points alng
+    :param mlip_results: results from all points along the PES curve
     :param orca_min_point: name of reference point for ddE
     :param orca_min_data: data for reference point for ddE
     :return: ddE, and ddF metrics for the given PES curve

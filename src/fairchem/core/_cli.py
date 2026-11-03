@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import tempfile
 from typing import TYPE_CHECKING
 
 import hydra
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
 
     from fairchem.core.components.runner import Runner
 
-# this effects the cli only since the actual job will be run in subprocesses or remoe
+# this affects the cli only since the actual job will be run in subprocesses or remotely
 logging.basicConfig(level=logging.INFO)
 
 
@@ -69,8 +70,22 @@ def get_hydra_config_from_yaml(
     os.environ["HYDRA_FULL_ERROR"] = "1"
     config_directory = os.path.dirname(os.path.abspath(config_yml))
     config_name = os.path.basename(config_yml)
-    hydra.initialize_config_dir(config_directory, version_base="1.1")
-    cfg = hydra.compose(config_name=config_name, overrides=overrides_args)
+
+    if config_name.endswith(".yml"):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_config_name = f"{os.path.splitext(config_name)[0]}.yaml"
+            temp_config_path = os.path.join(temp_dir, temp_config_name)
+            with open(config_yml) as source, open(temp_config_path, "w") as target:
+                target.write(source.read())
+
+            with hydra.initialize_config_dir(temp_dir, version_base="1.3"):
+                cfg = hydra.compose(
+                    config_name=temp_config_name,
+                    overrides=overrides_args,
+                )
+    else:
+        with hydra.initialize_config_dir(config_directory, version_base="1.3"):
+            cfg = hydra.compose(config_name=config_name, overrides=overrides_args)
     # merge default structured config with initialized job object
     cfg = OmegaConf.merge({"job": OmegaConf.structured(JobConfig)}, cfg)
     # canonicalize config (remove top level keys that just used replacing variables)
@@ -101,12 +116,12 @@ def main(
         ), "SLURM DID NOT SUBMIT JOB!! Please do not submit jobs from an active slurm job (srun or otherwise)"
 
         if scheduler_cfg.use_ray:
-            logging.info("Lauching job on Ray + Slurm cluster")
+            logging.info("Launching job on Ray + Slurm cluster")
             from fairchem.core.launchers import ray_on_slurm_launch
 
             ray_on_slurm_launch.ray_on_slurm_launch(cfg, log_dir)
         else:
-            logging.info("Lauching job on directly on Slurm cluster")
+            logging.info("Launching job directly on Slurm cluster")
             from fairchem.core.launchers import slurm_launch
 
             slurm_launch.slurm_launch(cfg, log_dir)
@@ -121,6 +136,11 @@ def main(
             logging.info(
                 f"Running in local mode with local ray cluster with recursive_instantiate_runner={cfg.job.recursive_instantiate_runner}"
             )
+            from fairchem.core.launchers.ray_on_slurm_launch import (
+                write_ray_environment_report,
+            )
+
+            write_ray_environment_report(cfg.job)
             # disable recursively instantiate the runner here to allow lazy instantiations in the runner
             runner: Runner = hydra.utils.instantiate(
                 cfg.runner, _recursive_=cfg.job.recursive_instantiate_runner

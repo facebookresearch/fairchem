@@ -168,7 +168,7 @@ Running the model with QuasiNewton prints at each relaxation step which is a lot
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
 # Define the
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -328,7 +328,7 @@ As a post-processing step we check to see if:
 3. the adsorbate intercalated
 4. the surface has changed
 
-We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
+We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will omit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
 To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
 
@@ -357,7 +357,7 @@ for file_outer in glob("data/adslabs/*"):
         rx_id = file.split("/")[-1].split(".")[0]
         traj = ase.io.read(file, ":")
 
-        # Check to see if the trajectory is anomolous
+        # Check to see if the trajectory is anomalous
         detector = DetectTrajAnomaly(traj[0], traj[-1], traj[0].get_tags())
         anom = (
             detector.is_adsorbate_dissociated()

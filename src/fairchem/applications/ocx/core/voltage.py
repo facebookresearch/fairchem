@@ -32,7 +32,7 @@ def fullcell2halfcell(vcell):
 
 
 def load_calibration_data_for_voltage_conversion():
-    ## experiment conditions: Nuetral CO2RR in 4cm2 cell, Sputtered Copper Catalyst, 0.1M Bicarbonate - ref electrode (3M kcl) 230mV vs SHE
+    ## experiment conditions: Neutral CO2RR in 4cm2 cell, Sputtered Copper Catalyst, 0.1M Bicarbonate - ref electrode (3M kcl) 230mV vs SHE
     ref_pot = 0.23  # V Ag/AgCl electrode
     cathode_pH = 12.5
     anode_pH = 3

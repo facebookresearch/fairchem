@@ -16,7 +16,7 @@ extras = ["sella"]
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/omol"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.metadata]
 allow-direct-references = true

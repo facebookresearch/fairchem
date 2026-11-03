@@ -138,6 +138,7 @@ def axis_angle_wigner_hybrid(
     coeffs: WignerCoefficients | None = None,
     U_blocks: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
     custom_kernels: CustomKernelModule | None = None,
+    compact_l2: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using hybrid approach (optimal method per l).
@@ -163,10 +164,12 @@ def axis_angle_wigner_hybrid(
         coeffs: Pre-computed WignerCoefficients for l>=5 Ra/Rb path.
         U_blocks: Pre-computed U transformation blocks for l>=5.
         custom_kernels: CustomKernelModule holding l=2,3,4 coefficient buffers.
+        compact_l2: Return only the l=0, l=1, and l=2 diagonal blocks.
 
     Returns:
-        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
-        (N, size, size) and size = (lmax+1)^2.
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge). Each has shape
+        (N, size, size), where size = (lmax+1)^2, or (N, 35) when
+        compact_l2=True.
     """
     # Handle single vector input
     if edge_distance_vec.dim() == 1:
@@ -189,6 +192,23 @@ def axis_angle_wigner_hybrid(
     # Step 4: Create Y-rotation quaternion and combine with edge->Y
     q_gamma = quaternion_y_rotation(gamma)
     q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    if compact_l2:
+        if lmax != 2:
+            raise ValueError("compact_l2 requires lmax=2")
+        D_l0 = torch.ones((N, 1), dtype=dtype, device=device)
+        D_l1 = quaternion_to_rotation_matrix(q_combined)
+        D_l2 = quaternion_to_wigner_d_l2_einsum(q_combined, custom_kernels.C_l2)
+        D = torch.cat((D_l0, D_l1.flatten(1), D_l2.flatten(1)), dim=1)
+        D_inv = torch.cat(
+            (
+                D_l0,
+                D_l1.transpose(1, 2).flatten(1),
+                D_l2.transpose(1, 2).flatten(1),
+            ),
+            dim=1,
+        )
+        return D, D_inv
 
     # Step 5: Compute Wigner D using hybrid approach
     D = wigner_d_from_quaternion_hybrid(

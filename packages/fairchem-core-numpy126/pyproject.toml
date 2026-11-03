@@ -10,7 +10,11 @@ dynamic = ["version", "readme"]
 requires-python = ">=3.10, <3.14"
 dependencies = [
     "torch~=2.13.0",
-    "ray[serve]>=2.53.0",
+    # 2.56.1 is the first release whose ray.serve._private.config handles
+    # protobuf>=7 removing FieldDescriptor.label; older ray breaks serve.run.
+    # Pinning the ray floor keeps that constraint where it belongs instead of
+    # capping protobuf for every downstream consumer of this library.
+    "ray[serve]>=2.56.1",
     "numpy>=1.26.4,<2",
     "scipy>=1.15.0",
     "lmdb>=1.6.2,<=1.7.3",
@@ -31,6 +35,11 @@ dependencies = [
     "pyyaml",
     "wandb",
     "websockets",
+    "nvalchemi-toolkit-ops>=0.4.1",
+    # UMA Nitro's CuTe kernels, imported only on Hopper and Blackwell GPUs. The
+    # marker matches NVIDIA's wheels: other platforms skip these.
+    "nvidia-cutlass-dsl==4.7.1; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "cuda-python>=12.8; sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
@@ -45,7 +54,7 @@ fairchem = "fairchem.core._cli:main"
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem"
 home = "https://opencatalystproject.org/"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.version]
 source = "vcs"

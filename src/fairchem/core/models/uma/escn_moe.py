@@ -591,7 +591,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         for dataset_name in self.dataset_names:
             dataset_mask = np_dataset_names == dataset_name
             for key, mole_output_tensor in head_output.items():
-                # TODO cant we use torch.zeros here?
+                # TODO can't we use torch.zeros here?
                 output_tensor = mole_output_tensor.new_zeros(
                     mole_output_tensor.shape
                 )  # float('inf'))
@@ -669,7 +669,7 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         # check that all the input dataset names is a strict subset of dataset names
         assert (
             set(data.dataset) <= set(self.dataset_names)
-        ), f"Input dataset names: {set(data.dataset)} must be a strict subset of model's valid datset names: {set(self.dataset_names)} "
+        ), f"Input dataset names: {set(data.dataset)} must be a strict subset of model's valid dataset names: {set(self.dataset_names)} "
         # breakout the outputs to correct heads named by datasetname
         np_dataset_names = np.array(data.dataset)
 
@@ -677,7 +677,7 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         for dataset_name in self.dataset_names:
             dataset_mask = np_dataset_names == dataset_name
             for key, head_output_tensor in head_output.items():
-                # TODO cant we use torch.zeros here?
+                # TODO can't we use torch.zeros here?
                 output_tensor = head_output_tensor.new_zeros(
                     head_output_tensor.shape
                 )  # float('inf'))

@@ -27,6 +27,17 @@ from fairchem.core.models.uma.triton.kernels import (
 )
 
 
+def _compact_l2_wigner(wigner: torch.Tensor) -> torch.Tensor:
+    return torch.cat(
+        (
+            wigner[:, :1, :1].flatten(1),
+            wigner[:, 1:4, 1:4].flatten(1),
+            wigner[:, 4:9, 4:9].flatten(1),
+        ),
+        dim=1,
+    )
+
+
 def node_to_edge_wigner_permute_launcher(
     x: torch.Tensor,
     edge_index: torch.Tensor,
@@ -182,7 +193,7 @@ def wigner_conv1_fused_fwd_launcher(
     num_edges = edge_index.shape[1]
     C = x.shape[2]
     C2 = 2 * C
-    wigner_flat = wigner.reshape(num_edges, -1).contiguous()
+    wigner_flat = _compact_l2_wigner(wigner).contiguous()
 
     m0 = torch.empty((num_edges, 3 * C2), dtype=x.dtype, device=x.device)
     m1 = torch.empty((num_edges, 4 * C2), dtype=x.dtype, device=x.device)
@@ -234,7 +245,7 @@ def wigner_inv_conv2_fused_fwd_launcher(
     assert wigner.shape[1:] == (9, 9), "wigner must be [E, 9, 9]"
     E = g0.shape[0]
     C = g0.shape[1] // 3
-    wigner_flat = wigner.reshape(E, -1).contiguous()
+    wigner_flat = _compact_l2_wigner(wigner).contiguous()
 
     out = torch.empty((E, 9, C), dtype=g0.dtype, device=g0.device)
 

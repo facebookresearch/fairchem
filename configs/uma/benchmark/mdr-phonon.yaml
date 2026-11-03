@@ -1,7 +1,11 @@
 defaults:
   - cluster: h100
   - checkpoint: uma_sm_mpa
+  - calculator: uma
   - _self_
+
+calculator:
+  task_name: omat
 
 benchmark_name: mdr-phonon
 
@@ -30,10 +34,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.calculate.MDRPhononRunner
-  calculator:
-   _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
-   name_or_path: ${checkpoint.ckpt_path}
-   task_name: omat
+  calculator: ${calculator}
   input_data:
     _target_: fairchem.core.components.calculate.get_mdr_phonon_data_list
     index_df_path: ${cluster.data_root_dir}/materials/mdr-phonon/pbe.json

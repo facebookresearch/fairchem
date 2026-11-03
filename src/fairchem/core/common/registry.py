@@ -5,7 +5,7 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# Borrowed from https://github.com/facebookresearch/pythia/blob/master/pythia/common/registry.py.
+# Borrowed from https://github.com/facebookresearch/mmf/blob/main/mmf/common/registry.py.
 
 Registry is central source of truth. Inspired from Redux's concept of
 global store, Registry maintains mappings of various information to unique

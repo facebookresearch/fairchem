@@ -164,6 +164,27 @@ class GateActivation(torch.nn.Module):
 
         return torch.cat((input_tensors_scalars, input_tensors_vectors), dim=1)
 
+    def forward_m_blocks(
+        self,
+        gating_scalars: torch.Tensor,
+        input_blocks: tuple[torch.Tensor, ...],
+    ) -> tuple[torch.Tensor, ...]:
+        if not self.m_prime:
+            raise ValueError("M-block activation requires m_prime=True")
+
+        num_edges = gating_scalars.shape[0]
+        gates = self.gate_act(gating_scalars).view(
+            num_edges, self.lmax, self.num_channels
+        )
+        m0 = input_blocks[0].view(num_edges, self.lmax + 1, self.num_channels)
+        output_blocks = [
+            torch.cat((self.scalar_act(m0[:, :1]), m0[:, 1:] * gates), dim=1).flatten(1)
+        ]
+        for m, input_block in enumerate(input_blocks[1:], start=1):
+            block = input_block.view(num_edges, 2, self.lmax - m + 1, self.num_channels)
+            output_blocks.append((block * gates[:, None, m - 1 :]).flatten(1))
+        return tuple(output_blocks)
+
 
 class S2Activation(torch.nn.Module):
     """

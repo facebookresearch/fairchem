@@ -278,15 +278,14 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
 
         return torch.cat(out, dim=1), x_0_extra
 
-    def gemms_from_packed(
+    def gemm_outputs_from_packed(
         self,
         m0_buf: torch.Tensor,
         m1_buf: torch.Tensor,
         m2_buf: torch.Tensor,
-        num_edges: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Run conv1's cuBLAS GEMMs + gating on pre-packed buffers.
+        Run conv1's cuBLAS GEMMs on pre-packed buffers.
 
         Consumes the three scaled + GEMM-packed buffers emitted by the fused
         producer op (wigner_conv1_fused_op), skipping the radial-scale/pack step
@@ -296,31 +295,54 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
             m0_buf: Packed m=0 buffer [E, 3*2C].
             m1_buf: Packed m=1 buffer [E, 4*2C].
             m2_buf: Packed m=2 buffer [E, 2*2C].
-            num_edges: Number of edges E.
-
         Returns:
-            (output, gating): output [E, coeffs, m_output_channels],
-                gating [E, extra_m0_output_channels].
+            M-major GEMM outputs kept in packed blocks. The first output
+            contains both the gate scalars and m=0 values.
         """
-        x_0 = self.fc_m0(m0_buf)
-        x_0_extra, x_0 = x_0.split(
+        if self.mmax != 2:
+            raise ValueError("packed conv1 GEMMs require mmax=2")
+        conv_m1, conv_m2 = self.so2_m_conv
+        if conv_m1._w_block is None:
+            conv_m1._build_w_block()
+        if conv_m2._w_block is None:
+            conv_m2._build_w_block()
+        return (
+            self.fc_m0(m0_buf),
+            m1_buf @ conv_m1._w_block.T,
+            m2_buf @ conv_m2._w_block.T,
+        )
+
+    def gemm_blocks_from_packed(
+        self,
+        m0_buf: torch.Tensor,
+        m1_buf: torch.Tensor,
+        m2_buf: torch.Tensor,
+    ) -> tuple[tuple[torch.Tensor, ...], torch.Tensor]:
+        x0_full, x1, x2 = self.gemm_outputs_from_packed(m0_buf, m1_buf, m2_buf)
+        gating, x0 = x0_full.split(
             (
                 self.extra_m0_output_channels,
                 self.fc_m0.out_features - self.extra_m0_output_channels,
             ),
             -1,
         )
-        out = [x_0.view(num_edges, -1, self.m_output_channels)]
-        for m in range(1, self.mmax + 1):
+        return (x0, x1, x2), gating
+
+    def gemms_from_packed(
+        self,
+        m0_buf: torch.Tensor,
+        m1_buf: torch.Tensor,
+        m2_buf: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        output_blocks, gating = self.gemm_blocks_from_packed(m0_buf, m1_buf, m2_buf)
+        output = [output_blocks[0].view(m0_buf.shape[0], -1, self.m_output_channels)]
+        for m, block in enumerate(output_blocks[1:], start=1):
             conv = self.so2_m_conv[m - 1]
-            if conv._w_block is None:
-                conv._build_w_block()
-            buf = m1_buf if m == 1 else m2_buf
-            out_cat = buf @ conv._w_block.T
-            r, i = out_cat.view(-1, 2, conv.num_l, conv.m_output_channels).unbind(1)
-            out.append(r)
-            out.append(i)
-        return torch.cat(out, dim=1), x_0_extra
+            real, imag = block.view(
+                m0_buf.shape[0], 2, conv.num_l, conv.m_output_channels
+            ).unbind(1)
+            output.extend((real, imag))
+        return torch.cat(output, dim=1), gating
 
 
 class SO2_Conv2_InternalBlock(torch.nn.Module):
@@ -405,9 +427,9 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
 
         return torch.cat(out, dim=1)
 
-    def gemms_to_buffers(
+    def gemms_from_blocks(
         self,
-        x_message: torch.Tensor,
+        input_blocks: tuple[torch.Tensor, ...],
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Run conv2's block-diagonal GEMMs, returning the three raw buffers.
@@ -418,33 +440,36 @@ class SO2_Conv2_InternalBlock(torch.nn.Module):
         including) the torch.cat that materializes the M-major x_message.
 
         Args:
-            x_message: Input features [E, coeffs, channels].
+            input_blocks: Activated M-major features, flattened by order.
 
         Returns:
             (g0, g1, g2) raw conv2 GEMM outputs.
         """
-        x_by_m = x_message.split(self.m_split_sizes, dim=1)
-        num_edges = x_message.shape[0]
-
         # m=0: linear
-        x_0 = x_by_m[0].reshape(num_edges, -1)
-        g0 = self.fc_m0(x_0)  # [E, 3C]
+        g0 = self.fc_m0(input_blocks[0])  # [E, 3C]
 
         # m=1: block GEMM
         conv_m1 = self.so2_m_conv[0]
         if conv_m1._w_block is None:
             conv_m1._build_w_block()
-        x_m1 = x_by_m[1].reshape(num_edges, 2, -1).flatten(1)
-        g1 = x_m1 @ conv_m1._w_block.T  # [E, 4C]
+        g1 = input_blocks[1] @ conv_m1._w_block.T  # [E, 4C]
 
         # m=2: block GEMM
         conv_m2 = self.so2_m_conv[1]
         if conv_m2._w_block is None:
             conv_m2._build_w_block()
-        x_m2 = x_by_m[2].reshape(num_edges, 2, -1).flatten(1)
-        g2 = x_m2 @ conv_m2._w_block.T  # [E, 2C]
+        g2 = input_blocks[2] @ conv_m2._w_block.T  # [E, 2C]
 
         return g0, g1, g2
+
+    def gemms_to_buffers(
+        self,
+        x_message: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        input_blocks = tuple(
+            block.flatten(1) for block in x_message.split(self.m_split_sizes, dim=1)
+        )
+        return self.gemms_from_blocks(input_blocks)
 
 
 def convert_so2_conv1(

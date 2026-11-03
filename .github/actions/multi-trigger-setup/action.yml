@@ -51,7 +51,7 @@ runs:
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
-    # actually changed. It it did, it's possible to get false positive
+    # actually changed. If it did, it's possible to get false positive
     # signals because the workflow runs from its definition on the default
     # branch, not the branch where it was updated. See note below in the
     # run section for additional context.

@@ -70,6 +70,12 @@ jobs:
         with:
           name: dist-data-omat
           path: dist-data-omat/*
+    
+      - name: Upload omol artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-data-omol
+          path: dist-data-omol/*
 
       - name: Upload omc artifact
         uses: actions/upload-artifact@v7

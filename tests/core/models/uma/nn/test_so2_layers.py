@@ -12,6 +12,7 @@ import unittest
 import torch
 
 from fairchem.core.models.uma.common.so3 import CoefficientMapping
+from fairchem.core.models.uma.nn.activation import GateActivation
 from fairchem.core.models.uma.nn.so2_layers import (
     SO2_Conv1_WithRadialBlock,
     SO2_Conv2_InternalBlock,
@@ -268,6 +269,76 @@ class TestSO2_Conv2_InternalBlock(unittest.TestCase):
     def test_uses_so2_m_conv_block_internally(self):
         for m_conv in self.conv2_block.so2_m_conv:
             assert isinstance(m_conv, SO2_m_Conv_Block)
+
+
+class TestPackedSO2Pipeline(unittest.TestCase):
+    def setUp(self):
+        torch.manual_seed(42)
+        self.edges = 16
+        self.input_channels = 8
+        self.hidden_channels = 4
+        self.output_channels = 8
+        self.lmax = 2
+        self.mmax = 2
+        mapping = CoefficientMapping(self.lmax, self.mmax)
+        self.conv1 = SO2_Conv1_WithRadialBlock(
+            sphere_channels=self.input_channels,
+            m_output_channels=self.hidden_channels,
+            lmax=self.lmax,
+            mmax=self.mmax,
+            mappingReduced=mapping,
+            extra_m0_output_channels=self.lmax * self.hidden_channels,
+            edge_channels_list=[16, 8],
+        )
+        self.activation = GateActivation(
+            lmax=self.lmax,
+            mmax=self.mmax,
+            num_channels=self.hidden_channels,
+            m_prime=True,
+        )
+        self.conv2 = SO2_Conv2_InternalBlock(
+            sphere_channels=self.hidden_channels,
+            m_output_channels=self.output_channels,
+            lmax=self.lmax,
+            mmax=self.mmax,
+            mappingReduced=mapping,
+        )
+
+    def _run(self, inputs, packed):
+        if packed:
+            blocks, gating = self.conv1.gemm_blocks_from_packed(*inputs)
+            blocks = self.activation.forward_m_blocks(gating, blocks)
+            return self.conv2.gemms_from_blocks(blocks)
+
+        message, gating = self.conv1.gemms_from_packed(*inputs)
+        message = self.activation(gating, message)
+        return self.conv2.gemms_to_buffers(message)
+
+    def test_packed_pipeline_matches_materialized_forward_and_backward(self):
+        shapes = [
+            (self.edges, self.conv1.fc_m0.in_features),
+            (self.edges, 2 * self.conv1.so2_m_conv[0].in_size),
+            (self.edges, 2 * self.conv1.so2_m_conv[1].in_size),
+        ]
+        reference_inputs = tuple(
+            torch.randn(shape, requires_grad=True) for shape in shapes
+        )
+        packed_inputs = tuple(
+            tensor.detach().clone().requires_grad_() for tensor in reference_inputs
+        )
+
+        reference_outputs = self._run(reference_inputs, packed=False)
+        packed_outputs = self._run(packed_inputs, packed=True)
+        for reference, packed in zip(reference_outputs, packed_outputs):
+            torch.testing.assert_close(reference, packed, rtol=1e-6, atol=1e-7)
+
+        grad_outputs = tuple(torch.randn_like(output) for output in reference_outputs)
+        reference_grads = torch.autograd.grad(
+            reference_outputs, reference_inputs, grad_outputs
+        )
+        packed_grads = torch.autograd.grad(packed_outputs, packed_inputs, grad_outputs)
+        for reference, packed in zip(reference_grads, packed_grads):
+            torch.testing.assert_close(reference, packed, rtol=1e-6, atol=1e-7)
 
 
 class TestConvertSO2Conv(unittest.TestCase):
