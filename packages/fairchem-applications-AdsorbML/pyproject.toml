@@ -10,7 +10,7 @@ license = {text = "MIT License"}
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/AdsorbML"
-documentation = "https://fair-chem.github.io/"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.version]
 source = "vcs"

@@ -21,6 +21,8 @@ Running UMA Benchmarks
 
 ### Molecules
 - NVE MD conservation MD22
+- OMol liquid density (62 experimental liquids, 1 ns NPT)
+- GSCDB
 
 ## Running Benchmarks
 
@@ -95,3 +97,74 @@ fairchem -c configs/uma/benchmark/adsorbml.yaml checkpoint=uma_sm cluster=h100
 fairchem -c configs/uma/benchmark/nvemd-materials.yaml checkpoint=uma_sm cluster=h100
 fairchem -c configs/uma/benchmark/nvemd-molecules.yaml checkpoint=uma_sm cluster=h100
 ```
+
+## OMol liquid density
+
+The liquid-density benchmark launches one independent NPT simulation for each
+of 62 liquids, then runs a reducer that compares the predicted densities with
+experiment and logs aggregate and per-system results to W&B.
+
+```bash
+fairchem -c configs/uma/benchmark/omol-liquid-density.yaml checkpoint=uma_sm cluster=h200
+```
+
+The default protocol is 1 ns with a 0.5 fs timestep. The first 30% is discarded
+as equilibration and density is sampled every 100 steps. Protocol values are
+normal Hydra parameters and can be overridden from the command line:
+
+```bash
+fairchem -c configs/uma/benchmark/omol-liquid-density.yaml \
+  runner.timestep_fs=0.5 runner.total_time_ps=500
+```
+
+For a short local smoke test, process the complete catalog in one job and
+override the runtime:
+
+```bash
+fairchem -c configs/uma/benchmark/omol-liquid-density.yaml \
+  cluster=h100_local job.scheduler.num_array_jobs=1 runner.total_time_ps=1
+```
+
+The data are provisioned outside the repository under
+`${cluster.data_root_dir}/molecules/liquid_density/`:
+
+- `liquid_density_inputs.json` contains a versioned list of systems. Each entry
+  stores the system ID, ASE-encoded atoms, representative one-molecule SMILES,
+  molecule and atom counts, experimental temperature, and experimental density.
+- `liquid_density_references.pkl` contains the authoritative experimental
+  density keyed by the same system IDs. The reducer verifies that these values
+  match the duplicated JSON metadata before scoring.
+
+The reducer writes a complete per-system results table plus density MAE, RMSE,
+mean and maximum absolute relative errors, signed bias, and success/failure
+counts. It also saves and logs a predicted-versus-experimental density parity
+plot. Full trajectories are not retained.
+
+## GSCDB
+
+Place the pinned `gscdb_inputs.pkl` artifact at
+`${cluster.data_root_dir}/gscdb_inputs.pkl`, then run:
+
+```bash
+fairchem -c configs/uma/benchmark/gscdb.yaml checkpoint=uma_sm cluster=h100
+```
+
+For a file elsewhere, add
+`gscdb_input_data=/path/to/gscdb_inputs.pkl` to the command. The artifact
+contains all ASE structures and verbatim copies of the benchmark's `Info/*.csv`
+metadata, so running the evaluation does not clone or read a mutable GitHub
+checkout. Its C60ISO references incorporate the nine revised values from Table 1
+of Reimann and Kaupp, DOI `10.1021/acs.jpclett.6c01636`; the two reactions that
+GSCDB assigns to the excluded `SC74` set remain excluded from metrics. The
+artifact embeds a `Reference_updates.csv` provenance manifest. The pinned
+artifact contains 14,006 structures and has SHA256
+`4c84fb3e9109a18b26ff49bdeb334d7b66d4707280370e891d90c94e2174b892`.
+
+The reducer writes raw molecular energies to `gscdb_results.json.gz`, signed
+errors to `gscdb_reaction_errors.csv`, and full-distribution category metrics to
+`gscdb_metrics_by_category.csv`. The reported metrics are MAE, RMSE, mean signed
+error, standard deviation, and 95th-percentile absolute error; no reactions are
+removed by percentile trimming. The reaction-error CSV retains all 8,448 GSCDB
+rows, including unevaluated property rows with missing predictions. Metrics omit
+the non-energy and historically excluded datasets configured in
+`metric_excluded_datasets`.

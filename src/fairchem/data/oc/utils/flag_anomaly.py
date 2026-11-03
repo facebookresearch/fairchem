@@ -23,7 +23,7 @@ class DetectTrajAnomaly:
         desorption_cutoff_multiplier=1.5,
     ):
         """
-        Flag anomalies based on initial and final stucture of a relaxation.
+        Flag anomalies based on initial and final structure of a relaxation.
 
         Args:
             init_atoms (ase.Atoms): the adslab in its initial state

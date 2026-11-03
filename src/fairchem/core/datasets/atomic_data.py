@@ -4,7 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-modified from troch_geometric Data class
+modified from torch_geometric Data class
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ class AtomicData:
         self.__keys__ = set(_REQUIRED_KEYS)
 
         # this conversion must have been done somewhere in
-        # pytorch geoemtric data
+        # pytorch geometric data
         self.pos = pos
         self.atomic_numbers = atomic_numbers
         self.cell = cell.to(self.pos.dtype)
@@ -208,7 +208,7 @@ class AtomicData:
                     f"dataset must be a string or list of strings, got {type(dataset)}"
                 )
 
-        # tagets
+        # targets
         if energy is not None:
             self.energy = energy
         if forces is not None:
@@ -414,7 +414,7 @@ class AtomicData:
             nedges = torch.tensor([0], dtype=torch.long)
 
         # initialized to torch.zeros(natoms) if tags missing.
-        # https://wiki.fysik.dtu.dk/ase/_modules/ase/atoms.html#Atoms.get_tags
+        # https://docs.ase-lib.org/ase/atoms.html#ase.Atoms.get_tags
         tags = torch.from_numpy(atoms.get_tags()).long()
         fixed = torch.zeros(natoms, dtype=torch.long)
         if hasattr(atoms, "constraints"):
@@ -467,7 +467,7 @@ class AtomicData:
             else stress
         )
 
-        # TODO another way to specify this is to spcify a key. maybe total_charge
+        # TODO another way to specify this is to specify a key. maybe total_charge
         charge = torch.LongTensor(
             [
                 (

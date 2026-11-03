@@ -21,8 +21,8 @@ dependencies = [
 ]
 
 [project.urls]
-repository = "http://github.com/Fair-Chem/src/fairchem/applications/ocx"
-documentation = "https://fair-chem.github.io/"
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx"
+documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.version]
 source = "vcs"

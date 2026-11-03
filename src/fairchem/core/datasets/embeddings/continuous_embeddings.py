@@ -17,7 +17,7 @@ Properties:
     Block
     Atomic Volume
 
-NaN stored for unavaialable parameters.
+NaN stored for unavailable parameters.
 """
 
 from __future__ import annotations

@@ -1,8 +1,6 @@
 ---
 jupytext:
-  cell_metadata_filter: -all
   formats: md:myst
-  main_language: python
   text_representation:
     extension: .md
     format_name: myst
@@ -36,11 +34,11 @@ Python library for programmatic use of the [Open Catalyst Demo](https://open-cat
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
 ```
 
-2. Get access to any necessary huggingface gated models 
+2. Get access to any necessary huggingface gated models
     * Get and login to your Huggingface account
     * Request access to https://huggingface.co/facebook/UMA
     * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
 
 ```{code-cell} ipython3
 :tags: [skip-execution]
@@ -249,11 +247,11 @@ print([
 ```
 
 
-### Converting to [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects
+### Converting to [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects
 
 **Important! The `to_ase_atoms()` method described below will fail with an import error if [ase](https://wiki.fysik.dtu.dk/ase) is not installed.**
 
-Two classes have support for generating [ase.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html) objects:
+Two classes have support for generating [ase.Atoms](https://docs.ase-lib.org/ase/atoms.html) objects:
 * `ocpapi.Atoms.to_ase_atoms()`: Adds unit cell, atomic positions, and other structural information to the returned `ase.Atoms` object.
 * `ocpapi.AdsorbateSlabRelaxationResult.to_ase_atoms()`: Adds the same structure information to the `ase.Atoms` object. Also adds the predicted forces and energy of the relaxed structure, which can be accessed with the `ase.Atoms.get_potential_energy()` and `ase.Atoms.get_forces()` methods.
 
@@ -276,7 +274,7 @@ print(ase_atoms)
 
 ### Converting to other structure formats
 
-From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
+From an `ase.Atoms` object (see previous section), it is possible to [write to other structure formats](https://docs.ase-lib.org/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
 :tags: ["skip-execution"]

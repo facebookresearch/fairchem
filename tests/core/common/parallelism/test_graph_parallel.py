@@ -328,13 +328,16 @@ def a2a_vs_allgather_test(atomic_numbers, edge_index):
     natoms = atomic_numbers.shape[0]
 
     # Partition atoms (same as gp_utils does)
-    node_partition = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    device = atomic_numbers.device
+    node_partition = torch.tensor_split(
+        torch.arange(natoms, device=device), world_size
+    )[rank]
     node_offset = node_partition.min().item()
 
-    # Create rank assignments
-    rank_assignments = partition_atoms_index_split(
-        natoms, world_size, torch.device("cpu")
-    )
+    # Create rank assignments on the same device as the data: build_gp_context
+    # derives its working device from rank_assignments, so a CPU tensor here
+    # would make it index a CPU mask with CUDA edge indices.
+    rank_assignments = partition_atoms_index_split(natoms, world_size, device)
 
     # Filter edges: keep edges where target is in our partition
     target_in_partition = (edge_index[1] >= node_partition.min()) & (
@@ -351,10 +354,12 @@ def a2a_vs_allgather_test(atomic_numbers, edge_index):
     # Run all-to-all version
     result_a2a = _a2a_simple_layer(x_local, local_edge_index, rank_assignments, natoms)
 
+    # Results travel back through spawn_multi_process's forked Manager
+    # server, which cannot unpickle CUDA tensors. Move to CPU first.
     return {
         "rank": rank,
-        "allgather": result_ag.detach(),
-        "all_to_all": result_a2a.detach(),
+        "allgather": result_ag.detach().cpu(),
+        "all_to_all": result_a2a.detach().cpu(),
         "match": torch.allclose(result_ag, result_a2a, atol=1e-6),
     }
 
@@ -414,12 +419,13 @@ def a2a_backward_test(atomic_numbers, edge_index):
     natoms = atomic_numbers.shape[0]
 
     # Partition atoms
-    node_partition = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    device = atomic_numbers.device
+    node_partition = torch.tensor_split(
+        torch.arange(natoms, device=device), world_size
+    )[rank]
     node_offset = node_partition.min().item()
 
-    rank_assignments = partition_atoms_index_split(
-        natoms, world_size, torch.device("cpu")
-    )
+    rank_assignments = partition_atoms_index_split(natoms, world_size, device)
 
     # Filter edges
     target_in_partition = (edge_index[1] >= node_partition.min()) & (
@@ -454,8 +460,10 @@ def a2a_backward_test(atomic_numbers, edge_index):
             create_graph=False,
         )[0]
 
-        results[f"{method}_energy"] = energy.detach()
-        results[f"{method}_forces"] = forces.detach()
+        # .cpu() so the results survive the forked Manager server used by
+        # spawn_multi_process, which cannot rebuild CUDA tensors.
+        results[f"{method}_energy"] = energy.detach().cpu()
+        results[f"{method}_forces"] = forces.detach().cpu()
 
     results["rank"] = rank
     results["energy_match"] = torch.allclose(
@@ -551,7 +559,9 @@ def a2a_spatial_partition_test(atomic_numbers, edge_index, pos):
     natoms = atomic_numbers.shape[0]
 
     # --- All-gather with index-based partitioning (baseline) ---
-    node_partition_idx = torch.tensor_split(torch.arange(natoms), world_size)[rank]
+    node_partition_idx = torch.tensor_split(
+        torch.arange(natoms, device=atomic_numbers.device), world_size
+    )[rank]
     node_offset_idx = node_partition_idx.min().item()
 
     target_in_partition_idx = (edge_index[1] >= node_partition_idx.min()) & (
@@ -589,10 +599,12 @@ def a2a_spatial_partition_test(atomic_numbers, edge_index, pos):
     full_ag = gather_from_model_parallel_region_sum_grad(result_ag, natoms)
     full_a2a = gather_from_model_parallel_region_sum_grad(result_a2a, natoms)
 
+    # .cpu() so the results survive the forked Manager server used by
+    # spawn_multi_process, which cannot rebuild CUDA tensors.
     return {
         "rank": rank,
-        "allgather_full": full_ag.detach(),
-        "all_to_all_full": full_a2a.detach(),
+        "allgather_full": full_ag.detach().cpu(),
+        "all_to_all_full": full_a2a.detach().cpu(),
         "match": torch.allclose(full_ag, full_a2a, atol=1e-5),
     }
 
@@ -826,6 +838,26 @@ _skip_if_ci = pytest.mark.skipif(
 )
 
 
+def _requires_gpus(n: int):
+    """
+    Skip unless at least n CUDA devices are visible.
+
+    ``_to_cuda`` places rank r on ``cuda:r``, so a test spawning n ranks
+    needs n distinct devices. The ``gpu`` marker only covers the
+    zero-device case (see ``pytest_runtest_setup`` in tests/conftest.py).
+
+    Args:
+        n: Number of CUDA devices the test requires.
+
+    Returns:
+        A pytest skipif marker.
+    """
+    return pytest.mark.skipif(
+        torch.cuda.device_count() < n,
+        reason=f"requires {n} CUDA devices",
+    )
+
+
 def _to_cuda(*tensors):
     device = torch.device(f"cuda:{gp_utils.get_gp_rank()}")
     return tuple(t.to(device) for t in tensors)
@@ -846,6 +878,8 @@ def a2a_spatial_partition_test_gpu(atomic_numbers, edge_index, pos):
     return a2a_spatial_partition_test(atomic_numbers, edge_index, pos)
 
 
+@pytest.mark.gpu()
+@_requires_gpus(2)
 @_skip_if_ci
 @pytest.mark.parametrize(
     "num_atoms, edges",
@@ -885,6 +919,8 @@ def test_a2a_vs_allgather_gpu(num_atoms, edges):
         )
 
 
+@pytest.mark.gpu()
+@_requires_gpus(2)
 @_skip_if_ci
 def test_a2a_backward_gpu():
     atomic_numbers = torch.tensor([2.0, 3.0, 5.0, 7.0])
@@ -915,8 +951,14 @@ def test_a2a_backward_gpu():
         )
 
 
+@pytest.mark.gpu()
+@_requires_gpus(2)
 @_skip_if_ci
-@pytest.mark.parametrize("world_size", [2, 3])
+@pytest.mark.parametrize(
+    "world_size",
+    # Gate the 3-rank case separately so 2-GPU hosts still run the 2-rank one.
+    [2, pytest.param(3, marks=_requires_gpus(3))],
+)
 def test_a2a_multi_rank_gpu(world_size):
     num_atoms = 6
     src = list(range(num_atoms))
@@ -946,6 +988,8 @@ def test_a2a_multi_rank_gpu(world_size):
         )
 
 
+@pytest.mark.gpu()
+@_requires_gpus(2)
 @_skip_if_ci
 def test_a2a_spatial_partition_gpu():
     num_atoms = 8

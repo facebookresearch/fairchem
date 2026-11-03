@@ -51,6 +51,16 @@
             "filename": "form_elem_refs.yaml"
         }
     },
+    "uma-s-1p2p1-ft-d4rev": {
+        "filename": "uma-s-1p2p1-ft-d4rev.pt",
+        "repo_id": "facebook/UMA",
+        "subfolder": "checkpoints"
+    },
+    "uma-s-1p2p1-ft-r2scan": {
+        "filename": "uma-s-1p2p1-ft-r2scan.pt",
+        "repo_id": "facebook/UMA",
+        "subfolder": "checkpoints"
+    },
     "esen-md-direct-all-omol": {
         "filename": "esen_md_direct_all.pt",
         "repo_id": "facebook/OMol25",

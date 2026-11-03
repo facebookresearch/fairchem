@@ -46,7 +46,7 @@ For IS2RE / IS2RS training, validation and test sets, we provide precomputed LMD
 
 ## DDEC Charges
 
-We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calcuations failed for them.
+We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calculations failed for them.
 
 |Size of compressed version (in bytes)    |Size of uncompressed version (in bytes)    | MD5 checksum (download link)    |
 |---    |---    |---    |

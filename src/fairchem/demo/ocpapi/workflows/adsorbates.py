@@ -48,7 +48,7 @@ from .retry import NO_LIMIT, RateLimitLogging, retry_api_calls
 # material as a tuple in that order
 _CTX_AD_BULK: ContextVar[tuple[str, str]] = ContextVar(f"{__name__}:ad_bulk")
 
-# Context intance that stores information about a slab
+# Context instance that stores information about a slab
 _CTX_SLAB: ContextVar[Slab] = ContextVar(f"{__name__}:slab")
 
 

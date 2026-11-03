@@ -1,6 +1,6 @@
 ## Validating energy predictions for 2023 Open Catalyst Challenge
 
-The `challenge_eval.py` script takes in your prediction npz file and the model used to generate the ML relaxed strcutures (gemnet-oc-2M, scn-2M, or escn-2M) and returns the success rate. More details on how to run energy predictions on ML relaxed strcutures can be found on the [challenge website](https://opencatalystproject.org/challenge.html) under the evaluation section.
+The `challenge_eval.py` script takes in your prediction npz file and the model used to generate the ML relaxed structures (gemnet-oc-2M, scn-2M, or escn-2M) and returns the success rate. More details on how to run energy predictions on ML relaxed structures can be found on the [challenge website](https://opencatalystproject.org/challenge.html) under the evaluation section.
 
 1. Git clone this repository:
     ```
