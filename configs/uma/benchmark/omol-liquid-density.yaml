@@ -1,0 +1,54 @@
+defaults:
+  - cluster: h200
+  - checkpoint: uma_sm
+  - calculator: uma
+  - _self_
+
+calculator:
+  task_name: omol
+
+benchmark_name: omol-liquid-density
+data_dir: ${cluster.data_root_dir}/molecules/liquid_density
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  seed: 42
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 62
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.LiquidDensityRunner
+  calculator: ${calculator}
+  input_data_path: ${data_dir}/liquid_density_inputs.json
+  timestep_fs: 0.5
+  total_time_ps: 1000.0
+  equilibration_fraction: 0.30
+  sample_interval: 100
+  thermostat_damping_steps: 100
+  barostat_damping_steps: 1000
+  pressure_bar: 1.01325
+  seed: ${job.seed}
+
+reducer:
+  _target_: fairchem.core.components.benchmark.LiquidDensityReducer
+  benchmark_name: ${benchmark_name}
+  input_data_path: ${data_dir}/liquid_density_inputs.json
+  reference_data_path: ${data_dir}/liquid_density_references.pkl

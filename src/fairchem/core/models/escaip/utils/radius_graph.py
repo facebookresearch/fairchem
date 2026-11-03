@@ -243,7 +243,7 @@ def build_radius_graph(
         env = torch.amax(env, dim=0)
     # set the envelope to zero for self-loops
     env.masked_fill_(dist == 0.0, 0.0)
-    # sort the distances of source and destintion neighbors
+    # sort the distances of source and destination neighbors
     index = torch.arange(N, device=device)[:, None]
     ranks = torch.arange(M * N, device=device)[None, :]
     # ranks are the ranks of the atoms within the neighbors, i.e. the j-th source

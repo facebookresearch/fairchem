@@ -1,5 +1,10 @@
-#!/usr/bin/env python3
-"""Regenerate the example input structures linked from the UMA catalysis tutorial.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
+Regenerate the example input structures linked from the UMA catalysis tutorial.
 
 These ``.xyz`` files are the **unrelaxed input geometries** the
 ``docs/uma_tutorials/uma_catalysis_tutorial.md`` "no UMA access?" admonitions
@@ -26,6 +31,7 @@ Outputs (written next to this script):
   co_on_ni111.xyz    MultipleAdsorbateSlabConfig *CO
   c_o_on_ni111.xyz   MultipleAdsorbateSlabConfig *C + *O
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -34,9 +40,6 @@ import numpy as np
 from ase import Atoms
 from ase.build import bulk
 from ase.io import read, write
-from pymatgen.core.surface import SlabGenerator
-from pymatgen.io.ase import AseAtomsAdaptor
-
 from fairchem.data.oc.core import (
     Adsorbate,
     AdsorbateSlabConfig,
@@ -44,6 +47,8 @@ from fairchem.data.oc.core import (
     MultipleAdsorbateSlabConfig,
     Slab,
 )
+from pymatgen.core.surface import SlabGenerator
+from pymatgen.io.ase import AseAtomsAdaptor
 
 OUT = Path(__file__).resolve().parent
 
@@ -126,7 +131,9 @@ def gen_co_on_ni111(ni_bulk_atoms: Atoms) -> None:
     np.random.seed(SEED)
     slab = _ni_slab_obj(ni_bulk_atoms)
     adsorbate_co = Adsorbate(adsorbate_smiles_from_db="*CO")
-    cfg = MultipleAdsorbateSlabConfig(slab, [adsorbate_co], num_configurations=NUM_SITES)
+    cfg = MultipleAdsorbateSlabConfig(
+        slab, [adsorbate_co], num_configurations=NUM_SITES
+    )
     _write_clean(cfg.atoms_list[0], "co_on_ni111.xyz")
 
 
@@ -162,7 +169,9 @@ def verify() -> None:
         assert counts == expected, f"{name}: got {counts}, expected {expected}"
         assert all(atoms.get_pbc()), f"{name}: expected pbc True on all axes"
         assert atoms.get_volume() > 0, f"{name}: non-periodic / zero-volume cell"
-        print(f"  {name:20s} {len(atoms):3d} atoms  {atoms.get_chemical_formula()}  pbc=TTT  OK")
+        print(
+            f"  {name:20s} {len(atoms):3d} atoms  {atoms.get_chemical_formula()}  pbc=TTT  OK"
+        )
 
 
 if __name__ == "__main__":

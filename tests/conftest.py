@@ -97,9 +97,33 @@ def pytest_addoption(parser):
             "YAMLs from the matching model entry."
         ),
     )
+    parser.addoption(
+        "--inference-settings",
+        action="store",
+        default=None,
+        help=(
+            "Named inference settings (e.g. default, multigpu, batch, traineval) "
+            "to run the existing suite in. Shared pretrained-model fixtures load "
+            "with it (otherwise high-precision), and tests that opt in, such as "
+            "the equivariance tests, use it instead of their own settings. Tests "
+            "that pass explicit settings keep them."
+        ),
+    )
 
 
 def pytest_configure(config):
+    requested = requested_inference_settings(config)
+    if requested is not None:
+        from fairchem.core.units.mlip_unit.api.inference import (
+            NAME_TO_INFERENCE_SETTING,
+        )
+
+        if requested not in NAME_TO_INFERENCE_SETTING:
+            raise pytest.UsageError(
+                f"--inference-settings={requested!r} is not one of "
+                f"{sorted(NAME_TO_INFERENCE_SETTING)}"
+            )
+        _FIXTURE_SETTINGS["inference_settings"] = requested
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
@@ -172,6 +196,29 @@ def sweep_refs_from(config) -> str | None:
         return None
     raw = raw.strip()
     return raw or None
+
+
+# The named inference settings shared pretrained-model fixtures load with:
+# --inference-settings if given (set in pytest_configure), else FP32.
+_FIXTURE_SETTINGS = {"inference_settings": "high-precision"}
+
+
+def requested_inference_settings(config) -> str | None:
+    """
+    Return ``--inference-settings`` value, or ``None`` if unset/empty.
+    """
+    raw = config.getoption("--inference-settings", default=None)
+    if raw is None:
+        return None
+    raw = raw.strip()
+    return raw or None
+
+
+def fixture_inference_settings() -> str:
+    """
+    The named inference settings shared pretrained-model fixtures load with.
+    """
+    return _FIXTURE_SETTINGS["inference_settings"]
 
 
 def uma_models() -> list[str]:
@@ -579,6 +626,9 @@ def get_predict_unit_for_test(name_or_path, *, refs_from=None, **kwargs):
 
     from fairchem.core import pretrained_mlip
 
+    # FP32 (high-precision) unless --inference-settings names another mode;
+    # tests of a specific mode pass it explicitly.
+    kwargs.setdefault("inference_settings", fixture_inference_settings())
     if name_or_path in pretrained_mlip.available_models:
         return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
     if os.path.isfile(name_or_path):

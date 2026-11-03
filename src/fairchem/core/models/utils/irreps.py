@@ -47,7 +47,7 @@ def irreps_sum(ang_mom: int) -> int:
     """
     Returns the sum of the dimensions of the irreps up to the specified angular momentum.
 
-    :param ang_mom: max angular momenttum to sum up dimensions of irreps
+    :param ang_mom: max angular momentum to sum up dimensions of irreps
     """
     total = 0
     for i in range(ang_mom + 1):

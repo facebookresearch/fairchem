@@ -74,7 +74,7 @@ def node_to_edge_wigner_permute_kernel(
 
     Grid: (num_edges, num_c_blocks)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c_block_id = tl.program_id(1)
 
     # Channel vectorization with block offset
@@ -594,7 +594,7 @@ def node_to_edge_wigner_permute_bwd_dx_kernel(
 
     Grid: (num_edges,)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
 
     # Channel vectorization
     c_range = tl.arange(0, BLOCK_C)
@@ -1049,7 +1049,7 @@ def permute_wigner_inv_edge_to_node_kernel(
 
     Grid: (num_edges, num_c_blocks)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c_block_id = tl.program_id(1)
 
     c_start = c_block_id * BLOCK_C
@@ -1195,7 +1195,7 @@ def permute_wigner_inv_edge_to_node_bwd_dx_kernel(
 
     Grid: (num_edges, num_c_blocks)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c_block_id = tl.program_id(1)
 
     c_start = c_block_id * BLOCK_C
@@ -1354,7 +1354,7 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
 
     Grid: (num_edges,)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
 
     c_range = tl.arange(0, C)
     c_mask = c_range < C
@@ -1618,7 +1618,7 @@ def wigner_conv1_fused_fwd_kernel(
     BLOCK_C: tl.constexpr,  # == C
     GRID_E_STRIDE: tl.constexpr,
 ):
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, BLOCK_C)
     c_mask = c < C
 
@@ -1740,7 +1740,7 @@ def wigner_conv1_fused_bwd_kernel(
          stored per edge for a deterministic index_add
       6. grad_W = g_l @ x_l^T  (block-diagonal outer product)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, BLOCK_C)
     c_mask = c < C
     C2 = 2 * C
@@ -2003,7 +2003,7 @@ def wigner_inv_conv2_fused_fwd_kernel(
     BLOCK_C: tl.constexpr,  # == C
     GRID_E_STRIDE: tl.constexpr,
 ):
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c_block_id = tl.program_id(1)
     c_start = c_block_id * BLOCK_C
     c = c_start + tl.arange(0, BLOCK_C)
@@ -2056,7 +2056,7 @@ def wigner_inv_conv2_scatter_fwd_kernel(
     GRID_E_STRIDE: tl.constexpr,
 ):
     """Inverse-rotate packed edge features and accumulate them by target node."""
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, BLOCK_C)
     c_mask = c < C
 
@@ -2123,7 +2123,7 @@ def wigner_inv_conv2_fused_bwd_kernel(
       3. recompute x_l from saved GEMM buffers (M->L)
       4. dW = dy @ x_l^T  (block-diagonal outer product)
     """
-    edge_id = tl.program_id(0)
+    edge_id = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, BLOCK_C)
     c_mask = c < C
 
@@ -2209,7 +2209,7 @@ def packed_gate_fwd_kernel(
     C: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
-    edge = tl.program_id(0)
+    edge = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, C)
     while edge < num_edges:
         x0_base = edge * x0_full_stride_n
@@ -2267,7 +2267,7 @@ def packed_gate_bwd_kernel(
     C: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
-    edge = tl.program_id(0)
+    edge = tl.program_id(0).to(tl.int64)
     c = tl.arange(0, C)
     while edge < num_edges:
         x0_base = edge * x0_full_stride_n

@@ -413,7 +413,7 @@ def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
-    # this assumes the checkpont also contains the config with the full model in it
+    # this assumes the checkpoint also contains the config with the full model in it
     # TODO: need to schematize how we save and load the config from checkpoint
     config = checkpoint["config"]["model"]
     name = config.pop("name")
@@ -490,6 +490,30 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
         key=lambda x: x[1],
     )
+
+
+def get_subdirectories_sorted_by_step(directory: str) -> list:
+    """
+    Get the ``step_N`` subdirectories of a directory sorted by their step.
+
+    Unlike modification times, the step in a checkpoint directory's name does
+    not change when files are later added to or removed from it.
+
+    Args:
+        directory (str): The path to the directory to search.
+    Returns:
+        list: A list of tuples containing the subdirectory path and its step,
+            lowest step first.
+    """
+    if not os.path.isdir(directory):
+        return []
+
+    steps = []
+    for d in pathlib.Path(directory).iterdir():
+        step = d.name.removeprefix("step_")
+        if d.name.startswith("step_") and step.isdigit() and d.is_dir():
+            steps.append((str(d), int(step)))
+    return sorted(steps, key=lambda x: x[1])
 
 
 def os_arch_for_download() -> tuple[str, str]:

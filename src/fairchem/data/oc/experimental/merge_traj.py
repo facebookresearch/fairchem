@@ -22,7 +22,7 @@ def main():
     Given a directory containing adsorbate subdirectories, loops through all
     runs and merges intermediate checkpoints into a single, full trajectory.
     """
-    # TODO: Impove efficiency for when dealing with larger systems
+    # TODO: Improve efficiency for when dealing with larger systems
     root_dir = sys.argv[1]
     all_adsorbates = os.listdir(root_dir)
 

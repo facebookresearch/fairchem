@@ -195,7 +195,7 @@ class TestAtomsToGraphs:
         # test converting a molecule with no unit cell
         molecule = Atoms("2N", [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0)])
 
-        # this will raise an Singlular Matrix Error because the cell doesn't exist
+        # this will raise a Singular Matrix Error because the cell doesn't exist
         with pytest.raises(np.linalg.LinAlgError):
             AtomicData.from_ase(
                 molecule,

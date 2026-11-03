@@ -68,7 +68,8 @@ def test_reference_style_ignores_prose_target():
 def test_html_href_and_src():
     text = '<a href="other.md">x</a> <img src="pics/p.png">'
     links = cl.extract_links(text)
-    assert "other.md" in links and "pics/p.png" in links
+    assert "other.md" in links
+    assert "pics/p.png" in links
 
 
 def test_code_blocks_are_ignored():
@@ -86,7 +87,7 @@ def test_code_blocks_are_ignored():
 # --- internal resolution ---------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture()
 def docs_tree(tmp_path: Path) -> Path:
     (tmp_path / "core").mkdir()
     (tmp_path / "core" / "uma.md").write_text("# uma")

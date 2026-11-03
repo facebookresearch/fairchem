@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 ## The following part is from xformers, copied here in case it's deprecated
-## Ref: https://github.com/facebookresearch/xformers/blob/main/xformers/components/activations.py
+## Ref: https://github.com/facebookresearch/xformers/blob/279e083384ea26b5359ac65d116fd12b15b32643/xformers/components/activations.py
 
 
 class Activation(str, Enum):
@@ -159,7 +159,7 @@ def init_linear_weights(module, gain=1.0):
 
 
 ## The following part is modified from xformers
-## Ref: https://github.com/facebookresearch/xformers/blob/main/xformers/components/residual.py
+## Ref: https://github.com/facebookresearch/xformers/blob/279e083384ea26b5359ac65d116fd12b15b32643/xformers/components/residual.py
 
 
 class NormalizationType(str, Enum):

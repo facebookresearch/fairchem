@@ -348,7 +348,7 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
         node_features = self.get_node_features(node_features, data.neighbor_list)
         node_hidden = self.node_hidden_linear(node_features)
 
-        # Get edge faetures
+        # Get edge features
         edge_hidden = self.edge_hidden_linear(edge_features)
 
         # Concatenate edge and node features (num_nodes, num_neighbors, hidden_size)
@@ -403,7 +403,7 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
         else:
             node_output = self.aggregate(
                 edge_output, data.neighbor_mask
-            )  ##### TODO: use masked with envolope
+            )  ##### TODO: use masked with envelope
 
         return node_output, edge_output
 

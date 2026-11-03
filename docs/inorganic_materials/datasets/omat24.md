@@ -20,7 +20,7 @@ The OMat24 train and val splits are fully compatible with the Matbench-Discovery
    1. The splits do not contain any structure that has a protostructure label present in the initial or relaxed
       structures of the WBM dataset.
    2. The splits do not include any structure that was generated starting from an Alexandria relaxed structure with
-      protostructure lable in the intitial or relaxed structures of the  WBM datset.
+      protostructure label in the initial or relaxed structures of the WBM dataset.
 
 ## Subdatasets
 OMat24 is made up of X subdatasets based on how the structures were generated. The subdatasets included are:
@@ -96,7 +96,7 @@ For example to read the **rattled-relax** subdataset,
 from fairchem.core.datasets import AseDBDataset
 
 dataset_path = "/path/to/omat24/train/rattled-relax"
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 
 dataset = AseDBDataset(config=dict(src=dataset_path, **config_kwargs))
 
@@ -108,7 +108,7 @@ To read more than one subdataset you can simply pass a list of subdataset paths,
 ```python
 from fairchem.core.datasets import AseDBDataset
 
-config_kwargs = {}  # see tutorial on additiona configuration
+config_kwargs = {}  # see tutorial on additional configuration
 dataset_paths = [
     "/path/to/omat24/train/rattled-relax",
     "/path/to/omat24/train/rattled-1000-subsampled",

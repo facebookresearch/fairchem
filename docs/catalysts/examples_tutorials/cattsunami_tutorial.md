@@ -295,7 +295,7 @@ To generalize an interactive visualization, use `ase gui` from the command line 
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-# Make an interative html file of the optimized neb trajectory
+# Make an interactive html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
 ```

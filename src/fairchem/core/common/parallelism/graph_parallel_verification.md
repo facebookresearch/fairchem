@@ -88,7 +88,7 @@ pytest tests/core/common/test_gp_utils.py tests/core/models/uma/test_escn_md.py 
 ## 3. Performance Benchmarks
 
 All benchmarks use `InferenceBenchRunner` with FCC crystal systems (deterministic),
-`timeiters=100`, `repeats=5`, turbo mode (compile=True, tf32=True).
+`timeiters=100`, `repeats=5`, multigpu mode, formerly turbo (compile=True, tf32=True).
 Results written to `benchmark_results.json` in the run directory under `/checkpoint/ocp/rgao/speed/`.
 
 ### 3a. 8-GPU single-node (local, ~10 min each)
@@ -291,7 +291,7 @@ for model, data in d['model_to_qps_data'].items():
 
 ---
 
-## 5. Reference Results (H200 turbo)
+## 5. Reference Results (H200 multigpu)
 
 ### 4k atoms/rank (canonical):
 

@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 # example how to use checkpoint fixtures
 from __future__ import annotations
 
+import dataclasses
 import os
 from functools import partial
 
@@ -19,12 +20,24 @@ from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    guess_inference_settings,
+)
+from tests.conftest import requested_inference_settings
 
 # Test equivariance in both fp32 and fp64
 # If error in equivariance is due to numerical error in fp
 # Then fp64 should have substainally lower variance than fp32
 # Otherwise error might be from a bug
+
+
+@pytest.fixture()
+def mode(request) -> str | None:
+    """
+    The --inference-settings mode to run in, or None for this file's settings.
+    """
+    return requested_inference_settings(request.config)
 
 
 # variance in numerical error below num_tol
@@ -37,11 +50,16 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
     ],
 )
 def test_direct_equivariance(
-    dtype, num_tol, rot_tol, direct_checkpoint, fake_uma_dataset
+    dtype, num_tol, rot_tol, direct_checkpoint, fake_uma_dataset, mode
 ):
     direct_inference_checkpoint_pt, _ = direct_checkpoint
     equivariance_on_pt(
-        dtype, num_tol, rot_tol, direct_inference_checkpoint_pt, fake_uma_dataset
+        dtype,
+        num_tol,
+        rot_tol,
+        direct_inference_checkpoint_pt,
+        fake_uma_dataset,
+        mode,
     )
 
 
@@ -53,11 +71,16 @@ def test_direct_equivariance(
     ],
 )
 def test_direct_mole_equivariance(
-    dtype, num_tol, rot_tol, direct_mole_checkpoint, fake_uma_dataset
+    dtype, num_tol, rot_tol, direct_mole_checkpoint, fake_uma_dataset, mode
 ):
     direct_mole_inference_checkpoint_pt, _ = direct_mole_checkpoint
     equivariance_on_pt(
-        dtype, num_tol, rot_tol, direct_mole_inference_checkpoint_pt, fake_uma_dataset
+        dtype,
+        num_tol,
+        rot_tol,
+        direct_mole_inference_checkpoint_pt,
+        fake_uma_dataset,
+        mode,
     )
 
 
@@ -69,7 +92,7 @@ def test_direct_mole_equivariance(
     ],
 )
 def test_conserving_mole_equivariance(
-    dtype, num_tol, rot_tol, conserving_mole_checkpoint, fake_uma_dataset
+    dtype, num_tol, rot_tol, conserving_mole_checkpoint, fake_uma_dataset, mode
 ):
     conserving_mole_inference_checkpoint_pt, _ = conserving_mole_checkpoint
     equivariance_on_pt(
@@ -78,11 +101,12 @@ def test_conserving_mole_equivariance(
         rot_tol,
         conserving_mole_inference_checkpoint_pt,
         fake_uma_dataset,
+        mode,
     )
 
 
 def equivariance_on_pt(
-    dtype, num_tol, rot_tol, inference_checkpoint_path, data_root_dir
+    dtype, num_tol, rot_tol, inference_checkpoint_path, data_root_dir, mode=None
 ):
     db = AseDBDataset(config={"src": os.path.join(data_root_dir, "oc20")})
 
@@ -99,6 +123,10 @@ def equivariance_on_pt(
     settings = InferenceSettings(
         activation_checkpointing=False, base_precision_dtype=dtype
     )
+    if mode is not None:  # --inference-settings: run this test in that mode
+        settings = dataclasses.replace(
+            guess_inference_settings(mode), base_precision_dtype=dtype
+        )
     predictor = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
