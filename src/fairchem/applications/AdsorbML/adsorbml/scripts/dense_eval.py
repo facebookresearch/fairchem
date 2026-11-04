@@ -5,6 +5,8 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
+from __future__ import annotations
+
 """
 AdsorbML evaluation script. This script expects the results-file to be
 organized in a very specific structure in order to evaluate successfully.
@@ -73,8 +75,6 @@ e.g.
         .
     }
 """
-
-from __future__ import annotations
 
 import argparse
 from collections import defaultdict
