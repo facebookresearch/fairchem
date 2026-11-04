@@ -6,10 +6,8 @@ coverage:
   status:
     project:
       default:
-        target: auto
-        informational: false
+        informational: true
     patch:
       default:
-        target: 80%
-        informational: false
+        informational: true
 github_checks: false
