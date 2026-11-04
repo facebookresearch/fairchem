@@ -541,9 +541,7 @@ jobs:
     if: ${{ vars.UMA_NITRO_RUNNER != '' }}
     runs-on: ${{ vars.UMA_NITRO_RUNNER }}
     name: 'test_nitro_gpu (3.14)'
-    environment:
-      name: external-testing
-      url: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
+    environment: external-testing
     timeout-minutes: 45
     permissions:
       contents: read
