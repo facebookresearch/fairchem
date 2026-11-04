@@ -38,6 +38,9 @@ jobs:
           'external-testing' || 'internal-testing' }}
     env:
       COVERAGE_CORE: ${{ matrix.python_version == '3.14' && 'sysmon' || 'ctrace' }}
+      # Only Python 3.14 reports are uploaded. Skip redundant 3.11 tracing and
+      # its subprocess-data merge, which can fail with SQLITE_CANTOPEN.
+      PYTEST_ADDOPTS: ${{ matrix.python_version == '3.11' && '--no-cov' || '' }}
     runs-on: 32-core-ubuntu
     # Explicit `name:` overrides GitHub Actions' default check-run name.
     # Without it, GitHub auto-expands EVERY field of the object-typed
@@ -156,7 +159,7 @@ jobs:
           pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Generate coverage report
-        if: ${{ always() && hashFiles('.coverage') != '' }}
+        if: ${{ always() && matrix.python_version == '3.14' && hashFiles('.coverage') != '' }}
         run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
 
       - if: ${{ matrix.python_version == '3.14' }}
