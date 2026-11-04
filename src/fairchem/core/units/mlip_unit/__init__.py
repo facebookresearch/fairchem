@@ -32,8 +32,10 @@ def load_predict_unit(
     workers: int = 1,
     seed: int = 41,
     gp_config=None,
+    assume_fixed_input: bool = False,
 ) -> MLIPPredictUnit:
-    """Load a MLIPPredictUnit from a checkpoint file.
+    """
+    Load a MLIPPredictUnit from a checkpoint file.
 
     Args:
         path: Path to the checkpoint file
@@ -52,6 +54,9 @@ def load_predict_unit(
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
         seed: Optional random seed for reproducibility. If provided, will set the random seed for
             Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
+        assume_fixed_input: Skip parallel input update checks. Advanced callers must
+            preserve atom ordering, count, and all fields except positions and cell.
+            Only affects parallel prediction with MOLE merging enabled initially.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -75,6 +80,7 @@ def load_predict_unit(
             num_workers=workers,
             seed=seed,
             gp_config=gp_config,
+            assume_fixed_input=assume_fixed_input,
         )
     else:
         return MLIPPredictUnit(
