@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 
-import matplotlib.pyploat as plt
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from fairchem.core.scripts import download_large_files

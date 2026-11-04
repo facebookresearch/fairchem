@@ -8,6 +8,7 @@ dynamic = ["version", "readme"]
 description = "Code for ODAC MOF configurations and VASP input sets for direct air capture"
 license = {text = "MIT License"}
 dependencies = [
+    "fairchem-core>=1.1.0",  # first release with the "odac" download_large_files group
     "ase>=3.27",
     "pymatgen>=2023.10.3",
 ]
