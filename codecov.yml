@@ -1,9 +1,15 @@
+ignore:
+  # Nitro includes compiled GPU kernels whose execution Python coverage cannot track.
+  - "src/fairchem/core/models/uma/uma_nitro/**"
+
 coverage:
   status:
     project:
       default:
-        informational: true
+        target: auto
+        informational: false
     patch:
       default:
-        informational: true
+        target: 80%
+        informational: false
 github_checks: false

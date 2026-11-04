@@ -18,6 +18,8 @@ on:
 # pushes and manual triggers, we want the sha of the branch.
 env:
   CI: true
+  # Trace the checked-out source consistently across CPU and GPU jobs.
+  PYTHONPATH: ${{ github.workspace }}/src
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
@@ -27,6 +29,8 @@ env:
 
 jobs:
   test:
+    env:
+      COVERAGE_CORE: ${{ matrix.python_version == '3.14' && 'sysmon' || 'ctrace' }}
     runs-on: 32-core-ubuntu
     # Explicit `name:` overrides GitHub Actions' default check-run name.
     # Without it, GitHub auto-expands EVERY field of the object-typed
@@ -128,7 +132,7 @@ jobs:
 
       - name: Download large test files
         if: matrix.shard.name == 'core'
-        run: coverage run -m fairchem.core.scripts.download_large_files oc
+        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.scripts.download_large_files oc
 
       - name: Core tests (${{ matrix.shard.name }})
         env:
@@ -137,13 +141,17 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
 
       - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-coverage
@@ -170,6 +178,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_cpu_sweep:
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
     runs-on: 32-core-ubuntu
     # See `test` job above for the `name:` rationale (literal job key,
     # not `${{ github.job }}`, to avoid the null-at-job-level pitfall).
@@ -241,13 +252,13 @@ jobs:
 
       - name: Download large test files
         if: matrix.shard.name == 'core'
-        run: coverage run -m fairchem.core.scripts.download_large_files oc
+        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.scripts.download_large_files oc
 
       - name: Sweep CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # The core shard has no serial @pretrained tests, so the sweep
@@ -257,7 +268,20 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@v7
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
@@ -275,6 +299,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
@@ -339,7 +366,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -348,7 +375,20 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@v7
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
@@ -366,6 +406,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_gpu_sweep:
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
@@ -416,7 +459,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
 
       - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
@@ -424,7 +467,20 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@v7
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
