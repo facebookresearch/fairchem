@@ -46,7 +46,11 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATa
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
-from tests.conftest import get_predict_unit_for_test, models_to_test
+from tests.conftest import (
+    get_predict_unit_for_test,
+    inference_settings_for_test,
+    models_to_test,
+)
 
 # All tests use a GPU and a pretrained model. Tests that iterate over all
 # registered models inherit the bare @pretrained (no model args) from here;
@@ -215,7 +219,9 @@ def large_bulk_atoms() -> Atoms:
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_calculator_from_checkpoint(pretrained_checkpoint):
     calc = FAIRChemCalculator.from_model_checkpoint(
-        pretrained_checkpoint, task_name="omol"
+        pretrained_checkpoint,
+        task_name="omol",
+        inference_settings=inference_settings_for_test("default"),
     )
     assert "energy" in calc.implemented_properties
     assert "forces" in calc.implemented_properties
@@ -226,10 +232,14 @@ def test_calculator_with_task_names_matches_uma_task(
     aperiodic_atoms, pretrained_checkpoint
 ):
     calc_omol = FAIRChemCalculator.from_model_checkpoint(
-        pretrained_checkpoint, task_name="omol"
+        pretrained_checkpoint,
+        task_name="omol",
+        inference_settings=inference_settings_for_test("default"),
     )
     calc_omol_uma_task = FAIRChemCalculator.from_model_checkpoint(
-        pretrained_checkpoint, task_name=UMATask.OMOL
+        pretrained_checkpoint,
+        task_name=UMATask.OMOL,
+        inference_settings=inference_settings_for_test("default"),
     )
     calculators = [calc_omol, calc_omol_uma_task]
     energies = []
@@ -267,7 +277,9 @@ def test_no_task_name_single_task(request):
 def test_calculator_unknown_task_raises_error(pretrained_checkpoint):
     with pytest.raises(ValueError):
         FAIRChemCalculator.from_model_checkpoint(
-            pretrained_checkpoint, task_name="ommmmmol"
+            pretrained_checkpoint,
+            task_name="ommmmmol",
+            inference_settings=inference_settings_for_test("default"),
         )
 
 
@@ -333,6 +345,7 @@ def test_relaxation_final_energy(slab_atoms, all_models_predict_unit):
 
 
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.compile_gpu()
 @pytest.mark.parametrize(
     "inference_settings", ["default", "high-precision", "multigpu"]
 )

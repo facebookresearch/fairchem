@@ -353,7 +353,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --eager-inference --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -438,7 +438,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --eager-inference --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
 
       - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
