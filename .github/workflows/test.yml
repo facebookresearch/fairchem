@@ -533,3 +533,84 @@ jobs:
         uses: ./.github/actions/multi-trigger-cleanup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
+
+  # Activation is pending provisioning: configure UMA_NITRO_RUNNER with a real
+  # supported-GPU runner label, then require this stable status in branch rules.
+  # An unset variable deliberately skips this job; it does not establish coverage.
+  test_nitro_gpu:
+    if: ${{ vars.UMA_NITRO_RUNNER != '' }}
+    runs-on: ${{ vars.UMA_NITRO_RUNNER }}
+    name: 'test_nitro_gpu (3.14)'
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      CUDA_VISIBLE_DEVICES: '0'
+      TORCHINDUCTOR_COMPILE_THREADS: '2'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          # The existing contributor approval gate protects this secret-bearing
+          # workflow_run checkout, as in the other GPU jobs above.
+          allow-unsafe-pr-checkout: true
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: 'test_nitro_gpu (3.14)'
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install packages/fairchem-core[dev,extras] \
+            packages/fairchem-data-omol[dev] \
+            packages/fairchem-data-omat \
+            -r tests/requirements.txt
+          pip install packages/fairchem-core[torchsim]
+
+      - name: Verify supported GPU and kernel policy
+        id: preflight
+        run: python .github/scripts/nitro_ci.py --preflight nitro-preflight.log
+
+      - name: Nitro prediction and runtime fallback tests
+        id: nitro
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # Run the entire GPU subset serially, including real compiled fallbacks.
+        # The pinned uma-s-1p2p1 tests are outside the 1p1/1p2 sweep matrices.
+        # Preserve pytest's empty-selection failure; do not force eager inference.
+        run: |
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL 2100s pytest -o faulthandler_timeout=300 tests/core/models/uma/uma_nitro -m gpu --durations=0 -vv --rootdir=. -c packages/fairchem-core/pyproject.toml --junitxml=junit-nitro.xml
+
+      - name: Require executed Nitro prediction and fallback coverage
+        id: coverage
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' }}
+        run: python .github/scripts/nitro_ci.py --verify junit-nitro.xml --summary nitro-coverage.json
+
+      - name: Upload Nitro evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-${{ github.run_id }}-${{ github.run_attempt }}-test_nitro_gpu-py3.14-all-phases
+          path: |
+            nitro-preflight.log
+            junit-nitro.xml
+            nitro-coverage.json
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: 'test_nitro_gpu (3.14)'
