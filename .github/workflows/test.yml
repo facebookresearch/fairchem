@@ -29,7 +29,9 @@ env:
 
 jobs:
   test:
-    # Fork code must be approved before checkout and environment secrets are released.
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
     environment: >-
       ${{ github.event_name == 'workflow_run' &&
           github.event.workflow_run.head_repository.full_name != github.repository &&
@@ -182,7 +184,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_cpu_sweep:
-    # Fork code must be approved before checkout and environment secrets are released.
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
     environment: >-
       ${{ github.event_name == 'workflow_run' &&
           github.event.workflow_run.head_repository.full_name != github.repository &&
@@ -308,7 +312,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
-    # Fork code must be approved before checkout and environment secrets are released.
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
     environment: >-
       ${{ github.event_name == 'workflow_run' &&
           github.event.workflow_run.head_repository.full_name != github.repository &&
@@ -419,7 +425,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_gpu_sweep:
-    # Fork code must be approved before checkout and environment secrets are released.
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
     environment: >-
       ${{ github.event_name == 'workflow_run' &&
           github.event.workflow_run.head_repository.full_name != github.repository &&
@@ -516,7 +524,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_lammps_gpu:
-    # Fork code must be approved before checkout and environment secrets are released.
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
     environment: >-
       ${{ github.event_name == 'workflow_run' &&
           github.event.workflow_run.head_repository.full_name != github.repository &&
