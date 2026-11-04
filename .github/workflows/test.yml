@@ -541,6 +541,9 @@ jobs:
     if: ${{ vars.UMA_NITRO_RUNNER != '' }}
     runs-on: ${{ vars.UMA_NITRO_RUNNER }}
     name: 'test_nitro_gpu (3.14)'
+    environment:
+      name: external-testing
+      url: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -555,8 +558,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
-          # The existing contributor approval gate protects this secret-bearing
-          # workflow_run checkout, as in the other GPU jobs above.
+          # Required reviewer approval in external-testing occurs before checkout.
+          # Approved fork code can then use the checkpoint secret for these tests.
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
 

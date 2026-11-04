@@ -30,6 +30,12 @@ runner, GitHub skips the job and the supported-GPU coverage gap remains open.
    only after activation and a successful run. Record the runner and the first
    successful run in the investigation plan before closing the coverage item.
 
+The job uses the existing `external-testing` environment, which requires reviewer
+approval before checkout or any test code runs. Its approval URL identifies the
+actual source commit, including the upstream PR SHA for `workflow_run`. This
+approval also applies to manual dispatches. Keep the environment's required
+reviewer protection configured when activating the runner.
+
 The lane preserves the approved checkout SHA, contributor approval gate,
 per-step Hugging Face secret handling and manual status setup/cleanup. Its
 45-minute job timeout bounds installation and initial kernel compilation.
