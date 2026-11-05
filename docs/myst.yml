@@ -65,7 +65,6 @@ project:
                 - file: inorganic_materials/examples_tutorials/elastic.md
         - title: Heterogeneous Catalysts
           children:
-            - file: catalysts/open_catalyst_project.md
             - file: catalysts/datasets/summary.md
               children:
                 - file: catalysts/datasets/oc20.md
@@ -84,6 +83,7 @@ project:
                 - file: catalysts/examples_tutorials/adsorbml_walkthrough.md
                 - file: catalysts/examples_tutorials/cattsunami_tutorial.md
                 - file: catalysts/examples_tutorials/ocpapi.md
+            - file: catalysts/open_catalyst_project.md
             - url: https://open-catalyst.metademolab.com/
               title: OCP Demo (no install required!)
         - title: MOFs for Direct Air Capture
