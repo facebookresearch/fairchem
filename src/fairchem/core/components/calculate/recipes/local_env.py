@@ -25,7 +25,7 @@ def construct_bond_matrix(
     """
     Constructs a bond matrix for a given crystal structure.
 
-    This function uses a near neigbor algorithm from pymatgen to determine bonds between atoms in the structure and
+    This function uses a near neighbor algorithm from pymatgen to determine bonds between atoms in the structure and
     creates an adjacency matrix where 1 indicates a bond between atoms and 0 indicates no bond.
 
     Args:

@@ -104,7 +104,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         This method generates a fixed number of configurations where sites are
         selected to ensure that adsorbate binding indices are at least a fair
         distance away from each other (covalent radii + interstitial gap).
-        While this helps prevent adsorbate overlap it does not gaurantee it
+        While this helps prevent adsorbate overlap it does not guarantee it
         since non-binding adsorbate atoms can overlap if the right combination
         of angles is sampled.
         """

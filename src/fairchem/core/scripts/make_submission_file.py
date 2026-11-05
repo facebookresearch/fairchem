@@ -99,7 +99,7 @@ if __name__ == "__main__":
     submissions.
 
     If writing IS2RE predictions from relaxations, paths must be directories
-    containg trajectory files. Additionally, --is2re-relaxations must be
+    containing trajectory files. Additionally, --is2re-relaxations must be
     provided as a command line argument.
 
     If writing IS2RE predictions from hybrid relaxations (force only model +

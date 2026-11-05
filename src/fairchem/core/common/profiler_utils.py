@@ -46,7 +46,7 @@ def get_default_profiler_handler(
 
 def get_profile_schedule(wait: int = 5, warmup: int = 5, active: int = 2):
     """Get a profile schedule and total number of steps to run
-    check pytorch docs on the meaning of these paramters:
+    check pytorch docs on the meaning of these parameters:
     https://pytorch.org/docs/stable/profiler.html#torch.profiler.schedule
     Example usage:
     ```

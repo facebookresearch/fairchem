@@ -14,11 +14,18 @@ import time
 from datetime import timedelta
 from typing import Any, TypeVar
 
-import ray
 import torch
 import torch.distributed as dist
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
+
+try:
+    import ray
+
+    ray_installed = True
+except ImportError:
+    ray_installed = False
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.typing import none_throws
@@ -173,6 +180,7 @@ def cleanup() -> None:
     time.sleep(0.5)  # Give OS time to release ports
 
 
+@requires(ray_installed, message="Requires `ray[serve]` to be installed")
 def cleanup_gp_ray():
     """Useful for cleaning up GP with ray"""
     if ray.is_initialized():

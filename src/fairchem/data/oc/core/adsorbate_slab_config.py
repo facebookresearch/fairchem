@@ -287,7 +287,7 @@ class AdsorbateSlabConfig:
         overlap by:
             1. Projecting the adsorbate and surface atoms onto the surface plane.
             2. Identify all adsorbate atom - surface atom combinations for which
-                an itersection when translating along the normal would occur.
+                an intersection when translating along the normal would occur.
                 This is where the distance between the projected points is less than
                 r_surface_atom + r_adsorbate_atom
             3. Explicitly solve for the scaled normal at which the distance between
@@ -309,7 +309,7 @@ class AdsorbateSlabConfig:
         Returns:
             (float): the magnitude of the normal vector for placement
         """
-        # Center everthing about the site so we dont need to deal with pbc issues
+        # Center everything about the site so we dont need to deal with pbc issues
         slab_c2 = slab_c.copy()
         cell_center = np.dot(np.array([0.5, 0.5, 0.5]), slab_c2.cell)
         slab_c2.translate(cell_center - site)
@@ -344,9 +344,7 @@ class AdsorbateSlabConfig:
             return max(scaled_norms)
         else:
             # Comment(@brookwander): this is a kinda scary edge case
-            return (
-                0  # if there are no possible surface itersections, place it at the site
-            )
+            return 0  # if there are no possible surface intersections, place it at the site
 
     def _find_combos_to_check(
         self,
@@ -357,7 +355,7 @@ class AdsorbateSlabConfig:
     ):
         """
         Find the pairs of surface and adsorbate atoms that would have an intersection event
-        while traversing the normal vector. For each pair, return pertanent information for
+        while traversing the normal vector. For each pair, return pertinent information for
         finding the point of intersection.
         Args:
             adsorbate_c2 (ase.Atoms): A copy of the adsorbate with coordinates at the centered site
@@ -502,7 +500,7 @@ def get_interstitial_distances(adsorbate_slab_config: ase.Atoms, overlap_tag: in
     and adsorbate atoms.
 
     Args:
-        adsorbate_slab_configuration (ase.Atoms): an slab atoms object with an
+        adsorbate_slab_configuration (ase.Atoms): a slab atoms object with an
             adsorbate placed
         overlap_tag (int): Tag to check overlap with
 
@@ -551,7 +549,7 @@ def there_is_overlap(adsorbate_slab_config: ase.Atoms, overlap_tag: int = 2):
     and adsorbate atoms.
 
     Args:
-        adsorbate_slab_configuration (ase.Atoms): an slab atoms object with an
+        adsorbate_slab_configuration (ase.Atoms): a slab atoms object with an
             adsorbate placed
         overlap_tag (int): Tag to check overlap with
 

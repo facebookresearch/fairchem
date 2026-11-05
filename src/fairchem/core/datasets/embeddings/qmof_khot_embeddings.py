@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 k-hot elemental embeddings from QMOF, motivated by the following Github Issue threads:
 https://github.com/txie-93/cgcnn/issues/2
-https://github.com/arosen93/QMOF/issues/18
+https://github.com/Andrew-S-Rosen/QMOF/issues/18
 """
 
 from __future__ import annotations

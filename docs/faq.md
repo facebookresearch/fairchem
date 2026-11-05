@@ -1,13 +1,72 @@
-# FAQ
+# Frequently Asked Questions
 
 :::{margin}
-```{image} ../assets/icons/catalysis.svg
+```{image} assets/icons/catalysis.svg
 :alt: Catalysis
 :width: 100px
 ```
 :::
 
-This page answers frequently asked questions about the Open Catalyst Project and FAIRChem models for catalysis applications.
+Answers to common questions about UMA, FAIR Chemistry, and catalysis
+applications are collected here.
+
+## UMA
+
+:::{admonition} How do I choose the right task?
+:class: dropdown
+
+Choose the task based on your application domain and required level of theory:
+
+- **`omol`**: Molecules, organic chemistry, pharmaceuticals, and polymers.
+- **`omat`**: Inorganic materials, alloys, and bulk properties.
+- **`oc20`**: Heterogeneous catalysis without oxides or explicit solvent.
+- **`oc22`**: Oxide catalysts and supports.
+- **`oc25`**: Catalyst-electrolyte interfaces with explicit solvent.
+- **`odac`**: Metal-organic frameworks and direct air capture.
+- **`omc`**: Molecular crystals and organic electronics.
+
+See the [UMA task guide](./core/uma.md#the-uma-task) for the corresponding DFT
+methods and limitations.
+:::
+
+:::{admonition} Why am I getting a 401 error when loading UMA?
+:class: dropdown
+
+UMA is gated on Hugging Face. Request access to the
+[UMA repository](https://huggingface.co/facebook/UMA), create a token with read
+access to public gated repositories, and authenticate with
+`huggingface-cli login` or the `HF_TOKEN` environment variable.
+:::
+
+:::{admonition} Which checkpoint should I use?
+:class: dropdown
+
+Start with `uma-s-1p2p1`. It is the fastest current UMA model while retaining
+state-of-the-art accuracy on most supported benchmarks. Use `uma-m-1p1` when
+its higher accuracy justifies greater memory use and slower inference.
+:::
+
+:::{admonition} Can I use the `omol` task for periodic systems?
+:class: dropdown
+
+The `omol` task was trained on aperiodic molecular data, so periodic systems
+should be treated with caution. Use `omat`, `omc`, `odac`, or a catalysis task
+when one of those training domains matches your system.
+:::
+
+:::{admonition} How do I specify molecular charge and spin?
+:class: dropdown
+
+For `omol`, set total charge and spin multiplicity on the ASE object:
+
+```python
+atoms.info.update({"charge": 0, "spin": 1})
+```
+
+Other tasks expect the values documented in the [UMA model guide](./core/uma.md).
+:::
+
+## Open Catalyst Project
 
 ::::{grid} 1 2 2 4
 
@@ -40,7 +99,7 @@ Technical details and DFT
 ---
 
 (general)=
-## General
+### General
 
 :::{admonition} What is a catalyst? What is a bulk? What is a surface? What is an adsorbate?
 :class: dropdown
@@ -76,7 +135,9 @@ These simulations can help us design cheaper, more efficient, and more durable c
 :::{admonition} Are there any rate limits on incoming requests?
 :class: dropdown
 
-Rate limits may apply when using the OCP API. Check the [API documentation](./examples_tutorials/ocpapi.md) for current limits.
+Rate limits may apply when using the OCP API. Check the
+[API documentation](./catalysts/examples_tutorials/ocpapi.md) for current
+limits.
 :::
 
 :::{admonition} How do I know which surface/adsorbate/etc to pick when running this?
@@ -121,7 +182,7 @@ We are working to fix this!
 ---
 
 (ml-questions)=
-## ML Questions
+### ML Questions
 
 :::{admonition} What sort of models are used to generate these predictions?
 :class: dropdown
@@ -173,7 +234,7 @@ We are investigating efficient ways to add uncertainty to these predictions; mor
 ---
 
 (catalysis-questions)=
-## Catalysis Questions
+### Catalysis Questions
 
 :::{admonition} All I know is the rough composition of the material I'm interested in. How do I select a bulk structure or surface in the website?
 :class: dropdown
@@ -190,7 +251,7 @@ For surface structure, you have a few options:
 :::{admonition} How do I use these predictions to understand or predict the activity/selectivity of a catalyst?
 :class: dropdown
 
-The catalyst predictions exposed on this service can be used in many ways; we've tried to highlight a few potential use cases in the [examples and tutorials section](./examples_tutorials/summary.md). A few possible use cases:
+The catalyst predictions exposed on this service can be used in many ways; we've tried to highlight a few potential use cases in the [examples and tutorials section](./catalysts/examples_tutorials/summary.md). A few possible use cases:
 
 * If you or others have already identified ideal adsorption energies for a particular chemistry, you can use this service to compare the adsorption energies across several facets on the catalyst, or compare different catalyst surfaces.
 * The adsorption energy on different sites of a particular surface may help you identify which surface is responsible for catalytic activity.
@@ -216,19 +277,19 @@ The stability of more complex catalyst interfaces is a very interesting research
 
 If you know the crystal structure of composition of your catalyst but it's not present in the drop-down list, it's probably because the structure is either not in the Materials Project, or it's predicted to be unstable by more than 0.1 eV/atom, or our calculations failed when we relaxed the inputs with DFT/RPBE.
 
-* You can use the new [Open Catalyst API](./examples_tutorials/ocpapi.md) to enumerate surfaces and perform the adsorbate placement using python or your web browser. Make sure you have an RPBE-relaxed structure before starting this process!
-* You can also do these by hand using the [Open Catalyst Project tools](./examples_tutorials/adsorption_energies/adsorption_energies.md)
+* You can use the new [Open Catalyst API](./catalysts/examples_tutorials/ocpapi.md) to enumerate surfaces and perform the adsorbate placement using python or your web browser. Make sure you have an RPBE-relaxed structure before starting this process!
+* You can also do these by hand using the [Open Catalyst Project tools](./catalysts/examples_tutorials/adsorption_energies/adsorption_energies.md)
 :::
 
 :::{admonition} I think my material is more complex than the surfaces shown here (surface segregation, additional terminations, etc); what should I do?
 :class: dropdown
 
-The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy ([see the adsorption energies tutorial](./examples_tutorials/adsorption_energies/adsorption_energies.md)). If you find the models work well for your application, we'd love to hear from you! And if they don't, feel free to reach out via a [github issue](https://github.com/facebookresearch/fairchem/issues).
+The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy ([see the adsorption energies tutorial](./catalysts/examples_tutorials/adsorption_energies/adsorption_energies.md)). If you find the models work well for your application, we'd love to hear from you! And if they don't, feel free to reach out via a [github issue](https://github.com/facebookresearch/fairchem/issues).
 
 We're considering allowing predictions on more diverse surfaces, but there are some computational nuances that make doing so a bit difficult. Feel free to reach out via [GitHub discussions](https://github.com/facebookresearch/fairchem/discussions) if you have a specific use case or are interested in getting updates!
 :::
 
-:::{admonition} I'm interested in electrochemistry, but I don't see any solvent effects or water layer; what should I do?
+::::{admonition} I'm interested in electrochemistry, but I don't see any solvent effects or water layer; what should I do?
 :class: dropdown
 
 It's very common in the electrocatalyst modeling community to relate gas-phase adsorption energies (like those shown here) to adsorption energies in solvent by incorporating a per-adsorbate solvent correction to the adsorption energy. This correction tends to be largest for adsorbates that can hydrogen bond with a water layer (like *OH), or adsorbate that have a strong dipole moment that can be screened with a water layer. This approximation is helpful in screening millions of possible catalyst surfaces, especially because the structure of the water layers on each surface is difficult to predict.
@@ -237,7 +298,7 @@ Of course, by not including a solvent the models cannot help predict the impact 
 :::{note}
 Even using DFT, full fidelity detailed modeling of the solvent/catalyst interface in electrochemical conditions is an active research challenge!
 :::
-:::
+::::
 
 :::{admonition} I'm interested in trying this across many different surfaces or discover new catalysts but it's hard to select them all on the website; how should I try this?
 :class: dropdown
@@ -253,7 +314,7 @@ If either of these are unclear or you have trouble using them, please direct que
 ---
 
 (computational-catalysis-questions)=
-## Computational Catalysis Questions
+### Computational Catalysis Questions
 
 :::{admonition} What are the caveats of using these calculations?
 :class: dropdown
@@ -340,15 +401,15 @@ If either of these are unclear or you have trouble using them, please direct que
 This is a very exciting and interesting research area! We expect that OCP models like those shown here will be capable of predicting energies at higher coverages, but this is an ongoing research area. This is especially interesting for adsorbates with long-range interactions like *CO, which has a strong dipole moment. More training data or more sophisticated models may be needed to accurately resolve high-coverage adsorption energies.
 :::
 
-:::{admonition} Reaction energies are great, but I'm interested in reaction kinetics (activation energies). Can I use OCP models for kinetics?
+::::{admonition} Reaction energies are great, but I'm interested in reaction kinetics (activation energies). Can I use OCP models for kinetics?
 :class: dropdown
 
 This is a very exciting and interesting research area! We expect that OCP models like those shown here will be capable of predicting activation energies and reaction barriers, but this is an ongoing research area. More training data or more sophisticated models may be needed to accurately resolve transition state energies.
 
 :::{tip}
-Check out the [CatTsunami tutorial](./examples_tutorials/cattsunami_tutorial.md) for transition state calculations using NEB methods.
+Check out the [CatTsunami tutorial](./catalysts/examples_tutorials/cattsunami_tutorial.md) for transition state calculations using NEB methods.
 :::
-:::
+::::
 
 :::{admonition} What DFT settings should I use to verify the single-points? How would I reproduce these energies with DFT?
 :class: dropdown

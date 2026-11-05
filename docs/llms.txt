@@ -1,0 +1,31 @@
+# FAIR Chemistry
+
+> Open datasets, pretrained models, and simulation tools for materials
+> science and quantum chemistry from Meta FAIR.
+
+FAIR Chemistry provides the UMA family of universal interatomic
+potentials and the `fairchem` Python packages used to run them.
+
+## Start here
+
+- [Introduction](https://facebookresearch.github.io/fairchem/introduction)
+- [Installation](https://facebookresearch.github.io/fairchem/install)
+- [Hello World](https://facebookresearch.github.io/fairchem/quickstart)
+- [Explore UMA's capabilities](https://facebookresearch.github.io/fairchem/uma-capabilities)
+
+## Models and workflows
+
+- [UMA model guide](https://facebookresearch.github.io/fairchem/uma)
+- [ASE calculator guide](https://facebookresearch.github.io/fairchem/ase-calculator)
+- [FAIR Chemistry papers](https://facebookresearch.github.io/fairchem/fair-chemistry-papers)
+- [FAIR Chemistry leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard)
+
+## Help and learning
+
+- [Frequently asked questions](https://facebookresearch.github.io/fairchem/faq)
+- [Learning resources](https://facebookresearch.github.io/fairchem/learning-resources)
+- [No-code UMA playground](https://aidemos.atmeta.com/uma?view=playground)
+
+## Complete documentation
+
+- [All documentation in one file](https://facebookresearch.github.io/fairchem/llms-full.txt)

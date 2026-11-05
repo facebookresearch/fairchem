@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.urls]
-repository = "http://github.com/Fair-Chem/src/fairchem/applications/cattsunami"
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/cattsunami"
 documentation = "https://facebookresearch.github.io/fairchem/"
 
 [tool.hatch.version]

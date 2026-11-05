@@ -108,7 +108,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -383,7 +383,7 @@ plt.legend(["DFT (PBE)", "UMA-OC20"]);
 
 ## Next steps
 
-In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./NRR/NRR_example-gemnet).
+In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./adsorption_energies/adsorption_energies.md).
 
 +++
 

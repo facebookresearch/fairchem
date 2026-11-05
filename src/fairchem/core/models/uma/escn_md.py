@@ -336,7 +336,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.num_sphere_samples = num_sphere_samples
         # set this True if we want to ALWAYS use pbc for internal graph gen
         # despite what's in the input data this only affects when otf_graph is True
-        # in this mode, the user must be responsible for providing a large vaccum box
+        # in this mode, the user must be responsible for providing a large vacuum box
         # for aperiodic systems
         self.always_use_pbc = always_use_pbc
 
@@ -634,7 +634,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
             assert (
                 node_partition.numel() > 0
-            ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+            ), "Looks like there are no atoms in this graph parallel partition. Cannot proceed"
 
         if self.otf_graph:
             pbc = None
@@ -1271,7 +1271,7 @@ def compose_tensor(
 
     if trace.shape[0] != l2_symmetric.shape[0]:
         raise ValueError(
-            "Shape missmatch between trace and l2_symmetric parts. The first dimension is the batch dimension"
+            "Shape mismatch between trace and l2_symmetric parts. The first dimension is the batch dimension"
         )
 
     batch_size = trace.shape[0]

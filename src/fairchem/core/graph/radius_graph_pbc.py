@@ -241,7 +241,7 @@ def radius_graph_pbc(
     atom_count_sqr = torch.arange(num_atom_pairs, device=device) - index_sqr_offset
 
     # Compute the indices for the pairs of atoms (using division and mod)
-    # If the systems get too large this apporach could run into numerical precision issues
+    # If the systems get too large this approach could run into numerical precision issues
     index1 = (
         torch.div(atom_count_sqr, num_atoms_per_image_expand, rounding_mode="floor")
     ) + index_offset_expand
@@ -806,7 +806,7 @@ def radius_graph_pbc_v2(
 
     edge_index = torch.stack((source_idx, target_idx))
 
-    # if we used node_partition, we need to map target indexs back to original indices
+    # if we used node_partition, we need to map target indices back to original indices
     if hasattr(data, "node_partition"):
         edge_index[1] = data.node_partition[edge_index[1]]
 

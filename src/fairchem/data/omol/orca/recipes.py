@@ -53,7 +53,7 @@ def single_point_calculation(
     spin_multiplicity: int
         Multiplicity of the system
     xc: str
-        Exchange-correlaction functional
+        Exchange-correlation functional
     basis: str
         Basis set
     orcasimpleinput: list
@@ -137,7 +137,7 @@ def ase_relaxation(
     spin_multiplicity: int
         Multiplicity of the system
     xc: str
-        Exchange-correlaction functional
+        Exchange-correlation functional
     basis: str
         Basis set
     orcasimpleinput: list

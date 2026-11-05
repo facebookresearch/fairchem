@@ -33,7 +33,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 If your application requires predictions over many systems, you can run batch inference using UMA models to use compute more efficiently and improve GPU utilization.
 
 :::{tip}
-To learn more about the different inference settings supported, see the [Prediction interface documentation](https://facebookresearch.github.io/fairchem/core/common_tasks/ase_calculator.html).
+To learn more about the different inference settings supported, see the [Prediction interface documentation](./ase_calculator.md).
 :::
 
 ## Generate Batches at Runtime
@@ -53,7 +53,7 @@ atomic_data_list = [
 ]
 batch = atomicdata_list_to_batch(atomic_data_list)
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 preds = predictor.predict(batch)
 ```
 
@@ -81,7 +81,7 @@ dataset = AseDBDataset(
     config=dict(src="path/to/your/dataset.aselmdb", a2g_args=dict(task_name="omol"))
 )
 loader = DataLoader(dataset, batch_size=200, collate_fn=atomicdata_list_to_batch)
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 
 for batch in loader:
     preds = predictor.predict(batch)
