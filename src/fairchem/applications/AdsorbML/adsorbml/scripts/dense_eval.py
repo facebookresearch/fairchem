@@ -5,6 +5,8 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
+from __future__ import annotations
+
 """
 AdsorbML evaluation script. This script expects the results-file to be
 organized in a very specific structure in order to evaluate successfully.
@@ -74,8 +76,6 @@ e.g.
     }
 """
 
-from __future__ import annotations
-
 import argparse
 from collections import defaultdict
 
@@ -112,7 +112,7 @@ def compute_hybrid_success(ml_data, dft_data, k):
     """
     Computes AdsorbML success rates at varying top-k values.
     Here, results are generated for the hybrid method, where the top-k ML
-    energies are used to to run DFT on the corresponding ML structures. The
+    energies are used to run DFT on the corresponding ML structures. The
     resulting energies are then compared to the ground truth DFT energies.
 
     Return success rates and DFT compute usage at varying k.
@@ -133,7 +133,7 @@ def compute_hybrid_success(ml_data, dft_data, k):
         for kk in success_rates:
             # For each k value, collect the top k systems
             # ML_data is insertion sorted created from a sorted list,
-            # gauranteeing the first k are the lowest energies.
+            # guaranteeing the first k are the lowest energies.
             sorted_site_idx = ml_adslabs[:kk]
             # Sanity check to ensure they are sorted
             if len(ml_energies) > kk:

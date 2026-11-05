@@ -163,7 +163,7 @@ class InterfaceConfig(MultipleAdsorbateSlabConfig):
             solvent_ions_atoms.set_cell(atoms.cell)
 
             # Place the solvent+ion environment at the interface with the
-            # adsorbate-slab envrionment. Iteratively tile the solvated atoms
+            # adsorbate-slab environment. Iteratively tile the solvated atoms
             # to ensure no atomic overlap with the adsorbate+slab.
             # TODO: It would be nice to incorporate the adsorbate directly in
             # packmol to allow for closer adsorbate-solvent-slab interaction.
@@ -225,7 +225,7 @@ class InterfaceConfig(MultipleAdsorbateSlabConfig):
             # the boundary of the cell. This hacky fix manually places
             # the ion in a random location in the cell. Packmol then will fix
             # these atoms and not optimize them during its optimization, only
-            # optimizing solvent molecules arround the ion.
+            # optimizing solvent molecules around the ion.
             for i, ion in enumerate(self.ions):
                 ion_atoms = ion.atoms.copy()
                 ion_atoms.set_cell(cell)

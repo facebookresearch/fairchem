@@ -12,6 +12,7 @@ from .adsorption_runner import AdsorptionRunner
 from .adsorption_singlepoint_runner import AdsorptionSinglePointRunner
 from .elasticity_runner import ElasticityRunner
 from .kappa_runner import KappaRunner
+from .liquid_density_runner import LiquidDensityRunner
 from .nve_md_runner import NVEMDRunner
 from .omol_runner import OMolRunner
 from .pairwise_ct_runner import PairwiseCountRunner
@@ -25,6 +26,7 @@ __all__ = [
     "AdsorptionSinglePointRunner",
     "ElasticityRunner",
     "KappaRunner",
+    "LiquidDensityRunner",
     "NVEMDRunner",
     "OMolRunner",
     "PairwiseCountRunner",

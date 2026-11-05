@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import signal
@@ -18,18 +19,61 @@ from unittest.mock import MagicMock
 
 import hydra
 import pytest
+from omegaconf import OmegaConf
 
+from fairchem.core import _cli
 from fairchem.core._cli import ALLOWED_TOP_LEVEL_KEYS, get_hydra_config_from_yaml, main
 from fairchem.core.common import distutils
 from fairchem.core.components.runner import MockRunner
+from fairchem.core.launchers import ray_on_slurm_launch
 
 
-def test_cli():
+def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    sys_args = ["--config", "tests/core/test_cli.yml"]
+    for variable in (
+        "RANK",
+        "LOCAL_RANK",
+        "WORLD_SIZE",
+        "SLURM_PROCID",
+        "SLURM_LOCALID",
+        "SLURM_NTASKS",
+        "SLURM_NODEID",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    timestamp_id = "live-environment-test"
+    sys_args = [
+        "--config",
+        "tests/core/test_cli.yml",
+        f"+job.run_dir={tmp_path}",
+        f"+job.timestamp_id={timestamp_id}",
+    ]
     sys.argv[1:] = sys_args
     main()
+
+    report_path = (
+        tmp_path
+        / timestamp_id
+        / "logs"
+        / "environment"
+        / f"run_{timestamp_id}_node_0_restart_0.json"
+    )
+    report = json.loads(report_path.read_text())
+
+    assert report["schema_version"] == 1
+    assert report["job"]["run_type"] == "run"
+    assert report["job"]["timestamp_id"] == timestamp_id
+    assert report["rank"] == {
+        "global_rank": 0,
+        "local_rank": 0,
+        "world_size": 1,
+        "node_id": "0",
+        "hostname": report["rank"]["hostname"],
+    }
+    assert report["environment"]["python_version"]
+    assert report["environment"]["pytorch_version"]
+    assert "torch" in report["environment"]["libraries"]
+    assert report["collection_errors"] == {}
 
 
 @pytest.mark.serial()
@@ -113,6 +157,54 @@ def test_cli_ray(num_ranks):
     ]
     sys.argv[1:] = sys_args
     main()
+
+
+def test_local_ray_writes_environment_before_runner(tmp_path, monkeypatch) -> None:
+    events = []
+    runner = MagicMock()
+    runner.run.side_effect = lambda: events.append("run")
+    config = OmegaConf.create(
+        {
+            "job": {
+                "run_dir": str(tmp_path),
+                "timestamp_id": "timestamp",
+                "recursive_instantiate_runner": False,
+                "scheduler": {
+                    "mode": "local",
+                    "use_ray": True,
+                    "num_nodes": 1,
+                    "ranks_per_node": 1,
+                },
+                "metadata": {
+                    "log_dir": str(tmp_path / "timestamp" / "logs"),
+                    "config_path": str(
+                        tmp_path / "timestamp" / "canonical_config.yaml"
+                    ),
+                },
+            },
+            "runner": {},
+        }
+    )
+    monkeypatch.setattr(
+        _cli,
+        "get_hydra_config_from_yaml",
+        lambda config_yml, overrides: config,
+    )
+    monkeypatch.setattr(
+        ray_on_slurm_launch,
+        "write_ray_environment_report",
+        lambda job_config: events.append("environment"),
+    )
+
+    def instantiate(*args, **kwargs):
+        events.append("instantiate")
+        return runner
+
+    monkeypatch.setattr(_cli.hydra.utils, "instantiate", instantiate)
+
+    main(args=argparse.Namespace(config="unused.yaml"), override_args=[])
+
+    assert events == ["environment", "instantiate", "run"]
 
 
 class TestMockRunnerSaveLoadState:

@@ -32,13 +32,13 @@ def check_adsorption_energy(sid, path, ref_energy, adsorption_energy):
         not abs((final_energy.get_potential_energy() - ref_energy) - adsorption_energy)
         < 1e-6
     ):
-        print(f"{sid} doesn't satify energy equation")
+        print(f"{sid} doesn't satisfy energy equation")
 
 
 def check_DFT_energy(sid, path, e_tol=0.05):
     """
     Given a relaxation trajectory, check to see if 1. final energy is less than the initial
-    energy, raise error if not. 2) If the energy decreases throuhghout a trajectory (small spikes are okay).
+    energy, raise error if not. 2) If the energy decreases throughout a trajectory (small spikes are okay).
     And 3) if 2 fails, check if it's just a matter of tolerance being too strict by
     considering only the first quarter of the trajectory and sampling every 10th frame
     to check for _almost_ monotonic decrease in energies.
@@ -101,7 +101,7 @@ def create_parser():
     parser.add_argument(
         "--sysid_file",
         type=str,
-        help="A txt file constains all the system ids (str) of the dataset",
+        help="A txt file contains all the system ids (str) of the dataset",
     )
     parser.add_argument(
         "--traj_path_by_sysid",

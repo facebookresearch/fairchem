@@ -44,7 +44,7 @@ def test_norm_denorm(normalizers, dummy_binary_db_dataset, dummy_element_refs):
 
 
 def test_create_normalizers(normalizers, dummy_binary_db_dataset, tmp_path):
-    # test that forces mean was overriden
+    # test that forces mean was overridden
     assert normalizers["forces"].mean.item() == 0.0
 
     # test from state dict

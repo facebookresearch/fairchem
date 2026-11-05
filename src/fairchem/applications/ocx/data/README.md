@@ -34,7 +34,7 @@ We include several experimental files relevant for analysis and understanding th
 - `target comp`: The target composition of the sample.
 - `xrf comp`: The XRF composition measurement.
 - `xrf offset`: The offset between the target and XRF composition.
-- `xrf stdev`: The standard devation across three replicate XRF measurements.
+- `xrf stdev`: The standard deviation across three replicate XRF measurements.
 - `allsolutions_cifids`: a list of lists. Each entry corresponds to a solution of matched XRD bulk id(s).
 - `allsolutions_formulas`: a list of lists. Each entry corresponds to a solution of matched XRD composition(s).
 - `allsolutions_weights`: a list of lists. The weights of the component phases.
@@ -75,7 +75,7 @@ The file contains the following columns where each row corresponds to a unique s
 - `facet_fraction_on_wulff_not_normalized`: Using the cleavage energy, this column contains the proportion of surface area on the Wulff shape for each facet where available. For one material, this may not sum to 1. We calculated cleavage energies up to Miller 3, but only adsorption energies up to 2. There were also instances where the adsorption energy was otherwise incomplete for a given surface. This gives instances where surfaces that may appear on Wulff are not represented.
 
 #### Other computational data files
-A few miscellanous files can be found in the [computational data folder](computational_data/). Their contents are as follows:
+A few miscellaneous files can be found in the [computational data folder](computational_data/). Their contents are as follows:
 1. `her_candidates.csv`: a complete list of the potential HER catalysts found in this work
 2. `cod_matches_lookup.pkl`: a lookup dictionary for COD materials. In some cases, the XRD data has matched to structures taken from COD. This file allows the lookup of a corresponding material in the computational pipeline if available.
 
@@ -105,7 +105,7 @@ Top level per Experimental XRD folder
     * Processed XRD data subfolder: includes snapshots of the data after each processing step: background removal, substrate peak removal, and normalization
 * `analysis`: contains data and files used for further analysis and dashboard creation
     * HTML file subfolder: contains all HTML files used to create the dashboards
-    * XRF reasurement results: Multiple `xrf-<substrate>.csv` files containing XRF measurement results for samples on different substartes (e.g., wafer or gde).
+    * XRF measurement results: Multiple `xrf-<substrate>.csv` files containing XRF measurement results for samples on different substrates (e.g., wafer or gde).
     * Composition data: `composition.csv` file that combines XRF and XRD information
     * XRD data is csv format: `xrd.csv` file containing all XRD data in CSV format.
     * XRD analysis reports: Contains `xrd_report_raw` and `xrd_report_analysis` which are  XRD analysis results as obtained from the XRD analysis pipeline and XRD matches and evaluation metrics, respectively

@@ -7,13 +7,19 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from fairchem.core.common.utils import get_deep, safe_extract_tar
+from fairchem.core.common.utils import (
+    get_branch_for_repo,
+    get_deep,
+    get_package_version,
+    safe_extract_tar,
+)
 
 
 def test_get_deep() -> None:
@@ -21,6 +27,44 @@ def test_get_deep() -> None:
     assert get_deep(d, "oc20.energy") == 1.5
     assert get_deep(d, "oc20.force", 0.9) == 0.9
     assert get_deep(d, "omol.energy") is None
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.check_call(["git", "-C", str(repo), *args], stdout=subprocess.DEVNULL)
+
+
+@pytest.fixture()
+def git_repo(tmp_path: Path) -> Path:
+    """A repo with one commit on a branch named "a-branch"."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "a-branch")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "test")
+    (repo / "f.txt").write_text("hello")
+    _git(repo, "add", "f.txt")
+    _git(repo, "commit", "-q", "-m", "first")
+    return repo
+
+
+def test_get_branch_for_repo(git_repo: Path) -> None:
+    assert get_branch_for_repo(str(git_repo)) == "a-branch"
+
+
+def test_get_branch_for_repo_detached_head(git_repo: Path) -> None:
+    # a detached HEAD has no branch; the commit hash still identifies the code
+    _git(git_repo, "checkout", "-q", "--detach", "HEAD")
+    assert get_branch_for_repo(str(git_repo)) is None
+
+
+def test_get_branch_for_repo_outside_a_repo(tmp_path: Path) -> None:
+    # how a released (non-editable) install looks
+    assert get_branch_for_repo(str(tmp_path)) is None
+
+
+def test_get_package_version() -> None:
+    # fairchem-core is installed to run this, so a version must resolve
+    assert get_package_version()
 
 
 class TestSafeExtractTar:

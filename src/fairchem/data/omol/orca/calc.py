@@ -213,7 +213,7 @@ def get_n_basis(atoms: Atoms) -> int:
     Get the number of basis functions that will be used for the given input.
 
     We assume our basis is def2-tzvpd. The number of basis functions is used
-    to estimate the memory requirments of a given job.
+    to estimate the memory requirements of a given job.
 
     :param atoms: atoms to compute the number of basis functions of
     :return: number of basis functions as printed by Orca

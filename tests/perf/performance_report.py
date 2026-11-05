@@ -9,12 +9,9 @@ from __future__ import annotations
 
 import itertools
 import json
-import re
-import subprocess
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, fields
-from functools import cache
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Generator
@@ -24,7 +21,8 @@ import numpy as np
 from torch.autograd import DeviceType
 from torch.cuda import is_available as is_cuda_available
 from torch.profiler import ProfilerActivity, profile, record_function
-from torch.utils.collect_env import SystemEnv, get_env_info
+
+from fairchem.core.common.environment import Environment, EnvironmentChange
 
 
 class MeasurementStats:
@@ -55,13 +53,11 @@ class MeasurementStats:
 
         # Assume anything decorated with @property is a stat
         properties = [
-            name for name, value in vars(self.__class__).items()
+            name
+            for name, value in vars(self.__class__).items()
             if isinstance(value, property)
         ]
-        return {
-            prop: getattr(self, prop)
-            for prop in properties
-        }
+        return {prop: getattr(self, prop) for prop in properties}
 
     @property
     def num_samples(self) -> int:
@@ -124,6 +120,7 @@ class MeasurementStats:
         """
         return float(np.std(np.array(self._values)))
 
+
 @dataclass
 class MeasurementChange:
     """
@@ -149,12 +146,10 @@ class MeasurementChange:
     relative_change: float | None = field(init=False)
 
     def __post_init__(self) -> None:
-
         # Relative change is not defined if value or baseline_value is not set
         if self.value is None or self.baseline_value is None:
             self.relative_change = None
         else:
-
             # Set to zero if there was no change
             if (difference := self.value - self.baseline_value) == 0:
                 self.relative_change = 0
@@ -206,7 +201,6 @@ class MeasurementChanges:
     total_changes: list[MeasurementChange] = field(init=False)
 
     def __post_init__(self) -> None:
-
         # Sort each of the lists to make the order predictable
         self.added.sort(key=lambda m: (m.measurement, m.metric, m.stat))
         self.removed.sort(key=lambda m: (m.measurement, m.metric, m.stat))
@@ -243,7 +237,7 @@ class MeasurementChanges:
                 )
                 for metric, stat in totals
             ],
-            key=lambda m: -abs(m.relative_change or 0)
+            key=lambda m: -abs(m.relative_change or 0),
         )
 
     def as_dict(self) -> dict[str, list[dict[str, int | float]]]:
@@ -260,10 +254,7 @@ class MeasurementChanges:
         # Assume all fields for this dataclass are lists with values that each
         # have their own as_dict() method
         return {
-            field.name: [
-                m.as_dict()
-                for m in getattr(self, field.name)
-            ]
+            field.name: [m.as_dict() for m in getattr(self, field.name)]
             for field in fields(self)
         }
 
@@ -304,9 +295,9 @@ class Measurements:
             activities.append(ProfilerActivity.CUDA)
 
         # Track performance while control is yielded
-        with profile(
-            activities=activities
-        ) as torch_profile, record_function("wrapper"):
+        with profile(activities=activities) as torch_profile, record_function(
+            "wrapper"
+        ):
             start = perf_counter()
             yield
             wall_time = perf_counter() - start
@@ -320,17 +311,15 @@ class Measurements:
         #
         # These timings are in microseconds and converted to seconds.
         self.cpu_time_sec.add_sample(
-            sum(
-                e.self_cpu_time_total
-                for e in key_averages
-            ) / 10**6
+            sum(e.self_cpu_time_total for e in key_averages) / 10**6
         )
         self.cuda_time_sec.add_sample(
             sum(
                 e.self_device_time_total
                 for e in key_averages
                 if e.device_type == DeviceType.CUDA and not e.is_user_annotation
-            ) / 10**6
+            )
+            / 10**6
         )
 
     def as_dict(self) -> dict[str, dict[str, int | float]]:
@@ -343,8 +332,7 @@ class Measurements:
 
         # Assume all fields for this dataclass have their own as_dict() method
         return {
-            field.name: getattr(self, field.name).as_dict()
-            for field in fields(self)
+            field.name: getattr(self, field.name).as_dict() for field in fields(self)
         }
 
     @staticmethod
@@ -414,7 +402,6 @@ class Measurements:
         unchanged: list[MeasurementChange] = []
         stats_iter = itertools.product(all_measurements, all_metrics, all_stats)
         for measurement, metric, stat in stats_iter:
-
             # Get the measurement stat from both reports
             target_value = target.get(measurement, {}).get(metric, {}).get(stat)
             baseline_value = baseline.get(measurement, {}).get(metric, {}).get(stat)
@@ -456,358 +443,6 @@ class Measurements:
         )
 
 
-@dataclass
-class EnvironmentChange:
-    """
-    Stores information about the change in a system environment between
-    different performance reports.
-
-    Attributes:
-        attribute: The name of the system attribute.
-        value: The current value of the system attribute. None if the value
-            is not currently gathered.
-        baseline_value: The baseline value of the system attribute. None if
-            the value was not gathered in the baseline report.
-    """
-
-    attribute: str
-    value: str | None
-    baseline_value: str | None
-
-    def as_dict(self) -> dict[str, Any]:
-        """
-        Create a dictionary with all of the properties stored on this object.
-
-        Returns:
-            A map of each of the values stored on this object.
-        """
-        return asdict(self)
-
-
-@dataclass
-class EnvironmentChanges:
-    """
-    Stores information about many different changes in system attributes
-    between two different performance reports.
-
-    Attributes:
-        added: Attributes that were added in the target report.
-        removed: Attributes that were removed from the baseline report.
-        changed: Attributes whose values changed relative to the baseline
-            report.
-        unchanged: Attributes whose values did not change between reports.
-    """
-
-    added: list[EnvironmentChange]
-    removed: list[EnvironmentChange]
-    changed: list[EnvironmentChange]
-    unchanged: list[EnvironmentChange]
-
-    def __post_init__(self) -> None:
-
-        # Sort each of the lists to make the order predictable
-        self.added.sort(key=lambda e: e.attribute)
-        self.removed.sort(key=lambda e: e.attribute)
-        self.changed.sort(key=lambda e: e.attribute)
-        self.unchanged.sort(key=lambda e: e.attribute)
-
-    def as_dict(self) -> dict[str, list[dict[str, str]]]:
-        """
-        Create a dictionary with all of the environment changes stored on this
-        object.
-
-        Returns:
-            A dictionary where each key represents a type of change (changed,
-            added, etc.) and values are all attributes that changed in
-            that way.
-        """
-
-        # Assume all fields for this dataclass are lists with values that each
-        # have their own as_dict() method
-        return {
-            field.name: [
-                m.as_dict()
-                for m in getattr(self, field.name)
-            ]
-            for field in fields(self)
-        }
-
-
-# Matches e.g.
-#    CPU(s)             24
-# And saves the numeric part in a capturing group.
-_lscpu_cpu_count_pattern: re.Pattern = re.compile(r"\n\s*CPU\(s\):\s+([0-9]+)\s*[\r\n]")
-
-# Matches e.g.
-#    Model name:             Type of CPU
-# And saves the "Type of CPU" in a capturing group.
-_lscpu_cpu_model_pattern: re.Pattern = re.compile(r"\n\s*Model name:\s+(.*)(?!\s*[\r\n])")
-
-
-@dataclass
-class Environment:
-    """
-    Stores information about the current environment.
-    """
-
-    git_commit_hash: str = field(init=False)
-
-    pytorch_version: str = field(init=False)
-    pytorch_is_debug_build: str = field(init=False)
-    cuda_version_to_build_pytorch: str = field(init=False)
-    rocm_version_to_build_pytorch: str = field(init=False)
-
-    os: str = field(init=False)
-    gcc_version: str = field(init=False)
-    clang_version: str = field(init=False)
-    cmake_version: str = field(init=False)
-    libc_version: str = field(init=False)
-
-    python_version: str = field(init=False)
-    python_platform: str = field(init=False)
-    cuda_runtime_version: str = field(init=False)
-    cuda_module_loading: str = field(init=False)
-    nvidia_driver_version: str = field(init=False)
-    cudnn_version: str = field(init=False)
-    hip_runtime_version: str = field(init=False)
-    miopen_runtime_version: str = field(init=False)
-    xnnpack_available: str = field(init=False)
-
-    libraries: dict[str, str] = field(init=False)
-
-    num_gpus: str = field(init=False)
-    gpu_model: str = field(init=False)
-    num_cpus: str = field(init=False)
-    cpu_model: str = field(init=False)
-
-    def __post_init__(self) -> None:
-        system_env = get_torch_env_info()
-
-        self.git_commit_hash = self._get_git_commit_hash()
-
-        self.pytorch_version = system_env.torch_version
-        self.pytorch_is_debug_build = system_env.is_debug_build
-        self.cuda_version_to_build_pytorch = system_env.cuda_compiled_version
-        self.rocm_version_to_build_pytorch = system_env.hip_compiled_version
-
-        self.os = system_env.os
-        self.gcc_version = system_env.gcc_version
-        self.clang_version = system_env.clang_version
-        self.cmake_version = system_env.cmake_version
-        self.libc_version = system_env.libc_version
-
-        self.python_version = system_env.python_version
-        self.python_platform = system_env.python_platform
-        self.cuda_runtime_version = system_env.cuda_runtime_version
-        self.cuda_module_loading = system_env.cuda_module_loading
-        self.nvidia_driver_version = system_env.nvidia_driver_version
-        self.cudnn_version = system_env.cudnn_version
-        self.hip_runtime_version = system_env.hip_runtime_version
-        self.miopen_runtime_version = system_env.miopen_runtime_version
-        self.xnnpack_available = system_env.is_xnnpack_available
-
-        # pip_packages are stored in a multiline string:
-        #
-        #  mypy_extensions==1.1.0
-        #  numpy==2.2.6
-        #  nvidia-cublas-cu12==12.4.5.8
-        #  nvidia-cuda-cupti-cu12==12.4.127
-        #
-        # Convert to a map from package name to version. e.g.
-        #  {
-        #    "mypy_extensions": "1.1.0",
-        #    "numpy": "2.2.6"
-        #  }
-        #
-        # Conda packages are also stored in a multiline string:
-        #
-        #  numpy                     2.2.6                    pypi_0    pypi
-        #  nvidia-cublas-cu12        12.4.5.8                 pypi_0    pypi
-        #  nvidia-cuda-cupti-cu12    12.4.127                 pypi_0    pypi
-        #  nvidia-cuda-nvrtc-cu12    12.4.127                 pypi_0    pypi
-        #
-        # Also convert them to a map from package name to version:
-        #  {
-        #    "numpy": "2.2.6",
-        #    "nvidia-cublas-cu12 ": "12.4.5.8"
-        #  }
-        #
-        # Then merge both dictionaries.
-        self.libraries = {
-          package_version[0]: package_version[1]
-          for line in system_env.pip_packages.splitlines()
-          if len(package_version := line.split("==")) == 2
-        } | {
-            package_version[0]: package_version[1]
-            for line in system_env.conda_packages.splitlines()
-            if len(package_version := line.split()) >= 2
-        }
-
-        # nvidia_gpu_models is a multiline string with lines for each gpu:
-        #
-        #  GPU 0: Quadro GV100
-        #  GPU 1: Quadro GV100
-        #
-        # Count the number of GPUs and save the types.
-        self.num_gpus = str(len(system_env.nvidia_gpu_models.splitlines()))
-        self.gpu_model = (
-            # Get the unique GPU types. For any situation in which there is
-            # not exactly one type, mark as unknown.
-            list(gpu_models)[0]
-            if len(gpu_models := {
-                parts[1].strip()
-                for line in system_env.nvidia_gpu_models.splitlines()
-                if len(parts := line.split(":")) > 1
-            }) == 1
-            else "Unknown"
-        )
-
-        # CPU details on linux machines are direct outputs from lscpu. Fetch
-        # a subset representing the most important fields.
-        self.num_cpus = (
-            match.group(1)
-            if (match := _lscpu_cpu_count_pattern.search(system_env.cpu_info))
-            else "Unknown"
-        )
-        self.cpu_model = (
-            match.group(1)
-            if (match := _lscpu_cpu_model_pattern.search(system_env.cpu_info))
-            else "Unknown"
-        )
-
-    def _get_git_commit_hash(self) -> str:
-        """
-        Tries to detect the current git commit hash.
-        """
-        try:
-            result = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                text=True,
-            ).strip()
-        except Exception:
-            result = ""
-
-        # Return Unknown for non-zero exits as well as empty returns
-        return result or "Unknown"
-
-    def as_dict(self) -> dict[str, Any]:
-        """
-        Create a dictionary with information about the environment.
-
-        Returns:
-            Map containing details about the environment stored on this object.
-        """
-        return asdict(self)
-
-    @staticmethod
-    def compare(
-        target: dict[str, str | dict[str, str]],
-        baseline: dict[str, str | dict[str, str]],
-    ) -> EnvironmentChanges:
-        """
-        Compares two dictionaries generated by as_dict() calls on different
-        instances.
-
-        Args:
-            target: The primary environment in the comparison.
-            baseline: The baseline environment in the comparison.
-
-        Returns:
-            Details about all changes in environments.
-        """
-
-        # Input is a dictionary where values can be strings or dictionaries.
-        #  {
-        #    "attribute_name_1": "attribute_value_1",
-        #    "attribute_name_2": {
-        #      "sub_attribute_name": "sub_attribute_value"
-        #    }
-        #  }
-        #
-        # Since the specific keys could change between reports, we need to
-        # discover all values present across both reports.
-        all_attributes: set[str] = set()
-        for name, value in itertools.chain(target.items(), baseline.items()):
-            if isinstance(value, dict):
-                all_attributes.update(f"{name}.{sub}" for sub in value)
-            else:
-                all_attributes.add(name)
-
-        # Helper function to get an attribute value from the input environment
-        # dictionary. Supports nested attribute paths.
-        def get_value(
-            environment: dict[str, str | dict[str, str]],
-            attribute_name: str,
-        ) -> str | None:
-            path = attribute_name.split(".")
-
-            # Check for a nested attribute
-            if isinstance(value := environment.get(path[0]), dict):
-                assert len(path) == 2
-                return value.get(path[1])
-
-            # This is a nested attribute where the parent does not exist
-            if value is None and len(path) == 2:
-                return value
-
-            # Otherwise this is a root level attribute
-            assert len(path) == 1
-            return value
-
-        # Organize attributes by the way in which they changed
-        added: list[EnvironmentChange] = []
-        removed: list[EnvironmentChange] = []
-        changed: list[EnvironmentChange] = []
-        unchanged: list[EnvironmentChange] = []
-        for attribute in all_attributes:
-
-            # Get the measurement stat from both reports
-            target_value = get_value(target, attribute)
-            baseline_value = get_value(baseline, attribute)
-            change = EnvironmentChange(
-                attribute=attribute,
-                value=target_value,
-                baseline_value=baseline_value,
-            )
-
-            # If both the baseline and target are None, there is nothing
-            # to do
-            if baseline_value is None and target_value is None:
-                continue
-
-            # If the baseline is None, the attribute is new
-            if baseline_value is None:
-                added.append(change)
-
-            # If the target is None, the attribute was removed
-            elif target_value is None:
-                removed.append(change)
-
-            # Otherwise capture whether changed or not
-            elif target_value != baseline_value:
-                changed.append(change)
-            else:
-                unchanged.append(change)
-
-        return EnvironmentChanges(
-            added=added,
-            removed=removed,
-            changed=changed,
-            unchanged=unchanged,
-        )
-
-@cache
-def get_torch_env_info() -> SystemEnv:
-    """
-    Returns the system information reported by torch. Cached because this
-    can be slow to generate.
-
-    Returns:
-        SystemEnv instance from torch.
-    """
-    return get_env_info()
-
-
 class PerformanceReport:
     """
     Aggregates performance metrics across various tasks and stores them in
@@ -830,7 +465,7 @@ class PerformanceReport:
             "measurements": {
                 measurement_name: measurement.as_dict()
                 for measurement_name, measurement in self._measurements.items()
-            }
+            },
         }
 
     @contextmanager
@@ -896,7 +531,7 @@ def cli() -> None:
         "included in the comparison. Use this to limit to a subset of "
         "measurements. This option can be passed multiple times to set more "
         "than one stat name."
-    )
+    ),
 )
 @click.option(
     "--metric",
@@ -907,7 +542,7 @@ def cli() -> None:
         "By default, if this option is not set, all metrics will be included "
         "in the comparison. Use this to limit to a subset of metrics. This "
         "option can be passed multiple times to set more than one stat name."
-    )
+    ),
 )
 @click.option(
     "--stat",
@@ -918,13 +553,10 @@ def cli() -> None:
         "By default, if this option is not set, all stats will be included in "
         "the comparison. Use this to limit to a subset of stats. This option "
         "can be passed multiple times to set more than one stat name."
-    )
+    ),
 )
 @click.option(
-    "--json",
-    "as_json",
-    is_flag=True,
-    help="Print output formatted as a JSON object."
+    "--json", "as_json", is_flag=True, help="Print output formatted as a JSON object."
 )
 def compare(
     target: Path,
@@ -976,7 +608,6 @@ def compare(
             measurements: list[MeasurementChange],
             force_relative_change: bool = False,
         ) -> str:
-
             # Avoid errors below for empty lists
             if not measurements:
                 return header
@@ -993,7 +624,6 @@ def compare(
             # Build the measurements line by line
             lines: list[str] = []
             for m in measurements:
-
                 # Add the relative change if needed
                 line: str = "  "
                 if any_changed or force_relative_change:
@@ -1023,7 +653,6 @@ def compare(
             header: str,
             attributes: list[EnvironmentChange],
         ) -> str:
-
             # Avoid errors below for empty lists
             if not attributes:
                 return header
@@ -1034,7 +663,6 @@ def compare(
             # Build the results line by line
             lines: list[str] = []
             for a in attributes:
-
                 # Add attribute name
                 line = f"  {a.attribute.rjust(max_attribute_len)}"
 
@@ -1052,7 +680,6 @@ def compare(
                 lines.append(line)
 
             return "\n".join([header] + lines + [""])
-
 
         print(f"""
 --------------

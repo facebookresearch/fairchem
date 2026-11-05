@@ -76,7 +76,7 @@ def create_parser():
     parser.add_argument(
         "--sysid_file",
         type=str,
-        help="A txt file constains all the system ids (random ids) of the dataset",
+        help="A txt file contains all the system ids (random ids) of the dataset",
     )
     parser.add_argument(
         "--traj_path_by_sysid",

@@ -20,7 +20,7 @@ This repo provides a number of scripts to quickly fine-tune a model using a cust
 :::
 
 :::{note}
-Training datasets must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
+Training datasets must be in the [ASE-lmdb format](https://docs.ase-lib.org/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats (CIFs, traj, extxyz, etc.) as well as a fine-tuning YAML config that can be directly used for fine-tuning.
 :::
 
 ## Generating Training/Fine-tuning Datasets
@@ -72,6 +72,8 @@ Choose based on the data you have available in the ASE db. For example, some ape
 :::
 
 This will generate a folder of LMDBs and a `uma_sm_finetune_template.yaml` that you can run directly with the fairchem CLI to start training.
+
+For the `omol` task, total charge and spin multiplicity are read from `atoms.info` (the `charge` and `spin` keys, e.g. `charge=... spin=...` in extxyz comment lines), stored in the generated LMDBs, and used during training. Note that a plain `ase.io.read` of an `.aselmdb` file will not show them in `atoms.info`: ASE stores them as row data, which fairchem's dataset loader restores into `atoms.info` when training.
 
 :::{tip}
 If you want to only create the ASE LMDBs, you can use `src/fairchem/core/scripts/create_finetune_dataset.py` which is called by `create_uma_finetune_dataset.py`.

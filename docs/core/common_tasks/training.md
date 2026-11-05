@@ -20,7 +20,7 @@ The FAIRChem training framework currently uses a simple SPMD (Single Program Mul
 
 3. **Runner Interface** - The core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs. Runners are distinct user functions that run on a single rank (i.e., GPU). They describe separate high-level tasks such as Train, Eval, Predict, Relaxations, MD, etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.
 
-4. **Trainer** - We use [TorchTNT](https://docs.pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
+4. **Trainer** - We use [TorchTNT](https://meta-pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
 
 :::{note}
 TNT is PyTorch's replacement for PyTorch Lightning - which has become severely bloated and difficult to use over the years; so we opted for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation, and prediction. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, e.g., training a Multitask-MLIP is one unit, training a diffusion model should be another unit.
