@@ -11,6 +11,7 @@ import datetime
 import errno
 import functools
 import importlib
+import importlib.metadata
 import logging
 import os
 import pathlib
@@ -404,6 +405,54 @@ def get_commit_hash_for_repo(
     return commit_hash
 
 
+def get_branch() -> str | None:
+    """
+    Branch of the fairchem.core checkout the job is running from.
+
+    Returns:
+        The branch name, or None when it cannot be determined: a released
+        install does not sit in a git repo, and a detached HEAD has no branch.
+    """
+    return get_branch_for_repo(fairchem.core.__path__[0])
+
+
+def get_branch_for_repo(
+    git_repo_path: str,
+) -> str | None:
+    try:
+        branch = (
+            subprocess.check_output(
+                ["git", "-C", git_repo_path, "branch", "--show-current"],
+                stderr=subprocess.DEVNULL,
+            )
+            .strip()
+            .decode("ascii")
+        )
+    # catch instances where code is not being run from a git repo
+    except Exception:
+        return None
+
+    # empty on a detached HEAD
+    return branch or None
+
+
+def get_package_version() -> str | None:
+    """
+    Installed version of fairchem-core.
+
+    Returns:
+        The version, e.g. "2.21.1" for a release or "2.21.1.dev50+gdfbfb7044"
+        for a dev checkout, or None if the package metadata is unavailable.
+        Note that for an editable install this is resolved when the package is
+        installed, so it can lag behind the commit reported by
+        :func:`get_commit_hash`.
+    """
+    try:
+        return importlib.metadata.version("fairchem.core")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     if not os.path.isfile(checkpoint_path):
         raise FileNotFoundError(
@@ -490,6 +539,30 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
         key=lambda x: x[1],
     )
+
+
+def get_subdirectories_sorted_by_step(directory: str) -> list:
+    """
+    Get the ``step_N`` subdirectories of a directory sorted by their step.
+
+    Unlike modification times, the step in a checkpoint directory's name does
+    not change when files are later added to or removed from it.
+
+    Args:
+        directory (str): The path to the directory to search.
+    Returns:
+        list: A list of tuples containing the subdirectory path and its step,
+            lowest step first.
+    """
+    if not os.path.isdir(directory):
+        return []
+
+    steps = []
+    for d in pathlib.Path(directory).iterdir():
+        step = d.name.removeprefix("step_")
+        if d.name.startswith("step_") and step.isdigit() and d.is_dir():
+            steps.append((str(d), int(step)))
+    return sorted(steps, key=lambda x: x[1])
 
 
 def os_arch_for_download() -> tuple[str, str]:

@@ -16,6 +16,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Tags are needed for hatch-vcs to version the local packages; a
+          # shallow clone builds fairchem-core as 0.1.devN, which fails
+          # fairchem-data-oc's fairchem-core lower bound.
+          fetch-depth: 0
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
         with:
