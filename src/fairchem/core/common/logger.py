@@ -13,13 +13,13 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import torch
+import wandb
 
 from fairchem.core.common import distutils
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import tensor_stats
 
 if TYPE_CHECKING:
-    import wandb
     from pandas import DataFrame
 
 
@@ -69,8 +69,6 @@ class Logger(ABC):
 @registry.register_logger("wandb")
 class WandBLogger(Logger):
     def __init__(self, config) -> None:
-        import wandb
-
         super().__init__(config)
         project = (
             self.config["logger"].get("project", None)
@@ -100,19 +98,13 @@ class WandBLogger(Logger):
         )
 
     def watch(self, model, log="all", log_freq: int = 1000) -> None:
-        import wandb
-
         wandb.watch(model, log=log, log_freq=log_freq)
 
     def log(self, update_dict, step: int, split: str = "") -> None:
-        import wandb
-
         update_dict = super().log(update_dict, step, split)
         wandb.log(update_dict, step=int(step))
 
     def log_plots(self, plots, caption: str = "") -> None:
-        import wandb
-
         assert isinstance(plots, list)
         plots = [wandb.Image(x, caption=caption) for x in plots]
         wandb.log({"data": plots})
@@ -125,8 +117,6 @@ class WandBLogger(Logger):
         step: int | None = None,
         commit: bool = False,
     ) -> None:
-        import wandb
-
         # cols are 1D list of N elements, data must be NxK where the number of cols must match cols
         # see https://docs.wandb.ai/guides/tables
         table = wandb.Table(columns=cols, data=data)
@@ -139,25 +129,17 @@ class WandBLogger(Logger):
         step: int | None = None,
         commit: bool = False,
     ):
-        import wandb
-
         table = wandb.Table(dataframe=dataframe)
         wandb.log({name: table}, step=step, commit=commit)
 
     def log_summary(self, summary_dict: dict[str, Any]):
-        import wandb
-
         for k, v in summary_dict.items():
             wandb.run.summary[k] = v
 
     def mark_preempting(self) -> None:
-        import wandb
-
         wandb.mark_preempting()
 
     def log_artifact(self, name: str, type: str, file_location: str) -> None:
-        import wandb
-
         art = wandb.Artifact(name=name, type=type)
         art.add_file(file_location)
         art.save()
@@ -241,8 +223,6 @@ class WandBSingletonLogger:
         job_type: str | None = None,
         settings: wandb.Settings | None = None,
     ) -> None:
-        import wandb
-
         wandb.init(
             config=config,
             id=run_id,
@@ -258,23 +238,17 @@ class WandBSingletonLogger:
 
     @classmethod
     def get_instance(cls):
-        import wandb
-
         assert wandb.run is not None, "wandb is not initialized, call init_wandb first!"
         if cls._instance is None:
             cls._instance = cls.__new__(cls)
         return cls._instance
 
     def watch(self, model, log="all", log_freq: int = 1000) -> None:
-        import wandb
-
         wandb.watch(model, log=log, log_freq=log_freq)
 
     def log(
         self, update_dict: dict, step: int | None = None, commit=False, split: str = ""
     ) -> None:
-        import wandb
-
         # HACK: this is really ugly logic here for backward compat but we should get rid of.
         # the split string shouldn't inserted here
         if split != "":
@@ -290,8 +264,6 @@ class WandBSingletonLogger:
     def log_table(
         self, name: str, cols: list, data: list, step: int | None = None, commit=False
     ) -> None:
-        import wandb
-
         # cols are 1D list of N elements, data must be NxK where the number of cols must match cols
         # see https://docs.wandb.ai/guides/tables
         table = wandb.Table(columns=cols, data=data)
@@ -304,32 +276,22 @@ class WandBSingletonLogger:
         step: int | None = None,
         commit: bool = False,
     ):
-        import wandb
-
         table = wandb.Table(dataframe=dataframe)
         wandb.log({name: table}, step=step, commit=commit)
 
     def log_plots(self, plots: list, caption: str = "") -> None:
         """Log plots as W&B images so they are visible in the run workspace."""
-        import wandb
-
         images = [wandb.Image(plot, caption=caption) for plot in plots]
         wandb.log({"data": images})
 
     def log_summary(self, summary_dict: dict[str, Any]):
-        import wandb
-
         for k, v in summary_dict.items():
             wandb.run.summary[k] = v
 
     def mark_preempting(self) -> None:
-        import wandb
-
         wandb.mark_preempting()
 
     def log_artifact(self, name: str, type: str, file_location: str) -> None:
-        import wandb
-
         art = wandb.Artifact(name=name, type=type)
         art.add_file(file_location)
         art.save()
