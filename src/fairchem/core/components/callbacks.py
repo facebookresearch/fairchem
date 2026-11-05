@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from torchtnt.framework.callback import Callback
 
 from fairchem.core.common import distutils
-from fairchem.core.common.utils import get_subdirectories_sorted_by_time
+from fairchem.core.common.utils import get_subdirectories_sorted_by_step
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -55,19 +55,36 @@ class TrainCheckpointCallback(Callback):
             self.checkpoint_every_n_steps is not None
             and step % self.checkpoint_every_n_steps == 0
         ):
-            save_callback(os.path.join(checkpoint_dir, f"step_{step}"))
+            checkpoint_path = os.path.join(checkpoint_dir, f"step_{step}")
+            save_callback(checkpoint_path)
             if distutils.is_master():
-                checkpoint_dirs_by_time = get_subdirectories_sorted_by_time(
-                    checkpoint_dir
-                )
-                for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:
-                    if not os.path.islink(dir):
-                        shutil.rmtree(dir)
+                self._rotate(checkpoint_dir, checkpoint_path)
 
     def on_train_end(self, state: State, unit: TTrainUnit) -> None:
         if self.checkpoint_every_n_steps is not None:
             save_callback, checkpoint_dir = self._checkpoint_hooks()
             save_callback(os.path.join(checkpoint_dir, "final"))
+
+    def _rotate(self, checkpoint_dir: str, checkpoint_path: str) -> None:
+        """
+        Delete all but the newest ``max_saved_checkpoints`` step checkpoints.
+
+        Checkpoints are ranked by step, not modification time. A ``final``
+        left over from before this save is deleted too: the run was extended
+        past it, and ``get_most_recent_viable_checkpoint_path`` would otherwise
+        still pick it. Symlinks and other directories are never deleted.
+
+        Args:
+            checkpoint_dir: The directory holding the checkpoint directories.
+            checkpoint_path: The checkpoint just saved, which is always kept.
+        """
+        steps = get_subdirectories_sorted_by_step(checkpoint_dir)
+        stale = [path for path, _ in steps[: -self.max_saved_checkpoints]]
+        stale.append(os.path.join(checkpoint_dir, "final"))
+        for path in stale:
+            is_stale_dir = os.path.isdir(path) and not os.path.islink(path)
+            if path != checkpoint_path and is_stale_dir:
+                shutil.rmtree(path)
 
     def _checkpoint_hooks(self) -> tuple[Callable[[str], None], str]:
         if self.save_callback is None or self.checkpoint_dir is None:

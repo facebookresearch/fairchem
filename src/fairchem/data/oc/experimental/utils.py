@@ -16,7 +16,7 @@ def v0_check(full_traj, initial):
     """
     Checks whether the initial structure as gathered from the POSCAR input file
     is in agreement with the initial image of the full trajectory. If not, the
-    trajectory comes fro the V0 dataset which failed to save intermediate
+    trajectory comes from the V0 dataset which failed to save intermediate
     checkpoints.
 
     Args

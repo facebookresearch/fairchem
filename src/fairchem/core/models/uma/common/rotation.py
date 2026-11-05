@@ -82,7 +82,7 @@ def _z_rot_mat(angle: torch.Tensor, lv: int) -> torch.Tensor:
 
     # The following code needs to replaced for a for loop because
     # torch.export barfs on outer product like operations
-    # ie: torch.outer(frequences, angle) (same as frequencies * angle[..., None])
+    # ie: torch.outer(frequencies, angle) (same as frequencies * angle[..., None])
     # will place a non-sense Guard on the dimensions of angle when attempting to export setting
     # angle (edge dimensions) as dynamic. This may be fixed in torch2.4.
 

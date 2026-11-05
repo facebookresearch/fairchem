@@ -22,14 +22,23 @@ class OMat24StaticSet(VaspInputSet):
     """Create input files for a OMat24 PBE static calculation.
     The default POTCAR versions used are PBE_54
 
+    Gamma-centered k-point grids and automatic metal k-point densities were used
+    for all OMat24 calculations, so force_gamma and auto_metal_kpoints default
+    to True.
+
     Args:
         structure (Structure): The Structure to create inputs for. If None, the input
             set is initialized without a Structure but one must be set separately before
             the inputs are generated.
+        force_gamma (bool): Force gamma-centered k-point grids. Defaults to True.
+        auto_metal_kpoints (bool): Use a higher k-point density for metallic
+            structures. Defaults to True.
         **kwargs: Keywords supported by VaspInputSet.
     """
 
     CONFIG = sets._load_yaml_config("OMat24StaticSet")
+    force_gamma: bool = True
+    auto_metal_kpoints: bool = True
 
 
 @dataclass

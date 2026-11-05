@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -38,7 +45,7 @@ class InputBlock(nn.Module):
         super().__init__()
 
         # Atomic number embeddings
-        # ref: escn https://github.com/Open-Catalyst-Project/ocp/blob/main/ocpmodels/models/escn/escn.py#L823
+        # ref: escn https://github.com/facebookresearch/fairchem/blob/8f20f8ece4e4ae2f273e9fc6668ccfe9fe014884/ocpmodels/models/escn/escn.py#L823
         self.atomic_embedding = nn.Embedding(
             molecular_graph_cfg.max_num_elements, global_cfg.hidden_size
         )

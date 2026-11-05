@@ -1998,10 +1998,10 @@ def test_execution_mode_auto_set_umas_fast_gpu(pretrained_model_name):
     """
 
     predict_unit = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings="turbo"
+        pretrained_model_name, device="cuda", inference_settings="multigpu"
     )
 
-    # Verify that actual module backend is UMASFastGPUBackend when set to turbo mode
+    # Verify that actual module backend is UMASFastGPUBackend when set to multigpu mode
     assert isinstance(predict_unit.model.module.backbone.backend, UMASFastGPUBackend), (
         f"Expected backend to be {UMASFastGPUBackend}, "
         f"got {predict_unit.model.module.backbone.backend}"
@@ -2040,7 +2040,7 @@ def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 
     predict_unit = get_predict_unit_for_test(
-        pretrained_model_name, device="cuda", inference_settings="turbo"
+        pretrained_model_name, device="cuda", inference_settings="multigpu"
     )
 
     # execution_mode should remain None (not auto-set to umas_fast_gpu)

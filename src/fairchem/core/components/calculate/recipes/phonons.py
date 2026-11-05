@@ -81,7 +81,7 @@ def run_mdr_phonon_benchmark(
         calculator: an Ase Calculator
         displacement: displacement step to compute forces (A)
         run_relax: run a structural relaxation
-        fix_symm_relax: wether to fix symmetry in relaxation
+        fix_symm_relax: whether to fix symmetry in relaxation
         symprec: symmetry precision used by phonopy
         symmetrize_fc: symmetrize force constants
 
