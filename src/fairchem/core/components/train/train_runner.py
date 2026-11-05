@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
 from torchtnt.framework.fit import fit
 
-from fairchem.core.common.utils import get_subdirectories_sorted_by_time
+from fairchem.core.common.utils import (
+    get_subdirectories_sorted_by_step,
+    get_subdirectories_sorted_by_time,
+)
 from fairchem.core.components.callbacks import (
     StopBeforeTimeoutCallback,
     TrainCheckpointCallback,
@@ -56,17 +59,38 @@ class Checkpointable(Protocol):
 
 
 def get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | None:
+    """
+    Find the newest complete checkpoint in a checkpoint directory.
+
+    A checkpoint is complete once DCP has written its ``.metadata`` file, which
+    it does last. Checkpoints named by ``TrainCheckpointCallback`` are ranked by
+    name: ``final`` first, then ``step_N`` by step. Modification times are not
+    used for them, since adding a file to an old checkpoint would make it look
+    newest. Directories with other names are only considered, newest by
+    modification time, when there are no ``final`` or ``step_N`` directories.
+
+    Args:
+        checkpoint_dir: The directory holding the checkpoint directories.
+
+    Returns:
+        The path to the newest complete checkpoint, or None if there is none.
+    """
     if not checkpoint_dir:
         return None
 
-    ckpt_dirs_time = get_subdirectories_sorted_by_time(checkpoint_dir)
-    most_recent_viable_checkpoint = None
-    for sub_dir_path, _ in ckpt_dirs_time[::-1]:
-        items = os.listdir(sub_dir_path)
-        if items and ".metadata" in items:
-            most_recent_viable_checkpoint = sub_dir_path
-            break
-    return most_recent_viable_checkpoint
+    def is_complete(path: str) -> bool:
+        return os.path.isfile(os.path.join(path, ".metadata"))
+
+    final = os.path.join(checkpoint_dir, "final")
+    steps = get_subdirectories_sorted_by_step(checkpoint_dir)
+    if steps or os.path.isdir(final):
+        candidates = [final, *(path for path, _ in reversed(steps))]
+    else:
+        candidates = [
+            path
+            for path, _ in reversed(get_subdirectories_sorted_by_time(checkpoint_dir))
+        ]
+    return next((path for path in candidates if is_complete(path)), None)
 
 
 class TrainEvalRunner(Runner):
