@@ -278,7 +278,7 @@ def compute_hessian_loop(
     Args:
         forces_flat: Flattened forces tensor, shape [N*3].
         pos: Atomic positions, shape [N, 3].
-        create_graph: Whether to create graph for third-order derivatives.
+        create_graph: Whether to retain and create graphs for third-order derivatives.
 
     Returns:
         Hessian matrix of shape [N*3, N*3].
@@ -295,7 +295,7 @@ def compute_hessian_loop(
         hessian[:, i] = torch.autograd.grad(
             -forces_flat[i],
             pos,
-            retain_graph=i < n_forces - 1,
+            retain_graph=create_graph or i < n_forces - 1,
             create_graph=create_graph,
         )[0].flatten()
 

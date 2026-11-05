@@ -15,6 +15,7 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
+    compute_hessian,
     get_l_component_range,
     reduce_node_to_system,
 )
@@ -426,3 +427,38 @@ class TestComputeForcesAndStress:
         # Reshape to 3x3 and check symmetry
         stress_matrix = stress.view(3, 3)
         assert torch.allclose(stress_matrix, stress_matrix.T, atol=1e-6)
+
+
+@pytest.mark.parametrize("vmap", [True, False])
+def test_hessian_loss_parameter_gradients(vmap):
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(17)
+        energy_model = nn.Sequential(
+            nn.Linear(3, 4), nn.SiLU(), nn.Linear(4, 1)
+        ).double()
+
+    pos = torch.tensor(
+        [[0.2, -0.3, 0.4], [0.7, 0.1, -0.5]],
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    parameters = (
+        energy_model[0].weight,
+        energy_model[0].bias,
+        energy_model[2].weight,
+    )
+    energy = energy_model(pos).sum()
+    forces = compute_forces(energy, pos, training=True)
+    hessian = compute_hessian(forces, pos, vmap=vmap, training=True).reshape(6, 6)
+    gradients = torch.autograd.grad(hessian.square().sum(), parameters)
+
+    reference = torch.autograd.functional.hessian(
+        lambda coordinates: energy_model(coordinates).sum(),
+        pos.detach(),
+        create_graph=True,
+    ).reshape(6, 6)
+    reference_gradients = torch.autograd.grad(reference.square().sum(), parameters)
+
+    torch.testing.assert_close(hessian, reference, rtol=1e-10, atol=1e-12)
+    for gradient, expected in zip(gradients, reference_gradients):
+        torch.testing.assert_close(gradient, expected, rtol=1e-10, atol=1e-12)

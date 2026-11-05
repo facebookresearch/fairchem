@@ -16,8 +16,12 @@ from ase.build import molecule as get_molecule
 from e3nn.math import direct_sum
 from e3nn.o3 import matrix_to_angles, spherical_harmonics, wigner_D
 
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.models.uma.escn_md import (
+    MLP_EFS_Head,
+    eSCNMDBackbone,
+    resolve_dataset_mapping,
+)
 
 
 @pytest.mark.parametrize(
@@ -184,3 +188,78 @@ def test_resolve_dataset_mapping_custom_param_name(caplog):
             deprecated_param_name="dataset_names",
         )
     assert "dataset_names" in caplog.text
+
+
+@pytest.mark.parametrize("hessian_vmap", [True, False])
+def test_force_only_hessian_inference(hessian_vmap):
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(17)
+        backbone = (
+            eSCNMDBackbone(
+                max_num_elements=10,
+                sphere_channels=4,
+                lmax=1,
+                mmax=1,
+                hidden_channels=8,
+                num_layers=1,
+                edge_channels=4,
+                num_distance_basis=6,
+                use_dataset_embedding=False,
+                always_use_pbc=False,
+                otf_graph=True,
+                direct_forces=False,
+                regress_forces=True,
+                regress_hessian=True,
+                regress_stress=False,
+            )
+            .double()
+            .eval()
+        )
+        head = MLP_EFS_Head(backbone, wrap_property=False).double().eval()
+    backbone.regress_config.hessian_vmap = hessian_vmap
+    positions = torch.tensor([[0.0, 0.0, 0.0], [0.9, 0.2, 0.1]], dtype=torch.float64)
+
+    def predict(coordinates, hessian):
+        backbone.regress_config.hessian = hessian
+        atoms = Atoms("H2", positions=coordinates.numpy(), cell=[10.0] * 3, pbc=False)
+        atoms.info.update(charge=0, spin=1)
+        data = atomicdata_list_to_batch(
+            [
+                AtomicData.from_ase(
+                    atoms,
+                    task_name="omol",
+                    r_data_keys=["charge", "spin"],
+                    r_edges=False,
+                )
+            ]
+        )
+        data["pos"] = data["pos"].double()
+        data["cell"] = data["cell"].double()
+        with torch.no_grad():
+            return head(data, backbone(data))
+
+    prediction = predict(positions, hessian=True)
+    hessian = prediction["hessian"].reshape(6, 6)
+    force_only = predict(positions, hessian=False)
+    torch.testing.assert_close(prediction["forces"], force_only["forces"])
+    assert not force_only["forces"].requires_grad
+
+    epsilon = 3e-3
+    columns = []
+    for index in range(positions.numel()):
+        displacement = torch.zeros_like(positions)
+        displacement.view(-1)[index] = epsilon
+        positive = predict(positions + displacement, hessian=False)["forces"]
+        negative = predict(positions - displacement, hessian=False)["forces"]
+        columns.append(-(positive - negative).flatten() / (2 * epsilon))
+    finite_difference = torch.stack(columns, dim=1)
+
+    torch.testing.assert_close(hessian, finite_difference, rtol=1e-4, atol=1e-7)
+    torch.testing.assert_close(hessian, hessian.T, rtol=1e-8, atol=1e-10)
+    translations = torch.eye(3, dtype=torch.float64).repeat(2, 1)
+    torch.testing.assert_close(
+        hessian @ translations,
+        torch.zeros(6, 3, dtype=torch.float64),
+        rtol=0,
+        atol=1e-9,
+    )

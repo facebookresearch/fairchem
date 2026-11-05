@@ -1065,7 +1065,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     """MLP head for predicting energy, forces, and stress using autograd derivatives.
 
     This head computes forces and stress by taking gradients of the energy with respect to
-    atomic positions and cell displacement.
+    atomic positions and cell displacement. The Hessian is the second derivative of the
+    energy with respect to positions, so it is obtained by differentiating the forces
+    once more. Forces therefore retain their autograd graph (``create_graph=True``)
+    whenever a Hessian is requested, including in inference/eval mode. When no Hessian
+    is requested, forces are computed without that graph and are plain tensors.
     """
 
     def __init__(
@@ -1140,7 +1144,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
         elif self.regress_config.forces and not self.regress_config.direct_forces:
-            forces = compute_forces(energy_part, data["pos"], training=self.training)
+            forces = compute_forces(energy_part, data["pos"], training=create_graph)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
         else:
             forces = None
