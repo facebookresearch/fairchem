@@ -47,7 +47,7 @@ from fairchem.core.units.mlip_unit.predict import (
 from fairchem.core.units.mlip_unit.single_atom_patch import (
     single_atom_prediction_from_lookup,
 )
-from tests.conftest import get_predict_unit_for_test, seed_everywhere
+from tests.core_plugin import get_predict_unit_for_test, seed_everywhere
 
 
 def _resolve_checkpoint_path(name_or_path: str) -> str:

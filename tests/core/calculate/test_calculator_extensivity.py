@@ -29,7 +29,7 @@ from scipy.spatial.transform import Rotation
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.units.mlip_unit import InferenceSettings
-from tests.conftest import get_predict_unit_for_test, sweep_refs_from
+from tests.core_plugin import get_predict_unit_for_test, sweep_refs_from
 
 # Extensivity is a property of the UMA-S architecture, not of any particular
 # head: every task head should satisfy E(N replicas) = N * E(1 replica) when
