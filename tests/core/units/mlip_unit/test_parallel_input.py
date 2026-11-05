@@ -42,7 +42,7 @@ def make_batch(atoms: Atoms) -> AtomicData:
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def water_batch():
     return make_batch(
         Atoms(
@@ -53,7 +53,7 @@ def water_batch():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def tiny_parallel_checkpoint(tmp_path):
     checkpoint = tmp_path / "tiny.pt"
     torch.save(
@@ -204,7 +204,7 @@ def changing_requests(water_batch):
     ]
 
 
-@pytest.mark.serial
+@pytest.mark.serial()
 @pytest.mark.parametrize("merge_mole", [False, True])
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.gpu)])
 def test_parallel_changing_inputs(
@@ -248,7 +248,7 @@ def test_parallel_changing_inputs(
         distutils.cleanup_gp_ray()
 
 
-@pytest.mark.serial
+@pytest.mark.serial()
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.gpu)])
 def test_parallel_fixed_input_skips_checks(
     tiny_parallel_checkpoint, water_batch, device, monkeypatch

@@ -784,9 +784,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 output[task_name][task.property]
             )
             if self.assert_on_nans:
-                assert torch.isfinite(pred_output[task_name]).all(), (
-                    f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
-                )
+                assert (
+                    torch.isfinite(pred_output[task_name]).all()
+                ), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
             if undo_refs and task.element_references is not None:
                 pred_output[task_name] = task.element_references.undo_refs(
                     data, pred_output[task_name]
