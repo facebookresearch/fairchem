@@ -65,6 +65,7 @@ project:
                 - file: inorganic_materials/examples_tutorials/elastic.md
         - title: Heterogeneous Catalysts
           children:
+            - file: catalysts/open_catalyst_project.md
             - file: catalysts/datasets/summary.md
               children:
                 - file: catalysts/datasets/oc20.md
