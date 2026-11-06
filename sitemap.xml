@@ -149,6 +149,9 @@
     <loc>http://localhost:3000/ocpapi</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/open-catalyst-project</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/summary-6</loc>
   </url>
   <url>
