@@ -100,7 +100,7 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 
 # a molecule
 h2o = molecule("H2O")
-h2o.info.update({"charge": 0, "spin": 1})
+h2o.info.update({"charge": 0, "spin_multiplicity": 1})
 
 # a bulk
 pt = bulk("Pt")
@@ -113,7 +113,10 @@ add_adsorbate(slab, adsorbate, 2.0, "bridge")
 atomic_data_list = [
     # note that we put the molecule in a large box
     AtomicData.from_ase(
-        h2o, task_name="omol", r_data_keys=["spin", "charge"], molecule_cell_size=12
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin_multiplicity", "charge"],
+        molecule_cell_size=12,
     ),
     AtomicData.from_ase(pt, task_name="omat"),
     AtomicData.from_ase(slab, task_name="oc20"),

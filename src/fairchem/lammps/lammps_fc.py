@@ -18,7 +18,10 @@ from ase.data import atomic_masses, chemical_symbols
 from ase.geometry import wrap_positions
 
 from fairchem.core.datasets.atomic_data import AtomicData
-from lammps import lammps
+
+# NOTE: ``from lammps import lammps`` is imported lazily in
+# ``run_lammps_with_fairchem`` so this module can be imported (e.g. for
+# config parsing and unit tests) without a LAMMPS installation.
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
@@ -28,6 +31,79 @@ FIX_EXT_ID = "ext_fc"
 FIX_EXTERNAL_CMD = f"fix {FIX_EXT_ID} all external pf/callback 1 1"
 
 FORCE_COMMANDS = ["pair_style", "bond_style", "angle_style", "dihedral_style"]
+
+
+def resolve_spin_multiplicity_value(
+    task_name: str | None = None,
+    spin: int | None = None,
+    spin_multiplicity: int | None = None,
+) -> int:
+    """
+    Resolve the spin multiplicity (2S+1) from LAMMPS spin arguments.
+
+    ``spin_multiplicity`` is the preferred name; ``spin`` is kept as a
+    deprecated shorthand. If both are given they must agree. If none is given, defaults to 1 for the omol
+    task (a physical multiplicity, 2S+1 >= 1) and 0 otherwise (the
+    model's null spin token, which non-omol tasks were trained with).
+
+    Raises:
+        ValueError: If more than one argument is set and they disagree.
+    """
+    values = {
+        name: value
+        for name, value in (
+            ("spin_multiplicity", spin_multiplicity),
+            ("spin", spin),
+        )
+        if value is not None
+    }
+    if not values:
+        return 1 if task_name == "omol" else 0
+    distinct = list(values.values())
+    if any(value != distinct[0] for value in distinct[1:]):
+        details = ", ".join(f"{name}={value!r}" for name, value in values.items())
+        raise ValueError(
+            f"Conflicting spin multiplicity values: {details}. "
+            "'spin' is shorthand for 'spin_multiplicity', the "
+            "spin multiplicity (2S+1); set only one of them, or "
+            "make them agree."
+        )
+    if "spin" in values and "spin_multiplicity" not in values:
+        logging.warning(
+            "The 'spin' LAMMPS config key/argument is deprecated: it is "
+            "the spin multiplicity (2S+1), not the spin S. Use "
+            "'spin_multiplicity' instead."
+        )
+    resolved = distinct[0]
+    if task_name == "omol" and resolved == 0:
+        logging.warning(
+            "task_name='omol' with spin multiplicity 0: 0 is not a valid "
+            "spin multiplicity (2S+1 >= 1); it is the model's null spin "
+            "token, which the omol task never saw in training. Set "
+            "spin_multiplicity to an integer from 1 to 100."
+        )
+    return resolved
+
+
+def spin_multiplicity_from_config(cfg, task_name: str | None = None) -> int:
+    """
+    Resolve the spin multiplicity (2S+1) from a LAMMPS Hydra config.
+
+    Reads ``spin_multiplicity`` (preferred) or the deprecated ``spin``
+    key; see ``resolve_spin_multiplicity_value``.
+    """
+    from omegaconf import OmegaConf
+
+    def _get(key):
+        if OmegaConf.is_config(cfg):
+            return OmegaConf.select(cfg, key, default=None)
+        return cfg.get(key)
+
+    return resolve_spin_multiplicity_value(
+        task_name=task_name if task_name is not None else _get("task_name"),
+        spin=_get("spin"),
+        spin_multiplicity=_get("spin_multiplicity"),
+    )
 
 
 def check_input_script(input_script: str):
@@ -53,8 +129,15 @@ def atomic_data_from_lammps_data(
     periodicity,
     task_name,
     charge: int = 0,
-    spin: int = 0,
+    spin: int | None = None,
+    spin_multiplicity: int | None = None,
 ):
+    # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
+    spin = resolve_spin_multiplicity_value(
+        task_name=task_name,
+        spin=spin,
+        spin_multiplicity=spin_multiplicity,
+    )
     # TODO: do we need to take of care of wrapping atoms that are outside the cell?
     pos = torch.as_tensor(x, dtype=torch.float32)
     pbc = torch.tensor(periodicity, dtype=torch.bool).unsqueeze(0)
@@ -162,9 +245,27 @@ def restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
 
 
 class FixExternalCallback:
-    def __init__(self, charge: int = 0, spin: int = 0):
+    def __init__(
+        self,
+        charge: int = 0,
+        spin: int | None = None,
+        spin_multiplicity: int | None = None,
+        task_name: str | None = None,
+    ):
         self.charge = charge
-        self.spin = spin
+        # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
+        self.spin = resolve_spin_multiplicity_value(
+            task_name=task_name,
+            spin=spin,
+            spin_multiplicity=spin_multiplicity,
+        )
+
+    @property
+    def spin_multiplicity(self) -> int:
+        """
+        The spin multiplicity (2S+1), i.e. the legacy ``spin``.
+        """
+        return self.spin
 
     def __call__(self, lmp, ntimestep, nlocal, tag, x, f):
         # force copy here, otherwise we can accident modify the original array in lammps
@@ -189,7 +290,7 @@ class FixExternalCallback:
             periodicity,
             lmp._task_name,
             charge=self.charge,
-            spin=self.spin,
+            spin_multiplicity=self.spin_multiplicity,
         )
         results = lmp._predictor.predict(atomic_data)
         assert "forces" in results, "forces must be in results"
@@ -214,8 +315,17 @@ def run_lammps_with_fairchem(
     lammps_input_path: str,
     task_name: str,
     charge: int = 0,
-    spin: int = 0,
+    spin: int | None = None,
+    spin_multiplicity: int | None = None,
 ):
+    from lammps import lammps
+
+    # ``spin`` is the deprecated shorthand for the spin multiplicity (2S+1).
+    spin = resolve_spin_multiplicity_value(
+        task_name=task_name,
+        spin=spin,
+        spin_multiplicity=spin_multiplicity,
+    )
     machine = None
     if "LAMMPS_MACHINE_NAME" in os.environ:
         machine = os.environ["LAMMPS_MACHINE_NAME"]
@@ -230,7 +340,9 @@ def run_lammps_with_fairchem(
         logging.info(f"Running input script: {input_script}")
         lmp.commands_list(script)
         lmp.command(FIX_EXTERNAL_CMD)
-        fix_external_call_back = FixExternalCallback(charge=charge, spin=spin)
+        fix_external_call_back = FixExternalCallback(
+            charge=charge, spin_multiplicity=spin
+        )
         lmp.set_fix_external_callback(FIX_EXT_ID, fix_external_call_back, lmp)
         lmp.commands_list(run_cmds)
     return lmp
@@ -247,8 +359,8 @@ def main(cfg: DictConfig):
         predict_unit,
         cfg.lmp_in,
         cfg.task_name,
-        cfg.charge,
-        cfg.spin,
+        cfg.get("charge", 0),
+        spin_multiplicity=spin_multiplicity_from_config(cfg),
     )
     # this is required to cleanup the predictor
     del lmp._predictor

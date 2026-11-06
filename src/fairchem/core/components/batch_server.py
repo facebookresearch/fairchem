@@ -236,7 +236,7 @@ class BatchPredictServerMixin:
         """
         Run the predict unit's validation and return the (possibly mutated) atoms.info.
 
-        Validation may set defaults (e.g. charge, spin) on ``atoms.info``.
+        Validation may set defaults (e.g. charge, spin_multiplicity) on ``atoms.info``.
         Because the caller needs those mutations applied locally, this method
         accepts and returns the ``atoms.info`` dict rather than a full
         ``Atoms`` object.

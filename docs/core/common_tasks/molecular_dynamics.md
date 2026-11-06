@@ -186,7 +186,8 @@ atoms:
 ```
 
 For molecular tasks, set `task_name: omol` and ensure total charge and spin
-multiplicity are present as `atoms.info["charge"]` and `atoms.info["spin"]`.
+multiplicity (2S+1) are present as `atoms.info["charge"]` and
+`atoms.info["spin_multiplicity"]` (the legacy key `spin` is also accepted).
 
 ## Outputs, checkpoints, and resume
 

@@ -108,7 +108,7 @@ def create_test_systems():
     # Non-PBC (aperiodic) H2O
     h2o_nopbc = molecule("H2O")
     h2o_nopbc.info["charge"] = 0
-    h2o_nopbc.info["spin"] = 1
+    h2o_nopbc.info["spin_multiplicity"] = 1
 
     # PBC H2O
     h2o_pbc = molecule("H2O")

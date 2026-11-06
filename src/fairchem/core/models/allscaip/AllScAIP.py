@@ -11,7 +11,6 @@ import logging
 from functools import partial
 from typing import TYPE_CHECKING
 
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -40,14 +39,7 @@ from fairchem.core.models.escaip.utils.nn_utils import (
     no_weight_decay,
 )
 from fairchem.core.models.uma.escn_md import GradRegressConfig
-from fairchem.core.units.mlip_unit.api.inference import (
-    CHARGE_RANGE,
-    DEFAULT_CHARGE,
-    DEFAULT_SPIN,
-    DEFAULT_SPIN_OMOL,
-    SPIN_RANGE,
-    UMATask,
-)
+from fairchem.core.units.mlip_unit.api.inference import validate_uma_atoms_data
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -180,56 +172,12 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
         """
         Validate and set defaults for calculator input data.
 
-        Sets default values for charge and spin in atoms.info and validates
-        they are within acceptable ranges.
+        Sets default values for charge and spin multiplicity (2S+1) in
+        atoms.info and validates they are within acceptable ranges. The
+        spin multiplicity may be set as ``spin_multiplicity`` (preferred)
+        or the legacy ``spin`` key.
         """
-        # Set charge defaults
-        if "charge" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                logging.warning(
-                    "task_name='omol' detected, but charge is not set in atoms.info. "
-                    "Defaulting to charge=0. Ensure charge is an integer representing "
-                    "the total charge on the system and is within the range -100 to 100."
-                )
-            atoms.info["charge"] = DEFAULT_CHARGE
-
-        # Set spin defaults (OMOL uses spin=1, others use spin=0)
-        if "spin" not in atoms.info:
-            if task_name == UMATask.OMOL.value:
-                atoms.info["spin"] = DEFAULT_SPIN_OMOL
-                logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in "
-                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
-                    "representing the spin multiplicity from 0 to 100."
-                )
-            else:
-                atoms.info["spin"] = DEFAULT_SPIN
-
-        # Validate charge range
-        charge = atoms.info["charge"]
-        if not isinstance(charge, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for charge: {type(charge)}. "
-                "Charge must be an integer representing the total charge on the system."
-            )
-        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for charge: {charge}. "
-                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
-            )
-
-        # Validate spin range
-        spin = atoms.info["spin"]
-        if not isinstance(spin, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for spin: {type(spin)}. "
-                "Spin must be an integer representing the spin multiplicity."
-            )
-        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for spin: {spin}. "
-                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
-            )
+        validate_uma_atoms_data(atoms, task_name)
 
     def compiled_forward(self, data: GraphAttentionData):
         # input block
