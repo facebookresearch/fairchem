@@ -1,0 +1,13 @@
+defaults:
+  - profile: fp64_eager
+  - _self_
+
+suite: prediction_fidelity
+role: reference
+scope: full
+checkpoint: ???
+checkpoint_id: null
+device: cuda
+seed: 42
+run_id: null
+output_dir: ???

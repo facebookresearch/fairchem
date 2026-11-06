@@ -1,0 +1,8 @@
+# FAIRChem's default inference preset (nitro): UMA Nitro where it can run.
+label: default
+preset: default
+# Nitro serves one system per call, so each structure gets its own predictor.
+predictor_scope: structure
+# Nitro's custom backward has no double backward, so it has no autograd Hessian
+# path. Finite-difference frequencies only need forces and remain supported.
+unsupported_suites: [autograd-frequencies]
