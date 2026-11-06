@@ -137,13 +137,13 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2,uma-s-1p2p1,uma-s-1p2p1-ft-d4rev,uma-s-1p2p1-ft-r2scan --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2,uma-s-1p2p1,uma-s-1p2p1-ft-d4rev,uma-s-1p2p1-ft-r2scan --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-coverage
@@ -181,7 +181,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.14']
-        sweep_model: [uma-s-1p1, uma-s-1p2]
+        sweep_model: [uma-s-1p1, uma-s-1p2, uma-s-1p2p1, uma-s-1p2p1-ft-d4rev, uma-s-1p2p1-ft-r2scan]
         shard: *cpu_shards
 
     steps:
@@ -339,7 +339,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2,uma-s-1p2p1,uma-s-1p2p1-ft-d4rev,uma-s-1p2p1-ft-r2scan -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -348,7 +348,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2,uma-s-1p2p1,uma-s-1p2p1-ft-d4rev,uma-s-1p2p1-ft-r2scan -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: codecov-test-results
         if: always()
@@ -376,7 +376,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.14']
-        sweep_model: [uma-s-1p1, uma-s-1p2]
+        sweep_model: [uma-s-1p1, uma-s-1p2, uma-s-1p2p1, uma-s-1p2p1-ft-d4rev, uma-s-1p2p1-ft-r2scan]
         shard: *gpu_shards
 
     steps:

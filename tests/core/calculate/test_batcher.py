@@ -41,7 +41,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 pytestmark = [
     pytest.mark.serial,
     pytest.mark.gpu,
-    pytest.mark.pretrained("uma-s-1p2"),
+    pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1"),
 ]
 
 
@@ -189,6 +189,7 @@ def test_context_manager_enter_exit(ray_session, declared_predict_unit):
         executor.submit(time.sleep, 1)
 
 
+@pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
     """Test that batched and serial calculations produce consistent results."""
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
@@ -219,6 +220,7 @@ def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
         npt.assert_allclose(r_batch["forces"], r_serial["forces"], atol=1e-4)
 
 
+@pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_checkpoint_swap_with_energy_verification(
     ray_session, declared_predict_unit, uma_predict_unit_alt
 ):
@@ -287,6 +289,7 @@ def test_batcher_shutdown(ray_controlled, declared_predict_unit):
     assert not ray.is_initialized()
 
 
+@pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 @pytest.mark.parametrize(
     "same_model",
     [

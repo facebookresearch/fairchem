@@ -128,7 +128,7 @@ def test_runner_catches_oom(tmp_path):
 
 @pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1")
 def test_run_inference_predictions_and_perf(pretrained_checkpoint):
     """
     Verify inference returns correct predictions and perf metrics on GPU.
@@ -159,7 +159,7 @@ def test_run_inference_predictions_and_perf(pretrained_checkpoint):
 
 @pytest.mark.skip(reason="Requires full UMA model download and large GPU memory")
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p2", "uma-s-1p2p1")
 def test_benchmark_runner_end_to_end(tmp_path, pretrained_checkpoint):
     """
     Full pipeline: baseline -> evaluate -> compare -> JSON report.

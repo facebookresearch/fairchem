@@ -794,7 +794,7 @@ def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
     """Test multiple concurrent Ray remote tasks hitting the inference server."""
 
@@ -831,7 +831,7 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
     """Test BatchServerPredictUnit from outside Ray with multiple systems."""
     conn_info = get_ray_connection_info(local_ray_cluster_with_head_file)
@@ -867,7 +867,7 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
     """Test that BatchServerPredictUnit correctly fetches model metadata."""
 
@@ -885,7 +885,7 @@ def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
@@ -1000,7 +1000,7 @@ def local_multiplexed_cluster():
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_multiplexed_single_model(
     local_multiplexed_cluster, uma_model_spec, uma_predict_unit
 ):
@@ -1029,7 +1029,7 @@ def test_multiplexed_single_model(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_multiplexed_switch_models(local_multiplexed_cluster, uma_model_spec):
     """Test switching between two different model keys."""
     available_uma = uma_models()
@@ -1069,7 +1069,7 @@ def test_multiplexed_switch_models(local_multiplexed_cluster, uma_model_spec):
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat",))
 def test_multiplexed_concurrent_requests(local_multiplexed_cluster, uma_model_spec):
     """Test concurrent requests to the multiplexed server."""
 

@@ -1570,7 +1570,9 @@ class TestMixedPBCBatch:
         assert (co_h2o == 0).all(), "Non-periodic molecule has non-zero cell offsets"
 
     @pytest.mark.gpu()
-    @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+    @pytest.mark.pretrained(
+        "uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1", tasks=("omat", "omol")
+    )
     def test_inference_results_match_mixed_vs_individual(
         self, radius_pbc_version, pretrained_checkpoint
     ):
