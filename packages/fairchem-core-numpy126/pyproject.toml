@@ -50,6 +50,7 @@ extras = ["ray[default]", "pymatgen", "quacc[phonons]>=0.15.3", "pandas"]
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"
+fairchem-regression = "fairchem.core.regression_suite.cli:main"
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem"

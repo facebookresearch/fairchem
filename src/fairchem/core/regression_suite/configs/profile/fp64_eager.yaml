@@ -1,0 +1,9 @@
+label: fp64-eager
+inference_settings:
+  _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+  base_precision_dtype: float64
+  tf32: false
+  compile: false
+  execution_mode: general
+  merge_mole: false
+  activation_checkpointing: false

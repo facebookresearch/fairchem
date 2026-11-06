@@ -1,0 +1,17 @@
+# Ablation: umas_fast_gpu Triton kernels with TF32, without compilation.
+label: fast-gpu-tf32-eager
+# A merged MOLE model serves one composition, so each structure gets its own.
+predictor_scope: structure
+# umas_fast_gpu's Triton backward is not differentiable; its autograd Hessian is wrong.
+unsupported_suites: [autograd-frequencies]
+inference_settings:
+  _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+  base_precision_dtype: float32
+  tf32: true
+  compile: false
+  execution_mode: umas_fast_gpu
+  merge_mole: true
+  activation_checkpointing: false
+  external_graph_gen: false
+  internal_graph_gen_version: 2
+  hessian_vmap: false
