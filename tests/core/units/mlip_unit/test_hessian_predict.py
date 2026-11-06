@@ -25,7 +25,7 @@ from numpy import testing as npt
 
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit import InferenceSettings
-from tests.conftest import get_predict_unit_for_test
+from tests.core_plugin import get_predict_unit_for_test
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol

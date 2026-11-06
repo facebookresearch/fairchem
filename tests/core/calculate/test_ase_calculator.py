@@ -46,7 +46,7 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATa
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
-from tests.conftest import get_predict_unit_for_test, models_to_test
+from tests.core_plugin import get_predict_unit_for_test, models_to_test
 
 # All tests use a GPU and a pretrained model. Tests that iterate over all
 # registered models inherit the bare @pretrained (no model args) from here;
@@ -87,7 +87,7 @@ def atoms_with_formation_energy():
 #      sweep job: --sweep-model=uma-s-1p1                →   1 model
 #    Total: 10 + 1 + 1 = 12 — every model tested exactly once.
 #
-# 2. Root conftest hook (tests/conftest.py): parametrizes
+# 2. Core test plugin hook (tests/core_plugin.py): parametrizes
 #    ``pretrained_checkpoint`` from the test's @pretrained("model", …)
 #    marker.  Used by UMA-specific tests via ``declared_predict_unit``
 #    (test_calculator_from_checkpoint, test_calculator_configurations, …).

@@ -28,7 +28,7 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
-from tests.conftest import get_predict_unit_for_test
+from tests.core_plugin import get_predict_unit_for_test
 
 pytestmark = [pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
 

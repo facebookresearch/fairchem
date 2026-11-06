@@ -53,7 +53,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-from tests.conftest import sweep_model, uma_models
+from tests.core_plugin import sweep_model, uma_models
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"

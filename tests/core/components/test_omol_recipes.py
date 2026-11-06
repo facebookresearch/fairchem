@@ -36,7 +36,7 @@ from fairchem.core.components.calculate.recipes.omol import (
     singlepoint,
     spin_gap,
 )
-from tests.conftest import get_predict_unit_for_test
+from tests.core_plugin import get_predict_unit_for_test
 
 pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 

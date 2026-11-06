@@ -24,7 +24,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
 )
-from tests.conftest import requested_inference_settings
+from tests.core_plugin import requested_inference_settings
 
 # Test equivariance in both fp32 and fp64
 # If error in equivariance is due to numerical error in fp
