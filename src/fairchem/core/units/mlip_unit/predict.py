@@ -19,6 +19,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import cached_property, wraps
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import hydra
@@ -28,14 +29,6 @@ import torch.distributed as dist
 from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
-
-try:
-    import ray
-    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
-
-    ray_installed = True
-except ImportError:
-    ray_installed = False
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
@@ -77,6 +70,9 @@ if TYPE_CHECKING:
 
     from fairchem.core.common.gp_utils import GraphParallelConfig
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+
+# ray is slow to import, so it is imported where it is used.
+ray_installed = find_spec("ray") is not None
 
 
 def collate_predictions(predict_fn):
@@ -827,6 +823,8 @@ class MLIPWorkerLocal:
         master_address: str | None = None,
         gp_config: GraphParallelConfig | None = None,
     ):
+        import ray
+
         self.worker_id = worker_id
         self.world_size = world_size
         self.predictor_config = predictor_config
@@ -847,6 +845,8 @@ class MLIPWorkerLocal:
     def _distributed_setup(
         self,
     ):
+        import ray
+
         # initialize distributed environment
         # TODO, this won't work for multi-node, need to fix master addr
         logging.info(f"Initializing worker {self.worker_id}...")
@@ -895,14 +895,6 @@ class MLIPWorker(MLIPWorkerLocal):
     pass
 
 
-if ray_installed:
-    MLIPWorker = ray.remote(MLIPWorker)
-else:
-    MLIPWorker = requires(
-        ray_installed, message="Requires `ray[serve]` to be installed"
-    )(MLIPWorker)
-
-
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(
@@ -920,6 +912,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         log_level: int = logging.INFO,
         gp_config: GraphParallelConfig | None = None,
     ):
+        import ray
+        from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
         super().__init__()
 
         gp_config = gp_utils.resolve_gp_config_for_workers(gp_config, num_workers)
@@ -1008,8 +1003,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
+        remote_worker = ray.remote(MLIPWorker)
         # Need to still place worker to occupy space, otherwise ray double books this GPU
-        rank0_worker = MLIPWorker.options(
+        rank0_worker = remote_worker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
                 placement_group=placement_groups[0],
@@ -1046,7 +1042,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                     worker_id += 1
                     continue
                 # Each actor requests 1 worker worth of resources and uses the specific placement group
-                actor = MLIPWorker.options(
+                actor = remote_worker.options(
                     num_gpus=num_gpu_per_worker,
                     scheduling_strategy=PlacementGroupSchedulingStrategy(
                         placement_group=pg,
@@ -1065,6 +1061,8 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 worker_id += 1
 
     def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
+        import ray
+
         # put the reference in the object store only once
         if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
             data_ref = ray.put(data)
@@ -1244,6 +1242,8 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
         cache_key = f"{ray_address}|{namespace}|{deployment_name}"
         if cache_key not in cls._handle_cache:
+            import ray
+
             if ray_address and not ray.is_initialized():
                 ray.init(ray_address, namespace=namespace)
 

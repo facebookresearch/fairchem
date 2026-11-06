@@ -42,7 +42,6 @@ from fairchem.core.common import distutils, gp_utils
 from fairchem.core.common.distutils import (
     get_device_for_local_rank,
 )
-from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import StrEnum
 from fairchem.core.components.train.train_runner import Checkpointable
@@ -539,6 +538,10 @@ class MLIPTrainEvalUnit(
         # this is required for models that have a no_weight_decay function
         self.optimizer = _get_optimizer_wd(optimizer_fn, model)
 
+        # Imported here so that importing this module (e.g. through the predict
+        # unit) does not import wandb.
+        from fairchem.core.common.logger import WandBSingletonLogger
+
         self.logger = (
             WandBSingletonLogger.get_instance()
             if distutils.is_master()
@@ -959,6 +962,9 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             self.model = prepare_module(
                 model, device=torch.device(get_device_for_local_rank()), strategy="ddp"
             )
+
+        from fairchem.core.common.logger import WandBSingletonLogger
+
         self.logger = (
             WandBSingletonLogger.get_instance()
             if distutils.is_master()
