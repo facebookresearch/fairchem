@@ -817,6 +817,33 @@ def move_tensors_to_cpu(data):
         return data
 
 
+def _same_inference_metadata(current, cached) -> bool:
+    """
+    Compare request metadata against a private CPU snapshot.
+    """
+    if torch.is_tensor(current):
+        return (
+            torch.is_tensor(cached)
+            and current.dtype == cached.dtype
+            and torch.equal(current.detach().cpu(), cached)
+        )
+    if type(current) is not type(cached):
+        return False
+    if isinstance(current, dict):
+        return current.keys() == cached.keys() and all(
+            _same_inference_metadata(value, cached[key])
+            for key, value in current.items()
+        )
+    if isinstance(current, (list, tuple)):
+        return len(current) == len(cached) and all(
+            _same_inference_metadata(value, previous)
+            for value, previous in zip(current, cached)
+        )
+    if isinstance(current, np.ndarray):
+        return current.dtype == cached.dtype and np.array_equal(current, cached)
+    return current == cached
+
+
 class MLIPWorkerLocal:
     def __init__(
         self,
@@ -837,6 +864,7 @@ class MLIPWorkerLocal:
         self.master_port = get_free_port() if master_port is None else master_port
         self.is_setup = False
         self.last_received_atomic_data = None
+        self._broadcast_group = None
 
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
@@ -877,15 +905,33 @@ class MLIPWorkerLocal:
         if not self.is_setup:
             self._distributed_setup()
 
+        if use_nccl and self._broadcast_group is None:
+            # Keep control messages on the CPU, including for NCCL workers, so
+            # choosing the update path does not require a CUDA scalar readback.
+            self._broadcast_group = (
+                dist.group.WORLD
+                if dist.get_backend() == "gloo"
+                else dist.new_group(backend="gloo")
+            )
+
         out = self.predict_unit.predict(data)
         if self.worker_id == 0:
             return move_tensors_to_cpu(out)
 
         if self.worker_id != 0 and use_nccl:
             self.last_received_atomic_data = data.to(self.device)
+            refresh = torch.empty(1, dtype=torch.int64, device="cpu")
             while True:
-                torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
-                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
+                dist.broadcast(refresh, src=0, group=self._broadcast_group)
+                if refresh.item():
+                    request = [None]
+                    dist.broadcast_object_list(
+                        request, src=0, group=self._broadcast_group
+                    )
+                    self.last_received_atomic_data = request[0].to(self.device)
+                else:
+                    dist.broadcast(self.last_received_atomic_data.pos, src=0)
+                    dist.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -988,6 +1034,11 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 ray.init(logging_level=log_level)
 
         self.atomic_data_on_device = None
+        self._input_snapshot = None
+        # Worker RPCs remain inside their broadcast loops even if the model
+        # falls back from merged inference. Transport must not change with it.
+        self._use_broadcast = self.inference_settings.merge_mole
+        self._refresh_request = torch.empty(1, dtype=torch.int64, device="cpu")
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -1064,23 +1115,64 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 self.workers.append(actor)
                 worker_id += 1
 
+    def _can_reuse_geometry_buffers(self, data: AtomicData) -> bool:
+        """
+        Reuse geometry buffers only when every other request field is unchanged.
+        """
+        if self._input_snapshot is None or data.keys() != self._input_snapshot.keys():
+            return False
+        for key, value in data:
+            previous = self._input_snapshot[key]
+            if key in ("pos", "cell"):
+                if value.shape != previous.shape or value.dtype != previous.dtype:
+                    return False
+            elif not _same_inference_metadata(value, previous):
+                return False
+        return True
+
     def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
-        if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
+        if not self._use_broadcast or self.atomic_data_on_device is None:
+            data_on_device = data.clone()
+            input_snapshot = data.clone().cpu() if self._use_broadcast else None
             data_ref = ray.put(data)
             # this will put the ray works into an infinite loop listening for broadcasts
             _futures = [
-                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
+                w.predict.remote(data_ref, use_nccl=self._use_broadcast)
                 for w in self.workers
             ]
-            self.atomic_data_on_device = data.clone()
+            self._input_snapshot = input_snapshot
+            self.atomic_data_on_device = data_on_device
         else:
-            self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
-            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
-            torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
-            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
+            refresh = not self._can_reuse_geometry_buffers(data)
+            # Prepare before announcing a collective: a local validation or
+            # transfer failure must leave peers waiting for the next command.
+            if refresh:
+                input_snapshot = data.clone().cpu()
+                data_on_device = data.clone()
+            else:
+                pos = data.pos.to(self.local_rank0.device)
+                cell = data.cell.to(self.local_rank0.device)
+            self._refresh_request.fill_(refresh)
+            group = self.local_rank0._broadcast_group
+            dist.broadcast(self._refresh_request, src=0, group=group)
+            if refresh:
+                # A geometry-only update would hide metadata changes from each
+                # rank's normal MOLE checks, or mismatch collective buffer sizes.
+                dist.broadcast_object_list([input_snapshot], src=0, group=group)
+                self._input_snapshot = input_snapshot
+                self.atomic_data_on_device = data_on_device
+            else:
+                self.atomic_data_on_device.pos = pos
+                self.atomic_data_on_device.cell = cell
+                dist.broadcast(self.atomic_data_on_device.pos, src=0)
+                dist.broadcast(self.atomic_data_on_device.cell, src=0)
 
-        return self.local_rank0.predict(self.atomic_data_on_device)
+        predictions = self.local_rank0.predict(
+            self.atomic_data_on_device, use_nccl=self._use_broadcast
+        )
+        self.inference_settings = self.local_rank0.predict_unit.inference_settings
+        return predictions
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
