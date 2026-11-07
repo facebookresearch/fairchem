@@ -1325,6 +1325,21 @@ To make things simple for the user that wants to run multi-gpu inference locally
 Multi-GPU inference requires Ray. Install it with `pip install fairchem-core[ray]`.
 :::
 
+Parallel inference supports changing inputs by default. When atom ordering,
+atom count, charge, spin, task, PBC, or other metadata changes, the complete
+request is refreshed on every worker. Changes to the MOLE merge contract
+trigger the existing automatic fallback to an unmerged model.
+
+When MOLE merging is enabled initially, advanced callers using a fixed system
+can pass `assume_fixed_input=True` to
+`pretrained_mlip.get_predict_unit(..., workers=2)` or `ParallelMLIPPredictUnit`.
+This skips input update checks and sends only positions and cell after the
+first request. Atom ordering, count, tensor shapes and dtypes, and every other
+input field must remain unchanged. This also requires fixed externally
+generated graph data. Violating this contract can cause incorrect results or
+hang distributed communication. The model's existing consistency checks remain
+enabled, but they cannot detect changes to metadata that was never transferred.
+
 For example, we can create a predictor with 8 GPU workers in a very similar way to MLIPPredictUnit and perform an MD calculation with the ASE calculator. This mode of operation is also compatible with our LAMMPS integration.
 
 ```python
