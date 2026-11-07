@@ -162,7 +162,7 @@ jobs:
         if: ${{ always() && matrix.python_version == '3.14' && hashFiles('.coverage') != '' }}
         run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
 
-      - if: ${{ matrix.python_version == '3.14' }}
+      - if: ${{ always() && matrix.python_version == '3.14' && hashFiles('coverage.xml') != '' }}
         name: codecov-coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
