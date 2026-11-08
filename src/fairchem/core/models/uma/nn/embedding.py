@@ -116,10 +116,15 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
 
+        # Each checkpointed chunk scatters onto the same zero tensor, and its
+        # contribution is added to x outside the checkpoint. Passing x itself
+        # into each chunk would keep one copy of the node features per chunk
+        # alive until backward.
+        zeros = torch.zeros_like(x)
         for idx in range(len(scatter_target_partitions)):
-            x = torch.utils.checkpoint.checkpoint(
+            x = x + torch.utils.checkpoint.checkpoint(
                 self.forward_chunk,
-                x,
+                zeros,
                 x_edge_partitions[idx],
                 scatter_target_partitions[idx],
                 wigner_inv_partitions[idx],
