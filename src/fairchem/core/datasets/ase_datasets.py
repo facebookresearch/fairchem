@@ -13,7 +13,7 @@ import logging
 import os
 import warnings
 from abc import ABC, abstractmethod
-from functools import cache, partial
+from functools import partial
 from glob import glob
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -89,8 +89,11 @@ class AseAtomsDataset(BaseDataset, ABC):
 
         self.atoms_transform = atoms_transform
 
-        if self.config.get("keep_in_memory", False):
-            self.__getitem__ = cache(self.__getitem__)
+        # Samples are cached here when keep_in_memory is set. A plain dict is used
+        # instead of functools.cache so that the dataset stays picklable.
+        self._in_memory_cache: dict[int, AtomicData] | None = (
+            {} if self.config.get("keep_in_memory", False) else None
+        )
 
         self.ids = self._load_dataset_get_ids(config)
         self.num_samples = len(self.ids)
@@ -106,6 +109,13 @@ class AseAtomsDataset(BaseDataset, ABC):
         if isinstance(idx, slice):
             return [self[i] for i in range(*idx.indices(len(self)))]
 
+        if self._in_memory_cache is None:
+            return self._get_data_object(idx)
+        if idx not in self._in_memory_cache:
+            self._in_memory_cache[idx] = self._get_data_object(idx)
+        return self._in_memory_cache[idx]
+
+    def _get_data_object(self, idx: int) -> AtomicData:
         # Get atoms object via derived class method
         atoms = self.get_atoms(idx)
 
