@@ -12,6 +12,10 @@ dependencies = [
     "pymatgen>=2023.10.3",
 ]
 
+[project.optional-dependencies]
+# fetches the ODAC large files; 1.1.0 is the first release with the "odac" group
+download = ["fairchem-core>=1.1.0"]
+
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/odac"
 documentation = "https://facebookresearch.github.io/fairchem/"
