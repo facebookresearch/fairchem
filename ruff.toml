@@ -72,7 +72,9 @@ convention = "google"
 
 [lint.per-file-ignores]
 # Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
-"src/fairchem/core/__init__.py" = ["I002"]
+# Lazily exported names are imported under TYPE_CHECKING for type checkers only.
+"src/fairchem/core/__init__.py" = ["I002", "TCH004"]
+"src/fairchem/core/calculate/__init__.py" = ["TCH004"]
 "src/fairchem/core/conf.py" = ["I002"]
 "src/fairchem/core/common/*" = ["PLW0603"]  # Using the global statement to update [] is discouraged
 "src/fairchem/core/scripts/*" = ["PLW0603"]  # Using the global statement to update [] is discouraged

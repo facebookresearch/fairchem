@@ -10,16 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import time
+from importlib.util import find_spec
 
 from monty.dev import requires
 
-try:
-    from ray import serve
-    from ray.serve.schema import ApplicationStatus
-
-    ray_installed = True
-except ImportError:
-    ray_installed = False
+# ray is slow to import, so it is imported where it is used.
+ray_installed = find_spec("ray") is not None
 
 # This module is deliberately a leaf: Ray Serve lifecycle helpers with no
 # fairchem imports, so consumers such as ``units.mlip_unit.predict`` can use
@@ -54,6 +50,8 @@ def get_app_handle_with_retry(
     or ``.remote()`` call can implicitly initialize it with the default
     (``False``) value.
     """
+    from ray import serve
+
     deadline = time.monotonic() + timeout_seconds
     while True:
         try:
@@ -102,6 +100,9 @@ def wait_for_serve_ready(
         TimeoutError: If the application does not reach RUNNING within
             ``timeout_seconds``.
     """
+    from ray import serve
+    from ray.serve.schema import ApplicationStatus
+
     deadline = time.monotonic() + timeout_seconds
 
     def _check_deadline(phase: str) -> None:

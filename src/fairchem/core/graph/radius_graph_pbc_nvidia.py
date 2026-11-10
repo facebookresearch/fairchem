@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from importlib.util import find_spec
 
 import numpy as np
 import torch
@@ -15,23 +16,11 @@ from monty.dev import requires
 
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 
-try:
-    from nvalchemiops.torch.neighbors import neighbor_list
-    from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
 
-    def nvalchemiops_installed() -> bool:
-        return True
-
-except ImportError as e:
-    logging.debug(
-        f"nvalchemiops not available: {e}. "
-        "Install with `pip install nvalchemi-toolkit-ops`"
-    )
-    estimate_max_neighbors = None
-    neighbor_list = None
-
-    def nvalchemiops_installed() -> bool:
-        return False
+def nvalchemiops_installed() -> bool:
+    # Importing nvalchemiops initializes warp and defines hundreds of kernels, which
+    # takes over a second, so only check that it is installed and import it lazily.
+    return find_spec("nvalchemiops") is not None
 
 
 @requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
@@ -72,6 +61,9 @@ def get_neighbors_nvidia(
         offsets: Cell offsets (tensor, int32, shape [num_edges, 3])
         distances_sq: Pairwise distances squared (tensor) accounting for PBC if distances_sq is True, otherwise None
     """
+    from nvalchemiops.torch.neighbors import neighbor_list
+    from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
+
     # Validate input shapes
     assert (
         positions.ndim == 2
