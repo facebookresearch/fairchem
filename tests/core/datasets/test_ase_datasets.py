@@ -228,6 +228,35 @@ def test_ase_multiread_dataset(tmp_path):
     assert "sid" in atoms.info
 
 
+def test_ase_multiread_index_file_multiple_files(tmp_path):
+    counts = {"a.traj": 2, "b.traj": 3}
+    lines = []
+    for name, count in counts.items():
+        write(
+            tmp_path / name,
+            [build.bulk("Cu", a=3.5 + 0.1 * i) for i in range(count)],
+        )
+        lines.append(f"{tmp_path / name} {count}")
+    (tmp_path / "test_index_file").write_text("\n".join(lines) + "\n")
+
+    dataset = AseReadMultiStructureDataset(
+        config={
+            "src": str(tmp_path),
+            "index_file": str(tmp_path / "test_index_file"),
+        },
+    )
+
+    # every file listed in the index file contributes its structures
+    assert len(dataset) == sum(counts.values())
+    got = [
+        (atoms.info["sid"], atoms.info["fid"])
+        for atoms in map(dataset.get_atoms, range(len(dataset)))
+    ]
+    expected = [(str(tmp_path / "a.traj"), i) for i in range(2)]
+    expected += [(str(tmp_path / "b.traj"), i) for i in range(3)]
+    assert got == expected
+
+
 def test_empty_dataset(tmp_path):
     # raises error on empty dataset
     with pytest.raises(ValueError):
