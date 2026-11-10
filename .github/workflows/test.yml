@@ -65,7 +65,7 @@ jobs:
           - name: units
             paths: tests/core/units
           - name: core
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/data tests/demo
+            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/core/test_imports.py tests/data tests/demo
         # The regression suite's end-to-end tests run a tiny model through
         # whole baselines, so it gets its own runner. It has no pretrained-model
         # tests, so it is added here rather than to the sweep jobs' anchor.
