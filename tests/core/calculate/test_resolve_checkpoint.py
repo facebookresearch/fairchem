@@ -103,4 +103,5 @@ def test_get_predict_unit_finetune_has_no_refs(tmp_path, monkeypatch, model_name
         1,
         41,
         gp_config=None,
+        assume_fixed_input=False,
     )

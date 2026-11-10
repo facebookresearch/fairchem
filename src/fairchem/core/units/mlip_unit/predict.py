@@ -824,6 +824,53 @@ def move_tensors_to_cpu(data):
         return data
 
 
+class _ParallelInputUpdate(enum.IntEnum):
+    GEOMETRY = 0
+    FULL = 1
+
+
+def _same_input_value(current, previous) -> bool:
+    """
+    Compare input metadata without converting tensors between devices.
+    """
+    if type(current) is not type(previous):
+        return False
+    if isinstance(current, torch.Tensor):
+        return (
+            current.shape == previous.shape
+            and current.dtype == previous.dtype
+            and current.device == previous.device
+            and torch.equal(current, previous)
+        )
+    if isinstance(current, np.ndarray):
+        return current.dtype == previous.dtype and np.array_equal(current, previous)
+    if isinstance(current, dict):
+        return current.keys() == previous.keys() and all(
+            _same_input_value(value, previous[key]) for key, value in current.items()
+        )
+    if isinstance(current, (list, tuple)):
+        return len(current) == len(previous) and all(
+            _same_input_value(a, b) for a, b in zip(current, previous, strict=True)
+        )
+    return current == previous
+
+
+def _only_geometry_changed(current: AtomicData, previous: AtomicData) -> bool:
+    """
+    Check whether existing worker buffers can serve the current request.
+    """
+    if current.keys() != previous.keys():
+        return False
+    for key, value in current:
+        old_value = previous[key]
+        if key in {"pos", "cell"}:
+            if value.shape != old_value.shape or value.dtype != old_value.dtype:
+                return False
+        elif not _same_input_value(value, old_value):
+            return False
+    return True
+
+
 class MLIPWorkerLocal:
     def __init__(
         self,
@@ -879,7 +926,10 @@ class MLIPWorkerLocal:
         self.is_setup = True
 
     def predict(
-        self, data: AtomicData, use_nccl: bool = False
+        self,
+        data: AtomicData,
+        use_nccl: bool = False,
+        assume_fixed_input: bool = False,
     ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
             self._distributed_setup()
@@ -890,9 +940,20 @@ class MLIPWorkerLocal:
 
         if self.worker_id != 0 and use_nccl:
             self.last_received_atomic_data = data.to(self.device)
+            update = torch.zeros(1, dtype=torch.int64, device=self.device)
             while True:
-                torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
-                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
+                if not assume_fixed_input:
+                    dist.broadcast(update, src=0)
+                if (
+                    not assume_fixed_input
+                    and update.item() == _ParallelInputUpdate.FULL
+                ):
+                    request = [None]
+                    dist.broadcast_object_list(request, src=0, device=self.device)
+                    self.last_received_atomic_data = request[0].to(self.device)
+                else:
+                    dist.broadcast(self.last_received_atomic_data.pos, src=0)
+                    dist.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -911,6 +972,18 @@ else:
 
 
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
+    """
+    Graph-parallel prediction with synchronized input updates.
+
+    By default, metadata changes refresh the complete request on every worker.
+    For inference that starts with MOLE merging, ``assume_fixed_input=True``
+    sends only positions and cell after the first call, without checking the
+    input. Callers must preserve atom count, atom
+    ordering, tensor shapes and dtypes, and every other input field, including
+    charge, spin, task, PBC, and externally generated graphs. Violations can
+    produce incorrect predictions or hang distributed communication.
+    """
+
     @requires(ray_installed, message="Requires `ray[serve]` to be installed")
     def __init__(
         self,
@@ -926,6 +999,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         num_workers_per_node: int = 8,
         log_level: int = logging.INFO,
         gp_config: GraphParallelConfig | None = None,
+        assume_fixed_input: bool = False,
     ):
         super().__init__()
 
@@ -954,6 +1028,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         if inference_settings is None:
             inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
+        self._assume_fixed_input = assume_fixed_input
+        # Transport is chosen once. Model fallback must not strand workers in
+        # their broadcast loop by switching the caller back to Ray requests.
+        self._broadcast_inputs = inference_settings.merge_mole
+        self._input_snapshot = None
+        self._input_update = None
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
         self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
@@ -1072,22 +1152,81 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 worker_id += 1
 
     def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
-        # put the reference in the object store only once
-        if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
-            data_ref = ray.put(data)
-            # this will put the ray works into an infinite loop listening for broadcasts
-            _futures = [
-                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
+        """
+        Predict from the current request, refreshing changed worker metadata.
+        """
+        futures = []
+        if not self._broadcast_inputs or self.atomic_data_on_device is None:
+            # Clone/validate before launching workers so malformed inputs do
+            # not leave them waiting in a collective without rank zero.
+            self.atomic_data_on_device = data.clone()
+            if self._broadcast_inputs and not self.assume_fixed_input:
+                # Keep the caller's complete input separate from model-side
+                # mutations and device moves, including in-place caller edits.
+                self._input_snapshot = data.clone()
+            data_ref = ray.put(self.atomic_data_on_device)
+            futures = [
+                w.predict.remote(
+                    data_ref,
+                    use_nccl=self._broadcast_inputs,
+                    assume_fixed_input=self.assume_fixed_input,
+                )
                 for w in self.workers
             ]
-            self.atomic_data_on_device = data.clone()
+        elif self.assume_fixed_input:
+            self._broadcast_geometry(data)
         else:
-            self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
-            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
-            torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
-            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
+            geometry_only = _only_geometry_changed(data, self._input_snapshot)
+            if not geometry_only:
+                # Prepare the replacement before announcing FULL. If cloning
+                # rejects an invalid request, workers can accept the next one.
+                snapshot = data.clone()
+                request = [snapshot.clone().cpu()]
+                replacement = snapshot.clone()
+            update = (
+                _ParallelInputUpdate.GEOMETRY
+                if geometry_only
+                else _ParallelInputUpdate.FULL
+            )
+            # Prebuilt command tensors avoid a CUDA fill kernel on every step.
+            dist.broadcast(self._input_update[update : update + 1], src=0)
+            if geometry_only:
+                self._broadcast_geometry(data)
+            else:
+                dist.broadcast_object_list(
+                    request, src=0, device=self.local_rank0.device
+                )
+                self.atomic_data_on_device = replacement
+                self._input_snapshot = snapshot
 
-        return self.local_rank0.predict(self.atomic_data_on_device)
+        result = self.local_rank0.predict(self.atomic_data_on_device)
+        self.inference_settings = self.local_rank0.predict_unit.inference_settings
+        if self._broadcast_inputs:
+            if not self.assume_fixed_input and self._input_update is None:
+                self._input_update = torch.tensor(
+                    [_ParallelInputUpdate.GEOMETRY, _ParallelInputUpdate.FULL],
+                    dtype=torch.int64,
+                    device=self.local_rank0.device,
+                )
+        else:
+            ray.get(futures)
+        return result
+
+    def _broadcast_geometry(self, data: AtomicData) -> None:
+        """
+        Update the fixed-size geometry buffers on every rank.
+        """
+        self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+        self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
+        dist.broadcast(self.atomic_data_on_device.pos, src=0)
+        dist.broadcast(self.atomic_data_on_device.cell, src=0)
+
+    @property
+    def assume_fixed_input(self) -> bool:
+        """
+        Input update protocol chosen at construction, shared by all workers.
+        """
+        return self._assume_fixed_input
 
     def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
