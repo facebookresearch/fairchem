@@ -36,7 +36,10 @@ from tests.conftest import get_predict_unit_for_test, sweep_refs_from
 # the replicas don't interact. Run on both UMA-S checkpoints — declared model
 # args route this file to the per-model sweep CI jobs so a future model
 # regression that breaks extensivity gets caught.
-pytestmark = [pytest.mark.gpu, pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")]
+pytestmark = [
+    pytest.mark.gpu,
+    pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2", "uma-s-1p2p1"),
+]
 
 TASK_NAMES = ["oc20", "omat", "omol", "odac", "omc", "oc25"]
 

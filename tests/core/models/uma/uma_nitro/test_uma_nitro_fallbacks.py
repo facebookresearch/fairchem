@@ -248,7 +248,7 @@ def general(pretrained_model_name):
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat", "omc", "omol"))
 @pytest.mark.parametrize(
     ("first", "second", "reason"),
     [
@@ -288,7 +288,7 @@ def test_runtime_contract_break_falls_back_to_multigpu(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_multigpu_then_falls_back_to_general(pretrained_model_name, general, caplog):
     """
@@ -311,7 +311,7 @@ def test_multigpu_then_falls_back_to_general(pretrained_model_name, general, cap
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_homogeneous_first_batch_runs_multigpu(pretrained_model_name, general, caplog):
     predictor = MLIPPredictUnit(
@@ -328,7 +328,7 @@ def test_homogeneous_first_batch_runs_multigpu(pretrained_model_name, general, c
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_heterogeneous_batch_falls_back_to_multigpu_then_general(
     pretrained_model_name, general, caplog
@@ -359,7 +359,7 @@ def test_heterogeneous_batch_falls_back_to_multigpu_then_general(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_keeps_running_for_the_same_reduced_composition(
     pretrained_model_name, general, caplog
@@ -382,7 +382,7 @@ def test_keeps_running_for_the_same_reduced_composition(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_falls_back_on_unsupported_error_during_inference(
     pretrained_model_name, general, monkeypatch, caplog
@@ -409,7 +409,7 @@ def test_falls_back_on_unsupported_error_during_inference(
 
 
 @pytest.mark.gpu()
-@pytest.mark.pretrained("uma-s-1p2p1")
+@pytest.mark.pretrained("uma-s-1p2p1", tasks=("omat",))
 @requires_nitro_gpu
 def test_other_errors_propagate(pretrained_model_name, monkeypatch):
     """
