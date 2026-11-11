@@ -29,13 +29,6 @@ env:
 
 jobs:
   test:
-    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
-    # approval gate explicit: external-testing requires maintainer review before
-    # checkout and release of HF_TOKEN; repository runs use internal-testing.
-    environment: >-
-      ${{ github.event_name == 'workflow_run' &&
-          github.event.workflow_run.head_repository.full_name != github.repository &&
-          'external-testing' || 'internal-testing' }}
     env:
       COVERAGE_CORE: ${{ matrix.python_version == '3.14' && 'sysmon' || 'ctrace' }}
       # Only Python 3.14 reports are uploaded. Skip redundant 3.11 tracing and
@@ -87,8 +80,9 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Fork runs use the external-testing environment,
-          # whose required reviewers approve this commit before checkout.
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
           # See https://gh.io/securely-using-pull_request_target
           allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
@@ -187,13 +181,6 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_cpu_sweep:
-    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
-    # approval gate explicit: external-testing requires maintainer review before
-    # checkout and release of HF_TOKEN; repository runs use internal-testing.
-    environment: >-
-      ${{ github.event_name == 'workflow_run' &&
-          github.event.workflow_run.head_repository.full_name != github.repository &&
-          'external-testing' || 'internal-testing' }}
     env:
       # Python monitoring avoids per-line tracing overhead in model tests.
       COVERAGE_CORE: sysmon
@@ -217,7 +204,7 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # See the checkout step in the `test` job for why this is set
-          # and why it is safe (external-testing required-reviewer gate).
+          # and why it is safe (external-contributor approval gate).
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
@@ -315,13 +302,6 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
-    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
-    # approval gate explicit: external-testing requires maintainer review before
-    # checkout and release of HF_TOKEN; repository runs use internal-testing.
-    environment: >-
-      ${{ github.event_name == 'workflow_run' &&
-          github.event.workflow_run.head_repository.full_name != github.repository &&
-          'external-testing' || 'internal-testing' }}
     env:
       # Python monitoring avoids per-line tracing overhead in model tests.
       COVERAGE_CORE: sysmon
@@ -350,8 +330,9 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Fork runs use the external-testing environment,
-          # whose required reviewers approve this commit before checkout.
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
           # See https://gh.io/securely-using-pull_request_target
           allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
@@ -428,13 +409,6 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_gpu_sweep:
-    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
-    # approval gate explicit: external-testing requires maintainer review before
-    # checkout and release of HF_TOKEN; repository runs use internal-testing.
-    environment: >-
-      ${{ github.event_name == 'workflow_run' &&
-          github.event.workflow_run.head_repository.full_name != github.repository &&
-          'external-testing' || 'internal-testing' }}
     env:
       # Python monitoring avoids per-line tracing overhead in model tests.
       COVERAGE_CORE: sysmon
@@ -457,7 +431,7 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # See the checkout step in the `test` job for why this is set
-          # and why it is safe (external-testing required-reviewer gate).
+          # and why it is safe (external-contributor approval gate).
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
@@ -527,13 +501,6 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_lammps_gpu:
-    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
-    # approval gate explicit: external-testing requires maintainer review before
-    # checkout and release of HF_TOKEN; repository runs use internal-testing.
-    environment: >-
-      ${{ github.event_name == 'workflow_run' &&
-          github.event.workflow_run.head_repository.full_name != github.repository &&
-          'external-testing' || 'internal-testing' }}
     runs-on: 4-core-ubuntu-gpu-t4
     permissions:
       contents: read
@@ -557,8 +524,9 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Fork runs use the external-testing environment,
-          # whose required reviewers approve this commit before checkout.
+          # workflow_run jobs. Safe here: fork PRs from all external
+          # contributors require maintainer approval before this trusted,
+          # secret-holding run can execute (repo Actions setting).
           # See https://gh.io/securely-using-pull_request_target
           allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
