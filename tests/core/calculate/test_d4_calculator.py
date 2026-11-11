@@ -31,7 +31,7 @@ requires_dftd4 = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
+@pytest.fixture()
 def h2o_atoms():
     """
     Water molecule for testing.
@@ -41,7 +41,7 @@ def h2o_atoms():
     return atoms
 
 
-@pytest.fixture
+@pytest.fixture()
 def cu_bulk():
     """
     Cu bulk with PBC for periodic testing.
@@ -87,9 +87,7 @@ class TestD4CorrectedCalculatorInit:
 
         base = EMT()
         calc = D4CorrectedCalculator(base)
-        assert calc.implemented_properties == list(
-            base.implemented_properties
-        )
+        assert calc.implemented_properties == list(base.implemented_properties)
 
     def test_method_param_loads(self):
         """
@@ -160,7 +158,9 @@ class TestD4CorrectedCalculatorMolecular:
         corrected_forces = h2o_atoms.get_forces()
 
         assert corrected_forces.shape == base_forces.shape
-        assert not np.allclose(corrected_forces, base_forces)
+        # ATM correction on water is tiny (~1e-8 eV/Å) since there's only
+        # one atom triple, so use a tight tolerance.
+        assert not np.allclose(corrected_forces, base_forces, atol=0, rtol=0)
 
     def test_free_energy_matches_energy(self, h2o_atoms):
         """
@@ -174,16 +174,22 @@ class TestD4CorrectedCalculatorMolecular:
         free_energy = calc.results["free_energy"]
         npt.assert_almost_equal(energy, free_energy)
 
-    def test_no_stress_for_molecules(self, h2o_atoms):
+    def test_no_stress_correction_for_molecules(self, h2o_atoms):
         """
-        Stress should not appear for non-periodic molecules.
+        D4 stress correction should not be applied for non-periodic molecules,
+        even if the base calculator returns stress.
         """
         from fairchem.core.calculate.d4_calculator import D4CorrectedCalculator
 
-        calc = D4CorrectedCalculator(EMT())
+        base = EMT()
+        h2o_atoms.calc = base
+        base_stress = h2o_atoms.get_stress().copy()
+
+        calc = D4CorrectedCalculator(base)
         h2o_atoms.calc = calc
         h2o_atoms.get_potential_energy()
-        assert "stress" not in calc.results
+        # Stress should be unchanged (no D4 correction applied)
+        npt.assert_array_equal(calc.results["stress"], base_stress)
 
     def test_charge_forwarded(self, h2o_atoms):
         """
@@ -221,21 +227,26 @@ class TestD4CorrectedCalculatorPeriodic:
 
         assert corrected_energy != base_energy
 
-    def test_forces_correction(self, cu_bulk):
+    def test_forces_correction(self):
         """
         D4 correction modifies forces in periodic systems.
         """
         from fairchem.core.calculate.d4_calculator import D4CorrectedCalculator
 
+        # Use a rattled structure so forces are non-zero
+        cu = bulk("Cu", "fcc", a=3.6) * (2, 1, 1)
+        rng = np.random.default_rng(42)
+        cu.positions += rng.normal(scale=0.05, size=cu.positions.shape)
+
         base = EMT()
-        cu_bulk.calc = base
-        base_forces = cu_bulk.get_forces().copy()
+        cu.calc = base
+        base_forces = cu.get_forces().copy()
 
         calc = D4CorrectedCalculator(base, three_body_only=False)
-        cu_bulk.calc = calc
-        corrected_forces = cu_bulk.get_forces()
+        cu.calc = calc
+        corrected_forces = cu.get_forces()
 
-        assert not np.allclose(corrected_forces, base_forces)
+        assert not np.allclose(corrected_forces, base_forces, atol=0, rtol=0)
 
     def test_stress_correction(self, cu_bulk):
         """

@@ -95,6 +95,9 @@ class D4CorrectedCalculator(Calculator):
         method: str | None = None,
         damping_params: dict[str, float] | None = None,
         three_body_only: bool = True,
+        backend: Literal["dftd4", "torch"] = "dftd4",
+        atm_cutoff: float = 15.0,
+        c6_update_interval: int = 1,
     ):
         """
         Initialize the D4-corrected calculator.
@@ -113,6 +116,15 @@ class D4CorrectedCalculator(Calculator):
                 and ``a2`` parameters are preserved since they enter the
                 ATM damping function. If False, the full D4 correction
                 (two-body + three-body) is applied.
+            backend: ``"dftd4"`` uses the dftd4 Fortran library (exact
+                but slow for large systems). ``"torch"`` uses a GPU-
+                accelerated PyTorch ATM implementation with C6 from
+                dftd4 (faster but uses approximate C9).
+            atm_cutoff: Real-space cutoff in Angstrom for the torch
+                backend ATM computation. Ignored for dftd4 backend.
+            c6_update_interval: Recompute C6 coefficients every N
+                calculator calls (torch backend only). Set higher
+                to amortize the ~1.4s dftd4 C6 computation cost.
         """
         super().__init__()
 
@@ -130,8 +142,20 @@ class D4CorrectedCalculator(Calculator):
                 "Provide one or the other, not both."
             )
 
+        if backend == "torch" and not three_body_only:
+            raise ValueError(
+                "The torch backend only supports three_body_only=True. "
+                "Use backend='dftd4' for full D4 correction."
+            )
+
         self.calculator = calculator
         self.three_body_only = three_body_only
+        self._backend = backend
+        self._atm_cutoff = atm_cutoff
+        self._c6_update_interval = c6_update_interval
+        self._c6_cache = None
+        self._c6_step = 0
+        self._torch_params = {}
 
         if method is not None:
             if three_body_only:
@@ -145,6 +169,11 @@ class D4CorrectedCalculator(Calculator):
                     a1=params["a1"],
                     a2=params["a2"],
                 )
+                self._torch_params = {
+                    "a1": params["a1"],
+                    "a2": params["a2"],
+                    "s9": params.get("s9", 1.0),
+                }
             else:
                 self._dpar = DampingParam(method=method)
         else:
@@ -153,6 +182,11 @@ class D4CorrectedCalculator(Calculator):
                 if damping_params is not None
                 else dict(WB97M_D4_PARAMS)
             )
+            self._torch_params = {
+                "a1": params.get("a1", WB97M_D4_PARAMS["a1"]),
+                "a2": params.get("a2", WB97M_D4_PARAMS["a2"]),
+                "s9": params.get("s9", 1.0),
+            }
             if three_body_only:
                 params["s6"] = 0.0
                 params["s8"] = 0.0
@@ -199,15 +233,23 @@ class D4CorrectedCalculator(Calculator):
             properties: The list of properties to calculate.
             system_changes: The list of changes in the system.
         """
-        from dftd4.interface import DispersionModel
-
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # Run the base calculator
         self.calculator.calculate(atoms, properties, system_changes)
         self.results = dict(self.calculator.results)
 
-        # Build D4 dispersion model (dftd4 uses atomic units / Bohr)
+        if self._backend == "torch":
+            self._calculate_torch(atoms)
+        else:
+            self._calculate_dftd4(atoms)
+
+    def _calculate_dftd4(self, atoms: Atoms) -> None:
+        """
+        Apply D4 correction using the dftd4 Fortran library.
+        """
+        from dftd4.interface import DispersionModel
+
         disp_kwargs: dict = {
             "numbers": atoms.numbers,
             "positions": atoms.positions / Bohr,
@@ -221,24 +263,67 @@ class D4CorrectedCalculator(Calculator):
         disp = DispersionModel(**disp_kwargs)
         res = disp.get_dispersion(param=self._dpar, grad=True)
 
-        # Add energy correction (Hartree -> eV)
         if "energy" in self.results:
             energy_corr = float(res["energy"]) * Hartree
             self.results["energy"] += energy_corr
             if "free_energy" in self.results:
                 self.results["free_energy"] += energy_corr
 
-        # Add force correction (negative gradient; Hartree/Bohr -> eV/Å)
         if "forces" in self.results:
             force_corr = -np.asarray(res["gradient"]) * Hartree / Bohr
             self.results["forces"] = self.results["forces"] + force_corr
 
-        # Add stress correction for periodic systems (virial -> Voigt stress)
         if "stress" in self.results and atoms.pbc.any():
             virial = np.asarray(res["virial"]) * Hartree
             stress_corr_3x3 = virial / atoms.get_volume()
             stress_corr_voigt = full_3x3_to_voigt_6_stress(stress_corr_3x3)
             self.results["stress"] = self.results["stress"] + stress_corr_voigt
+
+    def _calculate_torch(self, atoms: Atoms) -> None:
+        """
+        Apply ATM correction using the GPU-accelerated PyTorch backend.
+        """
+        import torch
+
+        from fairchem.core.calculate.d4_atm_torch import (
+            compute_atm,
+            compute_c6_dftd4,
+        )
+
+        # Determine device from base calculator
+        device = None
+        if hasattr(self.calculator, "predict_unit"):
+            pu = self.calculator.predict_unit
+            if hasattr(pu, "device"):
+                device = pu.device
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Update C6 if needed
+        if self._c6_cache is None or self._c6_step % self._c6_update_interval == 0:
+            self._c6_cache = compute_c6_dftd4(atoms)
+        self._c6_step += 1
+
+        atm_result = compute_atm(
+            atoms,
+            self._c6_cache,
+            a1=self._torch_params["a1"],
+            a2=self._torch_params["a2"],
+            s9=self._torch_params["s9"],
+            cutoff=self._atm_cutoff,
+            device=device,
+        )
+
+        if "energy" in self.results:
+            self.results["energy"] += atm_result["energy"]
+            if "free_energy" in self.results:
+                self.results["free_energy"] += atm_result["energy"]
+
+        if "forces" in self.results:
+            self.results["forces"] = self.results["forces"] + atm_result["forces"]
+
+        if "stress" in self.results and atoms.pbc.any() and "stress" in atm_result:
+            self.results["stress"] = self.results["stress"] + atm_result["stress"]
 
     @classmethod
     def from_model_checkpoint(
@@ -248,6 +333,9 @@ class D4CorrectedCalculator(Calculator):
         method: str | None = None,
         damping_params: dict[str, float] | None = None,
         three_body_only: bool = True,
+        backend: Literal["dftd4", "torch"] = "dftd4",
+        atm_cutoff: float = 15.0,
+        c6_update_interval: int = 1,
         inference_settings: InferenceSettings | str = "default",
         device: Literal["cuda", "cpu"] | None = None,
     ) -> D4CorrectedCalculator:
@@ -264,6 +352,9 @@ class D4CorrectedCalculator(Calculator):
             method: DFT-D4 method name for damping parameters.
             damping_params: Custom damping parameters dict.
             three_body_only: If True (default), only add three-body ATM term.
+            backend: ``"dftd4"`` or ``"torch"`` (GPU-accelerated ATM).
+            atm_cutoff: Real-space cutoff for torch backend (Angstrom).
+            c6_update_interval: Recompute C6 every N steps (torch backend).
             inference_settings: Inference settings for the base calculator.
             device: Device for the base calculator.
 
@@ -283,4 +374,7 @@ class D4CorrectedCalculator(Calculator):
             method=method,
             damping_params=damping_params,
             three_body_only=three_body_only,
+            backend=backend,
+            atm_cutoff=atm_cutoff,
+            c6_update_interval=c6_update_interval,
         )
