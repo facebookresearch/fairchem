@@ -1608,7 +1608,7 @@ class TestMixedPBCBatch:
         self, radius_pbc_version, pretrained_checkpoint
     ):
         """End-to-end inference on a mixed-PBC batch must match per-system individual results."""
-        from tests.conftest import get_predict_unit_for_test
+        from tests.core_plugin import get_predict_unit_for_test
 
         predictor = get_predict_unit_for_test(
             pretrained_checkpoint,

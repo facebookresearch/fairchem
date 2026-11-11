@@ -844,7 +844,7 @@ def _requires_gpus(n: int):
 
     ``_to_cuda`` places rank r on ``cuda:r``, so a test spawning n ranks
     needs n distinct devices. The ``gpu`` marker only covers the
-    zero-device case (see ``pytest_runtest_setup`` in tests/conftest.py).
+    zero-device case (see ``pytest_runtest_setup`` in tests/core_plugin.py).
 
     Args:
         n: Number of CUDA devices the test requires.

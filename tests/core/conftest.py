@@ -29,17 +29,17 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
     UNIT_RESUME_CONFIG,
 )
-from tests.conftest import (
+from tests.core.testing_utils import launch_main
+from tests.core.units.mlip_unit.create_fake_dataset import (
+    create_fake_uma_dataset,
+)
+from tests.core_plugin import (
     excluded_models,
     fixture_inference_settings,
     get_predict_unit_for_test,
     sweep_model,
     sweep_refs_from,
     uma_models,
-)
-from tests.core.testing_utils import launch_main
-from tests.core.units.mlip_unit.create_fake_dataset import (
-    create_fake_uma_dataset,
 )
 
 if TYPE_CHECKING:

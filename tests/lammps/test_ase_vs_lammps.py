@@ -27,7 +27,7 @@ from ase.md.verlet import VelocityVerlet
 from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
-from tests.conftest import get_predict_unit_for_test
+from tests.core_plugin import get_predict_unit_for_test
 
 pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 

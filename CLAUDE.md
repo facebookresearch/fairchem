@@ -82,9 +82,15 @@ pytest tests -c packages/fairchem-core/pyproject.toml
 
 ### Key Fixtures
 
-**Root conftest (`tests/conftest.py`):**
-- `seed_fixture` (function): Seeds all RNGs to 42
+**Root conftest (`tests/conftest.py`):** must import without fairchem-core,
+torch or ray, so packages that don't depend on core can run their tests. It
+loads `tests/core_plugin.py` only when fairchem-core is installed.
 - `water_xyz_file` (session): Path to a minimal 3-atom water XYZ file
+
+**Core test plugin (`tests/core_plugin.py`):** hooks, options (`--sweep-model`,
+`--exclude-models`, ...), fixtures and helpers that need fairchem-core. Import
+helpers such as `get_predict_unit_for_test` from `tests.core_plugin`.
+- `seed_fixture` (function): Seeds all RNGs to 42
 - `compile_reset_state` (function): Resets `torch.compiler` before/after test
 - `setup_before_each_test` (autouse): Cleans up Ray, GPU memory, distributed state
 

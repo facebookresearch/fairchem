@@ -21,7 +21,7 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.components.batch_server import setup_batch_predict_server
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
-from tests.conftest import get_predict_unit_for_test
+from tests.core_plugin import get_predict_unit_for_test
 
 ATOL = 5e-4
 
