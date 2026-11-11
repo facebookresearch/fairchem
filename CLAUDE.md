@@ -393,6 +393,14 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Optional packages imported by eagerly loaded `fairchem.core` modules must use
   a guarded import and `monty.dev.requires` on the feature entry point so the
   base package remains importable without the optional dependency.
+- Slow-to-import packages (`ray`, `nvalchemiops`/`warp`, `wandb`) must not be
+  imported at module level outside modules dedicated to them. Check
+  availability with `importlib.util.find_spec` for the `requires` condition and
+  import the package inside the functions that use it.
+  `tests/core/test_imports.py` fails if they are imported eagerly.
+- `fairchem/core/__init__.py` and `fairchem/core/calculate/__init__.py` resolve
+  their exports lazily through a module `__getattr__`. Every `fairchem.core.*`
+  import runs the top-level `__init__`, so do not add eager imports there.
 - `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
   not depend on enumeration order, seeded random coordinates, or atom counts
   unless those values are part of the public contract; prefer composition,

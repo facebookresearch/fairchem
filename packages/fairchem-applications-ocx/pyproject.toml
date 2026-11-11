@@ -8,6 +8,7 @@ dynamic = ["version", "readme"]
 description = "Bridging Experiments to Computational Models"
 license = {text = "MIT License"}
 dependencies = [
+    "fairchem-core>=2.20.0",  # first release with fairchem.core.common.safe_pickle
     "numpy>=2.0,<2.4",
     "scipy>=1.15.0",
     "scikit-learn",
