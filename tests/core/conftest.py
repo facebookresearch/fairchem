@@ -270,7 +270,7 @@ def direct_mole_checkpoint(fake_uma_dataset, tmp_path_factory):
     timestamp_id = "12345"
     device = "CPU"
 
-    with FileLock(str(root_tmp / "direct_mole_checkpoint.lock")):
+    with FileLock(str(root_tmp / "direct_mole_checkpoint.lock"), timeout=600):
         marker = root_tmp / "direct_mole_checkpoint.done"
         if not marker.is_file():
             sys_args = [
@@ -314,7 +314,7 @@ def direct_checkpoint(fake_uma_dataset, tmp_path_factory):
     timestamp_id = "12345"
     device = "CPU"
 
-    with FileLock(str(root_tmp / "direct_checkpoint.lock")):
+    with FileLock(str(root_tmp / "direct_checkpoint.lock"), timeout=600):
         marker = root_tmp / "direct_checkpoint.done"
         if not marker.is_file():
             sys_args = [
@@ -358,7 +358,7 @@ def conserving_mole_checkpoint(fake_uma_dataset, tmp_path_factory):
     timestamp_id = "12345"
     device = "CPU"
 
-    with FileLock(str(root_tmp / "conserving_mole_checkpoint.lock")):
+    with FileLock(str(root_tmp / "conserving_mole_checkpoint.lock"), timeout=600):
         marker = root_tmp / "conserving_mole_checkpoint.done"
         if not marker.is_file():
             sys_args = [
@@ -401,7 +401,7 @@ def fake_uma_dataset(tmp_path_factory):
     data_dir = str(root_tmp / "fake_uma_dataset")
     os.makedirs(data_dir, exist_ok=True)
 
-    with FileLock(str(root_tmp / "fake_uma_dataset.lock")):
+    with FileLock(str(root_tmp / "fake_uma_dataset.lock"), timeout=600):
         marker = root_tmp / "fake_uma_dataset.done"
         if not marker.is_file():
             create_fake_uma_dataset(data_dir)

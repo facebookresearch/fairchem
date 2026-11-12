@@ -18,6 +18,8 @@ on:
 # pushes and manual triggers, we want the sha of the branch.
 env:
   CI: true
+  PYTHONFAULTHANDLER: '1'
+  PYTHONUNBUFFERED: '1'
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
@@ -27,6 +29,10 @@ env:
 
 jobs:
   test:
+    timeout-minutes: 90
+    env:
+      PARALLEL_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'units' && 1800 || 1200 }}
+      SERIAL_TIMEOUT_SECONDS: 1800
     runs-on: 32-core-ubuntu
     # Explicit `name:` overrides GitHub Actions' default check-run name.
     # Without it, GitHub auto-expands EVERY field of the object-typed
@@ -137,13 +143,13 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - if: ${{ matrix.python_version == '3.14' }}
         name: codecov-coverage
@@ -170,6 +176,10 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_cpu_sweep:
+    timeout-minutes: 120
+    env:
+      PARALLEL_TIMEOUT_SECONDS: 1200
+      SERIAL_TIMEOUT_SECONDS: 2700
     runs-on: 32-core-ubuntu
     # See `test` job above for the `name:` rationale (literal job key,
     # not `${{ github.job }}`, to avoid the null-at-job-level pitfall).
@@ -247,7 +257,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # The core shard has no serial @pretrained tests, so the sweep
@@ -257,7 +267,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: codecov-test-results
         if: always()
@@ -275,6 +285,10 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
+    timeout-minutes: 90
+    env:
+      GENERAL_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'units' && 1800 || 2700 }}
+      COMPILE_TIMEOUT_SECONDS: 1200
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
@@ -339,7 +353,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -347,8 +361,12 @@ jobs:
         # UMA-S) run in test_gpu_sweep, not here.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TORCHINDUCTOR_COMPILE_THREADS: 2
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${COMPILE_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: codecov-test-results
         if: always()
@@ -366,6 +384,10 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_gpu_sweep:
+    timeout-minutes: 120
+    env:
+      GENERAL_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'units' && 2700 || 4500 }}
+      COMPILE_TIMEOUT_SECONDS: 1200
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
@@ -416,15 +438,19 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
 
       - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
         # the base test_gpu compile step excludes via --exclude-models.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TORCHINDUCTOR_COMPILE_THREADS: 2
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${COMPILE_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
 
       - name: codecov-test-results
         if: always()
@@ -442,6 +468,9 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_lammps_gpu:
+    timeout-minutes: 90
+    env:
+      GENERAL_TIMEOUT_SECONDS: 1800
     runs-on: 4-core-ubuntu-gpu-t4
     permissions:
       contents: read
@@ -497,7 +526,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 tests/lammps --durations=0 -vv -m gpu -c packages/fairchem-core/pyproject.toml
 
       - name: Cleanup
         if: always()
