@@ -21,6 +21,9 @@ def clock(monkeypatch):
     """
     Advance a virtual clock instead of sleeping during retries.
     """
+    if not serve_utils.ray_installed:
+        pytest.skip("Requires `ray[serve]` to be installed")
+
     now = [0.0]
     monkeypatch.setattr(serve_utils.time, "monotonic", lambda: now[0])
 
