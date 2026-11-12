@@ -17,13 +17,32 @@ from fairchem.core.components import serve_utils
 
 
 @pytest.fixture()
-def clock(monkeypatch):
+def ray_serve():
+    """
+    Import the optional Serve API used by the lifecycle helpers.
+    """
+    return pytest.importorskip(
+        "ray.serve",
+        reason="Requires `ray[serve]` to be installed",
+        exc_type=ImportError,
+    )
+
+
+@pytest.fixture()
+def application_status(ray_serve):
+    """
+    Import application states after checking that Serve is available.
+    """
+    from ray.serve.schema import ApplicationStatus
+
+    return ApplicationStatus
+
+
+@pytest.fixture()
+def clock(monkeypatch, ray_serve):
     """
     Advance a virtual clock instead of sleeping during retries.
     """
-    if not serve_utils.ray_installed:
-        pytest.skip("Requires `ray[serve]` to be installed")
-
     now = [0.0]
     monkeypatch.setattr(serve_utils.time, "monotonic", lambda: now[0])
 
@@ -43,11 +62,11 @@ def clock(monkeypatch):
     ],
 )
 def test_handle_lookup_retries_and_initializes_local_routing(
-    monkeypatch, clock, message
+    monkeypatch, clock, ray_serve, message
 ):
     handle = Mock()
     lookup = Mock(side_effect=[RuntimeError(message), handle])
-    monkeypatch.setattr(serve_utils.serve, "get_app_handle", lookup)
+    monkeypatch.setattr(ray_serve, "get_app_handle", lookup)
     assert serve_utils.get_app_handle_with_retry("model") is handle
     assert lookup.call_count == 2
     handle._init.assert_called_once_with(_prefer_local_routing=True)
@@ -56,10 +75,10 @@ def test_handle_lookup_retries_and_initializes_local_routing(
 
 @pytest.mark.parametrize("message", ["invalid application", "Failed to look up actor"])
 def test_handle_lookup_propagates_permanent_or_expired_error(
-    monkeypatch, clock, message
+    monkeypatch, clock, ray_serve, message
 ):
     lookup = Mock(side_effect=RuntimeError(message))
-    monkeypatch.setattr(serve_utils.serve, "get_app_handle", lookup)
+    monkeypatch.setattr(ray_serve, "get_app_handle", lookup)
     with pytest.raises(RuntimeError, match=message):
         serve_utils.get_app_handle_with_retry("model", timeout_seconds=1)
     assert lookup.call_count == (3 if "actor" in message else 1)
@@ -71,47 +90,51 @@ def _status(status, message=""):
     )
 
 
-def test_wait_for_serve_controller_and_deployment(monkeypatch, clock):
+def test_wait_for_serve_controller_and_deployment(
+    monkeypatch, clock, ray_serve, application_status
+):
     statuses = Mock(
         side_effect=[
             RuntimeError("SERVE_CONTROLLER_ACTOR not found"),
             SimpleNamespace(applications={}),
             SimpleNamespace(applications={}),
-            _status(serve_utils.ApplicationStatus.DEPLOYING),
+            _status(application_status.DEPLOYING),
             ValueError("temporary status failure"),
-            _status(serve_utils.ApplicationStatus.NOT_STARTED),
-            _status(serve_utils.ApplicationStatus.RUNNING),
+            _status(application_status.NOT_STARTED),
+            _status(application_status.RUNNING),
         ]
     )
-    monkeypatch.setattr(serve_utils.serve, "status", statuses)
+    monkeypatch.setattr(ray_serve, "status", statuses)
     assert serve_utils.wait_for_serve_ready("model", poll_interval_seconds=1)
     assert clock[0] == 5
 
 
 @pytest.mark.parametrize("status", ["DEPLOY_FAILED", "UNHEALTHY"])
-def test_wait_for_serve_reports_failed_application(monkeypatch, clock, status):
+def test_wait_for_serve_reports_failed_application(
+    monkeypatch, clock, ray_serve, application_status, status
+):
     monkeypatch.setattr(
-        serve_utils.serve,
+        ray_serve,
         "status",
-        Mock(return_value=_status(serve_utils.ApplicationStatus[status], "bad model")),
+        Mock(return_value=_status(application_status[status], "bad model")),
     )
     with pytest.raises(RuntimeError, match="bad model"):
         serve_utils.wait_for_serve_ready("model")
 
 
 @pytest.mark.parametrize("controller_ready", [False, True])
-def test_wait_for_serve_times_out(monkeypatch, clock, controller_ready):
+def test_wait_for_serve_times_out(monkeypatch, clock, ray_serve, controller_ready):
     status = Mock(return_value=SimpleNamespace(applications={}))
     if not controller_ready:
         status.side_effect = RuntimeError("Failed to look up actor")
-    monkeypatch.setattr(serve_utils.serve, "status", status)
+    monkeypatch.setattr(ray_serve, "status", status)
     with pytest.raises(TimeoutError, match="model"):
         serve_utils.wait_for_serve_ready("model", timeout_seconds=1)
 
 
-def test_wait_for_serve_propagates_controller_error(monkeypatch, clock):
+def test_wait_for_serve_propagates_controller_error(monkeypatch, clock, ray_serve):
     monkeypatch.setattr(
-        serve_utils.serve, "status", Mock(side_effect=ValueError("invalid controller"))
+        ray_serve, "status", Mock(side_effect=ValueError("invalid controller"))
     )
     with pytest.raises(ValueError, match="invalid controller"):
         serve_utils.wait_for_serve_ready("model")
