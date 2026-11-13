@@ -37,29 +37,21 @@ Note that this analysis assumes that all vibrational modes are harmonic, which i
 from __future__ import annotations
 
 from ase.build import bulk
-from quacc.recipes.mlip.core import relax_job
-from quacc.recipes.mlip.phonons import phonon_flow
+from quacc.recipes.mlp.phonons import phonon_flow
 
 # Make an Atoms object of a bulk Cu structure
 atoms = bulk("Cu")
 
-# Relax the structure before calculating phonons.
-model_params = dict(
-    library="fairchem",
-    name_or_path="uma-s-1p2p1",
-    task_name="omat",
-)
-atoms = relax_job(
-    atoms,
-    **model_params,
-    relax_cell=True,
-    opt_params={"fmax": 1e-3},
-)["atoms"]
-
 # Run a phonon (hessian) calculation with our favorite MLP potential
 result = phonon_flow(
     atoms,
-    job_params={"all": model_params},
+    method="fairchem",
+    job_params={
+        "all": dict(
+            name_or_path="uma-s-1p2p1",
+            task_name="omat",
+        ),
+    },
     min_lengths=10.0,  # set the minimum unit cell size smaller to be compatible with limited github runner ram
 )
 ```
