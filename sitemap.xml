@@ -50,6 +50,9 @@
     <loc>http://pre.render/evaluation</loc>
   </url>
   <url>
+    <loc>http://pre.render/regression-suite</loc>
+  </url>
+  <url>
     <loc>http://pre.render/fine-tuning</loc>
   </url>
   <url>
