@@ -1,0 +1,1 @@
+import{t as e}from"./rolldown-runtime-B0Z9INg1.js";var t=e(((e,t)=>{function n(e){return{name:`Shell Session`,aliases:[`console`],contains:[{className:`meta`,begin:/^\s{0,3}[/~\w\d[\]()@-]*[>%$#]/,starts:{end:/[^\\](?=\s*$)/,subLanguage:`bash`}}]}}t.exports=n}));export default t();

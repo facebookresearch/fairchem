@@ -1,0 +1,1 @@
+import{t as e}from"./lib-BXZhIJPW.js";var t=[],n=(function(n,r,i){let a=e(i||r),o=!r||r.cascade===void 0||r.cascade===null||r.cascade;return s(n);function s(e,n,r){let i=e.children||t,c=-1,l=0;if(a(e,n,r))return null;if(i.length>0){for(;++c<i.length;)s(i[c],c,e)&&(i[l++]=i[c]);if(o&&!l)return null;i.length=l}return e}});export{n as t};

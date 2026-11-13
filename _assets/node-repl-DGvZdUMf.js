@@ -1,0 +1,1 @@
+import{t as e}from"./rolldown-runtime-B0Z9INg1.js";var t=e(((e,t)=>{function n(e){return{name:`Node REPL`,contains:[{className:`meta`,starts:{end:/ |$/,starts:{end:`$`,subLanguage:`javascript`}},variants:[{begin:/^>(?=[ ]|$)/},{begin:/^\.\.\.(?=[ ]|$)/}]}]}}t.exports=n}));export default t();

@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-B0Z9INg1.js";import{a as t,i as n,n as r,o as i,r as a,t as o}from"./isArray-BZWRhuzi.js";function s(e){return typeof e==`string`||!r(e)&&n(e)&&t(e)==c}var c,l=e((()=>{i(),o(),a(),c=`[object String]`}));export{s as n,l as t};

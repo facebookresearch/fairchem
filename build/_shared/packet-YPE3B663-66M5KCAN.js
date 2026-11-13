@@ -1,1 +1,0 @@
-import{a as e,b as r}from"/fairchem/build/_shared/chunk-IMEQYZY3.js";import"/fairchem/build/_shared/chunk-GEZIJWLJ.js";import"/fairchem/build/_shared/chunk-RAQ24GF6.js";export{e as PacketModule,r as createPacketServices};

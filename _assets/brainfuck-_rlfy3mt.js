@@ -1,0 +1,3 @@
+import{t as e}from"./rolldown-runtime-B0Z9INg1.js";var t=e(((e,t)=>{function n(e){let t={className:`literal`,begin:/[+-]/,relevance:0};return{name:`Brainfuck`,aliases:[`bf`],contains:[e.COMMENT(`[^\\[\\]\\.,\\+\\-<> \r
+]`,`[\\[\\]\\.,\\+\\-<> \r
+]`,{returnEnd:!0,relevance:0}),{className:`title`,begin:`[\\[\\]]`,relevance:0},{className:`string`,begin:`[\\.,]`,relevance:0},{begin:/(?:\+\+|--)/,contains:[t]},t]}}t.exports=n}));export default t();
