@@ -44,6 +44,11 @@ Train models from scratch using the FAIRChem training framework.
 Evaluate pretrained models on standard benchmarks and metrics.
 :::
 
+:::{card} Numerical Regression Suite
+:link: regression_suite
+Check that an inference profile or code change reproduces the reference numbers.
+:::
+
 :::{card} Benchmarks
 :link: benchmark
 Run downstream property benchmarks like relaxations, elastic tensors, and phonons.

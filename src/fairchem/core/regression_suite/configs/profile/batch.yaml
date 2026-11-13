@@ -1,0 +1,7 @@
+# FAIRChem's batch preset for heterogeneous inputs: unmerged, eager, activation
+# checkpointing.
+label: batch
+preset: batch
+# Pinned so the backend the predictor would choose is part of the run identity.
+inference_settings:
+  execution_mode: general

@@ -1,0 +1,31 @@
+# Command-line defaults. Override with FAIRCHEM_REGRESSION_CONFIG=/path/to.yaml
+# (merged over this file). Artifacts always go to regression-artifacts/ in the
+# checkout that the suite is imported from.
+checkpoint: uma-s-1p2p1
+# Baseline of fast and full checks and verification reports unless --baseline
+# selects another: hf:ORG/REPO/PATH[@REVISION], wandb:[ENTITY/PROJECT/]NAME[:ALIAS],
+# a local name or path, or current, the last baseline finalized here.
+# {checkpoint} is the checkpoint's name, from --checkpoint or the setting above.
+# Releases pin the Hub revision that holds their baseline, for example
+# baseline: hf:facebook/UMA/regression_baselines/{checkpoint}.baseline@1f43bb7f
+baseline: hf:facebook/UMA/regression_baselines/{checkpoint}.baseline
+slurm:
+  partition: g3
+  qos: g3_alignment_shared
+  account: ocp
+  gpu_mem_gb: 120
+  cpu_mem_gb: 16
+  cpus_per_task: 8
+  timeout_hr: 24
+  parallelism: 64
+wandb:
+  entity: fairchem
+  project: uma-regression
+  # Whether finalization jobs publish baselines, their verification reports,
+  # and candidate reports to this W&B project without --wandb. The project is
+  # Meta-internal; set true in a FAIRCHEM_REGRESSION_CONFIG file to publish by
+  # default.
+  auto_publish: false
+  # W&B uploads files to its object store, which forward proxies may refuse.
+  no_proxy_hosts:
+    - meta-fair-aws-wandb.s3.us-east-2.amazonaws.com
