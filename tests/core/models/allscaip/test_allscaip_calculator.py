@@ -24,6 +24,7 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.models.allscaip.AllScAIP import AllScAIPBackbone
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from tests.conftest import inference_settings_for_test
 
 ALLSCAIP_MODEL = "allscaip-md-conserving-all-omol"
 
@@ -35,7 +36,11 @@ pytestmark = [pytest.mark.gpu, pytest.mark.pretrained(ALLSCAIP_MODEL)]
 
 @pytest.fixture(scope="module")
 def allscaip_predict_unit():
-    return pretrained_mlip.get_predict_unit(ALLSCAIP_MODEL, device="cuda")
+    return pretrained_mlip.get_predict_unit(
+        ALLSCAIP_MODEL,
+        device="cuda",
+        inference_settings=inference_settings_for_test("default"),
+    )
 
 
 def test_calculator_inference(allscaip_predict_unit):
