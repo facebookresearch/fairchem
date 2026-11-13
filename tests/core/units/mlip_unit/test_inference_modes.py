@@ -208,6 +208,7 @@ def test_direct_mole_inference_mode_md(
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_conserving_mole_inference_mode_default_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
@@ -224,6 +225,7 @@ def test_conserving_mole_inference_mode_default_gpu(
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_conserving_mole_inference_mode_md_gpu(
     conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):

@@ -12,6 +12,7 @@ import os
 import pdb
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -24,7 +25,8 @@ from fairchem.core.common.gp_utils import setup_gp
 
 
 class ForkedPdb(pdb.Pdb):
-    """A Pdb subclass that may be used from a forked multiprocessing child
+    """
+    A Pdb subclass that may be used from a forked multiprocessing child.
     https://stackoverflow.com/questions/4716533/how-to-attach-debugger-to-a-python-subproccess/23654936#23654936
 
     example usage to debug a torch distributed run on rank 0:
@@ -88,14 +90,17 @@ def init_pg_and_rank_and_launch_test(
         backend=pg_setup_params.backend,
         timeout=timedelta(seconds=120),
     )
-    # setup gp
-    if pg_setup_params.use_gp:
-        config = {
-            "gp_gpus": pg_setup_params.gp_group_size,
-            "distributed_backend": pg_setup_params.backend,
-        }
-        setup_gp(config)
-    mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    try:
+        # setup gp
+        if pg_setup_params.use_gp:
+            config = {
+                "gp_gpus": pg_setup_params.gp_group_size,
+                "distributed_backend": pg_setup_params.backend,
+            }
+            setup_gp(config)
+        mp_output_dict[rank] = test_method(*args, **kwargs)  # pyre-fixme
+    finally:
+        dist.destroy_process_group()
 
 
 def spawn_multi_process(
@@ -103,6 +108,7 @@ def spawn_multi_process(
     test_method: callable,
     init_and_launch: callable,
     *test_method_args: Any,
+    spawn_timeout_seconds: float = 600,
     **test_method_kwargs: Any,
 ) -> list[Any]:
     """
@@ -117,40 +123,76 @@ def spawn_multi_process(
     ``.detach().cpu()`` on any tensor before returning it from a NCCL worker.
 
     Args:
-        world_size: number of processes
-        backend: backend to use. for example, "nccl", "gloo", etc
+        config: Process group configuration, including world size and backend.
         test_method: callable to spawn. first 3 arguments are rank, world_size and mp output dict
+        init_and_launch: Child initializer that invokes the test method.
         test_method_args: args for the test method
+        spawn_timeout_seconds: Maximum parent wait, including child startup.
         test_method_kwargs: kwargs for the test method
 
     Returns:
         A list, l, where l[i] is the return value of test_method on rank i
     """
-    manager = multiprocessing.Manager()
-    mp_output_dict = manager.dict()
+    if spawn_timeout_seconds <= 0:
+        raise ValueError("spawn_timeout_seconds must be positive")
 
     with tempfile.NamedTemporaryFile(delete=False) as f:
         config.init_file = f.name
 
+    context = None
     try:
-        torch.multiprocessing.spawn(
-            # torch.multiprocessing.spawn sends rank as the first param
-            # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
-            init_and_launch,
-            args=(
-                config,
-                mp_output_dict,
-                test_method,
-                test_method_args,
-                test_method_kwargs,
-            ),
-            nprocs=config.world_size,
-        )
+        with multiprocessing.Manager() as manager:
+            mp_output_dict = manager.dict()
+            deadline = time.monotonic() + spawn_timeout_seconds
+            context = torch.multiprocessing.spawn(
+                # torch.multiprocessing.spawn sends rank as the first param
+                # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
+                init_and_launch,
+                args=(
+                    config,
+                    mp_output_dict,
+                    test_method,
+                    test_method_args,
+                    test_method_kwargs,
+                ),
+                nprocs=config.world_size,
+                join=False,
+            )
+            try:
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        pids = [
+                            process.pid
+                            for process in context.processes
+                            if process.is_alive()
+                        ]
+                        raise TimeoutError(
+                            f"Distributed test exceeded {spawn_timeout_seconds}s; "
+                            f"unfinished child PIDs: {pids}"
+                        )
+                    if context.join(timeout=min(remaining, 1), grace_period=1):
+                        break
+                return [mp_output_dict[i] for i in range(config.world_size)]
+            finally:
+                # Reap workers before closing their shared Manager server.
+                for process in context.processes:
+                    if process.is_alive():
+                        process.terminate()
+                cleanup_deadline = time.monotonic() + 5
+                for process in context.processes:
+                    process.join(timeout=max(0, cleanup_deadline - time.monotonic()))
+                for process in context.processes:
+                    if process.is_alive():
+                        process.kill()
+                    process.join(timeout=1)
     finally:
         if os.path.exists(config.init_file):
             os.unlink(config.init_file)
-
-    return [mp_output_dict[i] for i in range(config.world_size)]
+        if context is not None:
+            for filename in context.error_files:
+                if os.path.exists(filename):
+                    os.unlink(filename)
 
 
 def init_local_distributed_process_group(backend="nccl"):
