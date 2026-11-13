@@ -46,11 +46,15 @@ class FAIRChemCalculator(Calculator):
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
-              and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
+              and `spin_multiplicity` are pulled from `atoms.info` during calculations. The legacy `spin`
+              is accepted as a shorthand for `spin_multiplicity`; if both are set they must agree.
                 - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
-                - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
-                - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to
-                charge=`0` and spin=`1`.
+                - `spin_multiplicity` must be an integer representing the spin multiplicity (2S+1), not the spin S,
+                  and can range from 1 to 100 for the omol task.
+                - If `task_name="omol"`, and `charge` or `spin_multiplicity` are not set in `atoms.info`, they will
+                  default to charge=`0` and spin_multiplicity=`1`.
+                - For all non-omol tasks, `charge` and `spin_multiplicity`/`spin` should be `0` (the model's null
+                  spin token); those tasks were trained only with those values.
         """
 
         super().__init__()
@@ -103,7 +107,7 @@ class FAIRChemCalculator(Calculator):
         a2g_kwargs = {
             "task_name": self.task_name,
             "r_edges": r_edges,
-            "r_data_keys": ["spin", "charge"],
+            "r_data_keys": ["spin_multiplicity", "charge"],
             "max_neigh": max_neigh,
             "radius": radius,
             "target_dtype": predict_unit.inference_settings.base_precision_dtype,
@@ -203,9 +207,14 @@ class FAIRChemCalculator(Calculator):
 
         Notes:
             - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
-            - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
-            - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to `0`.
-            - `charge` and `spin` are currently only used for the `omol` head.
+            - `spin_multiplicity` must be an integer representing the spin multiplicity (2S+1), not the spin S,
+              and can range from 1 to 100 for the omol task. The legacy `spin` in `atoms.info` is
+              accepted as a shorthand; if both are set they must agree.
+            - If `task_name="omol"`, and `charge` or `spin_multiplicity` are not set in `atoms.info`, they will
+              default to charge=`0` and spin_multiplicity=`1`. For non-omol tasks they default to `0`.
+            - `charge` and `spin_multiplicity` embeddings are applied for every task. Non-omol tasks were
+              trained only with charge=`0` and spin=`0` (the null spin token), so nonzero values there are
+              an untrained input rather than ignored; keep them at `0` for non-omol tasks.
             - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy.
               It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """

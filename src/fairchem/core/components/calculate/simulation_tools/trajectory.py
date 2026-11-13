@@ -159,7 +159,8 @@ class TrajectoryFrame:
                 fixed = mask
 
         charge = atoms.info.get("charge", None)
-        spin = atoms.info.get("spin", None)
+        # ``spin`` is the legacy name for the spin multiplicity (2S+1).
+        spin = atoms.info.get("spin_multiplicity", atoms.info.get("spin", None))
 
         return cls(
             step=step,

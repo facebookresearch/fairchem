@@ -104,11 +104,11 @@ When using UMA, remember these key steps:
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
 :::{tip} OMOL Task Requirements
-For molecular calculations with the `omol` task, you must set spin and charge in `atoms.info`:
+For molecular calculations with the `omol` task, you must set the spin multiplicity (2S+1) and charge in `atoms.info` (the legacy key `spin` is accepted as a shorthand for `spin_multiplicity`):
 ```python
-atoms.info.update({"spin": 1, "charge": 0})
+atoms.info.update({"spin_multiplicity": 1, "charge": 0})
 ```
-Spin is the multiplicity (1 for singlet, 2 for doublet, 3 for triplet, etc.).
+`spin_multiplicity` is the spin multiplicity (2S+1), not the spin S (1 for singlet, 2 for doublet, 3 for triplet, etc.).
 :::
 
 We don't set a device here, so we get a warning about using a CPU device. You can ignore that. If a CUDA environment is available, a GPU may be used to speed up the calculations.
@@ -124,12 +124,12 @@ from ase.build import molecule
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
-singlet.info.update({"spin": 1, "charge": 0})
+singlet.info.update({"spin_multiplicity": 1, "charge": 0})
 singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 #  triplet CH2
 triplet = molecule("CH2_s3B1d")
-triplet.info.update({"spin": 3, "charge": 0})
+triplet.info.update({"spin_multiplicity": 3, "charge": 0})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 print(triplet.get_potential_energy() - singlet.get_potential_energy())
@@ -205,7 +205,7 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
-atoms.info.update(charge=0, spin=1)  # For omol
+atoms.info.update(charge=0, spin_multiplicity=1)  # For omol
 
 atoms.calc = calc
 
@@ -353,7 +353,7 @@ calc = FAIRChemCalculator(predictor, task_name="omol")
 from ase.vibrations import Vibrations
 
 n2 = Atoms("N2", [(0, 0, 0), (0, 0, 1.1)])
-n2.info.update({"spin": 1, "charge": 0})
+n2.info.update({"spin_multiplicity": 1, "charge": 0})
 n2.calc = calc
 
 BFGS(n2).run(fmax=0.01)

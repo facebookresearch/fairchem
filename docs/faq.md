@@ -57,11 +57,13 @@ when one of those training domains matches your system.
 :::{admonition} How do I specify molecular charge and spin?
 :class: dropdown
 
-For `omol`, set total charge and spin multiplicity on the ASE object:
+For `omol`, set total charge and spin multiplicity (2S+1) on the ASE object:
 
 ```python
-atoms.info.update({"charge": 0, "spin": 1})
+atoms.info.update({"charge": 0, "spin_multiplicity": 1})
 ```
+
+The legacy key `spin` is accepted as a shorthand for `spin_multiplicity`.
 
 Other tasks expect the values documented in the [UMA model guide](./core/uma.md).
 :::

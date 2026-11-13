@@ -18,9 +18,11 @@ from ase.data import atomic_masses
 from fairchem.core.datasets.atomic_data import (
     AtomicData,
     atomicdata_list_to_batch,
+    resolve_spin_multiplicity,
     warn_if_upcasting,
 )
 from fairchem.core.graph.compute import get_pbc_distances
+from fairchem.core.units.mlip_unit.api.inference import validate_uma_atoms_data
 
 
 @pytest.fixture()
@@ -31,6 +33,79 @@ def ase_atoms():
 def test_to_ase_single(ase_atoms):
     atoms = AtomicData.from_ase(ase_atoms).to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
+
+
+@pytest.mark.parametrize(
+    "info,r_data_keys,expected",
+    [
+        ({"spin_multiplicity": 3}, ["spin", "charge"], 3),
+        ({"spin_multiplicity": 3}, ["spin_multiplicity", "charge"], 3),
+        ({"spin_multiplicity": 3}, None, 3),
+        ({"spin": 3}, ["spin", "charge"], 3),
+        ({"spin": 3}, ["spin_multiplicity", "charge"], 3),
+        ({"spin_multiplicity": 3, "spin": 3}, ["spin", "charge"], 3),
+    ],
+)
+def test_from_ase_spin_multiplicity_shorthand(info, r_data_keys, expected):
+    atoms = molecule("H2O")
+    atoms.info.update(info)
+    data = AtomicData.from_ase(atoms, r_data_keys=r_data_keys)
+    assert data.spin.item() == expected
+
+
+def test_from_ase_conflicting_spin_keys_raise():
+    atoms = molecule("H2O")
+    atoms.info.update({"spin_multiplicity": 3, "spin": 1})
+    with pytest.raises(ValueError, match="Conflicting spin multiplicity"):
+        AtomicData.from_ase(atoms, r_data_keys=["spin", "charge"])
+
+
+def test_resolve_spin_multiplicity():
+    assert resolve_spin_multiplicity({}) is None
+    assert resolve_spin_multiplicity({"spin_multiplicity": 2}) == 2
+    assert resolve_spin_multiplicity({"spin": 2}) == 2
+    with pytest.raises(ValueError, match="Conflicting spin multiplicity"):
+        resolve_spin_multiplicity({"spin_multiplicity": 1, "spin": 3})
+
+
+def test_to_ase_writes_spin_multiplicity():
+    atoms = molecule("H2O")
+    atoms.info["spin_multiplicity"] = 3
+    out = AtomicData.from_ase(
+        atoms, r_data_keys=["spin_multiplicity", "charge"]
+    ).to_ase_single()
+    assert out.info["spin_multiplicity"] == 3
+    assert out.info["spin"] == 3
+
+
+def test_validate_uma_atoms_data_spin_multiplicity_shorthand(caplog):
+    atoms = molecule("H2O")
+    atoms.info["spin_multiplicity"] = 3
+    validate_uma_atoms_data(atoms, "omol")
+    assert atoms.info["spin"] == 3
+    assert atoms.info["spin_multiplicity"] == 3
+
+    with pytest.raises(ValueError, match="Conflicting spin multiplicity"):
+        bad = molecule("H2O")
+        bad.info.update({"spin_multiplicity": 3, "spin": 1})
+        validate_uma_atoms_data(bad, "omol")
+
+
+def test_validate_uma_atoms_data_warns(caplog):
+    # omol with the null spin token warns.
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin_multiplicity": 0})
+    with caplog.at_level(logging.WARNING):
+        validate_uma_atoms_data(atoms, "omol")
+    assert "spin multiplicity is 0" in caplog.text
+
+    # Non-omol tasks with nonzero charge/spin warn.
+    nonlocal_atoms = molecule("H2O")
+    nonlocal_atoms.info.update({"charge": 0, "spin": 3})
+    with caplog.at_level(logging.WARNING):
+        caplog.clear()
+        validate_uma_atoms_data(nonlocal_atoms, "omat")
+    assert "Non-omol tasks were" in caplog.text
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
