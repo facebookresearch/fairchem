@@ -68,7 +68,7 @@ def reduce_node_to_system(
         system_values.index_add_(0, batch, node_values.to(system_values.dtype))
     else:
         # For multi-dimensional tensors, we need to handle each trailing dimension
-        flat_node = node_values.view(node_values.shape[0], -1)
+        flat_node = node_values.reshape(node_values.shape[0], -1)
         flat_system = system_values.view(num_systems, -1)
         flat_system.index_add_(0, batch, flat_node.to(flat_system.dtype))
         system_values = flat_system.view(output_shape)
