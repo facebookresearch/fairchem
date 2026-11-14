@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 
 from src.fairchem.core.models.uma.nn.mole import (
+    MAX_PADDING_RATIO,
     MOLE,
     MOLEGlobals,
     _pnorm,
@@ -517,6 +518,134 @@ class TestMOLEOutputs:
 
         out = layer(x)
         expected = _reference_forward(layer, x, coefficients, self.sizes)
+        torch.testing.assert_close(out, expected)
+
+        grad_out = torch.randn_like(out)
+        (grad,) = torch.autograd.grad(out, x, grad_out)
+        (expected_grad,) = torch.autograd.grad(expected, x, grad_out)
+        torch.testing.assert_close(grad, expected_grad)
+
+
+class TestMOLEPaddedForward:
+    """
+    Check the single-bmm padded path against the per-system reference.
+    """
+
+    num_experts = 4
+    in_features = 6
+    out_features = 5
+
+    def _make_layer(self, sizes, bias=True, device="cpu"):
+        """
+        Build a MOLE layer and its globals for the given system sizes.
+        """
+        torch.manual_seed(0)
+        coefficients = torch.softmax(torch.randn(len(sizes), self.num_experts), dim=1)
+        global_mole_tensors = MOLEGlobals(
+            expert_mixing_coefficients=coefficients.to(device),
+            mole_sizes=torch.tensor(sizes),
+        )
+        layer = MOLE(
+            num_experts=self.num_experts,
+            in_features=self.in_features,
+            out_features=self.out_features,
+            global_mole_tensors=global_mole_tensors,
+            bias=bias,
+        ).to(device)
+        return layer, coefficients.to(device)
+
+    @pytest.mark.parametrize("sizes", [(4, 0, 5, 3), (6, 6), (1, 5, 4, 4)])
+    @pytest.mark.parametrize("width", [None, 3])
+    @pytest.mark.parametrize("bias", [True, False])
+    def test_padded_path_matches_reference(self, sizes, width, bias):
+        """
+        Outputs and gradients with respect to inputs and expert weights match
+        the per-system reference for 2D and 3D inputs.
+        """
+        layer, coefficients = self._make_layer(sizes, bias=bias)
+        assert layer.global_mole_tensors.padded_plan(sum(sizes), "cpu") is not None
+        shape = (sum(sizes), self.in_features)
+        if width is not None:
+            shape = (sum(sizes), width, self.in_features)
+        x = torch.randn(*shape, requires_grad=True)
+
+        out = layer(x)
+        expected = _reference_forward(layer, x, coefficients, sizes)
+        torch.testing.assert_close(out, expected)
+
+        grad_out = torch.randn_like(out)
+        grads = torch.autograd.grad(out, (x, layer.weights), grad_out)
+        expected_grads = torch.autograd.grad(expected, (x, layer.weights), grad_out)
+        for grad, expected_grad in zip(grads, expected_grads):
+            torch.testing.assert_close(grad, expected_grad)
+
+    def test_single_system_uses_loop(self):
+        """
+        With rows from only one system the loop is a single matmul, so no
+        padded layout is built.
+        """
+        for sizes in [(7,), (0, 7, 0)]:
+            layer, coefficients = self._make_layer(sizes)
+            assert layer.global_mole_tensors.padded_plan(sum(sizes), "cpu") is None
+            x = torch.randn(sum(sizes), self.in_features)
+            torch.testing.assert_close(
+                layer(x), _reference_forward(layer, x, coefficients, sizes)
+            )
+
+    def test_uneven_sizes_are_grouped(self):
+        """
+        Systems of very different sizes go into separate padded groups, keeping
+        padding within MAX_PADDING_RATIO, and the output still matches.
+        """
+        sizes = (40, 1, 1, 9, 30)
+        layer, coefficients = self._make_layer(sizes)
+        plan = layer.global_mole_tensors.padded_plan(sum(sizes), "cpu")
+        assert len(plan.groups) > 1
+        for group in plan.groups:
+            real = sum(sizes[i] for i in group.systems.tolist())
+            assert len(group.systems) * group.block_rows <= MAX_PADDING_RATIO * real
+        x = torch.randn(sum(sizes), 3, self.in_features)
+        torch.testing.assert_close(
+            layer(x), _reference_forward(layer, x, coefficients, sizes)
+        )
+
+    def test_plan_follows_mole_sizes(self):
+        """
+        Replacing mole_sizes or changing it in place refreshes the cached
+        layout.
+        """
+        sizes = (4, 5, 3)
+        layer, coefficients = self._make_layer(sizes)
+        x = torch.randn(sum(sizes), self.in_features)
+        torch.testing.assert_close(
+            layer(x), _reference_forward(layer, x, coefficients, sizes)
+        )
+
+        new_sizes = (3, 6, 3)
+        layer.global_mole_tensors.mole_sizes = torch.tensor(new_sizes)
+        torch.testing.assert_close(
+            layer(x), _reference_forward(layer, x, coefficients, new_sizes)
+        )
+
+        layer.global_mole_tensors.mole_sizes[:] = torch.tensor((5, 5, 2))
+        torch.testing.assert_close(
+            layer(x), _reference_forward(layer, x, coefficients, (5, 5, 2))
+        )
+
+    @pytest.mark.gpu()
+    def test_padded_path_matches_reference_gpu(self):
+        """
+        The padded path matches the reference on CUDA with frozen weights and
+        a 3D input, as in force inference.
+        """
+        sizes = (4, 0, 5, 3)
+        layer, coefficients = self._make_layer(sizes, device="cuda")
+        layer.requires_grad_(False)
+        x = torch.randn(sum(sizes), 3, self.in_features, device="cuda")
+        x.requires_grad_(True)
+
+        out = layer(x)
+        expected = _reference_forward(layer, x, coefficients, sizes)
         torch.testing.assert_close(out, expected)
 
         grad_out = torch.randn_like(out)
