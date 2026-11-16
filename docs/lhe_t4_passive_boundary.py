@@ -1,10 +1,12 @@
-"""Bounded T4 listener/network-authority classification for Meta LHE.
+"""Bounded T4 runner-pool read-authority classification for Meta LHE.
 
 The script performs local read-only classification of the HCA and Actions
 Runner listener authority. JWTs are decoded only in memory and only claim
-names, type classes and selected boolean values are emitted. It makes no
-network request and emits no raw credential, URL, address, hostname, DNS
-suffix, identifier, file body, or environment value.
+names, type classes and selected boolean values are emitted. It also makes
+three GET requests to the current runner service: an invalid-auth baseline and
+valid-auth pool/current-pool-agent listings with capabilities and job request
+fields disabled. Only aggregate counts and schema keys are emitted; no raw
+credential, URL, address, hostname, identifier, item value, or body is emitted.
 """
 
 from __future__ import annotations
@@ -1094,6 +1096,206 @@ def probe_scheduler_auth_boundary() -> int:
     return attempts
 
 
+def runner_api_get(
+    parsed_url: object,
+    path: str,
+    query: str,
+    token: str,
+    read_body: bool,
+) -> tuple[str, object | None]:
+    if not hasattr(parsed_url, "hostname"):
+        return "not_attempted", None
+    hostname = parsed_url.hostname
+    if not isinstance(hostname, str) or not hostname:
+        return "not_attempted", None
+    connection = http.client.HTTPSConnection(
+        hostname,
+        port=parsed_url.port or 443,
+        timeout=8,
+        context=ssl.create_default_context(),
+    )
+    try:
+        target = path + ("?" + query if query else "")
+        connection.request(
+            "GET",
+            target,
+            headers={
+                "Accept": "application/json",
+                "Authorization": "Bearer " + token,
+                "Connection": "close",
+                "User-Agent": "Meta-LHE-FairChem-Pool-Boundary/1.0",
+            },
+        )
+        response = connection.getresponse()
+        status = "http_" + str(response.status)
+        if not read_body or response.status != 200:
+            response.close()
+            return status, None
+        body = response.read(1024 * 1024 + 1)
+        response.close()
+        if len(body) > 1024 * 1024:
+            return status, {"oversized": True}
+        try:
+            value = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return status, {"json": False}
+        return status, value
+    except TimeoutError:
+        return "timeout", None
+    except (OSError, http.client.HTTPException, ssl.SSLError):
+        return "transport_error", None
+    finally:
+        connection.close()
+
+
+def summarize_runner_collection(
+    value: object,
+    current_id: str,
+    id_field: str,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "json_object": isinstance(value, dict),
+        "top_level_keys": safe_keys(value),
+        "declared_count_class": "absent_or_invalid",
+        "list_count": 0,
+        "current_identity_match_count": 0,
+        "other_identity_count": 0,
+        "item_key_names": [],
+        "assigned_request_field_present_count": 0,
+    }
+    if not isinstance(value, dict):
+        return result
+    declared_count = case_get(value, "count")
+    if isinstance(declared_count, int) and 0 <= declared_count <= 1_000_000:
+        result["declared_count_class"] = str(declared_count)
+    items = case_get(value, "value")
+    if not isinstance(items, list) or len(items) > 1_000_000:
+        return result
+    result["list_count"] = len(items)
+    item_keys: set[str] = set()
+    matches = 0
+    assigned_request_fields = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_keys.update(safe_keys(item))
+        item_id = case_get(item, id_field)
+        if str(item_id) == current_id:
+            matches += 1
+        if case_get(item, "assignedRequest") is not None:
+            assigned_request_fields += 1
+    result["current_identity_match_count"] = matches
+    result["other_identity_count"] = max(0, len(items) - matches)
+    result["item_key_names"] = sorted(item_keys)
+    result["assigned_request_field_present_count"] = assigned_request_fields
+    return result
+
+
+def probe_runner_pool_read_boundary() -> int:
+    listeners: list[Path] = []
+    for process_root in Path("/proc").iterdir():
+        if not process_root.name.isdigit():
+            continue
+        try:
+            comm = (process_root / "comm").read_text(errors="replace").strip()
+        except OSError:
+            continue
+        if comm == "Runner.Listener":
+            listeners.append(process_root)
+    if len(listeners) != 1:
+        emit("runner_pool_boundary_preconditions_met", False)
+        return 0
+    try:
+        executable = (listeners[0] / "exe").resolve(strict=True)
+        config_root = executable.parent.parent
+        credentials = json.loads((config_root / ".credentials").read_bytes())
+        runner = json.loads((config_root / ".runner").read_bytes())
+    except (OSError, json.JSONDecodeError):
+        emit("runner_pool_boundary_preconditions_met", False)
+        return 0
+    data = case_get(credentials, "data")
+    token = case_get(data, "token")
+    scheme = case_get(credentials, "scheme")
+    pool_id = case_get(runner, "PoolId")
+    agent_id = case_get(runner, "AgentId")
+    server_url = case_get(runner, "ServerUrlV2")
+    pool_id_string = str(pool_id)
+    agent_id_string = str(agent_id)
+    if not isinstance(server_url, str):
+        emit("runner_pool_boundary_preconditions_met", False)
+        return 0
+    parsed = urlsplit(server_url)
+    endpoint_class = classify_url(server_url)
+    preconditions = (
+        isinstance(token, str)
+        and len(token.split(".")) == 3
+        and isinstance(scheme, str)
+        and scheme.casefold() == "oauthaccesstoken"
+        and re.fullmatch(r"[0-9]{1,20}", pool_id_string) is not None
+        and re.fullmatch(r"[0-9]{1,20}", agent_id_string) is not None
+        and parsed.scheme == "https"
+        and parsed.port in (None, 443)
+        and endpoint_class["host_suffix_class"] == "github_actions_content"
+        and len([segment for segment in parsed.path.split("/") if segment]) == 0
+    )
+    emit("runner_pool_boundary_preconditions_met", preconditions)
+    if not preconditions or not isinstance(token, str):
+        return 0
+
+    pools_path = "/_apis/distributedtask/pools"
+    agents_path = f"/_apis/distributedtask/pools/{pool_id_string}/agents"
+    invalid_status, _ = runner_api_get(
+        parsed,
+        pools_path,
+        urlencode({"api-version": "5.1-preview.1", "poolType": "automation"}),
+        "invalid",
+        False,
+    )
+    pools_status, pools_value = runner_api_get(
+        parsed,
+        pools_path,
+        urlencode({"api-version": "5.1-preview.1", "poolType": "automation"}),
+        token,
+        True,
+    )
+    agents_status, agents_value = runner_api_get(
+        parsed,
+        agents_path,
+        urlencode(
+            {
+                "api-version": "6.0-preview.2",
+                "includeCapabilities": "false",
+                "includeAssignedRequest": "false",
+                "includeLastCompletedRequest": "false",
+            }
+        ),
+        token,
+        True,
+    )
+    emit(
+        "runner_pool_boundary_response_classes",
+        {
+            "invalid_auth_pools": invalid_status,
+            "valid_auth_pools": pools_status,
+            "valid_auth_current_pool_agents": agents_status,
+        },
+    )
+    emit(
+        "runner_pool_boundary_pools_summary",
+        summarize_runner_collection(pools_value, pool_id_string, "id"),
+    )
+    emit(
+        "runner_pool_boundary_agents_summary",
+        summarize_runner_collection(agents_value, agent_id_string, "id"),
+    )
+    emit("runner_pool_boundary_include_capabilities", False)
+    emit("runner_pool_boundary_include_assigned_request", False)
+    emit("runner_pool_boundary_include_last_completed_request", False)
+    emit("runner_pool_boundary_mutating_requests", 0)
+    emit("runner_pool_boundary_raw_item_values_emitted", 0)
+    return 3
+
+
 def inspect_addresses_and_routes() -> None:
     addresses = command_json(["ip", "-json", "address", "show"])
     address_classes: Counter[str] = Counter()
@@ -1527,7 +1729,7 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v4")
+    emit("schema", "v5")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
     inspect_runner_listener_authority()
@@ -1536,8 +1738,9 @@ def main() -> int:
     inspect_waagent()
     inspect_local_network_configuration_markers()
     inspect_environment_names()
-    emit("network_requests", 0)
-    emit("sockets_opened", 0)
+    runner_pool_request_count = probe_runner_pool_read_boundary()
+    emit("network_requests", runner_pool_request_count)
+    emit("sockets_opened", runner_pool_request_count)
     emit("raw_addresses_hostnames_urls_or_identifiers_emitted", 0)
     emit("raw_credentials_or_file_bodies_emitted", 0)
     emit("state_changes", 0)
