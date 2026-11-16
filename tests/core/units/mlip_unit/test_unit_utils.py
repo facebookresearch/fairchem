@@ -13,7 +13,7 @@ import pytest
 import torch
 
 from fairchem.core.common import distutils, gp_utils
-from fairchem.core.units.mlip_unit.utils import tf32_context_manager
+from fairchem.core.units.mlip_unit.utils import tf32_context_manager, update_configs
 
 
 @pytest.mark.parametrize("tf32", [False, True])
@@ -123,3 +123,24 @@ class GradSaveOptimizer(torch.optim.AdamW):
             )
         self.save_step += 1
         super().step()
+
+
+def test_update_configs_merges_nested_and_adds_new_keys():
+    original = {"backbone": {"layers": 2, "act": {"name": "silu"}}, "seed": 0}
+    overrides = {
+        "backbone": {"layers": 4, "act": {"slope": 0.1}, "extra": {"flag": True}},
+        "heads": {"energy": {"dim": 1}},
+        "seed": 1,
+    }
+    updated = update_configs(original, overrides)
+    assert updated == {
+        "backbone": {
+            "layers": 4,
+            "act": {"name": "silu", "slope": 0.1},
+            "extra": {"flag": True},
+        },
+        "heads": {"energy": {"dim": 1}},
+        "seed": 1,
+    }
+    # the original is not modified
+    assert original["backbone"]["layers"] == 2
