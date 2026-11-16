@@ -21,6 +21,7 @@ import os
 import re
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -42,6 +43,41 @@ def emit(name: str, value: object) -> None:
     else:
         rendered = str(value)
     print(f"{MARKER}_{name}={rendered}", flush=True)
+
+
+def permission_classes(values: list[object]) -> list[str]:
+    """Return only syntactically valid permission class names, never identifiers."""
+
+    return sorted(
+        {
+            value
+            for value in values
+            if isinstance(value, str)
+            and len(value) <= 80
+            and re.fullmatch(r"[a-z0-9][a-z0-9._:-]*", value)
+        }
+    )
+
+
+def lifetime_class(expires_at: object) -> str:
+    """Classify token lifetime without emitting an exact timestamp."""
+
+    if not isinstance(expires_at, str):
+        return "not_reported"
+    try:
+        expiration = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:
+        return "unparseable"
+    remaining = (expiration - datetime.now(timezone.utc)).total_seconds()
+    if remaining <= 0:
+        return "expired"
+    if remaining < 86400:
+        return "under_24h"
+    if remaining < 7 * 86400:
+        return "under_7d"
+    if remaining < 30 * 86400:
+        return "under_30d"
+    return "at_least_30d"
 
 
 def request(
@@ -384,6 +420,20 @@ def main() -> int:
         for permission in entry.get("permissions", [])
         if isinstance(permission, str)
     ]
+    global_permissions = permission_classes(
+        fine.get("global") if isinstance(fine.get("global"), list) else []
+    )
+    scoped_permission_names = permission_classes(scoped_permissions)
+    user_scope_permissions = permission_classes(
+        [
+            permission
+            for entry in scoped
+            if isinstance(entry, dict)
+            and isinstance(entry.get("entity"), dict)
+            and entry["entity"].get("type") == "user"
+            for permission in entry.get("permissions", [])
+        ]
+    )
     scoped_entity_types = Counter(
         entity.get("type", "unknown")
         for entry in scoped
@@ -401,6 +451,21 @@ def main() -> int:
         sum(permission.endswith(".write") for permission in scoped_permissions),
     )
     emit("FINE_GRAINED_CAN_READ_GATED", bool(fine.get("canReadGatedRepos")))
+    emit(
+        "FINE_GRAINED_SCOPED_PERMISSION_CLASSES",
+        ",".join(scoped_permission_names) if scoped_permission_names else "none",
+    )
+    emit(
+        "FINE_GRAINED_GLOBAL_PERMISSION_CLASSES",
+        ",".join(global_permissions) if global_permissions else "none",
+    )
+    emit("FINE_GRAINED_USER_SCOPE_PERMISSION_COUNT", len(user_scope_permissions))
+    emit(
+        "FINE_GRAINED_USER_SCOPE_PERMISSION_CLASSES",
+        ",".join(user_scope_permissions) if user_scope_permissions else "none",
+    )
+    emit("TOKEN_EXPIRATION_REPORTED", isinstance(auth.get("expiresAt"), str))
+    emit("TOKEN_REMAINING_LIFETIME_CLASS", lifetime_class(auth.get("expiresAt")))
     for entity_type in (
         "model",
         "dataset",
