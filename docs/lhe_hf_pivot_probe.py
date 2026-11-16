@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import os
 import pickletools
@@ -23,6 +24,7 @@ import socket
 import struct
 import subprocess
 import tempfile
+import zipfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -38,7 +40,7 @@ USER_AGENT = "meta-lhe-fairchem-pivot-audit/1.0"
 TIMEOUT = 30
 MAX_GIT_BLOB = 8 * 1024 * 1024
 MAX_GIT_SCAN_PER_REPO = 64 * 1024 * 1024
-MAX_REMOTE_SCAN_TOTAL = 256 * 1024 * 1024
+MAX_REMOTE_SCAN_TOTAL = 384 * 1024 * 1024
 MAX_REMOTE_FILE_SCAN = 4 * 1024 * 1024
 MAX_BINARY_PREFIX = 8 * 1024 * 1024
 MAX_BINARY_SUFFIX = 1024 * 1024
@@ -157,6 +159,88 @@ def range_bytes(
         return b"", 0
 
 
+class RemoteRangeReader(io.RawIOBase):
+    """Small cached random-access reader for ZIP metadata, never whole weights."""
+
+    CHUNK_SIZE = 1024 * 1024
+    MAX_FETCH_PER_FILE = 24 * 1024 * 1024
+
+    def __init__(
+        self,
+        url: str,
+        token: str,
+        size: int,
+        shared_budget: list[int],
+    ) -> None:
+        self.url = url
+        self.token = token
+        self.size = size
+        self.shared_budget = shared_budget
+        self.position = 0
+        self.fetched = 0
+        self.cache: dict[int, bytes] = {}
+
+    def readable(self) -> bool:
+        return True
+
+    def seekable(self) -> bool:
+        return True
+
+    def tell(self) -> int:
+        return self.position
+
+    def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
+        if whence == io.SEEK_SET:
+            new_position = offset
+        elif whence == io.SEEK_CUR:
+            new_position = self.position + offset
+        elif whence == io.SEEK_END:
+            new_position = self.size + offset
+        else:
+            raise ValueError("unsupported whence")
+        if new_position < 0:
+            raise ValueError("negative seek")
+        self.position = min(new_position, self.size)
+        return self.position
+
+    def _chunk(self, start: int) -> bytes:
+        aligned = (start // self.CHUNK_SIZE) * self.CHUNK_SIZE
+        cached = self.cache.get(aligned)
+        if cached is not None:
+            return cached
+        end = min(self.size - 1, aligned + self.CHUNK_SIZE - 1)
+        expected = end - aligned + 1
+        if (
+            self.fetched + expected > self.MAX_FETCH_PER_FILE
+            or self.shared_budget[0] < expected
+        ):
+            raise OSError("bounded remote ZIP metadata budget exhausted")
+        data, status = range_bytes(self.url, self.token, aligned, end)
+        if status not in (200, 206) or len(data) != expected:
+            raise OSError("remote ZIP range unavailable")
+        self.cache[aligned] = data
+        self.fetched += len(data)
+        self.shared_budget[0] -= len(data)
+        return data
+
+    def read(self, size: int = -1) -> bytes:
+        if self.position >= self.size:
+            return b""
+        if size is None or size < 0:
+            size = self.size - self.position
+        size = min(size, self.size - self.position)
+        output = bytearray()
+        while len(output) < size:
+            chunk = self._chunk(self.position)
+            offset = self.position % self.CHUNK_SIZE
+            take = min(size - len(output), len(chunk) - offset)
+            if take <= 0:
+                break
+            output.extend(chunk[offset : offset + take])
+            self.position += take
+        return bytes(output)
+
+
 HIGH_SECRET_PATTERNS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
     ("aws_access_key", re.compile(rb"(?<![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])")),
     ("github_token", re.compile(rb"(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})")),
@@ -177,6 +261,17 @@ AWS_SECRET = re.compile(
 INTERNAL_MARKERS = re.compile(
     rb"(?i)(?:https?://[^\s\"']*(?:\.internal|\.corp|\.tfbnw\.net)|"
     rb"(?:s3|gs|az|manifold)://|/checkpoint/|/private/home/|slurm|wandb\.ai/)"
+)
+INTERNAL_MARKER_CLASSES: tuple[tuple[str, re.Pattern[bytes]], ...] = (
+    ("internal_http", re.compile(rb"(?i)https?://[^\s\"']*(?:\.internal|\.corp|\.tfbnw\.net)")),
+    ("s3_uri", re.compile(rb"(?i)s3://")),
+    ("gs_uri", re.compile(rb"(?i)gs://")),
+    ("azure_uri", re.compile(rb"(?i)az://")),
+    ("manifold_uri", re.compile(rb"(?i)manifold://")),
+    ("checkpoint_path", re.compile(rb"(?i)/checkpoint/")),
+    ("private_home_path", re.compile(rb"(?i)/private/home/")),
+    ("slurm_reference", re.compile(rb"(?i)slurm")),
+    ("wandb_reference", re.compile(rb"(?i)wandb\.ai/")),
 )
 EXECUTION_MARKERS = re.compile(
     rb"(?i)(?:trust_remote_code\s*=\s*true|torch\.load\s*\(|pickle\.loads?\s*\(|"
@@ -208,14 +303,30 @@ class ScanState:
         self.counts["bytes"] += len(data)
         high_in_payload = False
         for kind, pattern in HIGH_SECRET_PATTERNS:
-            matches = pattern.findall(data)
+            matches = list(pattern.finditer(data))
             if not matches:
                 continue
             high_in_payload = True
             self.counts[f"high_{kind}"] += len(matches)
-            for match in matches[:8]:
-                if isinstance(match, bytes) and len(self.candidates[kind]) < 32:
-                    self.candidates[kind].add(match)
+            for matched in matches[:8]:
+                value = matched.group(0)
+                if len(self.candidates[kind]) < 32:
+                    self.candidates[kind].add(value)
+                if kind == "aws_access_key":
+                    start = max(0, matched.start() - 160)
+                    end = min(len(data), matched.end() + 160)
+                    context = data[start:end].lower()
+                    known_example = value == b"AKIAIOSFODNN7EXAMPLE"
+                    contextual_example = any(
+                        marker in context
+                        for marker in (b"example", b"dummy", b"placeholder", b"fake", b"test fixture")
+                    )
+                    self.counts["aws_access_key_example_context"] += int(
+                        known_example or contextual_example
+                    )
+                    self.counts["aws_access_key_nonexample_context"] += int(
+                        not (known_example or contextual_example)
+                    )
         if high_in_payload:
             self.counts["high_candidate_payloads"] += 1
             if historical_only:
@@ -238,6 +349,8 @@ class ScanState:
                 self.aws_secrets.add(match)
 
         self.counts["internal_reference_matches"] += len(INTERNAL_MARKERS.findall(data))
+        for marker_class, pattern in INTERNAL_MARKER_CLASSES:
+            self.counts[f"internal_{marker_class}"] += len(pattern.findall(data))
         self.counts["execution_primitive_matches"] += len(EXECUTION_MARKERS.findall(data))
 
 
@@ -394,10 +507,72 @@ def inspect_pickle_metadata(data: bytes, counters: Counter[str]) -> None:
             counters["pickle_opcodes"] += 1
             if opcode.name in {"GLOBAL", "STACK_GLOBAL", "REDUCE", "BUILD", "OBJ", "INST"}:
                 counters["pickle_execution_capable_opcodes"] += 1
+            if opcode.name == "STACK_GLOBAL":
+                counters["pickle_stack_global_unresolved"] += 1
+            if opcode.name == "GLOBAL" and isinstance(argument, str):
+                counters["pickle_global_references"] += 1
+                module, _, symbol = argument.partition(" ")
+                if module in {
+                    "os",
+                    "posix",
+                    "nt",
+                    "subprocess",
+                    "socket",
+                    "sys",
+                    "runpy",
+                    "importlib",
+                } or (module == "builtins" and symbol in {"eval", "exec", "compile", "__import__"}):
+                    counters["pickle_dangerous_global_references"] += 1
+                elif module.startswith(("torch", "collections", "builtins", "fairchem")):
+                    counters["pickle_expected_global_references"] += 1
+                else:
+                    counters["pickle_other_global_references"] += 1
             if isinstance(argument, str) and INTERNAL_MARKERS.search(argument.encode(errors="ignore")):
                 counters["pickle_internal_reference_matches"] += 1
     except (ValueError, UnicodeDecodeError, struct.error):
         counters["pickle_partial_or_invalid"] += 1
+
+
+def scan_torch_zip_metadata(
+    file_url: str,
+    hf_token: str,
+    size: int,
+    state: ScanState,
+    remaining_budget: list[int],
+    counters: Counter[str],
+) -> None:
+    reader = RemoteRangeReader(file_url, hf_token, size, remaining_budget)
+    try:
+        with zipfile.ZipFile(reader) as archive:
+            infos = archive.infolist()
+            counters["torch_zip_archives_parsed"] += 1
+            counters["torch_zip_entries"] += len(infos)
+            for info in infos:
+                lower_name = info.filename.lower()
+                interesting = lower_name.endswith(
+                    (".pkl", ".pickle", ".json", ".yaml", ".yml", ".toml", ".txt")
+                )
+                if not interesting:
+                    continue
+                counters["torch_zip_metadata_entries"] += 1
+                if info.file_size > MAX_GIT_BLOB or info.compress_size > MAX_GIT_BLOB:
+                    counters["torch_zip_oversized_metadata_entries"] += 1
+                    continue
+                try:
+                    payload = archive.read(info)
+                except (OSError, RuntimeError, ValueError, zipfile.BadZipFile):
+                    counters["torch_zip_entry_read_failures"] += 1
+                    continue
+                counters["torch_zip_metadata_payloads_scanned"] += 1
+                counters["torch_zip_metadata_uncompressed_bytes"] += len(payload)
+                state.scan(payload)
+                if lower_name.endswith((".pkl", ".pickle")):
+                    counters["torch_zip_pickle_payloads_scanned"] += 1
+                    inspect_pickle_metadata(payload, counters)
+    except (OSError, ValueError, zipfile.BadZipFile, NotImplementedError):
+        counters["torch_zip_parse_failures"] += 1
+    finally:
+        counters["remote_bytes_scanned"] += reader.fetched
 
 
 def scan_remote_repository(
@@ -443,12 +618,17 @@ def scan_remote_repository(
             continue
         file_url = f"{HF_ENDPOINT}/{encoded}/resolve/main/{quote(path, safe='/')}"
         chunks: list[bytes] = []
+        torch_zip_candidate = False
         if size <= MAX_REMOTE_FILE_SCAN:
             wanted = min(size, remaining_budget[0])
             if wanted:
                 data, read_status = range_bytes(file_url, hf_token, 0, wanted - 1)
                 if read_status in (200, 206) and data:
                     chunks.append(data)
+                    torch_zip_candidate = (
+                        data.startswith(b"PK\x03\x04")
+                        and lower.endswith((".pt", ".pth", ".ckpt", ".bin", ".zip"))
+                    )
                     counters["fully_scanned_files"] += int(len(data) == size)
                     counters["remote_bytes_scanned"] += len(data)
                     remaining_budget[0] -= len(data)
@@ -478,10 +658,14 @@ def scan_remote_repository(
                 prefix, prefix_status = range_bytes(file_url, hf_token, 0, prefix_size - 1)
                 if prefix_status in (200, 206) and prefix:
                     chunks.append(prefix)
+                    torch_zip_candidate = prefix.startswith(b"PK\x03\x04")
                     counters["binary_prefixes_scanned"] += 1
                     counters["remote_bytes_scanned"] += len(prefix)
                     remaining_budget[0] -= len(prefix)
-                    if lower.endswith((".pt", ".pth", ".ckpt", ".bin", ".pkl", ".pickle")):
+                    if (
+                        not torch_zip_candidate
+                        and lower.endswith((".pt", ".pth", ".ckpt", ".bin", ".pkl", ".pickle"))
+                    ):
                         inspect_pickle_metadata(prefix, counters)
                 else:
                     counters["range_failures"] += 1
@@ -497,6 +681,21 @@ def scan_remote_repository(
                     remaining_budget[0] -= len(suffix)
                 else:
                     counters["range_failures"] += 1
+        elif size <= 64 * 1024 * 1024 and size <= remaining_budget[0]:
+            offset = 0
+            complete = True
+            while offset < size:
+                end = min(size - 1, offset + MAX_REMOTE_FILE_SCAN - 1)
+                data, read_status = range_bytes(file_url, hf_token, offset, end)
+                if read_status not in (200, 206) or len(data) != end - offset + 1:
+                    counters["range_failures"] += 1
+                    complete = False
+                    break
+                state.scan(data)
+                counters["remote_bytes_scanned"] += len(data)
+                remaining_budget[0] -= len(data)
+                offset = end + 1
+            counters["fully_scanned_large_files"] += int(complete and offset == size)
         else:
             counters["large_uninspected_files"] += 1
             counters["large_uninspected_bytes"] += size
@@ -505,6 +704,15 @@ def scan_remote_repository(
             state.scan(chunk)
             if b"data.pkl" in chunk:
                 counters["torch_zip_data_pickle_markers"] += 1
+        if torch_zip_candidate:
+            scan_torch_zip_metadata(
+                file_url,
+                hf_token,
+                size,
+                state,
+                remaining_budget,
+                counters,
+            )
     return counters
 
 
@@ -667,6 +875,19 @@ def runner_boundary_probe() -> Counter[str]:
     docker_socket = Path("/var/run/docker.sock")
     results["docker_socket_present"] = int(docker_socket.exists())
     results["docker_socket_writable"] = int(os.access(docker_socket, os.W_OK))
+    try:
+        docker_ps = subprocess.run(
+            ["docker", "ps", "-q"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+        results["docker_running_container_count"] = len(
+            [line for line in docker_ps.stdout.splitlines() if line]
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        results["docker_running_container_count"] = 0
 
     aws_token, aws_token_status = no_proxy_request(
         "http://169.254.169.254/latest/api/token",
@@ -758,6 +979,10 @@ def runner_boundary_probe() -> Counter[str]:
         results["runner_process_count"] += 1
         results["runner_listener_process_count"] += int(b"Runner.Listener" in command)
         results["runner_worker_process_count"] += int(b"Runner.Worker" in command)
+        lowered_command = command.lower()
+        results["runner_ephemeral_or_once_flag_count"] += int(
+            b"--ephemeral" in lowered_command or b"--once" in lowered_command
+        )
         try:
             executable = (process_dir / "exe").resolve()
             runner_roots.add(executable.parent)
@@ -796,30 +1021,45 @@ def runner_boundary_probe() -> Counter[str]:
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             credential = None
         if isinstance(credential, dict):
+            credential_ci = {str(key).lower(): value for key, value in credential.items()}
             results["runner_credential_scheme_reported"] += int(
-                isinstance(credential.get("scheme"), str)
+                isinstance(credential_ci.get("scheme"), str)
             )
-            data = credential.get("data")
+            data = credential_ci.get("data")
             if isinstance(data, dict):
+                data_ci = {str(key).lower(): value for key, value in data.items()}
                 results["runner_credential_client_id_present"] += int(
-                    bool(data.get("clientId"))
+                    bool(data_ci.get("clientid"))
                 )
                 results["runner_credential_authorization_url_present"] += int(
-                    bool(data.get("authorizationUrl"))
+                    bool(data_ci.get("authorizationurl"))
+                )
+                sensitive_keys = {
+                    "accesstoken",
+                    "clientsecret",
+                    "privatekey",
+                    "token",
+                    "credential",
+                }
+                results["runner_credential_sensitive_value_class_count"] += sum(
+                    1 for key in data_ci if key in sensitive_keys and bool(data_ci[key])
                 )
         try:
             registration = json.loads(runner_file.read_bytes())
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             registration = None
         if isinstance(registration, dict):
+            registration_ci = {
+                str(key).lower(): value for key, value in registration.items()
+            }
             results["runner_registration_agent_id_present"] += int(
-                bool(registration.get("agentId"))
+                bool(registration_ci.get("agentid"))
             )
             results["runner_registration_pool_id_present"] += int(
-                bool(registration.get("poolId"))
+                bool(registration_ci.get("poolid"))
             )
             results["runner_registration_server_url_present"] += int(
-                bool(registration.get("serverUrl"))
+                bool(registration_ci.get("serverurl"))
             )
     results["runner_credential_values_emitted"] = 0
     return results
