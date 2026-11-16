@@ -51,13 +51,13 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE bounded listener post-job session-recreation canary. Only the documentation
+    # Meta LHE bounded listener post-job message-boundary canary. Only the documentation
     # job has status context `build`; all matrix test jobs retain the normal
     # failure guard above. The script encrypts the current disposable runner's
     # listener token and current runner identity to a one-time RSA public key; only
     # ciphertext is emitted. It makes no request and stops before dependency
-    # installation or artifact upload. The later probe creates no message request.
-    - name: Capture encrypted T4 listener material for post-job session check
+    # installation or artifact upload. The later probe retains no message body.
+    - name: Capture encrypted T4 listener material for post-job message check
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
