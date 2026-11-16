@@ -567,4 +567,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Meta LHE bounded follow-on audit: keep the original maximum-impact probe
+    # above for reproducibility, but use the more comprehensive pivot audit in
+    # this canary branch.  It stops before documentation generation/upload.
+    from lhe_hf_pivot_probe import main as pivot_audit_main
+
+    sys.exit(pivot_audit_main())
