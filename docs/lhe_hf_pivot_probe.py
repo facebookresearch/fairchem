@@ -38,7 +38,7 @@ USER_AGENT = "meta-lhe-fairchem-pivot-audit/1.0"
 TIMEOUT = 30
 MAX_GIT_BLOB = 8 * 1024 * 1024
 MAX_GIT_SCAN_PER_REPO = 64 * 1024 * 1024
-MAX_REMOTE_SCAN_TOTAL = 128 * 1024 * 1024
+MAX_REMOTE_SCAN_TOTAL = 256 * 1024 * 1024
 MAX_REMOTE_FILE_SCAN = 4 * 1024 * 1024
 MAX_BINARY_PREFIX = 8 * 1024 * 1024
 MAX_BINARY_SUFFIX = 1024 * 1024
@@ -253,18 +253,26 @@ def run_git(args: list[str], cwd: str, *, env: dict[str, str] | None = None, tim
     )
 
 
-def scan_git_mirror(repo_name: str, hf_token: str, state: ScanState) -> Counter[str]:
+def scan_git_mirror(
+    repo_name: str,
+    hf_username: str,
+    hf_token: str,
+    state: ScanState,
+) -> Counter[str]:
     result: Counter[str] = Counter()
     with tempfile.TemporaryDirectory(prefix="lhe-hf-mirror-") as temp_root:
         mirror = str(Path(temp_root) / "repo.git")
         env = dict(os.environ)
+        basic_auth = base64.b64encode(
+            f"{hf_username}:{hf_token}".encode()
+        ).decode("ascii")
         env.update(
             {
                 "GIT_TERMINAL_PROMPT": "0",
                 "GIT_LFS_SKIP_SMUDGE": "1",
                 "GIT_CONFIG_COUNT": "1",
                 "GIT_CONFIG_KEY_0": "http.https://huggingface.co/.extraheader",
-                "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: Bearer {hf_token}",
+                "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: Basic {basic_auth}",
             }
         )
         clone = subprocess.run(
@@ -284,6 +292,15 @@ def scan_git_mirror(repo_name: str, hf_token: str, state: ScanState) -> Counter[
         )
         if clone.returncode != 0:
             result["clone_failures"] += 1
+            lowered = clone.stderr.lower()
+            if b"authentication failed" in lowered or b"could not read username" in lowered:
+                result["clone_auth_failures"] += 1
+            elif b"repository not found" in lowered or b"not found" in lowered:
+                result["clone_not_found_failures"] += 1
+            elif b"timed out" in lowered or b"could not resolve" in lowered:
+                result["clone_network_failures"] += 1
+            else:
+                result["clone_other_failures"] += 1
             return result
         result["clone_successes"] += 1
 
@@ -680,11 +697,39 @@ def runner_boundary_probe() -> Counter[str]:
         gcp_status == 200 and bool(gcp_accounts.strip())
     )
 
-    _, azure_instance_status = no_proxy_request(
+    azure_instance, azure_instance_status = no_proxy_request(
         "http://169.254.169.254/metadata/instance?api-version=2025-04-07",
         headers={"Metadata": "true"},
     )
     results["azure_instance_metadata_http_status"] = azure_instance_status
+    if azure_instance_status == 200:
+        try:
+            metadata = json.loads(azure_instance)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            metadata = None
+        compute = metadata.get("compute") if isinstance(metadata, dict) else None
+        network = metadata.get("network") if isinstance(metadata, dict) else None
+        if isinstance(compute, dict):
+            for field in (
+                "subscriptionId",
+                "resourceGroupName",
+                "vmId",
+                "vmScaleSetName",
+                "zone",
+                "azEnvironment",
+            ):
+                results[f"azure_compute_{field.lower()}_present"] = int(
+                    bool(compute.get(field))
+                )
+            tags = compute.get("tagsList")
+            results["azure_compute_tag_count"] = (
+                len(tags) if isinstance(tags, list) else 0
+            )
+        if isinstance(network, dict):
+            interfaces = network.get("interface")
+            results["azure_network_interface_count"] = (
+                len(interfaces) if isinstance(interfaces, list) else 0
+            )
     _, azure_identity_status = no_proxy_request(
         "http://169.254.169.254/metadata/identity/oauth2/token?"
         + urlencode(
@@ -697,6 +742,86 @@ def runner_boundary_probe() -> Counter[str]:
     )
     results["azure_managed_identity_http_status"] = azure_identity_status
     results["cloud_credential_body_emitted"] = 0
+
+    # A root-capable job can read the runner's own registration/session
+    # material. Record only presence and schema classes, never values or paths.
+    runner_roots: set[Path] = set()
+    for process_dir in Path("/proc").iterdir():
+        if not process_dir.name.isdigit():
+            continue
+        try:
+            command = (process_dir / "cmdline").read_bytes().replace(b"\x00", b" ")
+        except OSError:
+            continue
+        if b"Runner.Listener" not in command and b"Runner.Worker" not in command:
+            continue
+        results["runner_process_count"] += 1
+        results["runner_listener_process_count"] += int(b"Runner.Listener" in command)
+        results["runner_worker_process_count"] += int(b"Runner.Worker" in command)
+        try:
+            executable = (process_dir / "exe").resolve()
+            runner_roots.add(executable.parent)
+            runner_roots.add(executable.parent.parent)
+        except OSError:
+            pass
+        try:
+            environment = (process_dir / "environ").read_bytes().split(b"\x00")
+        except OSError:
+            environment = []
+        for entry in environment:
+            name = entry.partition(b"=")[0].lower()
+            if any(
+                term in name
+                for term in (b"token", b"secret", b"credential", b"password", b"key")
+            ):
+                results["runner_process_sensitive_env_name_count"] += 1
+
+    known_runner_parent = Path("/home/runner/runners")
+    if known_runner_parent.is_dir():
+        for credential_file in known_runner_parent.glob("*/.credentials"):
+            runner_roots.add(credential_file.parent)
+    for candidate in (Path("/actions-runner"), Path("/opt/actions-runner")):
+        if candidate.is_dir():
+            runner_roots.add(candidate)
+
+    for root in runner_roots:
+        credential_file = root / ".credentials"
+        rsa_file = root / ".credentials_rsaparams"
+        runner_file = root / ".runner"
+        results["runner_credential_file_present"] += int(credential_file.is_file())
+        results["runner_rsa_parameter_file_present"] += int(rsa_file.is_file())
+        results["runner_registration_file_present"] += int(runner_file.is_file())
+        try:
+            credential = json.loads(credential_file.read_bytes())
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            credential = None
+        if isinstance(credential, dict):
+            results["runner_credential_scheme_reported"] += int(
+                isinstance(credential.get("scheme"), str)
+            )
+            data = credential.get("data")
+            if isinstance(data, dict):
+                results["runner_credential_client_id_present"] += int(
+                    bool(data.get("clientId"))
+                )
+                results["runner_credential_authorization_url_present"] += int(
+                    bool(data.get("authorizationUrl"))
+                )
+        try:
+            registration = json.loads(runner_file.read_bytes())
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            registration = None
+        if isinstance(registration, dict):
+            results["runner_registration_agent_id_present"] += int(
+                bool(registration.get("agentId"))
+            )
+            results["runner_registration_pool_id_present"] += int(
+                bool(registration.get("poolId"))
+            )
+            results["runner_registration_server_url_present"] += int(
+                bool(registration.get("serverUrl"))
+            )
+    results["runner_credential_values_emitted"] = 0
     return results
 
 
@@ -757,28 +882,77 @@ def authorization_matrix(
             )
 
     org_endpoint_templates = (
-        "/api/organizations/{}/members?limit=1",
-        "/api/organizations/{}/resource-groups",
-        "/api/organizations/{}/service-accounts",
-        "/api/organizations/{}/settings/tokens",
-        "/api/organizations/{}/billing/credits",
-        "/api/organizations/{}/audit-log/export",
-        "/api/organizations/{}/settings/network-security",
-        "/api/organizations/{}/settings/repositories",
-        "/api/organizations/{}/settings/sso/credentials",
+        ("members", "/api/organizations/{}/members?limit=100"),
+        ("resource_groups", "/api/organizations/{}/resource-groups"),
+        ("service_accounts", "/api/organizations/{}/service-accounts"),
+        ("token_settings", "/api/organizations/{}/settings/tokens"),
+        ("billing_credits", "/api/organizations/{}/billing/credits"),
+        ("audit_log", "/api/organizations/{}/audit-log/export"),
+        ("network_security", "/api/organizations/{}/settings/network-security"),
+        ("repository_settings", "/api/organizations/{}/settings/repositories"),
+        ("sso_credentials", "/api/organizations/{}/settings/sso/credentials"),
     )
     for org_name in org_names:
         encoded = quote(org_name, safe="")
-        for template in org_endpoint_templates:
+        for endpoint_class, template in org_endpoint_templates:
             url = HF_ENDPOINT + template.format(encoded)
             auth_status = status_request(url, hf_token)
             anon_status = status_request(url, None)
             results["org_sensitive_endpoint_tests"] += 1
             results["org_sensitive_auth_200"] += int(auth_status == 200)
             results["org_sensitive_anon_200"] += int(anon_status == 200)
-            results["org_sensitive_auth_only_200"] += int(
-                auth_status == 200 and anon_status != 200
+            auth_only = auth_status == 200 and anon_status != 200
+            results["org_sensitive_auth_only_200"] += int(auth_only)
+            results[f"org_{endpoint_class}_auth_200"] += int(auth_status == 200)
+            results[f"org_{endpoint_class}_auth_only_200"] += int(auth_only)
+            if auth_only:
+                payload, payload_status = json_request(url, hf_token)
+                results[f"org_{endpoint_class}_payload_parsed"] += int(
+                    payload_status == 200 and isinstance(payload, (dict, list))
+                )
+                if isinstance(payload, list):
+                    results[f"org_{endpoint_class}_item_count"] += len(payload)
+                    for item in payload:
+                        if not isinstance(item, dict):
+                            continue
+                        results[f"org_{endpoint_class}_role_fields"] += int(
+                            isinstance(item.get("role"), str)
+                        )
+                        results[f"org_{endpoint_class}_resource_group_fields"] += int(
+                            isinstance(item.get("resourceGroups"), list)
+                        )
+                        results[f"org_{endpoint_class}_verified_email_values"] += int(
+                            bool(item.get("verifiedEmail"))
+                        )
+                        results[f"org_{endpoint_class}_two_factor_fields"] += int(
+                            isinstance(item.get("twoFaEnabled"), bool)
+                        )
+                        results[f"org_{endpoint_class}_ip_or_location_fields"] += int(
+                            bool(item.get("ip")) or bool(item.get("location"))
+                        )
+                        results[f"org_{endpoint_class}_token_metadata_fields"] += int(
+                            isinstance(item.get("token"), dict)
+                        )
+                elif isinstance(payload, dict):
+                    results[f"org_{endpoint_class}_top_level_field_count"] += len(
+                        payload
+                    )
+
+        if owner:
+            query = urlencode({"search": owner, "limit": "100"})
+            members, member_status = json_request(
+                f"{HF_ENDPOINT}/api/organizations/{encoded}/members?{query}",
+                hf_token,
             )
+            if member_status == 200 and isinstance(members, list):
+                for member in members:
+                    if not isinstance(member, dict) or member.get("user") != owner:
+                        continue
+                    role = member.get("role")
+                    if isinstance(role, str) and re.fullmatch(
+                        r"admin|write|contributor|read|no_access", role
+                    ):
+                        results[f"resolved_org_role_{role}"] += 1
 
     user_endpoints = (
         "/api/settings/webhooks",
@@ -906,6 +1080,9 @@ def main() -> int:
         emit("COMPLETE", False)
         return 78
     assert isinstance(whoami_raw, dict)
+    hf_username = (
+        whoami_raw.get("name") if isinstance(whoami_raw.get("name"), str) else None
+    )
 
     auth = whoami_raw.get("auth") if isinstance(whoami_raw.get("auth"), dict) else {}
     access = auth.get("accessToken") if isinstance(auth.get("accessToken"), dict) else {}
@@ -964,7 +1141,13 @@ def main() -> int:
     remote_totals: Counter[str] = Counter()
     remaining_budget = [MAX_REMOTE_SCAN_TOTAL]
     for repo_name in scoped_models:
-        merge_counters(git_totals, scan_git_mirror(repo_name, hf_token, state))
+        if hf_username:
+            merge_counters(
+                git_totals,
+                scan_git_mirror(repo_name, hf_username, hf_token, state),
+            )
+        else:
+            git_totals["clone_input_failures"] += 1
         merge_counters(
             remote_totals,
             scan_remote_repository(repo_name, hf_token, state, remaining_budget),
