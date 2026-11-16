@@ -982,6 +982,16 @@ def capture_listener_replay_material_encrypted() -> bool:
         return False
     parsed = urlsplit(server_url)
     endpoint_class = classify_url(server_url)
+    agent_id_text = (
+        str(agent_id)
+        if isinstance(agent_id, int) and not isinstance(agent_id, bool)
+        else agent_id
+    )
+    agent_id_valid = (
+        isinstance(agent_id_text, str)
+        and re.fullmatch(r"[1-9][0-9]{0,19}", agent_id_text) is not None
+        and int(agent_id_text) <= 18446744073709551615
+    )
     preconditions = (
         isinstance(token, str)
         and 0 < len(token) <= 32768
@@ -992,8 +1002,7 @@ def capture_listener_replay_material_encrypted() -> bool:
         and parsed.port in (None, 443)
         and endpoint_class["host_suffix_class"] == "github_actions_content"
         and len([segment for segment in parsed.path.split("/") if segment]) == 0
-        and isinstance(agent_id, int)
-        and agent_id > 0
+        and agent_id_valid
         and isinstance(agent_name, str)
         and 0 < len(agent_name) <= 256
     )
@@ -1022,7 +1031,7 @@ def capture_listener_replay_material_encrypted() -> bool:
 
     payload = json.dumps(
         {
-            "agent_id": agent_id,
+            "agent_id": agent_id_text,
             "agent_name": agent_name,
             "os_description": platform.platform(),
             "runner_version": runner_version,
