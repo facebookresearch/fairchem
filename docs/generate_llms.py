@@ -46,17 +46,16 @@ def emit(name: str, value: object) -> None:
 
 def request(
     url: str,
-    token: str,
+    token: str | None,
     *,
     method: str = "GET",
     headers: dict[str, str] | None = None,
 ) -> Any:
     """Open an authenticated request without ever logging its URL or body."""
 
-    request_headers = {
-        "Authorization": f"Bearer {token}",
-        "User-Agent": USER_AGENT,
-    }
+    request_headers = {"User-Agent": USER_AGENT}
+    if token:
+        request_headers["Authorization"] = f"Bearer {token}"
     if headers:
         request_headers.update(headers)
     return urlopen(
@@ -91,7 +90,7 @@ def status_only(url: str, token: str) -> int:
         return 0
 
 
-def range_read_one_byte(url: str, token: str) -> tuple[bool, int]:
+def range_read_one_byte(url: str, token: str | None) -> tuple[bool, int]:
     """Prove content readability while consuming and retaining only one byte."""
 
     try:
@@ -105,6 +104,137 @@ def range_read_one_byte(url: str, token: str) -> tuple[bool, int]:
         return False, int(error.code)
     except (URLError, TimeoutError, ValueError, OSError):
         return False, 0
+
+
+def scoped_repository_impact(
+    scoped: list[object], token: str
+) -> dict[str, int | bool]:
+    """Prove every repo-scoped read without exposing entity or path names."""
+
+    collections = {
+        "model": ("models", ""),
+        "dataset": ("datasets", "datasets/"),
+        "space": ("spaces", "spaces/"),
+    }
+    results: dict[str, int | bool] = {
+        "repo_scope_count": 0,
+        "readable_repo_scope_count": 0,
+        "restricted_readable_repo_scope_count": 0,
+        "anonymous_readable_repo_scope_count": 0,
+        "private_repo_scope_count": 0,
+        "gated_repo_scope_count": 0,
+        "probe_failure_count": 0,
+        "official_scope_present": False,
+        "official_scope_read_present": False,
+        "official_scope_write_present": False,
+    }
+
+    for entry in scoped:
+        if not isinstance(entry, dict):
+            continue
+        entity = entry.get("entity")
+        permissions = entry.get("permissions")
+        if not isinstance(entity, dict) or not isinstance(permissions, list):
+            continue
+        entity_type = entity.get("type")
+        entity_name = entity.get("name")
+        if not isinstance(entity_type, str) or not isinstance(entity_name, str):
+            continue
+        permission_names = [
+            permission for permission in permissions if isinstance(permission, str)
+        ]
+        has_read = any(permission.endswith(".read") for permission in permission_names)
+        has_write = any(
+            permission.endswith(".write") for permission in permission_names
+        )
+        is_official = entity_type == "model" and entity_name == "facebook/UMA"
+        if is_official:
+            results["official_scope_present"] = True
+            results["official_scope_read_present"] = has_read
+            results["official_scope_write_present"] = has_write
+        if entity_type not in collections or not has_read:
+            continue
+
+        results["repo_scope_count"] += 1
+        collection, prefix = collections[entity_type]
+        encoded_id = quote(entity_name, safe="/")
+        info, status = get_json(f"{ENDPOINT}/api/{collection}/{encoded_id}", token)
+        if status != 200 or not isinstance(info, dict):
+            results["probe_failure_count"] += 1
+            continue
+        is_private = info.get("private") is True
+        is_gated = info.get("gated") not in (None, False)
+        if is_private:
+            results["private_repo_scope_count"] += 1
+        if is_gated:
+            results["gated_repo_scope_count"] += 1
+
+        siblings = info.get("siblings")
+        if not isinstance(siblings, list):
+            results["probe_failure_count"] += 1
+            continue
+        paths = [
+            sibling.get("rfilename")
+            for sibling in siblings
+            if isinstance(sibling, dict)
+            and isinstance(sibling.get("rfilename"), str)
+        ]
+
+        def content_priority(path: str) -> tuple[int, str]:
+            lower = path.lower()
+            if lower.endswith(
+                (
+                    ".safetensors",
+                    ".gguf",
+                    ".ckpt",
+                    ".pth",
+                    ".pt",
+                    ".bin",
+                    ".onnx",
+                    ".zip",
+                    ".tar",
+                )
+            ):
+                return (0, lower)
+            if lower.rsplit("/", 1)[-1] in {
+                "readme.md",
+                "license",
+                "license.md",
+                ".gitattributes",
+            }:
+                return (2, lower)
+            return (1, lower)
+
+        authenticated_read = False
+        restricted_read = False
+        anonymous_read = False
+        for path in sorted(paths, key=content_priority)[:12]:
+            file_url = (
+                f"{ENDPOINT}/{prefix}{encoded_id}/resolve/main/"
+                f"{quote(path, safe='/')}"
+            )
+            unauthenticated, unauthenticated_status = range_read_one_byte(
+                file_url, None
+            )
+            authenticated, _ = range_read_one_byte(file_url, token)
+            authenticated_read = authenticated_read or authenticated
+            anonymous_read = anonymous_read or unauthenticated
+            if authenticated and not unauthenticated and unauthenticated_status in {
+                401,
+                403,
+                404,
+            }:
+                restricted_read = True
+                break
+        if authenticated_read:
+            results["readable_repo_scope_count"] += 1
+        else:
+            results["probe_failure_count"] += 1
+        if anonymous_read:
+            results["anonymous_readable_repo_scope_count"] += 1
+        if restricted_read:
+            results["restricted_readable_repo_scope_count"] += 1
+    return results
 
 
 def next_link(header: str | None) -> str | None:
@@ -254,6 +384,13 @@ def main() -> int:
         for permission in entry.get("permissions", [])
         if isinstance(permission, str)
     ]
+    scoped_entity_types = Counter(
+        entity.get("type", "unknown")
+        for entry in scoped
+        if isinstance(entry, dict)
+        for entity in [entry.get("entity")]
+        if isinstance(entity, dict)
+    )
     emit("FINE_GRAINED_SCOPE_COUNT", len(scoped))
     emit(
         "FINE_GRAINED_READ_PERMISSION_COUNT",
@@ -264,6 +401,26 @@ def main() -> int:
         sum(permission.endswith(".write") for permission in scoped_permissions),
     )
     emit("FINE_GRAINED_CAN_READ_GATED", bool(fine.get("canReadGatedRepos")))
+    for entity_type in (
+        "model",
+        "dataset",
+        "space",
+        "org",
+        "user",
+        "resource-group",
+        "collection",
+        "bucket",
+        "kernel",
+        "container",
+    ):
+        emit(
+            f"FINE_GRAINED_{entity_type.upper().replace('-', '_')}_SCOPE_COUNT",
+            scoped_entity_types[entity_type],
+        )
+
+    scoped_impact = scoped_repository_impact(scoped, token)
+    for result_name, result_value in scoped_impact.items():
+        emit(f"SCOPED_{result_name.upper()}", result_value)
 
     orgs = whoami.get("orgs") if isinstance(whoami.get("orgs"), list) else []
     org_roles = Counter(
