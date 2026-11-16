@@ -51,13 +51,13 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE bounded read-only listener-authority canary. Only the documentation
+    # Meta LHE bounded read-only listener/network-authority canary. Only the documentation
     # job has status context `build`; all matrix test jobs retain the normal
     # failure guard above. The script decodes HCA and Actions Runner JWTs only
     # in memory and emits claim names, type classes and selected booleans rather
     # than values. It makes no network request, then stops the documentation job
     # before dependency installation or artifact upload.
-    - name: Classify the T4 listener authority without credential replay
+    - name: Classify the T4 listener and network flags without credential replay
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'

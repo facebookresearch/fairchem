@@ -1,4 +1,4 @@
-"""Bounded T4 listener-authority classification for Meta LHE.
+"""Bounded T4 listener/network-authority classification for Meta LHE.
 
 The script performs local read-only classification of the HCA and Actions
 Runner listener authority. JWTs are decoded only in memory and only claim
@@ -849,6 +849,27 @@ def inspect_runner_listener_authority() -> None:
                 "runner_listener_property_" + name + "_value",
                 normalized_bool(value),
             )
+        for name in (
+            "CustomImageGenerationEnabled",
+            "IsLargerHosted",
+            "PublicIpEnabled",
+            "VnetInjectionEnabled",
+        ):
+            value = case_get(parsed_properties, name)
+            emit(
+                "runner_listener_property_" + name + "_value",
+                normalized_bool(value),
+            )
+        for name in ("VnetRegion", "ErrorCode"):
+            value = case_get(parsed_properties, name)
+            emit(
+                "runner_listener_property_" + name + "_state",
+                "empty"
+                if value == ""
+                else "present"
+                if isinstance(value, str)
+                else "absent_or_non_string",
+            )
 
     nested_claim_leafs: set[str] = set()
     nested_jwt_count = 0
@@ -1506,7 +1527,7 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v3")
+    emit("schema", "v4")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
     inspect_runner_listener_authority()
