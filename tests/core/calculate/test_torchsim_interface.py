@@ -447,7 +447,7 @@ def test_direct_vs_ase_roundtrip() -> None:
     # Set task_name for each
     for ad in atomic_data_list:
         ad.dataset = ["oc20"]
-    atomic_data_roundtrip = atomicdata_list_to_batch(atomic_data_list)
+    atomic_data_roundtrip = atomicdata_list_to_batch(atomic_data_list).to(DEVICE)
 
     # Compare key attributes
     torch.testing.assert_close(atomic_data_direct.pos, atomic_data_roundtrip.pos)

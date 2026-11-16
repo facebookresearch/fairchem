@@ -34,7 +34,49 @@ from fairchem.core.calculate._batch import (
     InferenceBatcher,
     _get_concurrency_backend,
 )
+from fairchem.core.components.batch_server import wait_for_serve_ready
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+
+# Two one-CPU actors leave two CPUs for requests and Ray control work on CI.
+RAY_TEST_CPUS = 4
+RAY_TEST_TIMEOUT_S = 180
+RAY_TEST_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "FAIRCHEM_BATCH_SERVER_TIMEOUT_S": str(RAY_TEST_TIMEOUT_S),
+}
+
+
+@pytest.fixture(autouse=True)
+def ray_test_settings(monkeypatch):
+    """
+    Scope driver threads, worker threads, and deployment waits to these tests.
+    """
+    original_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    for name, value in RAY_TEST_ENV.items():
+        monkeypatch.setenv(name, value)
+    original_run = serve.run
+
+    def run_with_deadline(*args, **kwargs):
+        # Ray's blocking deployment wait has no deadline. Use its public
+        # nonblocking API, then wait for the same RUNNING state with a bound.
+        kwargs["blocking"] = False
+        handle = original_run(*args, **kwargs)
+        wait_for_serve_ready(
+            app_name=kwargs.get("name", "default"),
+            timeout_seconds=RAY_TEST_TIMEOUT_S,
+        )
+        return handle
+
+    monkeypatch.setattr(serve, "run", run_with_deadline)
+    try:
+        yield
+    finally:
+        torch.set_num_threads(original_threads)
+
 
 # mark all tests in this module as serial (Ray needs serial execution due to
 # large number of subprocesses) and pretrained (sweep-eligible).
@@ -47,7 +89,8 @@ pytestmark = [
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    pass  # Override root conftest to prevent it from calling ray.shutdown() between tests
+    # Preserve the module cluster instead of calling the root Ray cleanup.
+    pass
 
 
 def setup_ray():
@@ -66,18 +109,24 @@ def setup_ray():
     ray.init(
         ignore_reinit_error=True,
         namespace=namespace,
-        num_cpus=16,  # Increased to support default ray_actor_options num_cpus=8
+        num_cpus=RAY_TEST_CPUS,
         num_gpus=1 if torch.cuda.is_available() else 0,
+        runtime_env={"env_vars": RAY_TEST_ENV},
         logging_level="ERROR",
-        _temp_dir="/tmp/ray",  # Use larger /tmp instead of default /var/tmp (512 MB tmpfs)
+        # Avoid the default /var/tmp (512 MB tmpfs on the GPU runner).
+        _temp_dir="/tmp/ray",
         _system_config={"local_fs_capacity_threshold": 0.99},
     )
 
 
 def cleanup_ray():
-    """Cleanup Ray resources safely without affecting other test workers."""
+    """
+    Cleanup Ray resources safely without affecting other test workers.
+    """
     if not ray.is_initialized():
         return
+
+    BatchServerPredictUnit._handle_cache.clear()
 
     # CRITICAL: Must shutdown serve BEFORE ray to avoid dead actor errors
     try:
@@ -93,39 +142,68 @@ def cleanup_ray():
 
 @pytest.fixture(scope="module")
 def ray_session():
-    """Initialize Ray once for the entire test module."""
-    setup_ray()
-    yield
-    cleanup_ray()
+    """
+    Initialize Ray once for the entire test module.
+    """
+    try:
+        setup_ray()
+        yield
+    finally:
+        cleanup_ray()
 
 
 @pytest.fixture()
 def ray_controlled():
-    """For tests that need to shut down and restart Ray mid-test.
+    """
+    For tests that need to shut down and restart Ray mid-test.
 
     Gives the test exclusive Ray control, then restores the module-level
     cluster so subsequent tests that depend on ray_session are unaffected.
     """
     cleanup_ray()
-    setup_ray()
-    yield
-    cleanup_ray()
-    setup_ray()
+    try:
+        setup_ray()
+        yield
+    finally:
+        cleanup_ray()
+        setup_ray()
 
 
 @pytest.fixture()
-def inference_batcher(ray_session, declared_predict_unit):
-    batcher = InferenceBatcher(
+def batcher_factory(request, ray_test_settings):
+    """
+    Construct bounded batchers and always release deployments and executors.
+    """
+
+    def make_batcher(**kwargs):
+        kwargs.setdefault("concurrency_backend_options", {"max_workers": 2})
+        kwargs.setdefault("ray_actor_options", {"num_cpus": 1})
+        batcher = InferenceBatcher(**kwargs)
+
+        def close_batcher():
+            # Cancel queued requests before removing the deployment. Running
+            # requests use the bounded BatchServerPredictUnit timeout.
+            batcher.executor.shutdown(wait=False, cancel_futures=True)
+            batcher.shutdown(wait=False, shutdown_ray=False)
+
+        request.addfinalizer(close_batcher)
+        return batcher
+
+    return make_batcher
+
+
+@pytest.fixture()
+def inference_batcher(ray_session, declared_predict_unit, batcher_factory):
+    batcher = batcher_factory(
         predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
         concurrency_backend="threads",
-        concurrency_backend_options={"max_workers": 4},
-        ray_actor_options={"num_cpus": 2},
+        concurrency_backend_options={"max_workers": 2},
+        ray_actor_options={"num_cpus": 1},
     )
-    yield batcher
-    batcher.shutdown(shutdown_ray=False)
+    return batcher
 
 
 @pytest.mark.parametrize(
@@ -134,21 +212,23 @@ def inference_batcher(ray_session, declared_predict_unit):
         pytest.param(
             {
                 "concurrency_backend": "threads",
-                "concurrency_backend_options": {"max_workers": 8},
-                "ray_actor_options": {"num_cpus": 2},
+                "concurrency_backend_options": {"max_workers": 2},
+                "ray_actor_options": {"num_cpus": 1},
             },
             lambda b: isinstance(b.executor, ThreadPoolExecutor),
             id="threads_concurrency",
         ),
         pytest.param(
-            {"ray_actor_options": {"num_cpus": 2}},
+            {"ray_actor_options": {"num_cpus": 1}},
             lambda b: b.predict_server_handle is not None,
             id="ray_actor_options",
         ),
     ],
 )
-def test_initialization_options(ray_session, declared_predict_unit, kwargs, assert_fn):
-    batcher = InferenceBatcher(
+def test_initialization_options(
+    ray_session, declared_predict_unit, kwargs, assert_fn, batcher_factory
+):
+    batcher = batcher_factory(
         predict_unit=declared_predict_unit,
         max_batch_size=16,
         batch_wait_timeout_s=0.1,
@@ -175,7 +255,8 @@ def test_context_manager_enter_exit(ray_session, declared_predict_unit):
         max_batch_size=16,
         batch_wait_timeout_s=0.1,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 2},
+        ray_actor_options={"num_cpus": 1},
+        concurrency_backend_options={"max_workers": 2},
     ) as batcher:
         assert hasattr(batcher, "executor")
         assert hasattr(batcher, "predict_server_handle")
@@ -190,7 +271,9 @@ def test_context_manager_enter_exit(ray_session, declared_predict_unit):
 
 
 def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
-    """Test that batched and serial calculations produce consistent results."""
+    """
+    Test that batched and serial calculations produce consistent results.
+    """
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
 
     def calculate_properties(atoms, predict_unit):
@@ -207,6 +290,7 @@ def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
                 predict_unit=inference_batcher.batch_predict_unit,
             ),
             atoms_list,
+            timeout=RAY_TEST_TIMEOUT_S,
         )
     )
     results_serial = [
@@ -220,17 +304,19 @@ def test_batch_vs_serial_consistency(inference_batcher, declared_predict_unit):
 
 
 def test_checkpoint_swap_with_energy_verification(
-    ray_session, declared_predict_unit, uma_predict_unit_alt
+    ray_session, declared_predict_unit, uma_predict_unit_alt, batcher_factory
 ):
-    """Test that checkpoint swapping produces different energies and swapping back recovers originals."""
-    batcher = InferenceBatcher(
+    """
+    Check swapping produces different energies and swapping back recovers originals.
+    """
+    batcher = batcher_factory(
         predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
         concurrency_backend="threads",
-        concurrency_backend_options={"max_workers": 4},
-        ray_actor_options={"num_cpus": 4},
+        concurrency_backend_options={"max_workers": 2},
+        ray_actor_options={"num_cpus": 1},
     )
 
     atoms_list = [bulk("Cu"), bulk("Al")]
@@ -264,14 +350,16 @@ def test_checkpoint_swap_with_energy_verification(
     batcher.shutdown(shutdown_ray=False)
 
 
-def test_batcher_shutdown(ray_controlled, declared_predict_unit):
-    """Test that shutdown(shutdown_ray=True) cleans up all resources including Ray."""
-    batcher = InferenceBatcher(
+def test_batcher_shutdown(ray_controlled, declared_predict_unit, batcher_factory):
+    """
+    Test that shutdown(shutdown_ray=True) cleans up all resources including Ray.
+    """
+    batcher = batcher_factory(
         predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 2},
+        ray_actor_options={"num_cpus": 1},
     )
 
     assert batcher.predict_server_handle is not None
@@ -295,24 +383,31 @@ def test_batcher_shutdown(ray_controlled, declared_predict_unit):
     ],
 )
 def test_multiple_batchers(
-    ray_session, declared_predict_unit, uma_predict_unit_alt, same_model
+    ray_session,
+    declared_predict_unit,
+    uma_predict_unit_alt,
+    same_model,
+    batcher_factory,
 ):
-    """Test that multiple InferenceBatchers can coexist on the same Ray cluster."""
+    """
+    Test that multiple InferenceBatchers can coexist on the same Ray cluster.
+    """
     predict_unit2 = declared_predict_unit if same_model else uma_predict_unit_alt
 
-    batcher1 = InferenceBatcher(
+    # Fractional GPU reservations allow sharing; they do not cap memory.
+    batcher1 = batcher_factory(
         predict_unit=declared_predict_unit,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 4, "num_gpus": 0.5},
+        ray_actor_options={"num_cpus": 1, "num_gpus": 0.5},
     )
-    batcher2 = InferenceBatcher(
+    batcher2 = batcher_factory(
         predict_unit=predict_unit2,
         max_batch_size=8,
         batch_wait_timeout_s=0.05,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 4, "num_gpus": 0.5},
+        ray_actor_options={"num_cpus": 1, "num_gpus": 0.5},
     )
 
     assert batcher1.deployment_name != batcher2.deployment_name
@@ -342,11 +437,10 @@ def test_multiple_batchers(
         )
         return atoms_copy.get_potential_energy()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future1 = executor.submit(calc_energy, batcher1, atoms)
-        future2 = executor.submit(calc_energy, batcher2, atoms)
-        result1 = future1.result()
-        result2 = future2.result()
+    future1 = batcher1.executor.submit(calc_energy, batcher1, atoms)
+    future2 = batcher1.executor.submit(calc_energy, batcher2, atoms)
+    result1 = future1.result(timeout=RAY_TEST_TIMEOUT_S)
+    result2 = future2.result(timeout=RAY_TEST_TIMEOUT_S)
 
     npt.assert_allclose(result1, energy1, atol=1e-4)
     npt.assert_allclose(result2, energy2, atol=1e-4)
@@ -360,8 +454,12 @@ def test_multiple_batchers(
     batcher2.shutdown(shutdown_ray=False)
 
 
-def test_autobatch_config_initialization(ray_session, uma_predict_unit):
-    """Test initialization and auto_configure_batching method."""
+def test_autobatch_config_initialization(
+    ray_session, uma_predict_unit, batcher_factory
+):
+    """
+    Test initialization and auto_configure_batching method.
+    """
     autobatch_config = AutobatchConfig(
         min_batch_size=64,
         max_batch_size_cap=1024,
@@ -369,11 +467,11 @@ def test_autobatch_config_initialization(ray_session, uma_predict_unit):
         warmup_steps=1,
     )
 
-    batcher = InferenceBatcher(
+    batcher = batcher_factory(
         predict_unit=uma_predict_unit,
         split_oom_batch=True,
         num_replicas=1,
-        ray_actor_options={"num_cpus": 2},
+        ray_actor_options={"num_cpus": 1},
     )
 
     probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
@@ -385,7 +483,9 @@ def test_autobatch_config_initialization(ray_session, uma_predict_unit):
 
 
 def test_probe_optimal_batch_size_cpu():
-    """Test probing on CPU returns defaults."""
+    """
+    Test probing on CPU returns defaults.
+    """
     from fairchem.core.components.batch_server import probe_optimal_batch_size
 
     class MockPredictUnit:

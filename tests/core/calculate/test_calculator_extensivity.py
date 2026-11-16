@@ -13,8 +13,8 @@ Tests:  Extensivity of UMA-S forces and energies — E(N replicas) =
         SO(3) matrix to break axis-aligned-edge degeneracies in the
         eSCN spherical-harmonic basis.
 Models: uma-s-1p1, uma-s-1p2 (module-level pytestmark). uma-s-1p2 is
-        xfail(strict=False) here via _xfail_uma_s_1p2_extensivity_bug
-        for a known regression.
+        expected to fail only at numeric energy/force invariant assertions
+        for a known regression. Setup and inference errors remain failures.
 CI:     test_gpu_sweep (models shard).
 """
 
@@ -30,6 +30,10 @@ from scipy.spatial.transform import Rotation
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.units.mlip_unit import InferenceSettings
 from tests.conftest import get_predict_unit_for_test, sweep_refs_from
+from tests.core.calculate.extensivity_utils import (
+    assert_cell_major_forces_close,
+    expected_extensivity_failure,
+)
 
 # Extensivity is a property of the UMA-S architecture, not of any particular
 # head: every task head should satisfy E(N replicas) = N * E(1 replica) when
@@ -142,25 +146,10 @@ def calc(request, pretrained_checkpoint, dtype):
     return FAIRChemCalculator(pu, task_name=task_name)
 
 
-# uma-s-1p2 has a known extensivity regression: the model violates
-# E(N replicas) = N * E(1 replica). Surfaced when this file was routed
-# through the per-model sweep partition — main today only ran extensivity
-# against uma-s-1p1 (which passes). Mark every extensivity test in this
-# file as xfail under uma-s-1p2 with strict=False so a future model fix
-# shows up as xpassed (signal to delete this fixture). uma-s-1p1 and any
-# other sweep value continue to assert strictly.
-#
-# Tracked for the UMA team. Remove this fixture when uma-s-1p2 (or its
-# successor 1p2p1 / 1p3) reproduces extensivity.
-@pytest.fixture(autouse=True)
-def _xfail_uma_s_1p2_extensivity_bug(request, pretrained_checkpoint):
-    if pretrained_checkpoint == "uma-s-1p2":
-        request.node.add_marker(
-            pytest.mark.xfail(
-                reason="uma-s-1p2 has a known extensivity regression",
-                strict=False,
-            )
-        )
+# The documented UMA-S-1p2 regression is handled only at final numeric
+# invariants through expected_extensivity_failure. Model loading, structure
+# setup, and inference remain outside that scope. Verify checkpoint results
+# before assigning strict expected failures to individual parametrized cases.
 
 
 def _set_charge_spin(atoms, calc):
@@ -173,64 +162,62 @@ def _set_charge_spin(atoms, calc):
         atoms.info["spin"] = 1
 
 
-def _assert_multiset_close(a, b, *, atol):
-    # Compare two arrays as multisets of row vectors: extensivity says the
-    # supercell forces equal the unit-cell forces repeated `multiplier` times,
-    # but ASE's make_supercell doesn't guarantee `i % n_unit` ordering.
-    order_a = np.lexsort(a.T)
-    order_b = np.lexsort(b.T)
-    npt.assert_allclose(a[order_a], b[order_b], atol=atol)
-
-
 # --- PBC extensivity ---
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
-def test_pbc_extensivity_energy(supercell_matrix, multiplier, calc, dtype):
+def test_pbc_extensivity_energy(
+    supercell_matrix, multiplier, calc, dtype, pretrained_checkpoint
+):
     atoms_unit = _rotate(bulk("MgO", "rocksalt", a=4.213))
     _set_charge_spin(atoms_unit, calc)
     atoms_unit.calc = calc
     energy_unit = atoms_unit.get_potential_energy()
 
-    atoms_super = make_supercell(atoms_unit, supercell_matrix)
+    atoms_super = make_supercell(atoms_unit, supercell_matrix, order="cell-major")
     _set_charge_spin(atoms_super, calc)
     atoms_super.calc = calc
     energy_super = atoms_super.get_potential_energy()
 
-    npt.assert_allclose(
-        energy_super / energy_unit,
-        multiplier,
-        rtol=PBC_ENERGY_RTOL[dtype],
-        err_msg=(
-            f"Energy does not scale by {multiplier}x for supercell. "
-            f"E_unit={energy_unit:.6f}, E_super={energy_super:.6f}"
-        ),
-    )
+    with expected_extensivity_failure(pretrained_checkpoint, "PBC energy"):
+        npt.assert_allclose(
+            energy_super / energy_unit,
+            multiplier,
+            rtol=PBC_ENERGY_RTOL[dtype],
+            err_msg=(
+                f"Energy does not scale by {multiplier}x for supercell. "
+                f"E_unit={energy_unit:.6f}, E_super={energy_super:.6f}"
+            ),
+        )
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize("supercell_matrix, multiplier", SUPERCELL_CONFIGS)
-def test_pbc_extensivity_forces(supercell_matrix, multiplier, calc, dtype):
+def test_pbc_extensivity_forces(
+    supercell_matrix, multiplier, calc, dtype, pretrained_checkpoint
+):
     atoms_unit = _rotate(bulk("MgO", "rocksalt", a=4.213))
     _set_charge_spin(atoms_unit, calc)
     atoms_unit.calc = calc
     forces_unit = atoms_unit.get_forces()
 
-    atoms_super = make_supercell(atoms_unit, supercell_matrix)
+    atoms_super = make_supercell(atoms_unit, supercell_matrix, order="cell-major")
     _set_charge_spin(atoms_super, calc)
     atoms_super.calc = calc
     forces_super = atoms_super.get_forces()
 
-    forces_unit_tiled = np.vstack([forces_unit] * multiplier)
-    _assert_multiset_close(forces_super, forces_unit_tiled, atol=PBC_FORCES_ATOL[dtype])
+    with expected_extensivity_failure(pretrained_checkpoint, "PBC forces"):
+        assert_cell_major_forces_close(
+            forces_super, forces_unit, multiplier, atol=PBC_FORCES_ATOL[dtype]
+        )
 
 
 # --- Isolated-cluster extensivity ---
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
-def test_isolated_extensivity_energy(calc, dtype):
+def test_isolated_extensivity_energy(calc, dtype, pretrained_checkpoint):
     # Two H2O copies separated by 50 A, well beyond the 6 A model cutoff —
     # the combined-system energy must equal twice the single-molecule energy.
     mol_single = _rotate(molecule("H2O"))
@@ -246,19 +233,20 @@ def test_isolated_extensivity_energy(calc, dtype):
     mol_combined.calc = calc
     energy_combined = mol_combined.get_potential_energy()
 
-    npt.assert_allclose(
-        energy_combined,
-        2.0 * energy_single,
-        atol=ISOLATED_ENERGY_ATOL[dtype],
-        err_msg=(
-            f"Energy is not extensive for two separated molecules. "
-            f"E_single={energy_single:.6f}, E_combined={energy_combined:.6f}"
-        ),
-    )
+    with expected_extensivity_failure(pretrained_checkpoint, "isolated energy"):
+        npt.assert_allclose(
+            energy_combined,
+            2.0 * energy_single,
+            atol=ISOLATED_ENERGY_ATOL[dtype],
+            err_msg=(
+                f"Energy is not extensive for two separated molecules. "
+                f"E_single={energy_single:.6f}, E_combined={energy_combined:.6f}"
+            ),
+        )
 
 
 @pytest.mark.parametrize("dtype", DTYPES)
-def test_isolated_extensivity_forces(calc, dtype):
+def test_isolated_extensivity_forces(calc, dtype, pretrained_checkpoint):
     mol_single = _rotate(molecule("H2O"))
     _set_charge_spin(mol_single, calc)
     mol_single.calc = calc
@@ -273,15 +261,16 @@ def test_isolated_extensivity_forces(calc, dtype):
     forces_combined = mol_combined.get_forces()
 
     n = len(mol_single)
-    npt.assert_allclose(
-        forces_combined[:n],
-        forces_single,
-        atol=ISOLATED_FORCES_ATOL[dtype],
-        err_msg="Forces on first molecule don't match isolated molecule.",
-    )
-    npt.assert_allclose(
-        forces_combined[n:],
-        forces_single,
-        atol=ISOLATED_FORCES_ATOL[dtype],
-        err_msg="Forces on second molecule don't match isolated molecule.",
-    )
+    with expected_extensivity_failure(pretrained_checkpoint, "isolated forces"):
+        npt.assert_allclose(
+            forces_combined[:n],
+            forces_single,
+            atol=ISOLATED_FORCES_ATOL[dtype],
+            err_msg="Forces on first molecule don't match isolated molecule.",
+        )
+        npt.assert_allclose(
+            forces_combined[n:],
+            forces_single,
+            atol=ISOLATED_FORCES_ATOL[dtype],
+            err_msg="Forces on second molecule don't match isolated molecule.",
+        )

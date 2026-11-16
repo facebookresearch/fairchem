@@ -166,6 +166,7 @@ def test_umas_fast_gpu_gate_activation_fallback(channels, dtype):
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_umas_fast_gpu_gate_activation_fallback_dynamic_compile(
     compile_reset_state,
 ):

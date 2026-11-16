@@ -265,6 +265,7 @@ def general(pretrained_model_name):
     ids=["composition", "charge", "spin", "task", "homogeneous-batch"],
 )
 @requires_nitro_gpu
+@pytest.mark.compile_gpu()
 def test_runtime_contract_break_falls_back_to_multigpu(
     pretrained_model_name, general, caplog, first, second, reason
 ):
@@ -290,6 +291,7 @@ def test_runtime_contract_break_falls_back_to_multigpu(
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p2p1")
 @requires_nitro_gpu
+@pytest.mark.compile_gpu()
 def test_multigpu_then_falls_back_to_general(pretrained_model_name, general, caplog):
     """
     Once on multigpu, a further composition change takes multigpu's own fallback.
@@ -313,6 +315,7 @@ def test_multigpu_then_falls_back_to_general(pretrained_model_name, general, cap
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p2p1")
 @requires_nitro_gpu
+@pytest.mark.compile_gpu()
 def test_homogeneous_first_batch_runs_multigpu(pretrained_model_name, general, caplog):
     predictor = MLIPPredictUnit(
         checkpoint_path(pretrained_model_name),
@@ -330,6 +333,7 @@ def test_homogeneous_first_batch_runs_multigpu(pretrained_model_name, general, c
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p2p1")
 @requires_nitro_gpu
+@pytest.mark.compile_gpu()
 def test_heterogeneous_batch_falls_back_to_multigpu_then_general(
     pretrained_model_name, general, caplog
 ):
@@ -384,6 +388,7 @@ def test_keeps_running_for_the_same_reduced_composition(
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p2p1")
 @requires_nitro_gpu
+@pytest.mark.compile_gpu()
 def test_falls_back_on_unsupported_error_during_inference(
     pretrained_model_name, general, monkeypatch, caplog
 ):

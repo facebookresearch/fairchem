@@ -714,6 +714,7 @@ class TestTorchCompileCompatibility:
     """Tests for torch.compile compatibility of real-arithmetic functions."""
 
     @pytest.mark.gpu()
+    @pytest.mark.compile_gpu()
     def test_compact_l2_dynamic_compile(self, compile_reset_state):
         torch.manual_seed(42)
         kernels = CustomKernelModule().to(device="cuda", dtype=torch.float32)

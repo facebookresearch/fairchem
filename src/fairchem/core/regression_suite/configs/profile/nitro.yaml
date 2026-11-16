@@ -1,0 +1,10 @@
+# FAIRChem's nitro preset: the standalone UMA Nitro model. A fallback to multigpu
+# changes the settings during a run, which fails the run, so a passing run used
+# Nitro throughout.
+label: nitro
+preset: nitro
+# Nitro serves one system per call, so each structure gets its own predictor.
+predictor_scope: structure
+# Nitro's custom backward has no double backward, so it has no autograd Hessian
+# path. Finite-difference frequencies only need forces and remain supported.
+unsupported_suites: [autograd-frequencies]

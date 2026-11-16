@@ -18,13 +18,17 @@ CI:     test_gpu_sweep (models shard).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import pickle
+import signal
+import subprocess
+import sys
 import uuid
 from collections import OrderedDict, defaultdict
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -54,6 +58,73 @@ from fairchem.core.launchers.cluster.ray_cluster import find_free_port
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 from tests.conftest import sweep_model, uma_models
+
+# One CPU per actor leaves capacity for concurrent request tasks on four-core CI.
+RAY_TEST_CPUS = 4
+RAY_TEST_TIMEOUT_S = 180
+RAY_TEST_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "FAIRCHEM_BATCH_SERVER_TIMEOUT_S": str(RAY_TEST_TIMEOUT_S),
+}
+
+
+@contextmanager
+def _scoped_ray_settings(monkeypatch):
+    """
+    Bound driver/worker threads and Ray Serve startup and rollout waits.
+    """
+    original_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    for name, value in RAY_TEST_ENV.items():
+        monkeypatch.setenv(name, value)
+    original_run = serve.run
+
+    def run_with_deadline(*args, **kwargs):
+        kwargs["blocking"] = False
+        handle = original_run(*args, **kwargs)
+        wait_for_serve_ready(
+            app_name=kwargs.get("name", "default"),
+            timeout_seconds=RAY_TEST_TIMEOUT_S,
+        )
+        return handle
+
+    monkeypatch.setattr(serve, "run", run_with_deadline)
+    try:
+        yield
+    finally:
+        torch.set_num_threads(original_threads)
+
+
+@pytest.fixture()
+def ray_test_settings(monkeypatch):
+    with _scoped_ray_settings(monkeypatch):
+        yield
+
+
+def _get_ray_results(futures, timeout=RAY_TEST_TIMEOUT_S):
+    """
+    Bound request completion and cancel outstanding tasks after any failure.
+    """
+    try:
+        return ray.get(futures, timeout=timeout)
+    except BaseException:
+        for future in futures:
+            with suppress(Exception):
+                ray.cancel(future, force=True)
+        raise
+
+
+def _cleanup_ray():
+    """
+    Release cached handles, deployments, and workers after setup or test failure.
+    """
+    BatchServerPredictUnit._handle_cache.clear()
+    with suppress(Exception):
+        serve.shutdown()
+    ray.shutdown()
+
 
 ATOL = 5e-4
 DEPLOYMENT_NAME = "predict-server"
@@ -128,7 +199,9 @@ def test_model_spec_model_id_is_stable():
 
 
 def test_model_spec_auto_source_does_not_alias_registry_model():
-    """``source="auto"`` must resolve, not mint a second id for one model."""
+    """
+    ``source="auto"`` must resolve, not mint a second id for one model.
+    """
     auto = ModelSpec("uma-s-1p1")
 
     assert auto.source == "registry"
@@ -156,7 +229,9 @@ def test_model_spec_relative_and_absolute_paths_share_identity(tmp_path, monkeyp
 
 
 def test_model_spec_path_and_registry_remain_distinct():
-    """Distinct loaders for one name are genuinely different models."""
+    """
+    Distinct loaders for one name are genuinely different models.
+    """
     assert (
         ModelSpec("x", source="path").model_id
         != ModelSpec("x", source="registry").model_id
@@ -198,7 +273,9 @@ def test_model_spec_usable_as_set_member_and_dict_key():
 
 
 def test_model_spec_hash_survives_pickling():
-    """Specs are pickled to the replica with every request."""
+    """
+    Specs are pickled to the replica with every request.
+    """
     spec = ModelSpec("x", overrides={"backbone": {"max_neighbors": 64}})
     restored = pickle.loads(pickle.dumps(spec))
 
@@ -324,12 +401,16 @@ def test_model_spec_registry_does_not_evict_in_flight_specs():
 
 
 def _bare_server(server_class):
-    """Build an un-initialized deployment instance for pure-logic unit tests."""
+    """
+    Build an un-initialized deployment instance for pure-logic unit tests.
+    """
     return object.__new__(server_class.func_or_class)
 
 
 class _RecordingBatchQueue:
-    """Stands in for the ``@serve.batch`` wrapper on ``predict``."""
+    """
+    Stands in for the ``@serve.batch`` wrapper on ``predict``.
+    """
 
     def __init__(self):
         self.max_batch_size = None
@@ -411,7 +492,9 @@ def test_reconfigure_leaves_absent_keys_untouched():
 
 
 def test_deploy_app_pushes_batch_config_through_user_config(monkeypatch):
-    """Batching must travel as user_config so Serve applies it to all replicas."""
+    """
+    Batching must travel as user_config so Serve applies it to all replicas.
+    """
     recorded = {}
 
     class FakeDeployment:
@@ -498,7 +581,9 @@ def test_prepare_deployment_config_honors_explicit_num_gpus():
 
 
 def test_prepare_deployment_config_does_not_override_pinned_num_gpus():
-    """An explicit ray_actor_options value always wins over the default."""
+    """
+    An explicit ray_actor_options value always wins over the default.
+    """
     dc = batch_server._prepare_deployment_config(
         {"ray_actor_options": {"num_gpus": 0}}, 1, "inferred"
     )
@@ -604,7 +689,9 @@ def test_resolve_device_returns_pinned_cpu_device():
 
 
 def test_resolve_device_raises_when_pinned_cuda_is_unavailable(monkeypatch):
-    """Silently running a GPU workload on CPU is worse than failing fast."""
+    """
+    Silently running a GPU workload on CPU is worse than failing fast.
+    """
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
     with pytest.raises(RuntimeError, match="no CUDA device"):
@@ -644,7 +731,9 @@ def test_update_batch_config_rejects_unknown_deployment(monkeypatch):
     ids=["single-batched", "mux-batched", "single-scalar", "mux-scalar"],
 )
 def test_normalize_undo_flags(server_class, batched, num_requests, expected):
-    """``@serve.batch`` turns the scalar arg into one value per request."""
+    """
+    ``@serve.batch`` turns the scalar arg into one value per request.
+    """
     server = _bare_server(server_class)
     value = [True, False, True] if batched else True
 
@@ -711,9 +800,127 @@ def dashboard_port():
     return find_free_port()
 
 
+def _exercise_cpu_ray_budget():
+    """
+    Exercise real scheduling in a child so Ray startup itself has a deadline.
+    """
+    with pytest.MonkeyPatch.context() as monkeypatch, _scoped_ray_settings(monkeypatch):
+
+        class StubPredictUnit:
+            device = "cpu"
+
+            def __init__(self, energy):
+                self.energy = energy
+
+            @property
+            def num_threads(self):
+                return torch.get_num_threads()
+
+            def predict(self, data, undo_element_references=True):
+                return {"energy": torch.full((len(data),), self.energy)}
+
+        @ray.remote(num_cpus=0)
+        class RequestGate:
+            def __init__(self):
+                self.arrivals = 0
+
+            async def wait_for_both_requests(self):
+                self.arrivals += 1
+                while self.arrivals < 2:
+                    await asyncio.sleep(0.01)
+
+        @ray.remote(num_cpus=1)
+        def predict_from_worker(deployment_name, gate):
+            # Both one-CPU clients must start while both inference actors are live.
+            ray.get(gate.wait_for_both_requests.remote(), timeout=RAY_TEST_TIMEOUT_S)
+            unit = BatchServerPredictUnit.from_deployment_connection_info(
+                deployment_name=deployment_name
+            )
+            data = AtomicData.from_ase(bulk("Cu"), task_name="omat")
+            return unit.predict(data)["energy"].item(), torch.get_num_threads()
+
+        gate = None
+        try:
+            ray.init(
+                num_cpus=RAY_TEST_CPUS,
+                num_gpus=0,
+                object_store_memory=128 * 1024 * 1024,
+                include_dashboard=False,
+                runtime_env={"env_vars": RAY_TEST_ENV},
+            )
+            names = [f"cpu-budget-{uuid.uuid4().hex}" for _ in range(2)]
+            handles = [
+                setup_batch_predict_server(
+                    StubPredictUnit(float(index)),
+                    deployment_name=name,
+                    route_prefix=f"/{name}",
+                    deployment_config={
+                        "ray_actor_options": {"num_cpus": 1, "num_gpus": 0},
+                    },
+                )
+                for index, name in enumerate(names)
+            ]
+            for handle in handles:
+                threads = handle.get_predict_unit_attribute.remote(
+                    "num_threads"
+                ).result(timeout_s=RAY_TEST_TIMEOUT_S)
+                assert threads == 1
+            gate = RequestGate.remote()
+            futures = [predict_from_worker.remote(name, gate) for name in names]
+            assert _get_ray_results(futures) == [(0.0, 1), (1.0, 1)]
+        finally:
+            if gate is not None:
+                with suppress(Exception):
+                    ray.kill(gate)
+            _cleanup_ray()
+
+
+@pytest.mark.serial()
+def test_two_inference_actors_and_request_workers_fit_cpu_budget():
+    """
+    Real Serve replicas and blocking request tasks must fit four logical CPUs.
+
+    Stub predictions avoid checkpoints and GPUs while exercising Ray scheduling,
+    model transport, batching, worker thread limits, and simultaneous clients.
+    The child deadline includes Ray initialization and cleanup, which can stall
+    before any deployment readiness or request timeout is reached.
+    """
+    command = [
+        sys.executable,
+        "-c",
+        "import faulthandler; faulthandler.enable(); "
+        "faulthandler.dump_traceback_later(60, repeat=True); "
+        "from tests.core.components.test_batch_server import "
+        "_exercise_cpu_ray_budget; _exercise_cpu_ray_budget()",
+    ]
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env={**os.environ, **RAY_TEST_ENV},
+        text=True,
+        start_new_session=True,
+    ) as process:
+        try:
+            output, _ = process.communicate(timeout=RAY_TEST_TIMEOUT_S + 60)
+        except subprocess.TimeoutExpired:
+            # Stop the whole group so a hung GCS/worker cannot outlive the test.
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                output, _ = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                output, _ = process.communicate()
+            pytest.fail(f"Ray startup/scheduling/cleanup deadline exceeded:\n{output}")
+        assert process.returncode == 0, output
+
+
 @pytest.fixture()
-def local_ray_cluster_with_inference(uma_predict_unit, dashboard_port):
-    """Start a local Ray instance with the FAIRChem inference server.
+def local_ray_cluster_with_inference(
+    uma_predict_unit, dashboard_port, ray_test_settings
+):
+    """
+    Start a local Ray instance with the FAIRChem inference server.
 
     Function-scoped: a fresh Ray cluster and Serve deployment is created
     for every test and fully torn down afterwards. This avoids GPU/actor
@@ -722,42 +929,41 @@ def local_ray_cluster_with_inference(uma_predict_unit, dashboard_port):
     """
     num_gpus = 1 if torch.cuda.is_available() else 0
 
-    ray.init(
-        num_cpus=8,
-        num_gpus=num_gpus if num_gpus > 0 else None,
-        ignore_reinit_error=True,
-        log_to_driver=True,
-        logging_config=ray.LoggingConfig(log_level="WARNING"),
-        dashboard_port=dashboard_port,
-        namespace=NAMESPACE,
-    )
+    try:
+        ray.init(
+            num_cpus=RAY_TEST_CPUS,
+            runtime_env={"env_vars": RAY_TEST_ENV},
+            num_gpus=num_gpus if num_gpus > 0 else None,
+            ignore_reinit_error=True,
+            log_to_driver=True,
+            logging_config=ray.LoggingConfig(log_level="WARNING"),
+            dashboard_port=dashboard_port,
+            namespace=NAMESPACE,
+        )
 
-    setup_batch_predict_server(
-        uma_predict_unit,
-        deployment_name=DEPLOYMENT_NAME,
-        deployment_config={
-            "ray_actor_options": {
-                "num_cpus": 1,
-                "num_gpus": 1 if num_gpus > 0 else 0,
+        setup_batch_predict_server(
+            uma_predict_unit,
+            deployment_name=DEPLOYMENT_NAME,
+            deployment_config={
+                "ray_actor_options": {
+                    "num_cpus": 1,
+                    "num_gpus": 1 if num_gpus > 0 else 0,
+                },
             },
-        },
-    )
-    wait_for_serve_ready(app_name=DEPLOYMENT_NAME)
+        )
+        wait_for_serve_ready(
+            app_name=DEPLOYMENT_NAME, timeout_seconds=RAY_TEST_TIMEOUT_S
+        )
 
-    yield
-
-    # Cached handles point at the now-dead deployment; clear so the next
-    # test's fresh deployment isn't shadowed by a stale handle.
-    BatchServerPredictUnit._handle_cache.clear()
-
-    with suppress(Exception):
-        serve.shutdown()
-    ray.shutdown()
+        yield
+    finally:
+        _cleanup_ray()
 
 
 @pytest.fixture()
 def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard_port):
-    """Extend local_ray_cluster_with_inference with a head.json for external client tests.
+    """
+    Extend local_ray_cluster_with_inference with a head.json for external client tests.
 
     Only tests that call get_ray_connection_info need this fixture.
     """
@@ -771,19 +977,20 @@ def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard
                 "hostname": "localhost",
                 "dashboard_port": dashboard_port,
                 "local": True,
-                "num_cpus": 8,
+                "num_cpus": RAY_TEST_CPUS,
                 "num_gpus": num_gpus,
                 "namespace_serve_fairchem": NAMESPACE,
             }
         )
     )
 
-    yield str(head_file_path)
-
-    if head_file_path.exists():
-        head_file_path.unlink()
-        with suppress(OSError):
-            head_file_path.parent.rmdir()
+    try:
+        yield str(head_file_path)
+    finally:
+        if head_file_path.exists():
+            head_file_path.unlink()
+            with suppress(OSError):
+                head_file_path.parent.rmdir()
 
 
 # ---------------------------------------------------------------------------
@@ -796,11 +1003,15 @@ def local_ray_cluster_with_head_file(local_ray_cluster_with_inference, dashboard
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inference):
-    """Test multiple concurrent Ray remote tasks hitting the inference server."""
+    """
+    Test multiple concurrent Ray remote tasks hitting the inference server.
+    """
 
     @ray.remote
     def compute_predictions(dep_name: str, atoms_dict: dict):
-        """Ray remote task that computes predictions via inference server."""
+        """
+        Ray remote task that computes predictions via inference server.
+        """
         atoms = Atoms.fromdict(atoms_dict)
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
 
@@ -813,7 +1024,7 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
     atoms_dicts = [atoms.todict() for atoms in systems]
 
     futures = [compute_predictions.remote(DEPLOYMENT_NAME, d) for d in atoms_dicts]
-    results = ray.get(futures)
+    results = _get_ray_results(futures)
 
     assert len(results) == len(systems)
     for result, atoms in zip(results, systems):
@@ -833,7 +1044,9 @@ def test_rayserve_remote_task_multiple_concurrent(local_ray_cluster_with_inferen
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
-    """Test BatchServerPredictUnit from outside Ray with multiple systems."""
+    """
+    Test BatchServerPredictUnit from outside Ray with multiple systems.
+    """
     conn_info = get_ray_connection_info(local_ray_cluster_with_head_file)
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME,
@@ -869,7 +1082,9 @@ def test_rayserve_external_multiple_systems(local_ray_cluster_with_head_file):
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
-    """Test that BatchServerPredictUnit correctly fetches model metadata."""
+    """
+    Test that BatchServerPredictUnit correctly fetches model metadata.
+    """
 
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME
@@ -889,7 +1104,9 @@ def test_rayserve_external_model_metadata(local_ray_cluster_with_inference):
 def test_rayserve_external_vs_local_comparison(
     local_ray_cluster_with_inference, uma_predict_unit
 ):
-    """Compare BatchServerPredictUnit predictions with local predict unit."""
+    """
+    Compare BatchServerPredictUnit predictions with local predict unit.
+    """
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         deployment_name=DEPLOYMENT_NAME
     )
@@ -963,8 +1180,9 @@ def uma_model_spec(request):
 
 
 @pytest.fixture()
-def local_multiplexed_cluster():
-    """Set up a local Ray cluster with a multiplexed inference server.
+def local_multiplexed_cluster(ray_test_settings):
+    """
+    Set up a local Ray cluster with a multiplexed inference server.
 
     Function-scoped: full Ray + Serve teardown after each test so the GPU
     and actor resources are returned to the pool before the next test
@@ -972,31 +1190,32 @@ def local_multiplexed_cluster():
     """
     num_gpus = 1 if torch.cuda.is_available() else 0
 
-    ray.init(
-        log_to_driver=False,
-        logging_config=ray.LoggingConfig(log_level="WARNING"),
-        num_cpus=8,
-        num_gpus=num_gpus,
-        ignore_reinit_error=True,
-    )
+    try:
+        ray.init(
+            log_to_driver=False,
+            logging_config=ray.LoggingConfig(log_level="WARNING"),
+            num_cpus=RAY_TEST_CPUS,
+            runtime_env={"env_vars": RAY_TEST_ENV},
+            num_gpus=num_gpus,
+            ignore_reinit_error=True,
+        )
 
-    setup_multiplexed_batch_predict_server(
-        deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
-        deployment_config={
-            "ray_actor_options": {
-                "num_cpus": 1,
-                "num_gpus": num_gpus,
+        setup_multiplexed_batch_predict_server(
+            deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
+            deployment_config={
+                "ray_actor_options": {
+                    "num_cpus": 1,
+                    "num_gpus": num_gpus,
+                },
             },
-        },
-    )
-    wait_for_serve_ready(app_name=MULTIPLEXED_DEPLOYMENT_NAME)
+        )
+        wait_for_serve_ready(
+            app_name=MULTIPLEXED_DEPLOYMENT_NAME, timeout_seconds=RAY_TEST_TIMEOUT_S
+        )
 
-    yield
-
-    BatchServerPredictUnit._handle_cache.clear()
-    with suppress(Exception):
-        serve.shutdown()
-    ray.shutdown()
+        yield
+    finally:
+        _cleanup_ray()
 
 
 @pytest.mark.gpu()
@@ -1004,7 +1223,9 @@ def local_multiplexed_cluster():
 def test_multiplexed_single_model(
     local_multiplexed_cluster, uma_model_spec, uma_predict_unit
 ):
-    """Test loading a single model via the multiplexed server."""
+    """
+    Test loading a single model via the multiplexed server.
+    """
     unit = BatchServerPredictUnit.from_deployment_connection_info(
         model_spec=uma_model_spec,
         deployment_name=MULTIPLEXED_DEPLOYMENT_NAME,
@@ -1031,7 +1252,9 @@ def test_multiplexed_single_model(
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_multiplexed_switch_models(local_multiplexed_cluster, uma_model_spec):
-    """Test switching between two different model keys."""
+    """
+    Test switching between two different model keys.
+    """
     available_uma = uma_models()
     if len(available_uma) < 2:
         pytest.skip("Need at least 2 UMA models to test switching")
@@ -1071,11 +1294,15 @@ def test_multiplexed_switch_models(local_multiplexed_cluster, uma_model_spec):
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
 def test_multiplexed_concurrent_requests(local_multiplexed_cluster, uma_model_spec):
-    """Test concurrent requests to the multiplexed server."""
+    """
+    Test concurrent requests to the multiplexed server.
+    """
 
     @ray.remote
     def compute_predictions_mux(dep_name: str, model_spec: ModelSpec, atoms_dict: dict):
-        """Ray remote task using BatchServerPredictUnit directly."""
+        """
+        Ray remote task using BatchServerPredictUnit directly.
+        """
         atoms = Atoms.fromdict(atoms_dict)
         atomic_data = AtomicData.from_ase(atoms, task_name="omat")
         unit = BatchServerPredictUnit.from_deployment_connection_info(
@@ -1091,7 +1318,7 @@ def test_multiplexed_concurrent_requests(local_multiplexed_cluster, uma_model_sp
         compute_predictions_mux.remote(MULTIPLEXED_DEPLOYMENT_NAME, uma_model_spec, d)
         for d in atoms_dicts
     ]
-    results = ray.get(futures)
+    results = _get_ray_results(futures)
 
     assert len(results) == len(systems)
     for result, atoms in zip(results, systems):

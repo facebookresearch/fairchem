@@ -28,6 +28,7 @@ from fairchem.core.components.runner import MockRunner
 from fairchem.core.launchers import ray_on_slurm_launch
 
 
+@pytest.mark.serial()
 def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
@@ -70,10 +71,10 @@ def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
         "node_id": "0",
         "hostname": report["rank"]["hostname"],
     }
+    assert report["collection_errors"] == {}, report["collection_errors"]
     assert report["environment"]["python_version"]
     assert report["environment"]["pytorch_version"]
     assert "torch" in report["environment"]["libraries"]
-    assert report["collection_errors"] == {}
 
 
 @pytest.mark.serial()
