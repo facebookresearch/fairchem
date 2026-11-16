@@ -25,7 +25,7 @@ We don't have to change much code from above, we just use a built-in recipe to c
 3. For each deformation, a relaxation using the MLIP and (optionally) a single point calculation is run
 4. Finally, all of the above calculations are used to calculate the elastic properties of the material
 
-For more documentation, see the quacc docs for the [`elastic_tensor_flow` recipe](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html). The example below uses the MLP-specific wrapper `quacc.recipes.mlp.elastic.elastic_tensor_flow`, which drives this flow with MLIP relax/static jobs.
+For more documentation, see the quacc docs for the [`elastic_tensor_flow` recipe](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/common/elastic.html). The example below uses the MLP-specific wrapper `quacc.recipes.mlip.elastic.elastic_tensor_flow`, which drives this flow with MLIP relax/static jobs.
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -63,7 +63,7 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 from __future__ import annotations
 
 from ase.build import bulk
-from quacc.recipes.mlp.elastic import elastic_tensor_flow
+from quacc.recipes.mlip.elastic import elastic_tensor_flow
 
 # Make an Atoms object of a bulk Cu structure
 atoms = bulk("Cu")
@@ -73,7 +73,7 @@ result = elastic_tensor_flow(
     atoms,
     job_params={
         "all": dict(
-            method="fairchem",
+            library="fairchem",
             name_or_path="uma-s-1p2p1",
             task_name="omat",
         ),

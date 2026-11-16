@@ -438,7 +438,7 @@ class BatchPredictServerMixin:
                     raise ValueError(
                         f"Cannot split prediction for key '{key}': "
                         f"unexpected shape {pred.shape} for batch size {len(batch)} "
-                        f"and num_atoms {batch.num_atoms}"
+                        f"and num_atoms {batch.natoms.sum().item()}"
                     )
 
                 # Move to CPU before returning so the caller (which may be a

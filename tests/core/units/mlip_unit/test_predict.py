@@ -2043,6 +2043,7 @@ def test_direct_force_model_untrained_validation(direct_mole_checkpoint):
 
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-s-1p1", "uma-s-1p2")
+@pytest.mark.compile_gpu()
 def test_execution_mode_auto_set_umas_fast_gpu(pretrained_model_name):
     """Test that UMA-S models automatically use umas_fast_gpu on GPU with compatible settings.
 
@@ -2089,6 +2090,7 @@ def test_execution_mode_not_overridden_when_explicit(pretrained_model_name):
 @pytest.mark.gpu()
 @pytest.mark.pretrained("uma-m-1p1")
 @pytest.mark.no_sweep()
+@pytest.mark.compile_gpu()
 def test_execution_mode_not_set_when_conditions_not_met(pretrained_model_name):
     """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
 

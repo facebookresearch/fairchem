@@ -400,6 +400,7 @@ def test_wigner_conv1_fused_gradcheck(sphere_channels):
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_wigner_conv1_fused_deterministic_backward(
     torch_deterministic, compile_reset_state
 ):
@@ -426,6 +427,7 @@ def test_wigner_conv1_fused_deterministic_backward(
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("dense_wigner", [False, True])
+@pytest.mark.compile_gpu()
 def test_wigner_conv1_fused_dynamic_compile(compile_reset_state, dense_wigner):
     torch.manual_seed(42)
     num_nodes, channels = 8, 128
@@ -494,6 +496,7 @@ def test_wigner_inv_conv2_fused_gradcheck(sphere_channels):
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_wigner_inv_conv2_scatter_dynamic_compile(compile_reset_state):
     torch.manual_seed(42)
     num_nodes, channels = 8, 128
@@ -519,6 +522,7 @@ def test_wigner_inv_conv2_scatter_dynamic_compile(compile_reset_state):
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_wigner_inv_conv2_scatter_deterministic(
     torch_deterministic, compile_reset_state
 ):
@@ -628,6 +632,7 @@ def test_packed_gate_second_order_matches_materialized_activation():
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 def test_packed_gate_dynamic_compile(compile_reset_state):
     channels = 128
     compiled = torch.compile(packed_gate_op, fullgraph=True, dynamic=True)

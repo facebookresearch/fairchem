@@ -1,0 +1,11 @@
+# FAIRChem's high-precision preset: merged MOLE, compiled, FP32.
+label: high-precision
+preset: high-precision
+# A merged MOLE model serves one composition, so each structure gets its own.
+predictor_scope: structure
+# umas_fast_gpu's Triton backward is not differentiable; its autograd Hessian is wrong.
+unsupported_suites: [autograd-frequencies]
+# Pinned so the backend the predictor would choose is part of the run identity.
+inference_settings:
+  execution_mode: umas_fast_gpu
+  hessian_vmap: false

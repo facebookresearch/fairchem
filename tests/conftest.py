@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import random
 from contextlib import suppress
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -18,6 +19,9 @@ import torch
 
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core.common import distutils
+
+if TYPE_CHECKING:
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 @pytest.fixture()
@@ -98,6 +102,16 @@ def pytest_addoption(parser):
         ),
     )
     parser.addoption(
+        "--eager-inference",
+        action="store_true",
+        default=False,
+        help=(
+            "Run shared inference fixtures without torch.compile or Nitro. "
+            "Preserves precision and model options; fails on an unexpected "
+            "torch.compile call. Use with -m 'gpu and not compile_gpu'."
+        ),
+    )
+    parser.addoption(
         "--inference-settings",
         action="store",
         default=None,
@@ -112,6 +126,8 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    _FIXTURE_SETTINGS["inference_settings"] = "high-precision"
+    _FIXTURE_SETTINGS["eager"] = config.getoption("--eager-inference", default=False)
     requested = requested_inference_settings(config)
     if requested is not None:
         from fairchem.core.units.mlip_unit.api.inference import (
@@ -200,7 +216,7 @@ def sweep_refs_from(config) -> str | None:
 
 # The named inference settings shared pretrained-model fixtures load with:
 # --inference-settings if given (set in pytest_configure), else FP32.
-_FIXTURE_SETTINGS = {"inference_settings": "high-precision"}
+_FIXTURE_SETTINGS = {"inference_settings": "high-precision", "eager": False}
 
 
 def requested_inference_settings(config) -> str | None:
@@ -214,11 +230,55 @@ def requested_inference_settings(config) -> str | None:
     return raw or None
 
 
-def fixture_inference_settings() -> str:
+def fixture_inference_settings() -> str | InferenceSettings:
     """
     The named inference settings shared pretrained-model fixtures load with.
     """
-    return _FIXTURE_SETTINGS["inference_settings"]
+    return inference_settings_for_test(_FIXTURE_SETTINGS["inference_settings"])
+
+
+def inference_settings_for_test(
+    settings: str | InferenceSettings,
+) -> str | InferenceSettings:
+    """
+    Apply the opt-in eager policy without changing production presets.
+
+    Only compilation and Nitro are disabled. Precision, MOLE merging, graph
+    generation, derivatives, and backend selection keep the requested values.
+    Explicit settings tests should bypass this helper and use compile_gpu when
+    they require compilation.
+    """
+    if not _FIXTURE_SETTINGS["eager"]:
+        return settings
+
+    from dataclasses import replace
+
+    from fairchem.core.units.mlip_unit.api.inference import guess_inference_settings
+
+    return replace(guess_inference_settings(settings), compile=False, nitro=False)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_eager_inference_compilation(request):
+    """
+    Fail on unclassified compiler use, including during shared fixture setup.
+
+    The guard covers this pytest process. Ray actors receive explicit eager
+    settings through their serialized predictors rather than inheriting patches.
+    """
+    if not request.config.getoption("--eager-inference", default=False):
+        yield
+        return
+
+    def reject_compile(*args, **kwargs):
+        raise AssertionError(
+            "torch.compile was called under --eager-inference. Move this case "
+            "to compile_gpu or pass explicit eager inference settings."
+        )
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(torch, "compile", reject_compile)
+        yield
 
 
 def uma_models() -> list[str]:

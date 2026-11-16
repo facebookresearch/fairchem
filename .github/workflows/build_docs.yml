@@ -58,7 +58,8 @@ jobs:
 
     - uses: actions/setup-node@v7
       with:
-        node-version: 18.x
+        # MyST's renderer uses --env-file, which Node 18 does not support.
+        node-version: 24.x
 
     - name: Install Jupyter Book (via myst)
       run: npm install -g jupyter-book
