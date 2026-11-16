@@ -1,9 +1,9 @@
-"""Bounded T4 runner-authority classification for Meta LHE.
+"""Bounded T4 listener-authority classification for Meta LHE.
 
-The script performs local classification plus at most five read-only requests
-to the current worker's scheduler authority. Requests use an invalid message
-type or a random nonexistent resource; no foreign resource is selected and no
-response body is read. It emits no raw credential, URL, address, hostname, DNS
+The script performs local read-only classification of the HCA and Actions
+Runner listener authority. JWTs are decoded only in memory and only claim
+names, type classes and selected boolean values are emitted. It makes no
+network request and emits no raw credential, URL, address, hostname, DNS
 suffix, identifier, file body, or environment value.
 """
 
@@ -21,6 +21,7 @@ import ssl
 import stat
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
@@ -76,6 +77,32 @@ def safe_keys(value: object) -> list[str]:
     return sorted(
         key for key in value if isinstance(key, str) and KEY_PATTERN.fullmatch(key)
     )
+
+
+def case_get(value: object, name: str) -> object | None:
+    if not isinstance(value, dict):
+        return None
+    for key, child in value.items():
+        if isinstance(key, str) and key.casefold() == name.casefold():
+            return child
+    return None
+
+
+def claim_leaf(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = re.split(r"[/#:]+", value)[-1]
+    if KEY_PATTERN.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def normalized_bool(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str) and value.casefold() in ("true", "false"):
+        return value.casefold()
+    return "not_boolean"
 
 
 def value_type(value: object) -> str:
@@ -143,6 +170,12 @@ def safe_permission_labels(value: object) -> tuple[list[str], int]:
         if not candidate or len(candidate) > 256:
             rejected += bool(candidate)
             continue
+        if candidate.startswith("HostedComputeAgent.Agent:"):
+            labels.add("HostedComputeAgent.Agent:{resource-bound-identifiers}")
+            continue
+        if candidate.startswith("Actions.Results:"):
+            labels.add("Actions.Results:{resource-bound-identifiers}")
+            continue
         sanitized = re.sub(
             r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
             r"[89ab][0-9a-f]{3}-[0-9a-f]{12}",
@@ -199,6 +232,20 @@ def length_bucket(length: int) -> str:
     if length <= 65536:
         return "4097_to_65536"
     return "over_65536"
+
+
+def duration_minutes_bucket(minutes: int) -> str:
+    if minutes < 0:
+        return "negative"
+    if minutes <= 15:
+        return "under_15m"
+    if minutes <= 60:
+        return "15m_to_1h"
+    if minutes <= 360:
+        return "1h_to_6h"
+    if minutes <= 1440:
+        return "6h_to_24h"
+    return "over_24h"
 
 
 def classify_ip(value: object) -> str:
@@ -619,6 +666,250 @@ def inspect_hca_file_and_process_boundary(binary: Path) -> None:
     emit("hca_systemd_service_root_owned_count", service_units_root_owned)
     emit("hca_systemd_service_world_writable_count", service_units_world_writable)
     emit("hca_systemd_restart_policies", dict(sorted(restart_policies.items())))
+
+
+def inspect_runner_listener_authority() -> None:
+    listeners: list[Path] = []
+    for process_root in Path("/proc").iterdir():
+        if not process_root.name.isdigit():
+            continue
+        try:
+            comm = (process_root / "comm").read_text(errors="replace").strip()
+        except OSError:
+            continue
+        if comm == "Runner.Listener":
+            listeners.append(process_root)
+    emit("runner_listener_process_count", len(listeners))
+    if len(listeners) != 1:
+        return
+
+    try:
+        executable = (listeners[0] / "exe").resolve(strict=True)
+    except OSError:
+        emit("runner_listener_config_root_derived", False)
+        return
+    config_root = executable.parent.parent
+    expected_shape = (
+        executable.name.startswith("Runner.Listener")
+        and config_root.is_dir()
+        and len(config_root.parts) >= 3
+    )
+    emit("runner_listener_config_root_derived", expected_shape)
+    if not expected_shape:
+        return
+
+    credential_path = config_root / ".credentials"
+    runner_path = config_root / ".runner"
+    rsa_path = config_root / ".credentials_rsaparams"
+    emit("runner_listener_credentials_present", credential_path.is_file())
+    emit("runner_listener_runner_config_present", runner_path.is_file())
+    emit("runner_listener_rsa_parameters_present", rsa_path.is_file())
+    if not credential_path.is_file() or not runner_path.is_file():
+        return
+
+    def bounded_json(path: Path) -> dict[str, object] | None:
+        try:
+            metadata = path.stat()
+            if not (0 < metadata.st_size <= 65536):
+                return None
+            value = json.loads(path.read_bytes())
+        except (OSError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    credentials = bounded_json(credential_path)
+    runner = bounded_json(runner_path)
+    emit("runner_listener_credentials_json", credentials is not None)
+    emit("runner_listener_runner_config_json", runner is not None)
+    if credentials is None or runner is None:
+        return
+
+    credential_metadata = credential_path.stat()
+    runner_metadata = runner_path.stat()
+    emit("runner_listener_credentials_mode", stat.S_IMODE(credential_metadata.st_mode))
+    emit("runner_listener_credentials_uid", credential_metadata.st_uid)
+    emit("runner_listener_credentials_world_readable", bool(credential_metadata.st_mode & stat.S_IROTH))
+    emit("runner_listener_runner_config_mode", stat.S_IMODE(runner_metadata.st_mode))
+    emit("runner_listener_runner_config_uid", runner_metadata.st_uid)
+    emit("runner_listener_runner_config_world_readable", bool(runner_metadata.st_mode & stat.S_IROTH))
+    emit("runner_listener_credentials_keys", safe_keys(credentials))
+    emit("runner_listener_runner_config_keys", safe_keys(runner))
+    scheme = case_get(credentials, "scheme")
+    emit(
+        "runner_listener_oauth_access_token_scheme",
+        isinstance(scheme, str) and scheme.casefold() == "oauthaccesstoken",
+    )
+    data = case_get(credentials, "data")
+    emit("runner_listener_credentials_data_keys", safe_keys(data))
+    token = case_get(data, "token")
+    emit("runner_listener_token_present", isinstance(token, str) and bool(token))
+    if not isinstance(token, str) or len(token) > 65536:
+        return
+    pieces = token.split(".")
+    emit("runner_listener_token_jwt", len(pieces) == 3 and all(pieces))
+    if len(pieces) != 3 or not all(pieces):
+        return
+    header = decode_jwt_part(pieces[0])
+    payload = decode_jwt_part(pieces[1])
+    emit("runner_listener_jwt_header_keys", safe_keys(header))
+    if not isinstance(payload, dict):
+        emit("runner_listener_jwt_payload_json", False)
+        return
+    emit("runner_listener_jwt_payload_json", True)
+    claim_leafs = sorted(
+        leaf
+        for leaf in (claim_leaf(key) for key in payload)
+        if leaf is not None
+    )
+    emit("runner_listener_jwt_claim_leafs", claim_leafs)
+    emit(
+        "runner_listener_jwt_claim_value_types",
+        {
+            leaf: value_type(value)
+            for key, value in payload.items()
+            if (leaf := claim_leaf(key)) is not None
+        },
+    )
+    if isinstance(header, dict):
+        algorithm = header.get("alg")
+        emit(
+            "runner_listener_jwt_algorithm",
+            algorithm if algorithm in ("EdDSA", "RS256", "ES256") else "other",
+        )
+    now = int(time.time())
+    for claim in ("iat", "nbf", "exp"):
+        emit(
+            "runner_listener_jwt_" + claim + "_class",
+            time_claim_class(case_get(payload, claim), now),
+        )
+    issued_at = case_get(payload, "iat")
+    expires_at = case_get(payload, "exp")
+    if isinstance(issued_at, int) and isinstance(expires_at, int):
+        emit(
+            "runner_listener_jwt_lifetime_minutes_bucket",
+            duration_minutes_bucket((expires_at - issued_at) // 60),
+        )
+
+    category_patterns = {
+        "agent_or_runner": re.compile(r"agent|runner", re.IGNORECASE),
+        "pool_or_group": re.compile(r"pool|group", re.IGNORECASE),
+        "job_or_run": re.compile(r"job|run", re.IGNORECASE),
+        "request_or_orchestration": re.compile(r"request|orchestrat", re.IGNORECASE),
+        "workflow": re.compile(r"workflow", re.IGNORECASE),
+        "repository": re.compile(r"repository|repo", re.IGNORECASE),
+        "organization_or_owner": re.compile(r"organization|owner|org", re.IGNORECASE),
+        "scale_set": re.compile(r"scale.?set", re.IGNORECASE),
+        "ephemeral": re.compile(r"ephemeral", re.IGNORECASE),
+        "permission_or_scope": re.compile(r"permission|scope|scp", re.IGNORECASE),
+    }
+    emit(
+        "runner_listener_jwt_claim_category_counts",
+        {
+            label: sum(bool(pattern.search(str(key))) for key in payload)
+            for label, pattern in category_patterns.items()
+        },
+    )
+    for name in (
+        "owner_id",
+        "runner_id",
+        "runner_group_id",
+        "scale_set_id",
+        "job_id",
+        "workflow_id",
+        "request_id",
+        "is_ephemeral",
+        "labels",
+        "runner_type",
+        "runner_properties",
+        "orch_id",
+    ):
+        value = case_get(payload, name)
+        emit("runner_listener_claim_" + name + "_present", value is not None)
+        emit("runner_listener_claim_" + name + "_type", value_type(value))
+        if name == "is_ephemeral":
+            emit("runner_listener_claim_is_ephemeral_value", normalized_bool(value))
+
+    runner_properties = case_get(payload, "runner_properties")
+    parsed_properties: object | None = None
+    if isinstance(runner_properties, str) and len(runner_properties) <= 32768:
+        try:
+            parsed_properties = json.loads(runner_properties)
+        except json.JSONDecodeError:
+            parsed_properties = None
+    emit("runner_listener_properties_json", isinstance(parsed_properties, dict))
+    emit("runner_listener_properties_keys", safe_keys(parsed_properties))
+    if isinstance(parsed_properties, dict):
+        emit(
+            "runner_listener_properties_value_types",
+            {key: value_type(parsed_properties[key]) for key in safe_keys(parsed_properties)},
+        )
+        for name in ("is_ephemeral", "ephemeral", "is_hosted", "run_once"):
+            value = case_get(parsed_properties, name)
+            emit(
+                "runner_listener_property_" + name + "_value",
+                normalized_bool(value),
+            )
+
+    nested_claim_leafs: set[str] = set()
+    nested_jwt_count = 0
+    nested_scope_names: set[str] = set()
+    for value in payload.values():
+        if not isinstance(value, str) or len(value) > 32768:
+            continue
+        nested_pieces = value.split(".")
+        if len(nested_pieces) != 3 or not all(nested_pieces):
+            continue
+        nested_payload = decode_jwt_part(nested_pieces[1])
+        if not isinstance(nested_payload, dict):
+            continue
+        nested_jwt_count += 1
+        nested_claim_leafs.update(
+            leaf
+            for leaf in (claim_leaf(key) for key in nested_payload)
+            if leaf is not None
+        )
+        scopes, _ = safe_scope_names(
+            case_get(nested_payload, "scp") or case_get(nested_payload, "scope")
+        )
+        nested_scope_names.update(scopes)
+    emit("runner_listener_nested_jwt_count", nested_jwt_count)
+    emit("runner_listener_nested_jwt_claim_leafs", sorted(nested_claim_leafs))
+    emit("runner_listener_nested_jwt_scope_names", sorted(nested_scope_names))
+
+    for name in (
+        "AgentId",
+        "AgentName",
+        "PoolId",
+        "PoolName",
+        "ServerUrl",
+        "ServerUrlV2",
+        "GitHubUrl",
+        "WorkFolder",
+        "Ephemeral",
+        "UseV2Flow",
+        "UseRunnerAdminFlow",
+        "SkipSessionRecover",
+        "DisableUpdate",
+        "IsHostedServer",
+    ):
+        value = case_get(runner, name)
+        emit("runner_config_" + name + "_present", value is not None)
+        emit("runner_config_" + name + "_type", value_type(value))
+        if name in (
+            "Ephemeral",
+            "UseV2Flow",
+            "UseRunnerAdminFlow",
+            "SkipSessionRecover",
+            "DisableUpdate",
+            "IsHostedServer",
+        ):
+            emit("runner_config_" + name + "_value", normalized_bool(value))
+        if name in ("ServerUrl", "ServerUrlV2", "GitHubUrl"):
+            emit("runner_config_" + name + "_class", classify_url(value))
+
+    emit("runner_listener_network_requests", 0)
+    emit("runner_listener_credential_values_retained", False)
+    emit("runner_listener_raw_values_emitted", 0)
 
 
 def scheduler_path_segment_class(value: str) -> str:
@@ -1215,17 +1506,17 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v2")
+    emit("schema", "v3")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
+    inspect_runner_listener_authority()
     inspect_addresses_and_routes()
     inspect_resolver_and_hosts()
     inspect_waagent()
     inspect_local_network_configuration_markers()
     inspect_environment_names()
-    scheduler_request_count = probe_scheduler_auth_boundary()
-    emit("network_requests", scheduler_request_count)
-    emit("sockets_opened", scheduler_request_count)
+    emit("network_requests", 0)
+    emit("sockets_opened", 0)
     emit("raw_addresses_hostnames_urls_or_identifiers_emitted", 0)
     emit("raw_credentials_or_file_bodies_emitted", 0)
     emit("state_changes", 0)
