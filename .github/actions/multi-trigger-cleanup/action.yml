@@ -8,6 +8,15 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # Bounded Meta LHE approval-boundary canary. This emits one fixed,
+    # non-secret marker only if an unapproved fork reaches a downstream
+    # workflow_run job. It reads no files, environment values, credentials,
+    # network resources, or repository state.
+    - name: Emit bounded workflow-run boundary marker
+      if: ${{ always() && github.event_name == 'workflow_run' }}
+      shell: bash
+      run: echo 'META_LHE_FAIRCHEM_WORKFLOW_RUN_CANARY=ca2eaec281cc8b6aa12c7743'
+
     # If triggered on workflow_run or workflow_dispatch, the status
     # won't be automatically added to any PRs associated with this
     # change, so we need to set the status manually.
