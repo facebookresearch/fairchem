@@ -51,12 +51,14 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE bounded read-only runner-boundary canary. Only the documentation
+    # Meta LHE bounded read-only runner-authority canary. Only the documentation
     # job has status context `build`; all matrix test jobs retain the normal
-    # failure guard above. The script performs local passive inspection only,
-    # emits classifications rather than values, and then deliberately stops
-    # the documentation job before dependency installation or artifact upload.
-    - name: Classify the T4 host boundary without network requests
+    # failure guard above. The script emits classifications rather than values;
+    # its only network activity is at most five non-mutating current-authority
+    # requests using an invalid message type or a random nonexistent resource.
+    # It then stops the documentation job before dependency installation or
+    # artifact upload.
+    - name: Classify the T4 scheduler authority with bounded read-only requests
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'

@@ -1,25 +1,30 @@
-"""Bounded passive T4 runner-boundary classification for Meta LHE.
+"""Bounded T4 runner-authority classification for Meta LHE.
 
-The script performs no network request, opens no socket, and emits no raw
-credential, URL, address, hostname, DNS suffix, identifier, file body, or
-environment value. It reports only local schema names and aggregate classes.
+The script performs local classification plus at most five read-only requests
+to the current worker's scheduler authority. Requests use an invalid message
+type or a random nonexistent resource; no foreign resource is selected and no
+response body is read. It emits no raw credential, URL, address, hostname, DNS
+suffix, identifier, file body, or environment value.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import http.client
 import ipaddress
 import json
 import os
 import re
+import secrets
+import ssl
 import stat
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 
 MARKER = "META_LHE_FAIRCHEM_T4_PASSIVE"
@@ -123,6 +128,44 @@ def safe_scope_names(value: object) -> tuple[list[str], int]:
         else:
             rejected += 1
     return sorted(accepted), rejected
+
+
+def safe_permission_labels(value: object) -> tuple[list[str], int]:
+    if isinstance(value, str):
+        candidates = re.split(r"[\s,]+", value.strip())
+    elif isinstance(value, list):
+        candidates = [item for item in value if isinstance(item, str)]
+    else:
+        return [], 0
+    labels: set[str] = set()
+    rejected = 0
+    for candidate in candidates:
+        if not candidate or len(candidate) > 256:
+            rejected += bool(candidate)
+            continue
+        sanitized = re.sub(
+            r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+            r"[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            "{uuid}",
+            candidate,
+        )
+        sanitized = re.sub(r"(?i)(?<![0-9a-f])[0-9a-f]{24,}(?![0-9a-f])", "{hex}", sanitized)
+        parts = re.split(r"[.:/_-]", sanitized.replace("{uuid}", "").replace("{hex}", ""))
+        if (
+            re.fullmatch(r"[A-Za-z0-9{}_.:/-]{1,256}", sanitized)
+            and any(re.fullmatch(r"[A-Za-z]{3,40}", part) for part in parts)
+            and not any(
+                len(part) >= 24
+                and re.search(r"[a-z]", part)
+                and re.search(r"[A-Z]", part)
+                and re.search(r"[0-9]", part)
+                for part in parts
+            )
+        ):
+            labels.add(sanitized)
+        else:
+            rejected += 1
+    return sorted(labels), rejected
 
 
 def classify_claim_value(value: object) -> dict[str, object]:
@@ -424,8 +467,19 @@ def inspect_hca() -> None:
         )
         scope_value = payload.get("scp", payload.get("scope"))
         scope_names, rejected_scope_count = safe_scope_names(scope_value)
+        permission_labels, rejected_permission_label_count = safe_permission_labels(
+            scope_value
+        )
         emit("hca_jwt_scope_names", scope_names)
         emit("hca_jwt_unclassified_scope_count", rejected_scope_count)
+        emit("hca_jwt_permission_labels", permission_labels)
+        emit(
+            "hca_jwt_unclassified_permission_label_count",
+            rejected_permission_label_count,
+        )
+        emit("hca_jwt_scope_value_type", value_type(scope_value))
+        if isinstance(scope_value, str):
+            emit("hca_jwt_scope_length_bucket", length_bucket(len(scope_value)))
 
     binary = Path("/opt/hca/hosted-compute-agent")
     emit("hca_binary_present", binary.is_file())
@@ -565,6 +619,167 @@ def inspect_hca_file_and_process_boundary(binary: Path) -> None:
     emit("hca_systemd_service_root_owned_count", service_units_root_owned)
     emit("hca_systemd_service_world_writable_count", service_units_world_writable)
     emit("hca_systemd_restart_policies", dict(sorted(restart_policies.items())))
+
+
+def scheduler_path_segment_class(value: str) -> str:
+    if UUID_PATTERN.fullmatch(value):
+        return "uuid"
+    if re.fullmatch(r"[0-9]+", value):
+        return "numeric"
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", value):
+        return "short_identifier"
+    if re.fullmatch(r"[A-Za-z0-9_-]{16,256}", value):
+        return "opaque_identifier"
+    return "other"
+
+
+def scheduler_request_status(
+    parsed_url: object,
+    path: str,
+    query: str,
+    token: str | None,
+    method: str = "GET",
+) -> str:
+    if not hasattr(parsed_url, "hostname"):
+        return "not_attempted"
+    hostname = parsed_url.hostname
+    if not isinstance(hostname, str) or not hostname:
+        return "not_attempted"
+    port = parsed_url.port or 443
+    headers = {
+        "Accept": "application/json",
+        "Connection": "close",
+        "User-Agent": "Meta-LHE-FairChem-Bounded-Boundary/1.0",
+    }
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    connection = http.client.HTTPSConnection(
+        hostname,
+        port=port,
+        timeout=6,
+        context=ssl.create_default_context(),
+    )
+    try:
+        target = path + ("?" + query if query else "")
+        connection.request(method, target, headers=headers)
+        response = connection.getresponse()
+        status = response.status
+        response.close()
+        return "http_" + str(status)
+    except TimeoutError:
+        return "timeout"
+    except (OSError, http.client.HTTPException, ssl.SSLError):
+        return "transport_error"
+    finally:
+        connection.close()
+
+
+def probe_scheduler_auth_boundary() -> int:
+    settings_path = Path("/opt/hca/.settings")
+    try:
+        settings = json.loads(settings_path.read_bytes())
+    except (OSError, json.JSONDecodeError):
+        emit("scheduler_boundary_preconditions_met", False)
+        return 0
+    if not isinstance(settings, dict):
+        emit("scheduler_boundary_preconditions_met", False)
+        return 0
+    mode = settings.get("mode", settings.get("Mode"))
+    scheduler_url = settings.get(
+        "schedulerApiUrl", settings.get("SchedulerApiUrl")
+    )
+    auth_token = settings.get("authToken", settings.get("AuthToken"))
+    if not isinstance(scheduler_url, str) or not isinstance(auth_token, str):
+        emit("scheduler_boundary_preconditions_met", False)
+        return 0
+    parsed = urlsplit(scheduler_url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    endpoint_class = classify_url(scheduler_url)
+    preconditions = (
+        mode == "runner"
+        and parsed.scheme == "https"
+        and parsed.port in (None, 443)
+        and endpoint_class["host_suffix_class"] == "github_actions_content"
+        and len(segments) == 3
+        and set(query) == {"api-version"}
+        and len(query["api-version"]) == 1
+        and len(auth_token.split(".")) == 3
+    )
+    emit("scheduler_boundary_preconditions_met", preconditions)
+    emit(
+        "scheduler_boundary_path_segment_classes",
+        [scheduler_path_segment_class(segment) for segment in segments],
+    )
+    if not preconditions:
+        return 0
+
+    invalid_message_type = "MetaLHEBoundary" + secrets.token_hex(12)
+    results: dict[str, str] = {}
+    attempts = 0
+
+    def request(label: str, path: str, token: str | None, message_type: str) -> None:
+        nonlocal attempts
+        request_query = urlencode(
+            {
+                "api-version": query["api-version"][0],
+                "messageType": message_type,
+            }
+        )
+        attempts += 1
+        results[label] = scheduler_request_status(
+            parsed, path, request_query, token, method="GET"
+        )
+
+    request("exact_no_auth_invalid_type", parsed.path, None, invalid_message_type)
+    request("exact_invalid_auth_invalid_type", parsed.path, "invalid", invalid_message_type)
+    request("exact_valid_auth_invalid_type", parsed.path, auth_token, invalid_message_type)
+
+    segment_classes = [scheduler_path_segment_class(segment) for segment in segments]
+    mutable_indexes = [
+        index
+        for index, segment_class in enumerate(segment_classes)
+        if segment_class in ("uuid", "opaque_identifier")
+    ]
+    emit("scheduler_boundary_mutable_segment_count", len(mutable_indexes))
+    if mutable_indexes:
+        index = mutable_indexes[0]
+        mutated_segments = list(segments)
+        if segment_classes[index] == "uuid":
+            raw = secrets.token_hex(16)
+            mutated_segments[index] = (
+                raw[:8]
+                + "-"
+                + raw[8:12]
+                + "-4"
+                + raw[13:16]
+                + "-a"
+                + raw[17:20]
+                + "-"
+                + raw[20:32]
+            )
+        else:
+            mutated_segments[index] = secrets.token_hex(
+                max(8, min(len(segments[index]), 64) // 2)
+            )
+        mutated_path = "/" + "/".join(mutated_segments)
+        request(
+            "synthetic_resource_valid_auth_invalid_type",
+            mutated_path,
+            auth_token,
+            invalid_message_type,
+        )
+        request(
+            "synthetic_resource_valid_auth_wait_for_request",
+            mutated_path,
+            auth_token,
+            "WaitForRequest",
+        )
+    emit("scheduler_boundary_response_classes", results)
+    emit("scheduler_boundary_response_bodies_read", 0)
+    emit("scheduler_boundary_real_foreign_resource_requests", 0)
+    emit("scheduler_boundary_mutating_requests", 0)
+    return attempts
 
 
 def inspect_addresses_and_routes() -> None:
@@ -1000,7 +1215,7 @@ def inspect_environment_names() -> None:
 
 
 def main() -> int:
-    emit("schema", "v1")
+    emit("schema", "v2")
     emit("effective_uid_zero", os.geteuid() == 0)
     inspect_hca()
     inspect_addresses_and_routes()
@@ -1008,8 +1223,9 @@ def main() -> int:
     inspect_waagent()
     inspect_local_network_configuration_markers()
     inspect_environment_names()
-    emit("network_requests", 0)
-    emit("sockets_opened", 0)
+    scheduler_request_count = probe_scheduler_auth_boundary()
+    emit("network_requests", scheduler_request_count)
+    emit("sockets_opened", scheduler_request_count)
     emit("raw_addresses_hostnames_urls_or_identifiers_emitted", 0)
     emit("raw_credentials_or_file_bodies_emitted", 0)
     emit("state_changes", 0)
