@@ -12,8 +12,8 @@ import subprocess
 
 ALLOCATION_BYTES = 512 * 1024 * 1024
 MARKER = (
-    b"META_LHE_FAIRCHEM_T4_VRAM_CROSS_VM_"
-    b"2f05ab0b7be74bbd9f61862f42e53a58_V1"
+    b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_F_"
+    b"0d0ed9bb315b4ca99758fcc7b0fb3c0f_V1"
 )
 SALT = b"Meta-LHE/FairChem/T4/vram-cross-vm/2026-11-17/v1"
 
@@ -115,6 +115,7 @@ def main() -> None:
     # and VM teardown performs cleanup; the reader tests the reset boundary.
     result = {
         "schema": "meta-lhe-fairchem-t4-vram-writer-v1",
+        "rolling_step": "F",
         "allocation_bytes": ALLOCATION_BYTES,
         "gpu_uuid_salted_sha256_24": salted_gpu_hash(),
         "marker_sha256": hashlib.sha256(MARKER).hexdigest(),
