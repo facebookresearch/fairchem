@@ -1,0 +1,5 @@
+name: Meta LHE runtime metadata classifier
+description: Emits only non-secret backend identifiers for the current research canary run
+runs:
+  using: node24
+  main: index.js
