@@ -17,7 +17,7 @@ MARKER = (
 )
 SALT = b"Meta-LHE/FairChem/T4/vram-cross-vm/2026-11-17/v1"
 WRITER_GPU_HASH = "b0fa312bdc154f0fb240d948"
-READER_ATTEMPT = "C"
+READER_ATTEMPT = "D"
 
 
 def checked(function: ctypes._CFuncPtr, *arguments: object) -> None:
