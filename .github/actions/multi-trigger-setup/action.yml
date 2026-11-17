@@ -44,6 +44,7 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
@@ -57,7 +58,7 @@ runs:
     - name: Classify T4 GPU residual-memory isolation boundary
       if: ${{
           github.event_name == 'workflow_run'
-          && github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.conclusion != 'success'
           && inputs.status-context == 'build'
         }}
       shell: bash
