@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'src/fairchem/data/odac/**'
-      - 'packages/fairchem-data/fairchem-data-odac/**'
+      - 'packages/fairchem-data-odac/**'
   workflow_dispatch:
 
 permissions:
