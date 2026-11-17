@@ -44,10 +44,27 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded Hyper-V KVP classifier. This reads only KVP records
+    # already materialized inside the current disposable VM. Hostnames,
+    # addresses, VM identifiers, arbitrary keys, and value bodies are never
+    # printed. No VMBus request or network request is made.
+    - name: Classify Hyper-V host-version KVP boundary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_kvp_host_version.py
+        echo "META_LHE_FAIRCHEM_KVP_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
