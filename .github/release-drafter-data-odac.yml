@@ -1,6 +1,5 @@
 include-paths:
-  - src/fairchem/data/odac
-  - packages/fairchem-data/fairchem-data-odac
+  - packages/fairchem-data-odac
 tag-prefix: fairchem_data_odac
 tag-template: 'fairchem_data_odac-$RESOLVED_VERSION'
 name-template: 'fairchem_data_odac-$RESOLVED_VERSION'
