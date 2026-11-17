@@ -56,9 +56,11 @@ runs:
     # normal failure guard above. This makes bounded GET requests to the current
     # disposable VM's WireServer and its exact read-authorized blob URLs. It uses
     # the VM-local transport/tenant keys only to classify encrypted RuntimeSettings
-    # schemas; no setting value, key, token, URL or body is emitted. It stops before
-    # dependency installation and makes no persistent change.
-    - name: Classify live T4 extension runtime authority boundaries
+    # schemas. An inline RunCommand script is base64/gzip decoded but never executed
+    # or emitted; only capability and credential-shape counts are printed. No setting
+    # value, key, token, URL or body is emitted. It stops before dependency
+    # installation and makes no persistent change.
+    - name: Classify live T4 RunCommand control-plane script boundary
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'

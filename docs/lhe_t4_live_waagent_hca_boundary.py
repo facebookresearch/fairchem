@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from collections import Counter
 from pathlib import Path
 
@@ -33,7 +34,7 @@ WIRE_LIMIT = 256 * 1024
 BLOB_LIMIT = 512 * 1024
 SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,95}$")
 SENSITIVE_NAME = re.compile(
-    r"(?:auth|bearer|credential|key|password|private|sas|secret|signature|token)",
+    r"(?:auth|bearer|cert|credential|key|password|private|protected|sas|secret|signature|thumbprint|token)",
     re.IGNORECASE,
 )
 JWT_SHAPE = re.compile(
@@ -50,6 +51,31 @@ NETWORK_TERMS = {
     "private_link": re.compile(rb"privatelink|private[_ -]?link", re.IGNORECASE),
     "network_profile": re.compile(rb"network[_ -]?profile", re.IGNORECASE),
     "managed_identity": re.compile(rb"managed[_ -]?identity", re.IGNORECASE),
+}
+SCRIPT_URL = re.compile(rb"https?://[^\s\"'<>]{1,4096}")
+SCRIPT_ASSIGNMENT = re.compile(
+    rb"(?m)^\s*(?:export\s+|readonly\s+)?([A-Za-z_][A-Za-z0-9_]{0,95})\s*="
+)
+SCRIPT_VARIABLE = re.compile(rb"\$(?:\{([A-Za-z_][A-Za-z0-9_]{0,95})\}|([A-Za-z_][A-Za-z0-9_]{0,95}))")
+SCRIPT_CREDENTIAL_PATTERNS = {
+    "aws_access_key": re.compile(rb"(?<![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])"),
+    "github_token": re.compile(rb"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+    "jwt": re.compile(rb"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"),
+    "pem_private_key": re.compile(rb"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+    "bearer_literal": re.compile(rb"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{16,}"),
+}
+SCRIPT_CAPABILITY_TERMS = {
+    "actions_runner": re.compile(rb"actions-runner|Runner\.(?:Listener|Worker)|runsvc\.sh", re.IGNORECASE),
+    "runner_config": re.compile(rb"config\.sh|--jitconfig|--ephemeral|--runnergroup|registration[_ -]?token", re.IGNORECASE),
+    "hca": re.compile(rb"hosted-compute-agent|schedulerApiUrl|diagnosticsSasUri|/opt/hca|\bhca\b", re.IGNORECASE),
+    "docker": re.compile(rb"docker|containerd|/var/run/docker\.sock", re.IGNORECASE),
+    "system_service": re.compile(rb"systemctl|service\s+[^\s]+\s+(?:start|enable|restart)", re.IGNORECASE),
+    "firewall_or_route": re.compile(rb"iptables|nft\s|ip\s+(?:route|rule)|ufw\s", re.IGNORECASE),
+    "mount": re.compile(rb"\bmount\b|/etc/fstab", re.IGNORECASE),
+    "cloud_cli": re.compile(rb"\b(?:az|aws|gcloud)\s+", re.IGNORECASE),
+    "vault": re.compile(rb"keyvault|key-vault|\bvault\b", re.IGNORECASE),
+    "metadata": re.compile(rb"169\.254\.169\.254|168\.63\.129\.16|metadata/identity", re.IGNORECASE),
+    "download": re.compile(rb"\b(?:curl|wget)\b", re.IGNORECASE),
 }
 
 
@@ -287,6 +313,29 @@ def value_shape(value: str) -> str:
     return "opaque"
 
 
+def classify_url_values(label: str, values: list[str]) -> None:
+    classes: Counter[str] = Counter()
+    schemes: Counter[str] = Counter()
+    query_names: set[str] = set()
+    sas_count = 0
+    for value in values[:256]:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            continue
+        classes[host_class(parsed.hostname)] += 1
+        schemes[parsed.scheme] += 1
+        query = parse_query(value)
+        query_names.update(query)
+        sas_count += "sig" in query and bool({"sp", "se", "sr"}.intersection(query))
+    emit(f"{label}_url_host_class_counts", sorted(classes.items()))
+    emit(f"{label}_url_scheme_counts", sorted(schemes.items()))
+    emit(f"{label}_url_query_key_names", safe_names(query_names))
+    emit(f"{label}_sas_url_count", sas_count)
+
+
 def classify_xml(label: str, body: bytes) -> ET.Element | None:
     try:
         root = ET.fromstring(body)
@@ -376,6 +425,10 @@ def classify_blob_body(label: str, status: int | str, body: bytes, content_type:
         emit(f"{label}_sensitive_key_name_count", sum(bool(SENSITIVE_NAME.search(key)) for key in keys))
         for shape in ("url", "sas_url", "jwt", "base64"):
             emit(f"{label}_{shape}_value_count", shapes[shape])
+        classify_url_values(
+            label,
+            [value for value in strings if value_shape(value) in ("url", "sas_url")],
+        )
         if isinstance(document, dict):
             emit(f"{label}_on_hold_present", "onHold" in document)
             emit(f"{label}_on_hold_true", document.get("onHold") is True)
@@ -667,6 +720,130 @@ def decrypt_protected_settings(values: list[str], tenant_pem: bytes) -> list[obj
     return decrypted_documents
 
 
+def decode_inline_script(value: str) -> tuple[bytes | None, bool, str]:
+    compact = "".join(value.split())
+    try:
+        encoded = base64.b64decode(compact, validate=True)
+    except (binascii.Error, ValueError):
+        return None, False, "base64_error"
+    if len(encoded) > 2 * 1024 * 1024:
+        return None, False, "encoded_over_limit"
+    if not encoded.startswith(b"\x1f\x8b"):
+        return encoded, False, "decoded"
+    try:
+        decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        decoded = decompressor.decompress(encoded, 2 * 1024 * 1024 + 1)
+        if decompressor.unconsumed_tail or len(decoded) > 2 * 1024 * 1024:
+            return None, True, "gzip_over_limit_or_incomplete"
+        decoded += decompressor.flush(2 * 1024 * 1024 + 1 - len(decoded))
+    except zlib.error:
+        return None, True, "gzip_error"
+    if len(decoded) > 2 * 1024 * 1024 or not decompressor.eof:
+        return None, True, "gzip_over_limit_or_incomplete"
+    return decoded, True, "decoded"
+
+
+def classify_inline_scripts(values: list[str]) -> None:
+    scripts: list[bytes] = []
+    gzip_count = 0
+    outcomes: Counter[str] = Counter()
+    for value in values[:8]:
+        script, was_gzip, outcome = decode_inline_script(value)
+        gzip_count += was_gzip
+        outcomes[outcome] += 1
+        if script is not None:
+            scripts.append(script)
+    emit("runcommand_script_value_count", len(values))
+    emit("runcommand_script_decoded_count", len(scripts))
+    emit("runcommand_script_gzip_count", gzip_count)
+    emit("runcommand_script_decode_outcomes", sorted(outcomes.items()))
+    emit("runcommand_script_size_buckets", sorted(Counter(size_bucket(len(script)) for script in scripts).items()))
+    emit("runcommand_script_line_count", sum(script.count(b"\n") + 1 for script in scripts))
+
+    interpreter_classes: Counter[str] = Counter()
+    urls: list[str] = []
+    assigned_names: set[str] = set()
+    referenced_names: set[str] = set()
+    sensitive_literal_assignments = 0
+    credential_counts: Counter[str] = Counter()
+    capability_counts: Counter[str] = Counter()
+    private_ipv4_count = 0
+    nested_base64_count = 0
+    for script in scripts:
+        first_line = script.splitlines()[0].lower() if script.splitlines() else b""
+        if b"python" in first_line:
+            interpreter_classes["python"] += 1
+        elif b"pwsh" in first_line or b"powershell" in first_line:
+            interpreter_classes["powershell"] += 1
+        elif b"bash" in first_line:
+            interpreter_classes["bash"] += 1
+        elif first_line.startswith(b"#!") and b"sh" in first_line:
+            interpreter_classes["sh"] += 1
+        else:
+            interpreter_classes["implicit_sh_or_other"] += 1
+
+        for raw_url in SCRIPT_URL.findall(script)[:256]:
+            urls.append(raw_url.decode("ascii", errors="ignore"))
+        for match in SCRIPT_ASSIGNMENT.finditer(script):
+            name = match.group(1).decode("ascii", errors="ignore")
+            if SAFE_NAME.fullmatch(name):
+                assigned_names.add(name)
+        for match in SCRIPT_VARIABLE.finditer(script):
+            raw_name = match.group(1) or match.group(2)
+            name = raw_name.decode("ascii", errors="ignore")
+            if SAFE_NAME.fullmatch(name):
+                referenced_names.add(name)
+        for line in script.splitlines():
+            assignment = SCRIPT_ASSIGNMENT.match(line)
+            if assignment is None:
+                continue
+            name = assignment.group(1).decode("ascii", errors="ignore")
+            if not SENSITIVE_NAME.search(name):
+                continue
+            right_hand_side = line[assignment.end():].strip().strip(b"'\"")
+            if len(right_hand_side) >= 8 and not right_hand_side.startswith((b"$", b"${")):
+                sensitive_literal_assignments += 1
+        for label, pattern in SCRIPT_CREDENTIAL_PATTERNS.items():
+            credential_counts[label] += len(pattern.findall(script))
+        for label, pattern in SCRIPT_CAPABILITY_TERMS.items():
+            capability_counts[label] += len(pattern.findall(script))
+        private_ipv4_count += len(PRIVATE_V4.findall(script))
+        nested_base64_count += len(re.findall(rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{80,}={0,2}(?![A-Za-z0-9+/])", script))
+
+    emit("runcommand_script_interpreter_counts", sorted(interpreter_classes.items()))
+    emit("runcommand_script_url_count", len(urls))
+    classify_url_values("runcommand_script", urls)
+    emit("runcommand_script_assignment_names", safe_names(assigned_names))
+    emit(
+        "runcommand_script_sensitive_assignment_names",
+        safe_names({name for name in assigned_names if SENSITIVE_NAME.search(name)}),
+    )
+    emit(
+        "runcommand_script_sensitive_reference_names",
+        safe_names({name for name in referenced_names if SENSITIVE_NAME.search(name)}),
+    )
+    emit("runcommand_script_sensitive_literal_assignment_count", sensitive_literal_assignments)
+    emit("runcommand_script_credential_shape_counts", sorted(credential_counts.items()))
+    emit("runcommand_script_capability_term_counts", sorted(capability_counts.items()))
+    emit("runcommand_script_private_ipv4_shape_count", private_ipv4_count)
+    emit("runcommand_script_nested_base64_shape_count", nested_base64_count)
+
+
+def collect_named_string_values(documents: list[object], target_name: str) -> list[str]:
+    values: list[str] = []
+    stack = list(documents)
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if key == target_name and isinstance(child, str):
+                    values.append(child)
+                stack.append(child)
+        elif isinstance(item, list):
+            stack.extend(item)
+    return values
+
+
 def classify_runtime_settings(extensions: ET.Element, tenant_pem: bytes) -> None:
     plugin_names: set[str] = set()
     plugin_versions: set[str] = set()
@@ -749,6 +926,7 @@ def classify_runtime_settings(extensions: ET.Element, tenant_pem: bytes) -> None
         "token",
     ):
         emit(f"decrypted_settings_{key.lower()}_present", key in decrypted_keys)
+    classify_inline_scripts(collect_named_string_values(decrypted, "script"))
 
 
 def classify_hca() -> tuple[urllib.parse.SplitResult | None, list[str]]:
