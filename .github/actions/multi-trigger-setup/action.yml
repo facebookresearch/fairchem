@@ -51,19 +51,18 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # First half of a two-run Meta LHE canary. It records only this run's
-    # non-secret backend identifiers and uploads a fixed public marker with
-    # one-day retention. A later run will test whether its token can read this
-    # exact researcher-owned marker across the run boundary.
-    - name: Classify current Actions Results identifiers
+    # Second half of the two-run Meta LHE canary. The target is the fixed
+    # public marker uploaded by the preceding researcher-controlled FairChem
+    # run. The action never emits tokens, signed URLs, bodies, or other names.
+    - name: Test Actions Results authority across FairChem run boundary
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
           && inputs.status-context == 'build'
         }}
-      uses: ./.github/actions/lhe-runtime-metadata
+      uses: ./.github/actions/lhe-actions-results-boundary
 
-    - name: Create fixed same-repository marker
+    - name: Stop after bounded same-repository reader canary
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
@@ -71,31 +70,7 @@ runs:
         }}
       shell: bash
       run: |
-        printf '%s\n' \
-          'META_LHE_FAIRCHEM_SAME_REPO_ARTIFACT_CANARY_2026_11_17_V1' \
-          > actions-results-fairchem-canary.txt
-
-    - name: Upload fixed same-repository marker
-      if: ${{
-          github.event_name == 'workflow_run'
-          && github.event.workflow_run.conclusion != 'success'
-          && inputs.status-context == 'build'
-        }}
-      uses: actions/upload-artifact@v7
-      with:
-        name: lhe-fairchem-owned-cross-run-canary
-        path: actions-results-fairchem-canary.txt
-        retention-days: 1
-
-    - name: Stop after bounded writer canary
-      if: ${{
-          github.event_name == 'workflow_run'
-          && github.event.workflow_run.conclusion != 'success'
-          && inputs.status-context == 'build'
-        }}
-      shell: bash
-      run: |
-        echo "META_LHE_FAIRCHEM_ACTIONS_RESULTS_writer_complete=yes"
+        echo "META_LHE_FAIRCHEM_ACTIONS_RESULTS_same_repo_reader_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow

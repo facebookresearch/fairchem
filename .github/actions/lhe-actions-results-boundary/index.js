@@ -2,12 +2,12 @@ const zlib = require("node:zlib");
 
 // Every target below belongs to the researcher. Keeping them fixed prevents
 // this canary from being repurposed to inspect any third-party artifact.
-const TARGET_RUN_BACKEND_ID = "696ad47f-f302-436d-af65-dbd9ada0d860";
-const TARGET_JOB_BACKEND_ID = "175204ad-eb5a-5ba1-9f05-3438dd8b254c";
-const TARGET_ARTIFACT = "lhe-actions-results-private-canary";
-const TARGET_FILENAME = "actions-results-private-canary.txt";
+const TARGET_RUN_BACKEND_ID = "77a4df98-2b7a-8ac1-9357-65545d7db36e";
+const TARGET_JOB_BACKEND_ID = "6bfd067e-57ae-5d0b-8a81-5883d824b3f9";
+const TARGET_ARTIFACT = "lhe-fairchem-owned-cross-run-canary";
+const TARGET_FILENAME = "actions-results-fairchem-canary.txt";
 const EXPECTED_MARKER =
-  "META_LHE_ACTIONS_RESULTS_PRIVATE_CANARY_2026_11_17_V1\n";
+  "META_LHE_FAIRCHEM_SAME_REPO_ARTIFACT_CANARY_2026_11_17_V1\n";
 const MAX_ARCHIVE_BYTES = 2 * 1024 * 1024;
 
 function endpoint(method) {
@@ -105,7 +105,7 @@ async function main() {
   }
 
   const result = {
-    target_class: "fixed_researcher_owned_private_repo_artifact",
+    target_class: "fixed_researcher_owned_prior_fairchem_run_artifact",
     list_status: null,
     exact_owned_artifact_present: false,
     signed_url_request_status: null,
