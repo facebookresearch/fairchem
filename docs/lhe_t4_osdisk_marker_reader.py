@@ -14,6 +14,7 @@ from typing import Any
 
 
 PREFIX = "META_LHE_FAIRCHEM_OSDISK_READER"
+READER_ATTEMPT = "C"
 SALT = b"Meta-LHE/FairChem/T4/osdisk-cross-vm/2026-11-17/v1"
 CONTROL_MARKER = (
     b"META_LHE_FAIRCHEM_OSDISK_CROSS_VM_"
@@ -403,6 +404,7 @@ def main() -> int:
     matches = int(scan.get("control_marker_matches", 0))
     result = {
         "schema": "meta-lhe-fairchem-t4-osdisk-reader-v2-windowed",
+        "reader_attempt": READER_ATTEMPT,
         "scope": "logical ext4 free blocks on one fresh T4 VM",
         "scan": scan,
         "root_disk_identity_salted_sha256_24": disk_hash,
