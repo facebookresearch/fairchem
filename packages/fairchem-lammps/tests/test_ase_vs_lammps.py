@@ -26,8 +26,13 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
-from fairchem.core import FAIRChemCalculator
-from tests.conftest import get_predict_unit_for_test
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+
+
+def get_predict_unit_for_test(name_or_path, **kwargs):
+    kwargs.setdefault("inference_settings", "high-precision")
+    return pretrained_mlip.get_predict_unit(name_or_path, **kwargs)
+
 
 pytestmark = [pytest.mark.pretrained("uma-s-1p1")]
 
