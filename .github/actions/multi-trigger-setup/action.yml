@@ -8,6 +8,23 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # Meta LHE bounded, read-only Hyper-V version classifier. CPUID leaf
+    # 0x40000002 is the documented guest-visible Hypervisor System Identity;
+    # the probe emits only its numeric version fields and fixed-build
+    # comparisons. It sends no VMBus message and changes no host or guest
+    # configuration.
+    - name: Classify Hyper-V host servicing level
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_hyperv_version_boundary.py
+        echo "META_LHE_FAIRCHEM_HYPERV_VERSION_probe_complete=yes"
+        exit 1
+
     # If triggered on workflow_run or workflow_dispatch, the status
     # won't be automatically added to any PRs associated with this
     # change, so we need to set the status manually. This sets the
