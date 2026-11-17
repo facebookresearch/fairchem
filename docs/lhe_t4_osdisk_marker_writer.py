@@ -3,20 +3,27 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import platform
 import secrets
+import struct
 import subprocess
 from typing import Any
 
 
 PREFIX = "META_LHE_FAIRCHEM_OSDISK_WRITER"
 SALT = b"Meta-LHE/FairChem/T4/osdisk-cross-vm/2026-11-17/v1"
-WRITE_BYTES = 256 * 1024 * 1024
+WRITE_BYTES = 64 * 1024 * 1024
 BLOCK_SIZE = 4096
 CONTROL_PATH = "/var/tmp/meta_lhe_fairchem_osdisk_control.bin"
+FS_IOC_FIEMAP = 0xC020660B
+FIEMAP_FLAG_SYNC = 0x00000001
+MAX_EXTENTS = 128
+FIEMAP_HEADER_SIZE = 32
+FIEMAP_EXTENT_SIZE = 56
 
 
 def command(args: list[str], timeout: int = 20) -> dict[str, Any]:
@@ -87,6 +94,37 @@ def gpu_identity_hashes() -> list[str]:
     return [salted(line) for line in result["stdout"].splitlines() if line.strip()]
 
 
+def physical_extents(descriptor: int) -> list[dict[str, int]]:
+    buffer = bytearray(FIEMAP_HEADER_SIZE + MAX_EXTENTS * FIEMAP_EXTENT_SIZE)
+    struct.pack_into(
+        "<QQIIII",
+        buffer,
+        0,
+        0,
+        (1 << 64) - 1,
+        FIEMAP_FLAG_SYNC,
+        0,
+        MAX_EXTENTS,
+        0,
+    )
+    fcntl.ioctl(descriptor, FS_IOC_FIEMAP, buffer, True)
+    mapped = min(struct.unpack_from("<I", buffer, 20)[0], MAX_EXTENTS)
+    extents: list[dict[str, int]] = []
+    for index in range(mapped):
+        offset = FIEMAP_HEADER_SIZE + index * FIEMAP_EXTENT_SIZE
+        logical, physical, length = struct.unpack_from("<QQQ", buffer, offset)
+        flags = struct.unpack_from("<I", buffer, offset + 40)[0]
+        extents.append(
+            {
+                "logical_offset_bytes": logical,
+                "physical_offset_bytes": physical,
+                "length_bytes": length,
+                "flags": flags,
+            }
+        )
+    return extents
+
+
 def main() -> int:
     marker = "META_LHE_FAIRCHEM_OSDISK_CROSS_VM_" + secrets.token_hex(32)
     filler = secrets.token_bytes(BLOCK_SIZE - len(marker.encode("ascii")))
@@ -99,6 +137,8 @@ def main() -> int:
     )
     written = 0
     allocated_bytes = 0
+    extents: list[dict[str, int]] = []
+    fiemap_error_class = ""
     try:
         if hasattr(os, "posix_fallocate"):
             os.posix_fallocate(descriptor, 0, WRITE_BYTES)
@@ -112,6 +152,10 @@ def main() -> int:
                 pending = pending[count:]
         os.fsync(descriptor)
         allocated_bytes = os.fstat(descriptor).st_blocks * 512
+        try:
+            extents = physical_extents(descriptor)
+        except OSError as exc:
+            fiemap_error_class = type(exc).__name__
     finally:
         os.close(descriptor)
     os.sync()
@@ -120,7 +164,7 @@ def main() -> int:
     after = os.statvfs("/var/tmp")
     device = root_device()
     result = {
-        "schema": "meta-lhe-fairchem-t4-osdisk-writer-v1",
+        "schema": "meta-lhe-fairchem-t4-osdisk-exact-writer-v2",
         "scope": "one bounded control file on the current ephemeral OS disk",
         "research_control_marker": marker,
         "research_control_marker_sha256": hashlib.sha256(marker.encode("ascii")).hexdigest(),
@@ -128,6 +172,11 @@ def main() -> int:
         "requested_bytes": WRITE_BYTES,
         "written_bytes": written,
         "allocated_bytes_before_unlink": allocated_bytes,
+        "fiemap_extent_count": len(extents),
+        "fiemap_extents": extents,
+        "fiemap_error_class": fiemap_error_class,
+        "fiemap_covers_written_bytes": sum(item["length_bytes"] for item in extents)
+        >= written,
         "path_exists_after_unlink": os.path.exists(CONTROL_PATH),
         "free_bytes_delta_after_unlink": (
             after.f_bavail * after.f_frsize - before.f_bavail * before.f_frsize

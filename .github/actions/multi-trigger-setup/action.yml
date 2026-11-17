@@ -51,10 +51,10 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE bounded cross-VM media-reuse control. It writes one 256 MiB
+    # Meta LHE bounded cross-VM media-reuse control. It writes one 64 MiB
     # research-only file on this disposable VM, fsyncs it, unlinks it, and
     # emits only the public marker and salted device identifiers.
-    - name: Write and unlink T4 ephemeral OS-disk control marker
+    - name: Write, map, and unlink T4 ephemeral OS-disk control marker
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
