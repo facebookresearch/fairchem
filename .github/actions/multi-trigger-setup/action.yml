@@ -51,10 +51,10 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Meta LHE reader half of the bounded media-reuse control. It reads at
-    # most 256 MiB of ext4 blocks that remain logically free before and after
-    # each read, searching only for the public random marker from the writer.
-    - name: Search T4 logical free space for cross-VM control marker
+    # Meta LHE exact reader half of the bounded media-reuse control. It reads
+    # only the writer's 64 MiB FIEMAP extent where the blocks remain logically
+    # free before and after each read, searching only for the public marker.
+    - name: Search exact former T4 extent for cross-VM control marker
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'

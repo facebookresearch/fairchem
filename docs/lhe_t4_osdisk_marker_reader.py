@@ -17,19 +17,19 @@ PREFIX = "META_LHE_FAIRCHEM_OSDISK_READER"
 SALT = b"Meta-LHE/FairChem/T4/osdisk-cross-vm/2026-11-17/v1"
 CONTROL_MARKER = (
     b"META_LHE_FAIRCHEM_OSDISK_CROSS_VM_"
-    b"34acc273d11f8dc3a7acc2d24b94f07807dd4e8ca6ace536ffb53f382e9f70bd"
+    b"56bd3bcdb69250aeea9f3fa59387207c89a21b195c7977cdc02159a021a64dc7"
 )
-WRITER_GPU_HASH = "2290b62a0ffeaae393ddd71d"
-WRITER_DISK_HASH = "5380656c584cb3b74240e3f0"
+WRITER_GPU_HASH = "0b3744781bf825ee28606be0"
+WRITER_DISK_HASH = "b196f365ee0e2fc0d6a9fe86"
+TARGET_EXTENTS_BYTES = ((7_918_845_952, 67_108_864),)
 EXT4_MAGIC = 0xEF53
 EXT4_FEATURE_INCOMPAT_META_BG = 0x0010
 EXT4_FEATURE_INCOMPAT_64BIT = 0x0080
 EXT4_FEATURE_RO_COMPAT_BIGALLOC = 0x0200
 EXT4_BG_BLOCK_UNINIT = 0x0002
-CANDIDATE_POINTS = 65_536
 WINDOW_BLOCKS = 16
-MAX_SAMPLE_WINDOWS = 4096
-MAX_SAMPLE_BYTES = 256 * 1024 * 1024
+MAX_SAMPLE_WINDOWS = 1024
+MAX_SAMPLE_BYTES = 64 * 1024 * 1024
 UNINIT_EDGE_GUARD_BLOCKS = 1024
 
 
@@ -280,15 +280,20 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
                 return True
             return bool(bitmap) and bit_is_free(bitmap, bit)
 
-        span = blocks_count - first_data_block
-        point_count = min(CANDIDATE_POINTS, span)
-        free_window_candidates: list[int] = []
-        for index in range(point_count):
-            block_number = (
-                first_data_block
-                if point_count == 1
-                else first_data_block + index * (span - 1) // (point_count - 1)
+        target_windows: list[int] = []
+        for physical_offset, length in TARGET_EXTENTS_BYTES:
+            if physical_offset % block_size or length % block_size:
+                base["reason"] = "unaligned_target_extent"
+                return base
+            start_block = physical_offset // block_size
+            end_block = (physical_offset + length) // block_size
+            target_windows.extend(
+                range(start_block, end_block - WINDOW_BLOCKS + 1, WINDOW_BLOCKS)
             )
+        free_window_candidates: list[int] = []
+        for block_number in target_windows:
+            if not (first_data_block <= block_number < blocks_count):
+                continue
             relative = block_number - first_data_block
             group = relative // blocks_per_group
             bit = relative % blocks_per_group
@@ -373,8 +378,9 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
             "block_size": block_size,
             "block_count": blocks_count,
             "group_count": group_count,
-            "uniform_candidate_points": point_count,
-            "logical_free_window_candidates": len(free_window_candidates),
+            "target_extents_bytes": [list(item) for item in TARGET_EXTENTS_BYTES],
+            "target_window_count": len(target_windows),
+            "logical_free_target_windows": len(free_window_candidates),
             "window_blocks": WINDOW_BLOCKS,
             "selected_free_windows": len(selected),
             "revalidated_free_blocks": revalidated_blocks,
@@ -402,8 +408,8 @@ def main() -> int:
     scan = ext4_marker_scan(device, filesystem_type)
     matches = int(scan.get("control_marker_matches", 0))
     result = {
-        "schema": "meta-lhe-fairchem-t4-osdisk-reader-v2-windowed",
-        "scope": "logical ext4 free blocks on one fresh T4 VM",
+        "schema": "meta-lhe-fairchem-t4-osdisk-exact-reader-v3",
+        "scope": "writer FIEMAP extents that remain logical ext4 free blocks",
         "scan": scan,
         "root_disk_identity_salted_sha256_24": disk_hash,
         "gpu_uuid_salted_sha256_24": gpu_hashes,
