@@ -7,6 +7,7 @@ import collections
 import json
 import os
 import re
+import socket
 import subprocess
 import tempfile
 from typing import Any
@@ -220,8 +221,25 @@ def vmbus_inventory() -> dict[str, Any]:
         for name in os.listdir(root):
             path = os.path.join(root, name)
             class_id = read_small(os.path.join(path, "class_id")).lower()
+            if not class_id:
+                try:
+                    with open(
+                        os.path.join(path, "uevent"),
+                        encoding="utf-8",
+                        errors="replace",
+                    ) as stream:
+                        uevent = stream.read(4096)
+                except OSError:
+                    uevent = ""
+                match = re.search(
+                    r"^MODALIAS=vmbus:([0-9a-fA-F{}-]{32,38})$", uevent, re.MULTILINE
+                )
+                if match:
+                    class_id = match.group(1).lower()
             if re.fullmatch(r"\{?[0-9a-f-]{36,38}\}?", class_id):
                 class_counts[class_id.strip("{}") + ""] += 1
+            elif re.fullmatch(r"[0-9a-f]{32}", class_id):
+                class_counts[class_id] += 1
             driver_path = os.path.join(path, "driver")
             if os.path.islink(driver_path):
                 driver_counts[os.path.basename(os.path.realpath(driver_path))] += 1
@@ -241,17 +259,91 @@ def vmbus_inventory() -> dict[str, Any]:
     }
 
 
+def guest_device_surface_inventory() -> dict[str, Any]:
+    scsi_type_counts: collections.Counter[str] = collections.Counter()
+    scsi_driver_counts: collections.Counter[str] = collections.Counter()
+    scsi_root = "/sys/class/scsi_device"
+    if os.path.isdir(scsi_root):
+        for name in os.listdir(scsi_root):
+            path = os.path.join(scsi_root, name, "device")
+            device_type = read_small(os.path.join(path, "type"))
+            if device_type.isdigit():
+                scsi_type_counts[device_type] += 1
+            driver_path = os.path.join(path, "driver")
+            if os.path.islink(driver_path):
+                scsi_driver_counts[os.path.basename(os.path.realpath(driver_path))] += 1
+
+    block_type_counts: collections.Counter[str] = collections.Counter()
+    block_transport_counts: collections.Counter[str] = collections.Counter()
+    lsblk = command(["lsblk", "-J", "-o", "TYPE,TRAN"])
+    if lsblk.get("ok"):
+        try:
+            pending = list(json.loads(lsblk["stdout"]).get("blockdevices") or [])
+            while pending:
+                row = pending.pop()
+                value = str(row.get("type") or "unknown")
+                block_type_counts[value] += 1
+                transport = str(row.get("tran") or "none")
+                block_transport_counts[transport] += 1
+                pending.extend(row.get("children") or [])
+        except json.JSONDecodeError:
+            pass
+
+    pci_driver_counts: collections.Counter[str] = collections.Counter()
+    pci_root = "/sys/bus/pci/devices"
+    if os.path.isdir(pci_root):
+        for name in os.listdir(pci_root):
+            driver_path = os.path.join(pci_root, name, "driver")
+            if os.path.islink(driver_path):
+                pci_driver_counts[os.path.basename(os.path.realpath(driver_path))] += 1
+
+    vsock_socket_create = False
+    vsock_error = ""
+    try:
+        candidate = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+        candidate.close()
+        vsock_socket_create = True
+    except (AttributeError, OSError) as exc:
+        vsock_error = type(exc).__name__
+
+    modinfo = command(["modinfo", "-F", "filename", "hv_sock"])
+    return {
+        "scsi_type_counts": dict(sorted(scsi_type_counts.items())),
+        "scsi_driver_counts": dict(sorted(scsi_driver_counts.items())),
+        "block_type_counts": dict(sorted(block_type_counts.items())),
+        "block_transport_counts": dict(sorted(block_transport_counts.items())),
+        "pci_driver_counts": dict(sorted(pci_driver_counts.items())),
+        "virtio_driver_observed": any(
+            name.startswith("virtio") for name in pci_driver_counts
+        ),
+        "hv_sock_module_available": bool(
+            modinfo.get("ok") and modinfo.get("stdout", "").strip()
+        ),
+        "hv_sock_module_loaded": os.path.isdir("/sys/module/hv_sock"),
+        "vsock_socket_create_succeeded": vsock_socket_create,
+        "vsock_socket_create_error_class": vsock_error,
+        "vsock_proc_entry_present": os.path.exists("/proc/net/vsock"),
+        "vsock_device_node_present": os.path.exists("/dev/vsock"),
+        "vsock_connect_attempted": False,
+        "unique_device_identifier_emitted": False,
+    }
+
+
 def main() -> int:
     cpuid = cpuid_inventory()
     kernel_log = kernel_log_inventory()
     cpuid_version = cpuid.get("host_version_leaf", {})
     result = {
-        "schema": "meta-lhe-fairchem-t4-hyperv-boundary-v1",
-        "scope": "read-only Hyper-V CPUID, boot-log, DMI, and VMBus class metadata",
+        "schema": "meta-lhe-fairchem-t4-hyperv-device-surface-v2",
+        "scope": (
+            "read-only Hyper-V, VMBus, SCSI, PCI-driver, block, and local "
+            "AF_VSOCK capability metadata"
+        ),
         "cpuid": cpuid,
         "kernel_log": kernel_log,
         "platform": platform_inventory(),
         "vmbus": vmbus_inventory(),
+        "guest_device_surface": guest_device_surface_inventory(),
         "conclusions": {
             "microsoft_hypervisor_observed": cpuid.get("vendor") == "Microsoft Hv",
             "host_build_exposed": bool(kernel_log.get("host_builds") or cpuid_version),
