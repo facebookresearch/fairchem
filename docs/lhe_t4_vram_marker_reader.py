@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Search for rolling marker F, then seed rolling marker G."""
+"""Search for rolling marker G, then seed rolling marker H."""
 
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ import subprocess
 
 ALLOCATION_BYTES = 512 * 1024 * 1024
 PREVIOUS_MARKER = (
-    b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_F_"
-    b"0d0ed9bb315b4ca99758fcc7b0fb3c0f_V1"
-)
-NEXT_MARKER = (
     b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_G_"
     b"8c917762f6604be7a5c2ca5e45dc2dbe_V1"
 )
+NEXT_MARKER = (
+    b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_H_"
+    b"b1af7350ce95452684d769bd069beaf6_V1"
+)
 SALT = b"Meta-LHE/FairChem/T4/vram-cross-vm/2026-11-17/v1"
-PREVIOUS_WRITER_GPU_HASH = "902ea9e77c1743e87117e625"
-ROLLING_STEP = "G"
+PREVIOUS_WRITER_GPU_HASH = "2545d2cec3f8f5b008b5b625"
+ROLLING_STEP = "H"
 
 
 def checked(function: ctypes._CFuncPtr, *arguments: object) -> None:
