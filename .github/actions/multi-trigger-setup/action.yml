@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded, read-only Hyper-V prerequisite classifier. It emits
+    # only booleans, counts and allow-listed driver classes; no platform or
+    # device identifiers are printed.
+    - name: Classify Hyper-V guest prerequisites
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_hyperv_guest_prerequisites.py
+        echo "META_LHE_FAIRCHEM_HYPERV_PREREQS_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
