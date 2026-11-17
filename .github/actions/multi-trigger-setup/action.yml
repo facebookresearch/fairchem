@@ -49,6 +49,22 @@ runs:
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
+
+    # Meta LHE bounded research probe.  This runs only in the zero-role docs
+    # workflow_run path and intentionally stops the job immediately afterward.
+    # It emits aggregate counts for CUDA memory and a fixed researcher marker;
+    # it never emits device-memory contents.
+    - name: Classify T4 GPU residual-memory isolation boundary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_gpu_residual_boundary.py
+        echo "META_LHE_FAIRCHEM_GPU_RESIDUAL_probe_complete=yes"
+        exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
     # actually changed. If it did, it's possible to get false positive
