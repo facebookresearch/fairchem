@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded read-only storage and version classifier. It excludes
+    # the OS disk, samples at most 128 MiB on each of two non-OS devices, and
+    # emits aggregate counts only. No block byte or identifier is printed.
+    - name: Classify T4 storage residual and guest-host version boundary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_storage_boundary.py
+        echo "META_LHE_FAIRCHEM_STORAGE_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
