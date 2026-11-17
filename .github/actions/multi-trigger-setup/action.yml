@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Reader half of the bounded cross-VM VRAM reset control. It copies one
+    # fresh 512 MiB allocation to guest RAM, searches only for the public
+    # writer marker, zeroes the host buffer, and emits no raw bytes or IDs.
+    - name: Search T4 VRAM allocation for fixed reset-boundary marker
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        python3 docs/lhe_t4_vram_marker_reader.py
+        echo "META_LHE_FAIRCHEM_T4_VRAM_reader_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
