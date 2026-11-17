@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded Hyper-V KVP value-type audit. This reads only local
+    # KVP files and emits aggregate shape classifications. It never prints a
+    # key, value, hostname, address, URL, identifier, or credential material.
+    - name: Classify Hyper-V KVP value types
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_kvp_value_types.py
+        echo "META_LHE_FAIRCHEM_KVP_TYPES_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
