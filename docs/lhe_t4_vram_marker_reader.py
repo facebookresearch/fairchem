@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Search a bounded CUDA allocation only for the public writer marker."""
+"""Search for rolling marker F, then seed rolling marker G."""
 
 from __future__ import annotations
 
@@ -11,13 +11,17 @@ import subprocess
 
 
 ALLOCATION_BYTES = 512 * 1024 * 1024
-MARKER = (
-    b"META_LHE_FAIRCHEM_T4_VRAM_CROSS_VM_"
-    b"2f05ab0b7be74bbd9f61862f42e53a58_V1"
+PREVIOUS_MARKER = (
+    b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_F_"
+    b"0d0ed9bb315b4ca99758fcc7b0fb3c0f_V1"
+)
+NEXT_MARKER = (
+    b"META_LHE_FAIRCHEM_T4_VRAM_ROLLING_G_"
+    b"8c917762f6604be7a5c2ca5e45dc2dbe_V1"
 )
 SALT = b"Meta-LHE/FairChem/T4/vram-cross-vm/2026-11-17/v1"
-WRITER_GPU_HASH = "b0fa312bdc154f0fb240d948"
-READER_ATTEMPT = "E"
+PREVIOUS_WRITER_GPU_HASH = "902ea9e77c1743e87117e625"
+ROLLING_STEP = "G"
 
 
 def checked(function: ctypes._CFuncPtr, *arguments: object) -> None:
@@ -48,6 +52,10 @@ def configure_cuda() -> ctypes.CDLL:
         ),
         "cuMemcpyDtoH_v2": (
             [ctypes.c_void_p, ctypes.c_uint64, ctypes.c_size_t],
+            ctypes.c_int,
+        ),
+        "cuMemcpyHtoD_v2": (
+            [ctypes.c_uint64, ctypes.c_void_p, ctypes.c_size_t],
             ctypes.c_int,
         ),
         "cuCtxSynchronize": ([], ctypes.c_int),
@@ -108,33 +116,59 @@ def main() -> None:
     )
     checked(cuda.cuCtxSynchronize)
 
-    marker_present = host.find(MARKER) != -1
-    reader_gpu_hash = salted_gpu_hash()
+    previous_marker_present = host.find(PREVIOUS_MARKER) != -1
+    current_gpu_hash = salted_gpu_hash()
 
-    # Do not retain any non-marker device bytes in guest RAM after the check.
+    # Overwrite the entire guest buffer with the next public marker, copy it
+    # back to the same allocation, and intentionally leave normal process/VM
+    # teardown to release the context for the next rolling step.
+    chunk_bytes = 1024 * 1024
+    next_chunk = (
+        NEXT_MARKER
+        * ((chunk_bytes + len(NEXT_MARKER) - 1) // len(NEXT_MARKER))
+    )[:chunk_bytes]
+    for offset in range(0, ALLOCATION_BYTES, chunk_bytes):
+        host[offset : offset + chunk_bytes] = next_chunk
+    checked(
+        cuda.cuMemcpyHtoD_v2,
+        device_pointer,
+        host_pointer,
+        ALLOCATION_BYTES,
+    )
+    checked(cuda.cuCtxSynchronize)
+
+    # Do not retain any device bytes in guest RAM after the bounded check.
     zero_chunk = b"\x00" * (1024 * 1024)
     for offset in range(0, ALLOCATION_BYTES, len(zero_chunk)):
         host[offset : offset + len(zero_chunk)] = zero_chunk
-    checked(cuda.cuMemFree_v2, device_pointer)
-    checked(cuda.cuCtxDestroy_v2, context)
     host.close()
 
     result = {
-        "schema": "meta-lhe-fairchem-t4-vram-reader-v1",
-        "reader_attempt": READER_ATTEMPT,
+        "schema": "meta-lhe-fairchem-t4-vram-rolling-reader-writer-v1",
+        "rolling_step": ROLLING_STEP,
         "allocation_bytes": ALLOCATION_BYTES,
-        "writer_gpu_uuid_salted_sha256_24": WRITER_GPU_HASH,
-        "reader_gpu_uuid_salted_sha256_24": reader_gpu_hash,
-        "same_physical_gpu_as_writer": reader_gpu_hash == WRITER_GPU_HASH,
-        "marker_sha256": hashlib.sha256(MARKER).hexdigest(),
-        "marker_present": marker_present,
+        "previous_writer_gpu_uuid_salted_sha256_24": PREVIOUS_WRITER_GPU_HASH,
+        "current_gpu_uuid_salted_sha256_24": current_gpu_hash,
+        "same_physical_gpu_as_previous_writer": (
+            current_gpu_hash == PREVIOUS_WRITER_GPU_HASH
+        ),
+        "previous_marker_sha256": hashlib.sha256(PREVIOUS_MARKER).hexdigest(),
+        "previous_marker_present": previous_marker_present,
+        "next_marker_sha256": hashlib.sha256(NEXT_MARKER).hexdigest(),
+        "next_marker_repetitions": ALLOCATION_BYTES // len(NEXT_MARKER),
+        "next_marker_written": True,
+        "allocation_freed_by_script": False,
+        "context_destroyed_by_script": False,
         "host_buffer_zeroed_after_search": True,
         "raw_gpu_uuid_emitted": False,
         "raw_device_bytes_emitted": False,
         "raw_device_bytes_persisted": False,
         "credential_or_identifier_emitted": False,
     }
-    print(f"META_LHE_FAIRCHEM_T4_VRAM_READER={json.dumps(result, sort_keys=True)}")
+    print(
+        "META_LHE_FAIRCHEM_T4_VRAM_ROLLING="
+        + json.dumps(result, sort_keys=True)
+    )
 
 
 if __name__ == "__main__":

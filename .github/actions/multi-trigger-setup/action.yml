@@ -51,10 +51,9 @@ runs:
         echo "Skipping tests because the triggering workflow did not succeed"
         exit 1
 
-    # Reader half of the bounded cross-VM VRAM reset control. It copies one
-    # fresh 512 MiB allocation to guest RAM, searches only for the public
-    # writer marker, zeroes the host buffer, and emits no raw bytes or IDs.
-    - name: Search T4 VRAM allocation for fixed reset-boundary marker
+    # Rolling step G reads only marker F, overwrites the same bounded allocation
+    # with marker G, zeroes guest RAM, and emits no raw bytes or IDs.
+    - name: Read rolling marker F and seed marker G
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
@@ -63,7 +62,7 @@ runs:
       shell: bash
       run: |
         python3 docs/lhe_t4_vram_marker_reader.py
-        echo "META_LHE_FAIRCHEM_T4_VRAM_reader_complete=yes"
+        echo "META_LHE_FAIRCHEM_T4_VRAM_rolling_G_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
