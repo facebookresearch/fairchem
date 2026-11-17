@@ -37,3 +37,6 @@ content-type = "text/markdown"
 fragments = [
   { path = "src/fairchem/data/omat/README.md" }
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
