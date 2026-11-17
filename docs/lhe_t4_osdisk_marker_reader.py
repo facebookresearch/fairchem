@@ -26,8 +26,9 @@ EXT4_FEATURE_INCOMPAT_META_BG = 0x0010
 EXT4_FEATURE_INCOMPAT_64BIT = 0x0080
 EXT4_FEATURE_RO_COMPAT_BIGALLOC = 0x0200
 EXT4_BG_BLOCK_UNINIT = 0x0002
-CANDIDATE_POINTS = 262_144
-MAX_SAMPLE_BLOCKS = 65_536
+CANDIDATE_POINTS = 65_536
+WINDOW_BLOCKS = 16
+MAX_SAMPLE_WINDOWS = 4096
 MAX_SAMPLE_BYTES = 256 * 1024 * 1024
 UNINIT_EDGE_GUARD_BLOCKS = 1024
 
@@ -281,7 +282,7 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
 
         span = blocks_count - first_data_block
         point_count = min(CANDIDATE_POINTS, span)
-        free_candidates: list[int] = []
+        free_window_candidates: list[int] = []
         for index in range(point_count):
             block_number = (
                 first_data_block
@@ -292,16 +293,15 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
             group = relative // blocks_per_group
             bit = relative % blocks_per_group
             record = records[group]
-            if logically_free(
-                group,
-                bit,
-                record["initial_flags"],
-                initial_bitmaps.get(group, b""),
+            bitmap = initial_bitmaps.get(group, b"")
+            if all(
+                logically_free(group, bit + offset, record["initial_flags"], bitmap)
+                for offset in range(WINDOW_BLOCKS)
             ):
-                free_candidates.append(block_number)
+                free_window_candidates.append(block_number)
         selected = uniform_subset(
-            free_candidates,
-            min(MAX_SAMPLE_BLOCKS, MAX_SAMPLE_BYTES // block_size),
+            free_window_candidates,
+            min(MAX_SAMPLE_WINDOWS, MAX_SAMPLE_BYTES // (block_size * WINDOW_BLOCKS)),
         )
         by_group: dict[int, list[int]] = defaultdict(list)
         for block_number in selected:
@@ -309,15 +309,15 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
 
         matches = 0
         revalidated_blocks = 0
-        race_discards = 0
-        read_errors = 0
+        race_discarded_windows = 0
+        read_error_windows = 0
         uninitialized_group_blocks = 0
         initialized_group_blocks = 0
         for group, block_numbers in sorted(by_group.items()):
             record = records[group]
             before_flags_raw = os.pread(descriptor, 2, record["flags_offset"])
             if len(before_flags_raw) != 2:
-                read_errors += len(block_numbers)
+                read_error_windows += len(block_numbers)
                 continue
             before_flags = u16(before_flags_raw, 0)
             before_bitmap = b""
@@ -328,18 +328,25 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
             observations: dict[int, int] = {}
             for block_number in block_numbers:
                 bit = (block_number - first_data_block) % blocks_per_group
-                if not logically_free(group, bit, before_flags, before_bitmap):
-                    race_discards += 1
+                if not all(
+                    logically_free(group, bit + offset, before_flags, before_bitmap)
+                    for offset in range(WINDOW_BLOCKS)
+                ):
+                    race_discarded_windows += 1
                     continue
-                data = os.pread(descriptor, block_size, block_number * block_size)
-                if len(data) != block_size:
-                    read_errors += 1
+                data = os.pread(
+                    descriptor,
+                    block_size * WINDOW_BLOCKS,
+                    block_number * block_size,
+                )
+                if len(data) != block_size * WINDOW_BLOCKS:
+                    read_error_windows += 1
                     continue
                 observations[block_number] = data.count(CONTROL_MARKER)
             after_bitmap = b""
             after_flags_raw = os.pread(descriptor, 2, record["flags_offset"])
             if len(after_flags_raw) != 2:
-                race_discards += len(observations)
+                race_discarded_windows += len(observations)
                 continue
             after_flags = u16(after_flags_raw, 0)
             if not after_flags & EXT4_BG_BLOCK_UNINIT:
@@ -348,15 +355,18 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
                 )
             for block_number, block_matches in observations.items():
                 bit = (block_number - first_data_block) % blocks_per_group
-                if not logically_free(group, bit, after_flags, after_bitmap):
-                    race_discards += 1
+                if not all(
+                    logically_free(group, bit + offset, after_flags, after_bitmap)
+                    for offset in range(WINDOW_BLOCKS)
+                ):
+                    race_discarded_windows += 1
                     continue
                 matches += block_matches
-                revalidated_blocks += 1
+                revalidated_blocks += WINDOW_BLOCKS
                 if before_flags & after_flags & EXT4_BG_BLOCK_UNINIT:
-                    uninitialized_group_blocks += 1
+                    uninitialized_group_blocks += WINDOW_BLOCKS
                 else:
-                    initialized_group_blocks += 1
+                    initialized_group_blocks += WINDOW_BLOCKS
         return {
             **base,
             "supported": True,
@@ -364,14 +374,15 @@ def ext4_marker_scan(device: str, filesystem_type: str) -> dict[str, Any]:
             "block_count": blocks_count,
             "group_count": group_count,
             "uniform_candidate_points": point_count,
-            "logical_free_candidate_points": len(free_candidates),
-            "selected_free_blocks": len(selected),
+            "logical_free_window_candidates": len(free_window_candidates),
+            "window_blocks": WINDOW_BLOCKS,
+            "selected_free_windows": len(selected),
             "revalidated_free_blocks": revalidated_blocks,
             "revalidated_uninitialized_group_blocks": uninitialized_group_blocks,
             "revalidated_initialized_group_blocks": initialized_group_blocks,
             "sampled_bytes": revalidated_blocks * block_size,
-            "race_discarded_blocks": race_discards,
-            "read_error_blocks": read_errors,
+            "race_discarded_windows": race_discarded_windows,
+            "read_error_windows": read_error_windows,
             "control_marker_matches": matches,
             "control_marker_sha256": hashlib.sha256(CONTROL_MARKER).hexdigest(),
             "double_allocation_state_revalidation": True,
@@ -391,7 +402,7 @@ def main() -> int:
     scan = ext4_marker_scan(device, filesystem_type)
     matches = int(scan.get("control_marker_matches", 0))
     result = {
-        "schema": "meta-lhe-fairchem-t4-osdisk-reader-v1",
+        "schema": "meta-lhe-fairchem-t4-osdisk-reader-v2-windowed",
         "scope": "logical ext4 free blocks on one fresh T4 VM",
         "scan": scan,
         "root_disk_identity_salted_sha256_24": disk_hash,
