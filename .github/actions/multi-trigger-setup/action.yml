@@ -44,10 +44,34 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded cross-repository authorization canary. The target is a
+    # single fixed private artifact owned by the researcher. The action emits
+    # only status classes and marker equality: never a token, signed URL,
+    # response body, or another artifact name.
+    - name: Test Actions Results authority against researcher-owned private canary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      uses: ./.github/actions/lhe-actions-results-boundary
+
+    - name: Stop after bounded Actions Results canary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        echo "META_LHE_FAIRCHEM_ACTIONS_RESULTS_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow

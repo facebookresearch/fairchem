@@ -1,0 +1,5 @@
+name: Meta LHE bounded Actions Results boundary canary
+description: Tests one fixed researcher-owned private artifact without emitting credentials or URLs
+runs:
+  using: node24
+  main: index.js
