@@ -26,7 +26,7 @@ C_SOURCE = r"""
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/types.h>
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 
 #define RESPONSE_MAX 128
 #define RESPONSE_TIMEOUT (2 * HZ)
