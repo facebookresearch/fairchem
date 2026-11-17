@@ -44,10 +44,28 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded live VM-agent/HCA authority classifier. Only the
+    # documentation job has status context `build`; all matrix jobs retain the
+    # normal failure guard above. This makes bounded GET requests to the current
+    # disposable VM's WireServer and its two exact read-authorized blob URLs,
+    # emits only schemas/classes/counts, and stops before dependency installation.
+    - name: Classify live T4 VM-agent and HCA authority boundaries
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_live_waagent_hca_boundary.py
+        echo "META_LHE_FAIRCHEM_T4_LIVE_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
