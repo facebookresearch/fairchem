@@ -39,3 +39,6 @@ fragments = [
   { path = "src/fairchem/applications/cattsunami/README.md" },
   { path = "src/fairchem/applications/cattsunami/DATASET.md" }
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
