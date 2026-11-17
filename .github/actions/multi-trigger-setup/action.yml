@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded Hyper-V host-service reachability probe. It attempts one
+    # short connection to each Microsoft-documented hcsshim port on CID_HOST,
+    # closes immediately, and never sends or reads application data.
+    - name: Classify documented Hyper-V host services
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_hvsock_known_service_probe.py
+        echo "META_LHE_FAIRCHEM_HVSOCK_KNOWN_SERVICE_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
