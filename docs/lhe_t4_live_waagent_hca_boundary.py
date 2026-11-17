@@ -17,6 +17,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -158,6 +159,7 @@ def fetch(
     *,
     wire: bool,
     retries: int = 1,
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[int | str, bytes, str]:
     global REQUEST_COUNT
     if wire:
@@ -179,6 +181,9 @@ def fetch(
             "User-Agent": "meta-lhe-fairchem-live-boundary/1",
             "x-ms-version": "2021-12-02",
         }
+
+    if extra_headers:
+        headers.update(extra_headers)
 
     last_error: Exception | None = None
     for attempt in range(retries):
@@ -347,8 +352,16 @@ def classify_blob_body(label: str, status: int | str, body: bytes, content_type:
     if not isinstance(status, int) or status < 200 or status >= 300 or len(body) > BLOB_LIMIT:
         emit(f"{label}_parsed", False)
         return
+    normalized = body
+    bom_present = normalized.startswith(b"\xef\xbb\xbf")
+    if bom_present:
+        normalized = normalized[3:]
+    trailing_nuls = len(normalized) - len(normalized.rstrip(b"\0"))
+    normalized = normalized.rstrip(b" \t\r\n\0")
+    emit(f"{label}_utf8_bom_present", bom_present)
+    emit(f"{label}_trailing_nul_count", trailing_nuls)
     try:
-        document = json.loads(body)
+        document = json.loads(normalized)
     except (json.JSONDecodeError, UnicodeDecodeError):
         document = None
     if document is not None:
@@ -363,8 +376,23 @@ def classify_blob_body(label: str, status: int | str, body: bytes, content_type:
         emit(f"{label}_sensitive_key_name_count", sum(bool(SENSITIVE_NAME.search(key)) for key in keys))
         for shape in ("url", "sas_url", "jwt", "base64"):
             emit(f"{label}_{shape}_value_count", shapes[shape])
+        if isinstance(document, dict):
+            emit(f"{label}_on_hold_present", "onHold" in document)
+            emit(f"{label}_on_hold_true", document.get("onHold") is True)
+            for key in (
+                "certificateThumbprint",
+                "encryptedHealthChecks",
+                "encryptedApplicationProfile",
+                "profileId",
+            ):
+                emit(f"{label}_{key.lower()}_present", key in document)
+                if isinstance(document.get(key), str):
+                    emit(
+                        f"{label}_{key.lower()}_size_bucket",
+                        size_bucket(len(document[key].encode("utf-8", errors="ignore"))),
+                    )
         return
-    root = classify_xml(label, body)
+    root = classify_xml(label, normalized)
     emit(f"{label}_parsed", root is not None)
     if root is not None:
         emit(f"{label}_format", "xml")
@@ -391,8 +419,33 @@ def classify_jwt(label: str, token: str) -> None:
     lifetime = "unknown"
     if isinstance(exp, (int, float)) and isinstance(iat, (int, float)):
         minutes = max(0, int((exp - iat) / 60))
-        lifetime = "under_1h" if minutes <= 60 else "1h_to_24h" if minutes <= 1440 else "over_24h"
+        if minutes <= 60:
+            lifetime = "under_1h"
+        elif minutes <= 1440:
+            lifetime = "1h_to_24h"
+        elif minutes <= 10080:
+            lifetime = "1d_to_7d"
+        elif minutes <= 43200:
+            lifetime = "7d_to_30d"
+        else:
+            lifetime = "over_30d"
     emit(f"{label}_lifetime_bucket", lifetime)
+    remaining = "unknown"
+    if isinstance(exp, (int, float)):
+        remaining_minutes = int((exp - time.time()) / 60)
+        if remaining_minutes < 0:
+            remaining = "expired"
+        elif remaining_minutes <= 60:
+            remaining = "under_1h"
+        elif remaining_minutes <= 1440:
+            remaining = "1h_to_24h"
+        elif remaining_minutes <= 10080:
+            remaining = "1d_to_7d"
+        elif remaining_minutes <= 43200:
+            remaining = "7d_to_30d"
+        else:
+            remaining = "over_30d"
+    emit(f"{label}_remaining_bucket", remaining)
     scope = payload.get("scp")
     scope_values = scope.split() if isinstance(scope, str) else scope if isinstance(scope, list) else []
     scope_families: set[str] = set()
@@ -409,6 +462,293 @@ def classify_jwt(label: str, token: str) -> None:
     emit(f"{label}_scope_family_names", sorted(scope_families))
     emit(f"{label}_scope_value_count", len(scope_values))
     emit(f"{label}_scope_rejected_count", rejected)
+
+
+def certificate_request_headers(cipher: str) -> dict[str, str] | None:
+    transport_certificate = Path("/var/lib/waagent/TransportCert.pem")
+    if not transport_certificate.is_file() or transport_certificate.stat().st_size > 65536:
+        return None
+    try:
+        lines = transport_certificate.read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    public_certificate = "".join(line.strip() for line in lines if "---" not in line)
+    try:
+        base64.b64decode(public_certificate, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return {
+        "x-ms-cipher-name": cipher,
+        "x-ms-guest-agent-public-x509-cert": public_certificate,
+    }
+
+
+PEM_BLOCK = re.compile(
+    rb"-----BEGIN ([A-Z0-9 ]+)-----\r?\n.*?-----END \1-----\r?\n?",
+    re.DOTALL,
+)
+
+
+def pem_blocks(pem: bytes, suffix: bytes) -> list[bytes]:
+    return [
+        match.group(0)
+        for match in PEM_BLOCK.finditer(pem)
+        if match.group(1).endswith(suffix)
+    ]
+
+
+def recover_tenant_pem(certificates: ET.Element | None) -> bytes:
+    cached_path = Path("/var/lib/waagent/Certificates.pem")
+    cached = b""
+    if cached_path.is_file() and cached_path.stat().st_size <= 2 * 1024 * 1024:
+        try:
+            cached = cached_path.read_bytes()
+        except OSError:
+            cached = b""
+    emit("tenant_pem_cached_present", bool(cached))
+    emit("tenant_pem_cached_size_bucket", size_bucket(len(cached)))
+    emit("tenant_pem_cached_private_key_count", len(pem_blocks(cached, b"PRIVATE KEY")))
+    emit("tenant_pem_cached_certificate_count", len(pem_blocks(cached, b"CERTIFICATE")))
+    if pem_blocks(cached, b"PRIVATE KEY"):
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+
+    if certificates is None:
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+    data_values = [
+        "".join((element.text or "").split())
+        for element in certificates.iter()
+        if local_name(element.tag) == "Data" and (element.text or "").strip()
+    ]
+    if len(data_values) != 1 or len(data_values[0]) > 2 * 1024 * 1024:
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+
+    transport_private = Path("/var/lib/waagent/TransportPrivate.pem")
+    transport_certificate = Path("/var/lib/waagent/TransportCert.pem")
+    if not transport_private.is_file() or not transport_certificate.is_file():
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+    mime = (
+        "MIME-Version:1.0\n"
+        "Content-Disposition: attachment; filename=\"Certificates.p7m\"\n"
+        "Content-Type: application/x-pkcs7-mime; name=\"Certificates.p7m\"\n"
+        "Content-Transfer-Encoding: base64\n\n"
+        + data_values[0]
+    ).encode("ascii")
+    try:
+        decrypted = subprocess.run(
+            [
+                "openssl",
+                "cms",
+                "-decrypt",
+                "-inkey",
+                str(transport_private),
+                "-recip",
+                str(transport_certificate),
+            ],
+            input=mime,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+    if decrypted.returncode != 0 or len(decrypted.stdout) > 2 * 1024 * 1024:
+        emit("tenant_pem_recovered_from_live_response", False)
+        return cached
+    for no_mac_verify in (True, False):
+        command = [
+            "openssl",
+            "pkcs12",
+            "-nodes",
+            "-password",
+            "pass:",
+            "-in",
+            "/dev/stdin",
+        ]
+        if no_mac_verify:
+            command.append("-nomacver")
+        try:
+            converted = subprocess.run(
+                command,
+                input=decrypted.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if (
+            converted.returncode == 0
+            and len(converted.stdout) <= 2 * 1024 * 1024
+            and pem_blocks(converted.stdout, b"PRIVATE KEY")
+        ):
+            emit("tenant_pem_recovered_from_live_response", True)
+            emit("tenant_pem_live_private_key_count", len(pem_blocks(converted.stdout, b"PRIVATE KEY")))
+            emit("tenant_pem_live_certificate_count", len(pem_blocks(converted.stdout, b"CERTIFICATE")))
+            return converted.stdout
+    emit("tenant_pem_recovered_from_live_response", False)
+    return cached
+
+
+def decode_json_bytes(value: bytes) -> object | None:
+    candidates = []
+    for encoding in ("utf-8-sig", "utf-16"):
+        try:
+            candidates.append(value.decode(encoding).rstrip(" \t\r\n\0"))
+        except UnicodeDecodeError:
+            pass
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def decrypt_protected_settings(values: list[str], tenant_pem: bytes) -> list[object]:
+    keys = pem_blocks(tenant_pem, b"PRIVATE KEY")
+    emit("runtime_private_key_candidate_count", len(keys))
+    decrypted_documents: list[object] = []
+    decode_failures = 0
+    for value in values[:8]:
+        compact = "".join(value.split())
+        try:
+            encrypted = base64.b64decode(compact, validate=True)
+        except (binascii.Error, ValueError):
+            decode_failures += 1
+            continue
+        if len(encrypted) > 512 * 1024:
+            decode_failures += 1
+            continue
+        for key in keys[:8]:
+            descriptor = -1
+            try:
+                descriptor = os.memfd_create("lhe-runtime-key", flags=0)
+                os.write(descriptor, key)
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                result = subprocess.run(
+                    [
+                        "openssl",
+                        "cms",
+                        "-decrypt",
+                        "-inform",
+                        "DER",
+                        "-inkey",
+                        f"/proc/self/fd/{descriptor}",
+                        "-in",
+                        "/dev/stdin",
+                    ],
+                    input=encrypted,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    pass_fds=(descriptor,),
+                    timeout=4,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
+            if result.returncode != 0 or len(result.stdout) > 1024 * 1024:
+                continue
+            document = decode_json_bytes(result.stdout)
+            if document is not None:
+                decrypted_documents.append(document)
+                break
+    emit("runtime_protected_settings_base64_decode_failures", decode_failures)
+    emit("runtime_protected_settings_decrypted_count", len(decrypted_documents))
+    return decrypted_documents
+
+
+def classify_runtime_settings(extensions: ET.Element, tenant_pem: bytes) -> None:
+    plugin_names: set[str] = set()
+    plugin_versions: set[str] = set()
+    plugin_states: set[str] = set()
+    for element in extensions.iter():
+        if local_name(element.tag) != "Plugin":
+            continue
+        name = element.attrib.get("name", "")
+        version = element.attrib.get("version", "")
+        state = element.attrib.get("state", "")
+        if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", name):
+            plugin_names.add(name)
+        if re.fullmatch(r"[A-Za-z0-9_.+-]{1,40}", version):
+            plugin_versions.add(version)
+        if re.fullmatch(r"[A-Za-z-]{1,24}", state):
+            plugin_states.add(state)
+    emit("extension_plugin_names", sorted(plugin_names))
+    emit("extension_plugin_versions", sorted(plugin_versions))
+    emit("extension_plugin_states", sorted(plugin_states))
+
+    runtime_documents: list[object] = []
+    runtime_parse_failures = 0
+    for element in extensions.iter():
+        if local_name(element.tag) != "RuntimeSettings" or not (element.text or "").strip():
+            continue
+        document = decode_json_bytes((element.text or "").encode("utf-8"))
+        if document is None:
+            runtime_parse_failures += 1
+        else:
+            runtime_documents.append(document)
+    emit("runtime_settings_json_parsed_count", len(runtime_documents))
+    emit("runtime_settings_json_parse_failure_count", runtime_parse_failures)
+
+    all_keys: list[str] = []
+    all_strings: list[str] = []
+    protected_values: list[str] = []
+    for document in runtime_documents:
+        keys, strings, _, _ = walk_json(document)
+        all_keys.extend(keys)
+        all_strings.extend(strings)
+        stack = [document]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                for key, child in item.items():
+                    if key == "protectedSettings" and isinstance(child, str):
+                        protected_values.append(child)
+                    stack.append(child)
+            elif isinstance(item, list):
+                stack.extend(item)
+    shapes = Counter(value_shape(value) for value in all_strings)
+    emit("runtime_settings_key_names", safe_names(all_keys))
+    emit("runtime_settings_sensitive_key_name_count", sum(bool(SENSITIVE_NAME.search(key)) for key in all_keys))
+    emit("runtime_settings_string_count", len(all_strings))
+    for shape in ("url", "sas_url", "jwt", "base64"):
+        emit(f"runtime_settings_{shape}_value_count", shapes[shape])
+    emit("runtime_protected_settings_count", len(protected_values))
+    emit("runtime_protected_settings_cert_thumbprint_key_present", "protectedSettingsCertThumbprint" in all_keys)
+
+    decrypted = decrypt_protected_settings(protected_values, tenant_pem)
+    decrypted_keys: list[str] = []
+    decrypted_strings: list[str] = []
+    for document in decrypted:
+        keys, strings, _, _ = walk_json(document)
+        decrypted_keys.extend(keys)
+        decrypted_strings.extend(strings)
+    decrypted_shapes = Counter(value_shape(value) for value in decrypted_strings)
+    emit("decrypted_settings_key_names", safe_names(decrypted_keys))
+    emit("decrypted_settings_sensitive_key_name_count", sum(bool(SENSITIVE_NAME.search(key)) for key in decrypted_keys))
+    emit("decrypted_settings_string_count", len(decrypted_strings))
+    for shape in ("url", "sas_url", "jwt", "base64"):
+        emit(f"decrypted_settings_{shape}_value_count", decrypted_shapes[shape])
+    for key in (
+        "commandToExecute",
+        "fileUris",
+        "script",
+        "storageAccountName",
+        "storageAccountKey",
+        "managedIdentity",
+        "token",
+    ):
+        emit(f"decrypted_settings_{key.lower()}_present", key in decrypted_keys)
 
 
 def classify_hca() -> tuple[urllib.parse.SplitResult | None, list[str]]:
@@ -497,7 +837,26 @@ def main() -> None:
 
     documents: dict[str, ET.Element] = {}
     for name, url in dependent.items():
-        status, body, content_type = fetch(url, WIRE_LIMIT, wire=True, retries=4)
+        extra_headers = None
+        if name == "Certificates":
+            extra_headers = certificate_request_headers("AES128_CBC")
+            emit("certificates_transport_header_available", extra_headers is not None)
+        status, body, content_type = fetch(
+            url,
+            WIRE_LIMIT,
+            wire=True,
+            retries=4,
+            extra_headers=extra_headers,
+        )
+        if name == "Certificates" and status == 400 and extra_headers is not None:
+            legacy_headers = certificate_request_headers("DES_EDE3_CBC")
+            status, body, content_type = fetch(
+                url,
+                WIRE_LIMIT,
+                wire=True,
+                extra_headers=legacy_headers,
+            )
+            emit("certificates_legacy_cipher_retry", True)
         label = "wire_" + name.lower()
         emit(f"{label}_http_status", status)
         emit(f"{label}_size_within_limit", len(body) <= WIRE_LIMIT)
@@ -508,9 +867,36 @@ def main() -> None:
         body = b""
 
     extensions = documents.get("ExtensionsConfig")
+    certificates = documents.get("Certificates")
+    if certificates is not None:
+        formats = [
+            (element.text or "").strip()
+            for element in certificates.iter()
+            if local_name(element.tag) == "Format" and (element.text or "").strip()
+        ]
+        data_values = [
+            "".join((element.text or "").split())
+            for element in certificates.iter()
+            if local_name(element.tag) == "Data" and (element.text or "").strip()
+        ]
+        emit("certificates_format_count", len(formats))
+        emit("certificates_pkcs7_pfx_format_count", sum(value == "Pkcs7BlobWithPfxContents" for value in formats))
+        emit("certificates_data_count", len(data_values))
+        decoded_sizes: list[int] = []
+        failures = 0
+        for value in data_values:
+            try:
+                decoded_sizes.append(len(base64.b64decode(value, validate=True)))
+            except (binascii.Error, ValueError):
+                failures += 1
+        emit("certificates_data_decode_failures", failures)
+        emit("certificates_decoded_size_buckets", sorted(Counter(size_bucket(size) for size in decoded_sizes).items()))
+    tenant_pem = recover_tenant_pem(certificates)
+
     sas_values: dict[str, str] = {}
     sas_parts: dict[str, urllib.parse.SplitResult] = {}
     if extensions is not None:
+        classify_runtime_settings(extensions, tenant_pem)
         for name in (
             "Plugin",
             "RuntimeSettings",
@@ -576,31 +962,6 @@ def main() -> None:
         status, body, content_type = fetch(value, BLOB_LIMIT, wire=False)
         classify_blob_body(label.removesuffix("_sas") + "_body", status, body, content_type)
         body = b""
-
-    certificates = documents.get("Certificates")
-    if certificates is not None:
-        formats = [
-            (element.text or "").strip()
-            for element in certificates.iter()
-            if local_name(element.tag) == "Format" and (element.text or "").strip()
-        ]
-        data_values = [
-            "".join((element.text or "").split())
-            for element in certificates.iter()
-            if local_name(element.tag) == "Data" and (element.text or "").strip()
-        ]
-        emit("certificates_format_count", len(formats))
-        emit("certificates_pkcs7_pfx_format_count", sum(value == "Pkcs7BlobWithPfxContents" for value in formats))
-        emit("certificates_data_count", len(data_values))
-        decoded_sizes: list[int] = []
-        failures = 0
-        for value in data_values:
-            try:
-                decoded_sizes.append(len(base64.b64decode(value, validate=True)))
-            except (binascii.Error, ValueError):
-                failures += 1
-        emit("certificates_data_decode_failures", failures)
-        emit("certificates_decoded_size_buckets", sorted(Counter(size_bucket(size) for size in decoded_sizes).items()))
 
     waagent = Path("/var/lib/waagent")
     key_candidates: list[Path] = []
