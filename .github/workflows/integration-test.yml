@@ -3,7 +3,7 @@ name: integration-test
 on:
   pull_request:
     paths: # this will only trigger on changes to the demo directory, add more here if required
-        - 'src/fairchem/demo/**'
+        - 'packages/fairchem-demo-ocpapi/**'
   workflow_call:
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
           pip install -e packages/fairchem-data-oc[dev]
           pip install -e packages/fairchem-demo-ocpapi[dev]
           pip install -e packages/fairchem-applications-cattsunami
-          pip install -r tests/requirements.txt # pin test packages
+          pip install -r integration-tests/requirements.txt # pin test packages
 
       # The ocpapi integration tests are no longer run in CI:
       # fairchem-demo-ocpapi is unmaintained. Its unit tests still

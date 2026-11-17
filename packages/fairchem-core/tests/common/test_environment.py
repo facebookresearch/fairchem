@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from click.testing import CliRunner
 
 from fairchem.core.common import environment
-from tests.perf import performance_report
+from tests import performance_report
 
 
 class _StringSubclass(str):
