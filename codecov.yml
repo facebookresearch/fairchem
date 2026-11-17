@@ -1,6 +1,6 @@
 ignore:
   # Nitro includes compiled GPU kernels whose execution Python coverage cannot track.
-  - "src/fairchem/core/models/uma/uma_nitro/**"
+  - "packages/fairchem-core/src/fairchem/core/models/uma/uma_nitro/**"
 
 coverage:
   status:

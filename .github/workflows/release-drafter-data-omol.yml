@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'src/fairchem/data/omol/**'
-      - 'packages/fairchem-data/fairchem-data-omol/**'
+      - 'packages/fairchem-data-omol/**'
   workflow_dispatch:
 
 permissions:
