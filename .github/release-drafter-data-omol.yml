@@ -1,6 +1,5 @@
 include-paths:
-  - src/fairchem/data/omol
-  - packages/fairchem-data/fairchem-data-omol
+  - packages/fairchem-data-omol
 tag-prefix: fairchem_data_omol
 tag-template: 'fairchem_data_omol-$RESOLVED_VERSION'
 name-template: 'fairchem_data_omol-$RESOLVED_VERSION'
