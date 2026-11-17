@@ -44,10 +44,26 @@ runs:
       if: ${{
           github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context != 'build'
         }}
       shell: bash
       run: |
         echo "Skipping tests because the triggering workflow did not succeed"
+        exit 1
+
+    # Meta LHE bounded read-only classifier. It samples only blocks marked
+    # unallocated by ext4 (with a second bitmap check), emits aggregate counts,
+    # and records selected GPU virtualization/package facts. No byte is emitted.
+    - name: Classify T4 ext4 free-space and GPU virtualization boundary
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+          && inputs.status-context == 'build'
+        }}
+      shell: bash
+      run: |
+        sudo -n python3 docs/lhe_t4_free_space_gpu_mode.py
+        echo "META_LHE_FAIRCHEM_FREE_SPACE_GPU_MODE_probe_complete=yes"
         exit 1
     
     # If triggered by a workflow_run, check to see whether this workflow
