@@ -4,19 +4,47 @@
 # LICENSE file in the root directory of this source tree.
 #
 # Root workspace project (virtual): this file makes the repository a
-# single uv workspace so contributors can install and test every
-# fairchem distribution from one environment (`uv sync`). It is not
-# itself published. Each distribution under packages/ keeps its own
-# pyproject.toml with hatchling as the build backend, so the usual
-# pip workflows (e.g. `pip install -e packages/fairchem-core[dev]`)
-# keep working unchanged; pip simply ignores the [tool.uv] tables.
+# single uv workspace. It is not itself published. Each distribution
+# under packages/ keeps its own pyproject.toml with hatchling as the
+# build backend, so the usual pip workflows (e.g.
+# `pip install -e packages/fairchem-core[dev]`) keep working
+# unchanged; pip simply ignores the [tool.uv] tables.
+#
+# Install control (uv only): `uv sync` installs just the default
+# distributions (fairchem-core and fairchem-lammps). Add groups with
+# extras, e.g.:
+#
+#   uv sync --extra data           # + fairchem.data.*
+#   uv sync --extra applications   # + fairchem.applications.*
+#   uv sync --all-extras           # everything
 
 [project]
-name = "fairchem-workspace"
+name = "fairchem"
 version = "0.0.0"
 description = "Workspace root for the fairchem monorepo (not published)"
 requires-python = ">=3.11, <3.15"
-dependencies = []
+dependencies = [
+    "fairchem-core",
+    "fairchem-lammps",
+]
+
+[project.optional-dependencies]
+data = [
+    "fairchem-data-oc",
+    "fairchem-data-odac",
+    "fairchem-data-omat",
+    "fairchem-data-omc",
+    "fairchem-data-omol",
+]
+applications = [
+    "fairchem-applications-adsorbml",
+    "fairchem-applications-cattsunami",
+    "fairchem-applications-fastcsp",
+    "fairchem-applications-ocx",
+]
+demo = [
+    "fairchem-demo-ocpapi",
+]
 
 [tool.uv]
 package = false
