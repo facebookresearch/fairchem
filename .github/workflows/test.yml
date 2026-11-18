@@ -3,6 +3,12 @@ name: tests
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated suites to run: core,data-oc,data-omat,data-rest,applications,demo,lammps,integration (or all)'
+        required: false
+        type: string
+        default: all
   merge_group:
   push:
     branches: [main]
@@ -74,8 +80,8 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.11', '3.14']
-        # tests/perf is run by perf-test.yml on a separate cadence.
-        # tests/applications and tests/lammps are run by integration-test.yml
+        # integration-tests/ is run by perf-test.yml on a separate cadence.
+        # applications/lammps suites live under their packages
         # and test_lammps_gpu respectively. Both shards below intentionally
         # exclude those paths.
         # YAML anchor: shard list is reused by test_cpu_sweep below.
@@ -634,3 +640,332 @@ jobs:
         uses: ./.github/actions/multi-trigger-cleanup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
+
+  # --- Change-scoped package tests (branch-protection gate) ---
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      blocked: ${{ steps.select.outputs.blocked }}
+      core: ${{ steps.select.outputs.core }}
+      data-oc: ${{ steps.select.outputs.data-oc }}
+      data-omat: ${{ steps.select.outputs.data-omat }}
+      data-rest: ${{ steps.select.outputs.data-rest }}
+      applications: ${{ steps.select.outputs.applications }}
+      demo: ${{ steps.select.outputs.demo }}
+      lammps: ${{ steps.select.outputs.lammps }}
+      integration: ${{ steps.select.outputs.integration }}
+    steps:
+      - if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Merge-queue runs need a checkout for paths-filter to diff
+      # the queue's merge commit against its base.
+      - if: ${{ github.event_name == 'merge_group' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # On workflow_run the workflow definition comes from the
+      # default branch (a PR cannot rewrite its own test gate).
+      # Detect changed files by diffing the PR head against the
+      # default branch, mirroring the paths-filter outputs below.
+      - if: ${{ github.event_name == 'workflow_run' }}
+        id: filter_wr
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.event.repository.default_branch }}"
+          git checkout "$HEAD_SHA"
+          files=$(git diff --name-only "origin/${{ github.event.repository.default_branch }}...$HEAD_SHA")
+          echo "$files"
+          hit() { grep -qE "$1" <<< "$files"; }
+          {
+            hit '^\.github/' && echo "github-changed=true" || echo "github-changed=false"
+            if hit '^(pyproject\.toml|uv\.lock|ruff\.toml|\.github/workflows/test\.yml|\.github/workflows/_test-package\.yml|integration-tests/requirements\.txt)$'; then echo "shared=true"; else echo "shared=false"; fi
+            if hit '^packages/fairchem-core/'; then echo "core=true"; else echo "core=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-oc/'; then echo "data-oc=true"; else echo "data-oc=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-omat/'; then echo "data-omat=true"; else echo "data-omat=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-(odac|omc|omol)/'; then echo "data-rest=true"; else echo "data-rest=false"; fi
+            if hit '^packages/fairchem-applications/'; then echo "applications=true"; else echo "applications=false"; fi
+            if hit '^packages/fairchem-demo-ocpapi/'; then echo "demo=true"; else echo "demo=false"; fi
+            if hit '^packages/fairchem-lammps/'; then echo "lammps=true"; else echo "lammps=false"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+          filters: |
+            shared:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'ruff.toml'
+              - '.github/workflows/test.yml'
+              - '.github/workflows/_test-package.yml'
+              - 'integration-tests/requirements.txt'
+            core:
+              - 'packages/fairchem-core/**'
+            data-oc:
+              - 'packages/fairchem-data/fairchem-data-oc/**'
+            data-omat:
+              - 'packages/fairchem-data/fairchem-data-omat/**'
+            data-rest:
+              - 'packages/fairchem-data/fairchem-data-odac/**'
+              - 'packages/fairchem-data/fairchem-data-omc/**'
+              - 'packages/fairchem-data/fairchem-data-omol/**'
+            applications:
+              - 'packages/fairchem-applications/**'
+            demo:
+              - 'packages/fairchem-demo-ocpapi/**'
+            lammps:
+              - 'packages/fairchem-lammps/**'
+
+      # Resolve the final per-suite booleans for every trigger type
+      # in one place: push runs everything; workflow_dispatch runs
+      # the suites named in `only`; PR / merge-queue runs use the
+      # path filters, with core and shared changes fanning out to
+      # dependents (every distribution imports fairchem-core).
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          ONLY: ${{ inputs.only }}
+          SHARED: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.shared || steps.filter.outputs.shared }}
+          GITHUB_CHANGED: ${{ steps.filter_wr.outputs.github-changed }}
+          CORE: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.core || steps.filter.outputs.core }}
+          DATA_OC: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-oc || steps.filter.outputs.data-oc }}
+          DATA_OMAT: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-omat || steps.filter.outputs.data-omat }}
+          DATA_REST: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-rest || steps.filter.outputs.data-rest }}
+          APPLICATIONS: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.applications || steps.filter.outputs.applications }}
+          DEMO: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.demo || steps.filter.outputs.demo }}
+          LAMMPS: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.lammps || steps.filter.outputs.lammps }}
+        run: |
+          set -euo pipefail
+          declare -A run=()
+          if [ "$EVENT" = "push" ]; then
+            # Everything except the unmaintained ocpapi integration
+            # suite (see the note in the PR branch below).
+            for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ -z "$ONLY" ] || [ "$ONLY" = "all" ]; then
+              for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
+            else
+              IFS=',' read -ra wanted <<< "$ONLY"
+              for s in "${wanted[@]}"; do run["${s// /}"]=true; done
+              # Dependent fan-out, same as for PRs.
+              if [ "${run[core]:-}" = "true" ]; then
+                for s in data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+              fi
+            fi
+          else
+            # A PR that edits anything under .github/ runs no tests
+            # at all: the gate fails and a maintainer must invoke
+            # this workflow manually (workflow_dispatch, which uses
+            # the branch's own workflow file) after review.
+            if [ "${GITHUB_CHANGED:-false}" = "true" ]; then
+              echo "blocked=true" >> "$GITHUB_OUTPUT"
+              for s in core data-oc data-omat data-rest applications demo lammps integration; do
+                echo "$s=false" >> "$GITHUB_OUTPUT"
+              done
+              echo "Selected suites: none (.github changed; manual dispatch required)"
+              exit 0
+            fi
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            run[core]="${CORE:-false}"
+            run[data-oc]="${DATA_OC:-false}"
+            run[data-omat]="${DATA_OMAT:-false}"
+            run[data-rest]="${DATA_REST:-false}"
+            run[applications]="${APPLICATIONS:-false}"
+            run[demo]="${DEMO:-false}"
+            run[lammps]="${LAMMPS:-false}"
+            if [ "${SHARED:-false}" = "true" ] || [ "${CORE:-false}" = "true" ]; then
+              for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+            fi
+            # NOTE: the ocpapi integration suite deliberately does
+            # NOT run on core/shared changes. fairchem-demo-ocpapi is
+            # unmaintained; its integration tests run only when the
+            # demo package itself changes (or when explicitly
+            # selected via workflow_dispatch).
+            if [ "${DEMO:-false}" = "true" ]; then run[integration]=true; fi
+          fi
+          # Selecting demo on dispatch also selects its integration suite.
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
+          echo "blocked=false" >> "$GITHUB_OUTPUT"
+          for s in core data-oc data-omat data-rest applications demo lammps integration; do
+            echo "$s=${run[$s]:-false}" >> "$GITHUB_OUTPUT"
+          done
+          echo "Selected suites: ${!run[@]}"
+
+  test-core:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-core
+      extras: dev,extras
+      test-path: packages/fairchem-core/tests
+      cov-module: fairchem.core
+      pytest-args: '-m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
+    secrets: inherit
+
+  test-data-oc:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-oc == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-oc
+      test-path: packages/fairchem-data/fairchem-data-oc/tests
+      cov-module: fairchem.data.oc
+    secrets: inherit
+
+  test-data-omat:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-omat == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-omat
+      test-path: packages/fairchem-data/fairchem-data-omat/tests
+      cov-module: fairchem.data.omat
+    secrets: inherit
+
+  # odac / omc / omol and the applications distributions have no
+  # runnable test suites today (cattsunami's is bit-rotted; see PR
+  # #2378 audit) -- they still get a wheel build + contents check.
+  build-data-rest:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-rest == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-data/fairchem-data-odac
+            cov-module: fairchem.data.odac
+          - package-dir: packages/fairchem-data/fairchem-data-omc
+            cov-module: fairchem.data.omc
+          - package-dir: packages/fairchem-data/fairchem-data-omol
+            cov-module: fairchem.data.omol
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  build-applications:
+    needs: changes
+    if: ${{ needs.changes.outputs.applications == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-applications/fairchem-applications-adsorbml
+            cov-module: fairchem.applications.AdsorbML
+          - package-dir: packages/fairchem-applications/fairchem-applications-cattsunami
+            cov-module: fairchem.applications.cattsunami
+          - package-dir: packages/fairchem-applications/fairchem-applications-fastcsp
+            cov-module: fairchem.applications.fastcsp
+          - package-dir: packages/fairchem-applications/fairchem-applications-ocx
+            cov-module: fairchem.applications.ocx
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  test-demo:
+    needs: changes
+    if: ${{ needs.changes.outputs.demo == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-demo-ocpapi
+      test-path: packages/fairchem-demo-ocpapi/tests/unit
+      cov-module: fairchem.demo.ocpapi
+    secrets: inherit
+
+  test-lammps:
+    needs: changes
+    if: ${{ needs.changes.outputs.lammps == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-lammps
+      extras: ''
+      test-path: packages/fairchem-lammps/tests
+      cov-module: fairchem.lammps
+      pytest-args: '-m "not gpu and not pretrained"'
+    secrets: inherit
+
+  # Integration suite (ocpapi): fairchem-demo-ocpapi is
+  # unmaintained, so this runs only when the demo package itself
+  # changes, or when explicitly selected on workflow_dispatch
+  # (expensive ocpapi cases stay skipped, as before). It
+  # deliberately does not run on fairchem-core changes.
+  integration:
+    needs: changes
+    if: ${{ needs.changes.outputs.integration == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install core dependencies and packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e packages/fairchem-core[dev]
+          pip install -e packages/fairchem-data/fairchem-data-oc[dev]
+          pip install -e packages/fairchem-demo-ocpapi[dev]
+          pip install -e packages/fairchem-applications/fairchem-applications-cattsunami
+          pip install -r integration-tests/requirements.txt
+
+      - name: Integration tests
+        run: |
+          pytest packages/fairchem-demo-ocpapi/tests/integration/ \
+            --skip-ocpapi-integration \
+            -c ./packages/fairchem-core/pyproject.toml
+
+  # Single required status check for branch protection: skipped
+  # package jobs count as success.
+  tests-passed:
+    if: ${{ always() }}
+    needs: [changes, test-core, test-data-oc, test-data-omat, build-data-rest, build-applications, test-demo, test-lammps, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if .github was edited
+        if: ${{ needs.changes.outputs.blocked == 'true' }}
+        run: |
+          echo "This PR edits files under .github/, so no tests were run."
+          echo "A maintainer must review the changes and invoke the tests workflow manually (workflow_dispatch) from the PR branch."
+          exit 1
+      - name: Check results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "One or more jobs failed or were cancelled: ${{ toJSON(needs.*.result) }}"
+          exit 1
+      - run: echo "All required package tests passed or were skipped."
