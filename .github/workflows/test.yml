@@ -625,7 +625,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 tests/lammps --durations=0 -vv -m gpu -c packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 packages/fairchem-lammps/tests --durations=0 -vv -m gpu -c packages/fairchem-lammps/pyproject.toml
 
       - name: Cleanup
         if: always()
