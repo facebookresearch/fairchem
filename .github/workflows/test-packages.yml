@@ -1,0 +1,222 @@
+name: package tests
+
+# Change-scoped package tests, modeled on fairchemgen's test.yml.
+# On a PR, only the distributions whose files changed run their
+# tests (fairchem-core changes also run every dependent, since all
+# distributions import it), plus the integration suite. On push to
+# main, merge queue, and manual dispatch, everything runs.
+#
+# Branch protection: require the single `tests-passed` check below.
+# Skipped package jobs count as success, so the gate works no matter
+# which packages a PR touches. The heavyweight shard/GPU/sweep jobs
+# in test.yml are unchanged and can be required separately.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      core: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' }}
+      data-oc: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-oc == 'true' }}
+      data-omat: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-omat == 'true' }}
+      data-rest: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-rest == 'true' }}
+      applications: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.applications == 'true' }}
+      demo: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.demo == 'true' }}
+      lammps: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.lammps == 'true' }}
+    steps:
+      - if: ${{ github.event_name == 'pull_request' }}
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            shared:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'ruff.toml'
+              - '.github/workflows/test-packages.yml'
+              - '.github/workflows/_test-package.yml'
+              - 'integration-tests/requirements.txt'
+            core:
+              - 'packages/fairchem-core/**'
+            data-oc:
+              - 'packages/fairchem-data/fairchem-data-oc/**'
+            data-omat:
+              - 'packages/fairchem-data/fairchem-data-omat/**'
+            data-rest:
+              - 'packages/fairchem-data/fairchem-data-odac/**'
+              - 'packages/fairchem-data/fairchem-data-omc/**'
+              - 'packages/fairchem-data/fairchem-data-omol/**'
+            applications:
+              - 'packages/fairchem-applications/**'
+            demo:
+              - 'packages/fairchem-demo-ocpapi/**'
+            lammps:
+              - 'packages/fairchem-lammps/**'
+
+  test-core:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-core
+      extras: dev,extras
+      test-path: packages/fairchem-core/tests
+      cov-module: fairchem.core
+      pytest-args: '-m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
+    secrets: inherit
+
+  test-data-oc:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-oc == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-oc
+      test-path: packages/fairchem-data/fairchem-data-oc/tests
+      cov-module: fairchem.data.oc
+    secrets: inherit
+
+  test-data-omat:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-omat == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-omat
+      test-path: packages/fairchem-data/fairchem-data-omat/tests
+      cov-module: fairchem.data.omat
+    secrets: inherit
+
+  # odac / omc / omol and the applications distributions have no
+  # runnable test suites today (cattsunami's is bit-rotted; see PR
+  # #2378 audit) -- they still get a wheel build + contents check.
+  build-data-rest:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-rest == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-data/fairchem-data-odac
+            cov-module: fairchem.data.odac
+          - package-dir: packages/fairchem-data/fairchem-data-omc
+            cov-module: fairchem.data.omc
+          - package-dir: packages/fairchem-data/fairchem-data-omol
+            cov-module: fairchem.data.omol
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  build-applications:
+    needs: changes
+    if: ${{ needs.changes.outputs.applications == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-applications/fairchem-applications-adsorbml
+            cov-module: fairchem.applications.AdsorbML
+          - package-dir: packages/fairchem-applications/fairchem-applications-cattsunami
+            cov-module: fairchem.applications.cattsunami
+          - package-dir: packages/fairchem-applications/fairchem-applications-fastcsp
+            cov-module: fairchem.applications.fastcsp
+          - package-dir: packages/fairchem-applications/fairchem-applications-ocx
+            cov-module: fairchem.applications.ocx
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  test-demo:
+    needs: changes
+    if: ${{ needs.changes.outputs.demo == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-demo-ocpapi
+      test-path: packages/fairchem-demo-ocpapi/tests/unit
+      cov-module: fairchem.demo.ocpapi
+    secrets: inherit
+
+  test-lammps:
+    needs: changes
+    if: ${{ needs.changes.outputs.lammps == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-lammps
+      extras: ''
+      test-path: packages/fairchem-lammps/tests
+      cov-module: fairchem.lammps
+      pytest-args: '-m "not gpu and not pretrained"'
+    secrets: inherit
+
+  # Integration suite: runs on every PR regardless of which package
+  # changed (expensive ocpapi cases stay skipped, as before).
+  integration:
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install core dependencies and packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e packages/fairchem-core[dev]
+          pip install -e packages/fairchem-data/fairchem-data-oc[dev]
+          pip install -e packages/fairchem-demo-ocpapi[dev]
+          pip install -e packages/fairchem-applications/fairchem-applications-cattsunami
+          pip install -r integration-tests/requirements.txt
+
+      - name: Integration tests
+        run: |
+          pytest packages/fairchem-demo-ocpapi/tests/integration/ \
+            --skip-ocpapi-integration \
+            -c ./packages/fairchem-core/pyproject.toml
+
+  # Single required status check for branch protection: skipped
+  # package jobs count as success.
+  tests-passed:
+    if: ${{ always() }}
+    needs: [changes, test-core, test-data-oc, test-data-omat, build-data-rest, build-applications, test-demo, test-lammps, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "One or more jobs failed or were cancelled: ${{ toJSON(needs.*.result) }}"
+          exit 1
+      - run: echo "All required package tests passed or were skipped."
