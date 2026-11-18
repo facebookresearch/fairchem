@@ -1,10 +1,12 @@
 name: package tests
 
 # Change-scoped package tests, modeled on fairchemgen's test.yml.
-# On a PR, only the distributions whose files changed run their
-# tests (fairchem-core changes also run every dependent, since all
-# distributions import it), plus the integration suite. On push to
-# main, merge queue, and manual dispatch, everything runs.
+# On a PR or in the merge queue, only the distributions whose files
+# changed run their tests (fairchem-core changes also run every
+# dependent, since all distributions import it). The integration
+# suite runs only when demo/core files change. Push to main runs
+# everything; workflow_dispatch runs the suites named in its
+# `only` input (default: all).
 #
 # Branch protection: require the single `tests-passed` check below.
 # Skipped package jobs count as success, so the gate works no matter
@@ -13,6 +15,12 @@ name: package tests
 
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated suites to run: core,data-oc,data-omat,data-rest,applications,demo,lammps,integration (or all)'
+        required: false
+        type: string
+        default: all
   pull_request:
     branches: [main]
   push:
@@ -26,18 +34,27 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      core: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' }}
-      data-oc: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-oc == 'true' }}
-      data-omat: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-omat == 'true' }}
-      data-rest: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.data-rest == 'true' }}
-      applications: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.applications == 'true' }}
-      demo: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.demo == 'true' }}
-      lammps: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.lammps == 'true' }}
+      core: ${{ steps.select.outputs.core }}
+      data-oc: ${{ steps.select.outputs.data-oc }}
+      data-omat: ${{ steps.select.outputs.data-omat }}
+      data-rest: ${{ steps.select.outputs.data-rest }}
+      applications: ${{ steps.select.outputs.applications }}
+      demo: ${{ steps.select.outputs.demo }}
+      lammps: ${{ steps.select.outputs.lammps }}
+      integration: ${{ steps.select.outputs.integration }}
     steps:
-      - if: ${{ github.event_name == 'pull_request' }}
+      # Merge-queue runs need a checkout for paths-filter to diff
+      # the queue's merge commit against its base.
+      - if: ${{ github.event_name == 'merge_group' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          base: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           filters: |
             shared:
               - 'pyproject.toml'
@@ -62,6 +79,61 @@ jobs:
               - 'packages/fairchem-demo-ocpapi/**'
             lammps:
               - 'packages/fairchem-lammps/**'
+
+      # Resolve the final per-suite booleans for every trigger type
+      # in one place: push runs everything; workflow_dispatch runs
+      # the suites named in `only`; PR / merge-queue runs use the
+      # path filters, with core and shared changes fanning out to
+      # dependents (every distribution imports fairchem-core).
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          ONLY: ${{ inputs.only }}
+          SHARED: ${{ steps.filter.outputs.shared }}
+          CORE: ${{ steps.filter.outputs.core }}
+          DATA_OC: ${{ steps.filter.outputs.data-oc }}
+          DATA_OMAT: ${{ steps.filter.outputs.data-omat }}
+          DATA_REST: ${{ steps.filter.outputs.data-rest }}
+          APPLICATIONS: ${{ steps.filter.outputs.applications }}
+          DEMO: ${{ steps.filter.outputs.demo }}
+          LAMMPS: ${{ steps.filter.outputs.lammps }}
+        run: |
+          set -euo pipefail
+          declare -A run=()
+          if [ "$EVENT" = "push" ]; then
+            for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ -z "$ONLY" ] || [ "$ONLY" = "all" ]; then
+              for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
+            else
+              IFS=',' read -ra wanted <<< "$ONLY"
+              for s in "${wanted[@]}"; do run["${s// /}"]=true; done
+              # Dependent fan-out, same as for PRs.
+              if [ "${run[core]:-}" = "true" ]; then
+                for s in data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+              fi
+            fi
+          else
+            run[core]="${CORE:-false}"
+            run[data-oc]="${DATA_OC:-false}"
+            run[data-omat]="${DATA_OMAT:-false}"
+            run[data-rest]="${DATA_REST:-false}"
+            run[applications]="${APPLICATIONS:-false}"
+            run[demo]="${DEMO:-false}"
+            run[lammps]="${LAMMPS:-false}"
+            if [ "${SHARED:-false}" = "true" ] || [ "${CORE:-false}" = "true" ]; then
+              for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+            fi
+            # Integration exercises the demo API against core; run it
+            # only when one of those (or shared files) changed.
+            if [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
+          fi
+          # Selecting demo on dispatch also selects its integration suite.
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
+          for s in core data-oc data-omat data-rest applications demo lammps integration; do
+            echo "$s=${run[$s]:-false}" >> "$GITHUB_OUTPUT"
+          done
+          echo "Selected suites: ${!run[@]}"
 
   test-core:
     needs: changes
@@ -174,11 +246,12 @@ jobs:
       pytest-args: '-m "not gpu and not pretrained"'
     secrets: inherit
 
-  # Integration suite: runs on every PR regardless of which package
-  # changed (expensive ocpapi cases stay skipped, as before).
+  # Integration suite: runs only when demo/core (or shared) files
+  # changed, or when selected on workflow_dispatch (expensive
+  # ocpapi cases stay skipped, as before).
   integration:
     needs: changes
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.integration == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
