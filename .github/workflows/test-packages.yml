@@ -101,7 +101,9 @@ jobs:
           set -euo pipefail
           declare -A run=()
           if [ "$EVENT" = "push" ]; then
-            for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
+            # Everything except the unmaintained ocpapi integration
+            # suite (see the note in the PR branch below).
+            for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
           elif [ "$EVENT" = "workflow_dispatch" ]; then
             if [ -z "$ONLY" ] || [ "$ONLY" = "all" ]; then
               for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
@@ -124,9 +126,12 @@ jobs:
             if [ "${SHARED:-false}" = "true" ] || [ "${CORE:-false}" = "true" ]; then
               for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
             fi
-            # Integration exercises the demo API against core; run it
-            # only when one of those (or shared files) changed.
-            if [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
+            # NOTE: the ocpapi integration suite deliberately does
+            # NOT run on core/shared changes. fairchem-demo-ocpapi is
+            # unmaintained; its integration tests run only when the
+            # demo package itself changes (or when explicitly
+            # selected via workflow_dispatch).
+            if [ "${DEMO:-false}" = "true" ]; then run[integration]=true; fi
           fi
           # Selecting demo on dispatch also selects its integration suite.
           if [ "$EVENT" = "workflow_dispatch" ] && [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
@@ -246,9 +251,11 @@ jobs:
       pytest-args: '-m "not gpu and not pretrained"'
     secrets: inherit
 
-  # Integration suite: runs only when demo/core (or shared) files
-  # changed, or when selected on workflow_dispatch (expensive
-  # ocpapi cases stay skipped, as before).
+  # Integration suite (ocpapi): fairchem-demo-ocpapi is
+  # unmaintained, so this runs only when the demo package itself
+  # changes, or when explicitly selected on workflow_dispatch
+  # (expensive ocpapi cases stay skipped, as before). It
+  # deliberately does not run on fairchem-core changes.
   integration:
     needs: changes
     if: ${{ needs.changes.outputs.integration == 'true' }}
