@@ -14,7 +14,7 @@ import pickle
 import omegaconf
 import torch
 
-from fairchem.core.scripts.migrate_imports import mapping
+from fairchem.core.common.checkpoint_migration import mapping
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
@@ -88,7 +88,7 @@ def migrate_checkpoint(
     Migrates a checkpoint by updating module imports and configurations.
 
     This function loads a checkpoint, updates its configuration using the mapping
-    defined in fairchem.core.scripts.migrate_imports,
+    defined in fairchem.core.common.checkpoint_migration,
 
     optionally adds stress tasks for datasets that don't have them,
     and optionally removes static keys that are no longer needed.
