@@ -16,6 +16,8 @@ CI:     test_lammps_gpu (its own dedicated job — separate runner with
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from ase import units
@@ -164,7 +166,7 @@ def run_lammps(input_file, pretrained_checkpoint):
 def test_ase_vs_lammps_nve(pretrained_checkpoint):
     ase_kinetic, ase_pot = run_ase_nve(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_nve.file", pretrained_checkpoint
+        str(Path(__file__).parent / "lammps_nve.file"), pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.1)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
@@ -174,7 +176,7 @@ def test_ase_vs_lammps_nve(pretrained_checkpoint):
 def test_ase_vs_lammps_npt(pretrained_checkpoint):
     ase_kinetic, ase_pot = run_ase_npt(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_npt.file", pretrained_checkpoint
+        str(Path(__file__).parent / "lammps_npt.file"), pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
     assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
@@ -187,7 +189,7 @@ def test_ase_vs_lammps_npt(pretrained_checkpoint):
 def test_ase_vs_lammps_langevin(pretrained_checkpoint):
     ase_kinetic, ase_pot = run_ase_langevin(pretrained_checkpoint)
     lammps_kinetic, lammps_pot = run_lammps(
-        "tests/lammps/lammps_langevin.file", pretrained_checkpoint
+        str(Path(__file__).parent / "lammps_langevin.file"), pretrained_checkpoint
     )
     assert np.isclose(ase_kinetic, lammps_kinetic, rtol=1e-4)
     assert np.isclose(ase_pot, lammps_pot, rtol=1e-4)
