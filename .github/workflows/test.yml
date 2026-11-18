@@ -158,7 +158,7 @@ jobs:
 
       - name: Download large test files
         if: matrix.shard.name == 'core'
-        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.scripts.download_large_files oc
+        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.common.download_large_files oc
 
       - name: Core tests (${{ matrix.shard.name }})
         env:
@@ -288,7 +288,7 @@ jobs:
 
       - name: Download large test files
         if: matrix.shard.name == 'core'
-        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.scripts.download_large_files oc
+        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.common.download_large_files oc
 
       - name: Sweep CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         env:

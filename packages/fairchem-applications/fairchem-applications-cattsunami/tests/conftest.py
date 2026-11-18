@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from fairchem.core.scripts import download_large_files
+from fairchem.core.common import download_large_files
 
 
 @pytest.fixture(scope="class")
