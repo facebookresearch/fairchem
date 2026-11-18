@@ -38,8 +38,8 @@ demos, and application efforts for materials science and quantum chemistry.
 ## UMA is now much faster!
 
 <p align="center">
-  <a href="benchmarks/omol/README.md">
-    <img src="benchmarks/omol/omol_force_mae_vs_speed.png" width="650" alt="OMol force MAE versus ASE NVE runtime">
+  <a href="packages/fairchem-core/scripts/benchmarks/omol/README.md">
+    <img src="packages/fairchem-core/scripts/benchmarks/omol/omol_force_mae_vs_speed.png" width="650" alt="OMol force MAE versus ASE NVE runtime">
   </a>
 </p>
 
@@ -48,7 +48,7 @@ Uma-nitro brings blazing speedups to UMA. Currently it is only supported on Nvid
 The vertical axis is force MAE (meV/Å) on the public OMol25 validation set; the
 horizontal axis is MD speed (ns/day at a 1 fs timestep) from the mean runtime of an ASE
 NVE step on a 1000-atom silicon cell using an NVIDIA H200. See the
-[benchmark details and reproduction scripts](benchmarks/omol/README.md)
+[benchmark details and reproduction scripts](packages/fairchem-core/scripts/benchmarks/omol/README.md)
 for the full setup.
 
 For more OMol model accuracy benchmarks, you can also see the
