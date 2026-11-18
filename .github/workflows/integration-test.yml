@@ -44,6 +44,8 @@ jobs:
           pip install -e packages/fairchem-applications-cattsunami
           pip install -r tests/requirements.txt # pin test packages
 
-      - name: Integration tests
-        run: | # skip-ocpapi-integration skips expensive tests with the tag "@pytest.mark.ocpapi_integration_test"
-          pytest tests/demo/ocpapi/tests/integration/ --skip-ocpapi-integration -c ./packages/fairchem-core/pyproject.toml
+      # The ocpapi integration tests are no longer run in CI:
+      # fairchem-demo-ocpapi is unmaintained. Its unit tests still
+      # run in the main test workflow.
+      - name: Integration tests removed
+        run: echo "ocpapi integration tests are not run (package unmaintained)."
