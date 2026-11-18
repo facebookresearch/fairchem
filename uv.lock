@@ -2192,11 +2192,11 @@ requires-dist = [
     { name = "fairchem-applications-fastcsp", marker = "extra == 'applications'", editable = "packages/fairchem-applications-fastcsp" },
     { name = "fairchem-applications-ocx", marker = "extra == 'applications'", editable = "packages/fairchem-applications-ocx" },
     { name = "fairchem-core", editable = "packages/fairchem-core" },
-    { name = "fairchem-data-oc", marker = "extra == 'data'", editable = "packages/fairchem-data-oc" },
-    { name = "fairchem-data-odac", marker = "extra == 'data'", editable = "packages/fairchem-data-odac" },
-    { name = "fairchem-data-omat", marker = "extra == 'data'", editable = "packages/fairchem-data-omat" },
-    { name = "fairchem-data-omc", marker = "extra == 'data'", editable = "packages/fairchem-data-omc" },
-    { name = "fairchem-data-omol", marker = "extra == 'data'", editable = "packages/fairchem-data-omol" },
+    { name = "fairchem-data-oc", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-oc" },
+    { name = "fairchem-data-odac", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-odac" },
+    { name = "fairchem-data-omat", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-omat" },
+    { name = "fairchem-data-omc", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-omc" },
+    { name = "fairchem-data-omol", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-omol" },
     { name = "fairchem-demo-ocpapi", marker = "extra == 'demo'", editable = "packages/fairchem-demo-ocpapi" },
     { name = "fairchem-lammps", editable = "packages/fairchem-lammps" },
 ]
@@ -2213,7 +2213,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fairchem-core", editable = "packages/fairchem-core" },
-    { name = "fairchem-data-oc", editable = "packages/fairchem-data-oc" },
+    { name = "fairchem-data-oc", editable = "packages/fairchem-data/fairchem-data-oc" },
 ]
 
 [[package]]
@@ -2227,7 +2227,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fairchem-core", editable = "packages/fairchem-core" },
-    { name = "fairchem-data-oc", editable = "packages/fairchem-data-oc" },
+    { name = "fairchem-data-oc", editable = "packages/fairchem-data/fairchem-data-oc" },
 ]
 
 [[package]]
@@ -2443,7 +2443,7 @@ cu132 = [{ name = "torch", specifier = "==2.13.0", index = "https://download.pyt
 
 [[package]]
 name = "fairchem-data-oc"
-source = { editable = "packages/fairchem-data-oc" }
+source = { editable = "packages/fairchem-data/fairchem-data-oc" }
 dependencies = [
     { name = "ase" },
     { name = "fairchem-core" },
@@ -2468,7 +2468,7 @@ requires-dist = [
 
 [[package]]
 name = "fairchem-data-odac"
-source = { editable = "packages/fairchem-data-odac" }
+source = { editable = "packages/fairchem-data/fairchem-data-odac" }
 dependencies = [
     { name = "ase" },
     { name = "pymatgen" },
@@ -2489,7 +2489,7 @@ provides-extras = ["download"]
 
 [[package]]
 name = "fairchem-data-omat"
-source = { editable = "packages/fairchem-data-omat" }
+source = { editable = "packages/fairchem-data/fairchem-data-omat" }
 dependencies = [
     { name = "pymatgen" },
 ]
@@ -2499,7 +2499,7 @@ requires-dist = [{ name = "pymatgen", specifier = ">=2023.10.3" }]
 
 [[package]]
 name = "fairchem-data-omc"
-source = { editable = "packages/fairchem-data-omc" }
+source = { editable = "packages/fairchem-data/fairchem-data-omc" }
 dependencies = [
     { name = "ase" },
     { name = "atomate2", version = "0.1.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -2520,7 +2520,7 @@ requires-dist = [
 
 [[package]]
 name = "fairchem-data-omol"
-source = { editable = "packages/fairchem-data-omol" }
+source = { editable = "packages/fairchem-data/fairchem-data-omol" }
 dependencies = [
     { name = "ase" },
 ]
