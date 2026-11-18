@@ -24,11 +24,11 @@ documentation = "https://facebookresearch.github.io/fairchem/"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
-root = "../../"
+root = "../../../"
 git_describe_command = 'git describe --tags --match  fairchem_data_odac-*'
 
 [tool.hatch.build]
-directory = "../../dist-data-odac"
+directory = "../../../dist-data-odac"
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/fairchem/data/odac"]
