@@ -2187,10 +2187,10 @@ demo = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fairchem-applications-adsorbml", marker = "extra == 'applications'", editable = "packages/fairchem-applications-AdsorbML" },
-    { name = "fairchem-applications-cattsunami", marker = "extra == 'applications'", editable = "packages/fairchem-applications-cattsunami" },
-    { name = "fairchem-applications-fastcsp", marker = "extra == 'applications'", editable = "packages/fairchem-applications-fastcsp" },
-    { name = "fairchem-applications-ocx", marker = "extra == 'applications'", editable = "packages/fairchem-applications-ocx" },
+    { name = "fairchem-applications-adsorbml", marker = "extra == 'applications'", editable = "packages/fairchem-applications/fairchem-applications-adsorbml" },
+    { name = "fairchem-applications-cattsunami", marker = "extra == 'applications'", editable = "packages/fairchem-applications/fairchem-applications-cattsunami" },
+    { name = "fairchem-applications-fastcsp", marker = "extra == 'applications'", editable = "packages/fairchem-applications/fairchem-applications-fastcsp" },
+    { name = "fairchem-applications-ocx", marker = "extra == 'applications'", editable = "packages/fairchem-applications/fairchem-applications-ocx" },
     { name = "fairchem-core", editable = "packages/fairchem-core" },
     { name = "fairchem-data-oc", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-oc" },
     { name = "fairchem-data-odac", marker = "extra == 'data'", editable = "packages/fairchem-data/fairchem-data-odac" },
@@ -2204,7 +2204,7 @@ provides-extras = ["data", "applications", "demo"]
 
 [[package]]
 name = "fairchem-applications-adsorbml"
-source = { editable = "packages/fairchem-applications-AdsorbML" }
+source = { editable = "packages/fairchem-applications/fairchem-applications-adsorbml" }
 dependencies = [
     { name = "fairchem-core" },
     { name = "fairchem-data-oc" },
@@ -2218,7 +2218,7 @@ requires-dist = [
 
 [[package]]
 name = "fairchem-applications-cattsunami"
-source = { editable = "packages/fairchem-applications-cattsunami" }
+source = { editable = "packages/fairchem-applications/fairchem-applications-cattsunami" }
 dependencies = [
     { name = "fairchem-core" },
     { name = "fairchem-data-oc" },
@@ -2232,7 +2232,7 @@ requires-dist = [
 
 [[package]]
 name = "fairchem-applications-fastcsp"
-source = { editable = "packages/fairchem-applications-fastcsp" }
+source = { editable = "packages/fairchem-applications/fairchem-applications-fastcsp" }
 dependencies = [
     { name = "fairchem-core" },
     { name = "p-tqdm" },
@@ -2253,7 +2253,7 @@ provides-extras = ["free-energy"]
 
 [[package]]
 name = "fairchem-applications-ocx"
-source = { editable = "packages/fairchem-applications-ocx" }
+source = { editable = "packages/fairchem-applications/fairchem-applications-ocx" }
 dependencies = [
     { name = "fairchem-core" },
     { name = "matminer" },

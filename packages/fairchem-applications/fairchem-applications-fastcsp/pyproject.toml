@@ -30,11 +30,11 @@ documentation = "https://facebookresearch.github.io/fairchem/"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
-root = "../../"
+root = "../../../"
 git_describe_command = 'git describe --tags --match fairchem_applications_fastcsp-*'
 
 [tool.hatch.build]
-directory = "../../dist-applications-fastcsp"
+directory = "../../../dist-applications-fastcsp"
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/fairchem/applications/fastcsp"]
