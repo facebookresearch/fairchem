@@ -50,7 +50,7 @@ demo = [
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "packages/fairchem-data/*"]
 # fairchem-core-numpy126 publishes the same distribution name as
 # fairchem-core (a build variant with different pins), so it cannot
 # be a workspace member alongside it.
