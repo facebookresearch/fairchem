@@ -15,8 +15,8 @@ import numpy as np
 from fairchem.data.oc.core.slab import Slab
 from fairchem.data.oc.databases.pkls import BULK_PKL_PATH
 
-from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.common import download_large_files
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 if TYPE_CHECKING:
     import ase

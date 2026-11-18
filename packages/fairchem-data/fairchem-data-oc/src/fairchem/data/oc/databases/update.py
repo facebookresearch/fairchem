@@ -18,8 +18,8 @@ from ase.atoms import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator as SPC
 from tqdm import tqdm
 
-from fairchem.core.common.safe_pickle import safe_pickle_load
 from fairchem.core.common import download_large_files
+from fairchem.core.common.safe_pickle import safe_pickle_load
 
 
 # Monkey patch fix
