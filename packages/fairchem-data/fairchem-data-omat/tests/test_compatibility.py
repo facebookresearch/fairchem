@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import os
 import tempfile
 import importlib
@@ -33,7 +35,6 @@ from fairchem.data.omat.entries.compatibility import (
 )
 from fairchem.data.omat.vasp.sets import OMat24StaticSet
 
-from . import compatibility_resources
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -41,20 +42,14 @@ if TYPE_CHECKING:
 
 @pytest.fixture(scope="session")
 def mp_computed_structure_entries():
-    with importlib.resources.path(
-        compatibility_resources, "test_calc_compounds_mp.json"
-    ) as path:
-        entries = loadfn(path)
-        yield entries
+    path = Path(__file__).parent / "compatibility_resources" / "test_calc_compounds_mp.json"
+    yield loadfn(path)
 
 
 @pytest.fixture(scope="session")
 def omat_computed_structure_entries():
-    with importlib.resources.path(
-        compatibility_resources, "test_calc_compounds_omat.json"
-    ) as path:
-        entries = loadfn(path)
-        yield entries
+    path = Path(__file__).parent / "compatibility_resources" / "test_calc_compounds_omat.json"
+    yield loadfn(path)
 
 
 @pytest.fixture
