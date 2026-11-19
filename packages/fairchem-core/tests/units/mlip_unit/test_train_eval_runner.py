@@ -41,7 +41,7 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     assign_device_for_local_rank(True, 0)
     init_local_distributed_process_group(backend="gloo")
-    config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
+    config = "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
     # TODO mock main to avoid repeating this code in other tests
     cfg = get_hydra_config_from_yaml(
