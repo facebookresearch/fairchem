@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'src/fairchem/data/omc/**'
-      - 'packages/fairchem-data-omc/**'
+      - 'packages/fairchem-data/fairchem-data-omc/**'
   workflow_dispatch:
 
 permissions:
