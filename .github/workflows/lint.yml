@@ -27,5 +27,5 @@ jobs:
       - name: ruff
         run: |
           ruff --version
-          ruff check src # tests has a lot of issues , TODO
-          ruff format --check src # tests
+          ruff check packages/fairchem-core/src packages/fairchem-data/fairchem-data-oc/src # tests has a lot of issues , TODO
+          ruff format --check packages/fairchem-core/src packages/fairchem-data/fairchem-data-oc/src # tests
