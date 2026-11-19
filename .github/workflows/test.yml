@@ -84,7 +84,7 @@ jobs:
           - name: units
             paths: tests/core/units
           - name: core
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/core/test_imports.py tests/data tests/demo
+            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/core/test_imports.py tests/data packages/fairchem-demo-ocpapi/tests/unit
         # The regression suite's end-to-end tests run a tiny model through
         # whole baselines, so it gets its own runner. It has no pretrained-model
         # tests, so it is added here rather than to the sweep jobs' anchor.
@@ -167,13 +167,13 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_cpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Serial CPU tests (${{ matrix.shard.name }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report= --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Generate coverage report
         if: ${{ always() && matrix.python_version == '3.14' && hashFiles('.coverage') != '' }}
@@ -294,7 +294,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # The core shard has no serial @pretrained tests, so the sweep
@@ -304,7 +304,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Generate coverage report
         if: ${{ always() && hashFiles('.coverage') != '' }}
