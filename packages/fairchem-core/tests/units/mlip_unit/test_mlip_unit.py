@@ -133,7 +133,7 @@ def pickle_data_loader(pickle_path: str, steps: int):
 def test_full_eval_from_cli():
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_eval.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_eval.yaml",
     ]
     launch_main(sys_args)
 
@@ -145,7 +145,7 @@ def test_full_eval_from_cli():
 def test_full_conserving_mole_eval_from_cli(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_conserving_eval.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "oc20_energy_mae=16.582261562347412",
         "omol_energy_mae=0.2785639584064484",
@@ -154,7 +154,7 @@ def test_full_conserving_mole_eval_from_cli(fake_uma_dataset, torch_deterministi
 
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_conserving_eval.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "oc20_energy_mae=16.582261562347412",
         "omol_energy_mae=0.2785639584064484",
@@ -170,7 +170,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
 ):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "job.device_type=CUDA",
@@ -183,7 +183,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
 def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=13.661060333251953",
     ]
@@ -191,7 +191,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
 
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         "backbone=K2L2_gate",
         "act_type=gate",
         "ff_type=spectral",
@@ -202,7 +202,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
 
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         "backbone=K2L2_gate",
         "act_type=gate",
         "ff_type=spectral",
@@ -216,7 +216,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
 def test_full_train_eval_from_cli_aselmdb(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
         # this is slightly different for the cpu version from radius_pbc v1
@@ -235,7 +235,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic
 
         sys_args = [
             "--config",
-            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
             "datasets=aselmdb",
             f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
@@ -319,7 +319,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
 
         sys_args = [
             "--config",
-            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
             "num_experts=8",
             "checkpoint_every=10000",
             "datasets=aselmdb",
@@ -372,17 +372,17 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
 @pytest.mark.parametrize(
     "train_config, dataset_config, num_ddps, backbone_overrides",
     [
-        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
+        # ("packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
+        ("packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
         # test charge balancing GP support
         (
-            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
             "aselmdb",
             2,
             ["++backbone.charge_balanced_channels=[0]"],
         ),
         (
-            "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+            "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train_conserving.yaml",
             "aselmdb_conserving",
             2,
             [],
@@ -473,7 +473,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
 def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=86.24614715576172",
@@ -504,7 +504,7 @@ def test_train_and_resume_max_epochs(
     timestamp_id = "12345"
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
         f"+job.run_dir={temp_dir}",
@@ -544,7 +544,7 @@ def test_train_and_resume_max_steps(
     timestamp_id = "12345"
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
         f"+job.run_dir={temp_dir}",
@@ -587,7 +587,7 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
 
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         "num_experts=8",
         "checkpoint_every=10000",
         "datasets=aselmdb",

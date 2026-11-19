@@ -56,7 +56,7 @@ SUPERCELL_CONFIGS = [
 # Run every extensivity check in both fp32 and fp64. fp32 is what production
 # inference uses; fp64 is a precision-floor check that rules out summation-
 # order float drift when the test fails. Pattern mirrors
-# tests/core/units/mlip_unit/test_extensivity.py and test_equivariance.py.
+# packages/fairchem-core/tests/units/mlip_unit/test_extensivity.py and test_equivariance.py.
 DTYPES = [
     pytest.param(torch.float32, id="fp32"),
     pytest.param(torch.float64, id="fp64"),

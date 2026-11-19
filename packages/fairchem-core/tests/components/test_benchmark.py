@@ -32,7 +32,7 @@ def test_elastic_benchmark_launch(calculator, dummy_binary_dataset_path):
 
     sys_args = [
         "--config",
-        "tests/core/components/configs/test_elastic_benchmark.yaml",
+        "packages/fairchem-core/tests/components/configs/test_elastic_benchmark.yaml",
         f"test_data_path={dummy_binary_dataset_path!s}",
         f"target_data_path={target_data_path}",
     ]

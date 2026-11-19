@@ -38,7 +38,7 @@ def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     assign_device_for_local_rank(True, 0)
     init_local_distributed_process_group(backend="gloo")
-    config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
+    config = "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
 
     cfg = get_hydra_config_from_yaml(config, ["expected_loss=null"])
@@ -59,7 +59,7 @@ def test_traineval_runner_finetuning():
     # now re-initialize the runner and load_state
     hydra.core.global_hydra.GlobalHydra.instance().clear()
 
-    finetune_config = "tests/core/units/mlip_unit/test_mlip_finetune.yaml"
+    finetune_config = "packages/fairchem-core/tests/units/mlip_unit/test_mlip_finetune.yaml"
     finetune_cfg = get_hydra_config_from_yaml(
         finetune_config,
         [
