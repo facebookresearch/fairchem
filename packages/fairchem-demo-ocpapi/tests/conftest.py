@@ -11,12 +11,18 @@ import pytest
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--skip-ocpapi-integration",
-        action="store_true",
-        default=False,
-        help="skip ocpapi integration tests",
-    )
+    # The repo-root conftest registers the same option; when this
+    # suite is collected together with the core tests (the CI core
+    # shard), both conftests load and registration would conflict.
+    try:
+        parser.addoption(
+            "--skip-ocpapi-integration",
+            action="store_true",
+            default=False,
+            help="skip ocpapi integration tests",
+        )
+    except ValueError:
+        pass
 
 
 def pytest_configure(config):
