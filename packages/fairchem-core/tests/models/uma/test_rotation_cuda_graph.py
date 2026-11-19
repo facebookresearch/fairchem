@@ -24,7 +24,7 @@ from fairchem.core.models.uma.common.rotation import (
 )
 from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 
-JD_path = "src/fairchem/core/models/uma/Jd.pt"
+JD_path = "packages/fairchem-core/src/fairchem/core/models/uma/Jd.pt"
 
 
 def seed_everywhere(seed=0):

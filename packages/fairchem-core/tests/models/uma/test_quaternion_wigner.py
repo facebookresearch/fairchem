@@ -276,7 +276,7 @@ def Jd_matrices(lmax, dtype, device):
     """Load the J matrices used by the Euler angle approach."""
     test_dir = Path(__file__).parent
     repo_root = test_dir.parent.parent.parent.parent
-    jd_path = repo_root / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
+    jd_path = repo_root / "packages" / "fairchem-core" / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
 
     if jd_path.exists():
         Jd = torch.load(jd_path, map_location=device, weights_only=True)

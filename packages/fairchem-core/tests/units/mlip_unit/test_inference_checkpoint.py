@@ -5,9 +5,9 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 run using,
-pytest -s --inference-checkpoint inference_ckpt.pt tests/core/units/mlip_unit/test_inference_checkpoint.py
-python -m pytest tests/core/units/mlip_unit/test_inference_checkpoint.py -s --inference-checkpoint ~/may12_checkpoint.pt
-python -m pytest tests/core/units/mlip_unit/test_inference_checkpoint.py::test_conserving_mole_inference_modes_gpu -s --inference-checkpoint ~/may12_checkpoint.pt -vv --inference-dataset /checkpoint/ocp/shared/omol/250430-release/val
+pytest -s --inference-checkpoint inference_ckpt.pt packages/fairchem-core/tests/units/mlip_unit/test_inference_checkpoint.py
+python -m pytest packages/fairchem-core/tests/units/mlip_unit/test_inference_checkpoint.py -s --inference-checkpoint ~/may12_checkpoint.pt
+python -m pytest packages/fairchem-core/tests/units/mlip_unit/test_inference_checkpoint.py::test_conserving_mole_inference_modes_gpu -s --inference-checkpoint ~/may12_checkpoint.pt -vv --inference-dataset /checkpoint/ocp/shared/omol/250430-release/val
 """
 
 from __future__ import annotations

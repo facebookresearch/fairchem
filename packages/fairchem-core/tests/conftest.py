@@ -765,7 +765,7 @@ def setup_before_each_test():
     distutils.cleanup()
 
 
-# --- Fixtures formerly in tests/core/conftest.py (merged: the core
+# --- Fixtures formerly in packages/fairchem-core/tests/conftest.py (merged: the core
 # suite now has a single conftest) ---
 import os
 from itertools import product
@@ -1018,7 +1018,7 @@ def direct_mole_checkpoint(fake_uma_dataset, tmp_path_factory):
         if not marker.is_file():
             sys_args = [
                 "--config",
-                "tests/core/units/mlip_unit/test_mlip_train.yaml",
+                "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
                 "num_experts=8",
                 "checkpoint_every=10000",
                 "datasets=aselmdb",
@@ -1062,7 +1062,7 @@ def direct_checkpoint(fake_uma_dataset, tmp_path_factory):
         if not marker.is_file():
             sys_args = [
                 "--config",
-                "tests/core/units/mlip_unit/test_mlip_train.yaml",
+                "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
                 "num_experts=0",
                 "checkpoint_every=10000",
                 "datasets=aselmdb",
@@ -1106,7 +1106,7 @@ def conserving_mole_checkpoint(fake_uma_dataset, tmp_path_factory):
         if not marker.is_file():
             sys_args = [
                 "--config",
-                "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+                "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train_conserving.yaml",
                 "num_experts=8",
                 "heads.energyandforcehead.module=fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper",
                 "checkpoint_every=10000",

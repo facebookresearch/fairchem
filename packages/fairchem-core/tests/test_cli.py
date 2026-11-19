@@ -45,7 +45,7 @@ def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
     timestamp_id = "live-environment-test"
     sys_args = [
         "--config",
-        "tests/core/test_cli.yml",
+        "packages/fairchem-core/tests/test_cli.yml",
         f"+job.run_dir={tmp_path}",
         f"+job.timestamp_id={timestamp_id}",
     ]
@@ -81,7 +81,7 @@ def test_cli_writes_live_environment_report(tmp_path, monkeypatch):
 def test_cli_multi_rank_cpu():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    sys_args = ["--config", "tests/core/test_cli.yml", "job.scheduler.ranks_per_node=2"]
+    sys_args = ["--config", "packages/fairchem-core/tests/test_cli.yml", "job.scheduler.ranks_per_node=2"]
     sys.argv[1:] = sys_args
     main()
 
@@ -89,7 +89,7 @@ def test_cli_multi_rank_cpu():
 def test_cli_run_reduce():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    sys_args = ["--config", "tests/core/test_cli_run_reduce.yml"]
+    sys_args = ["--config", "packages/fairchem-core/tests/test_cli_run_reduce.yml"]
     sys.argv[1:] = sys_args
     main()
 
@@ -99,7 +99,7 @@ def test_cli_throws_error():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     sys_args = [
         "--config",
-        "tests/core/test_cli.yml",
+        "packages/fairchem-core/tests/test_cli.yml",
         "runner.x=1000",
         "runner.y=5",
     ]
@@ -114,7 +114,7 @@ def test_cli_throws_error_on_invalid_inputs():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     sys_args = [
         "-c",
-        "tests/core/test_cli.yml",
+        "packages/fairchem-core/tests/test_cli.yml",
         "runner.x=1000",
         "runner.a=5",  # a is not a valid input argument to runner
     ]
@@ -129,7 +129,7 @@ def test_cli_throws_error_on_disallowed_top_level_keys():
     assert "x" not in ALLOWED_TOP_LEVEL_KEYS
     sys_args = [
         "-c",
-        "tests/core/test_cli.yml",
+        "packages/fairchem-core/tests/test_cli.yml",
         "+x=1000",  # this is not allowed because we are adding a key that is not in ALLOWED_TOP_LEVEL_KEYS
     ]
     sys.argv[1:] = sys_args
@@ -138,7 +138,7 @@ def test_cli_throws_error_on_disallowed_top_level_keys():
 
 
 def get_cfg_from_yaml():
-    yaml = "tests/core/test_cli.yml"
+    yaml = "packages/fairchem-core/tests/test_cli.yml"
     cfg = get_hydra_config_from_yaml(yaml)
     # assert fields got initialized properly
     assert cfg.job.run_name is not None
@@ -153,7 +153,7 @@ def test_cli_ray(num_ranks):
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     sys_args = [
         "--config",
-        "tests/core/test_ray_runner.yml",
+        "packages/fairchem-core/tests/test_ray_runner.yml",
         f"job.scheduler.ranks_per_node={num_ranks}",
     ]
     sys.argv[1:] = sys_args
@@ -286,7 +286,7 @@ class TestSignalHandlingIntegration:
                 [
                     "fairchem",
                     "--config",
-                    "tests/core/test_cli.yml",
+                    "packages/fairchem-core/tests/test_cli.yml",
                     f"+job.run_dir={tmpdir}",
                     "+runner.sleep_seconds=30",
                 ],
