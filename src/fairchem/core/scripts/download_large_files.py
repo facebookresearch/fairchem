@@ -28,27 +28,27 @@ S3_ROOT = "https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/"
 FILE_GROUPS = {
     "odac": [
         Path("configs/odac/s2ef/scaling_factors/painn.pt"),
-        Path("src/fairchem/data/odac/force_field/data_w_oms.json"),
+        Path("packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/force_field/data_w_oms.json"),
         Path(
-            "src/fairchem/data/odac/promising_mof/promising_mof_features/JmolData.jar"
+            "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/promising_mof/promising_mof_features/JmolData.jar"
         ),
         Path(
-            "src/fairchem/data/odac/promising_mof/promising_mof_energies/adsorption_energy.txt"
+            "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/promising_mof/promising_mof_energies/adsorption_energy.txt"
         ),
-        Path("src/fairchem/data/odac/supercell_info.csv"),
+        Path("packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/supercell_info.csv"),
     ],
-    "oc": [Path("src/fairchem/data/oc/databases/pkls/bulks.pkl")],
+    "oc": [Path("packages/fairchem-data/fairchem-data-oc/src/fairchem/data/oc/databases/pkls/bulks.pkl")],
     "adsorbml": [
         Path(
-            "src/fairchem/applications/AdsorbML/adsorbml/2023_neurips_challenge/oc20dense_mapping.pkl"
+            "packages/fairchem-applications/fairchem-applications-adsorbml/src/fairchem/applications/AdsorbML/adsorbml/2023_neurips_challenge/oc20dense_mapping.pkl"
         ),
         Path(
-            "src/fairchem/applications/AdsorbML/adsorbml/2023_neurips_challenge/ml_relaxed_dft_targets.pkl"
+            "packages/fairchem-applications/fairchem-applications-adsorbml/src/fairchem/applications/AdsorbML/adsorbml/2023_neurips_challenge/ml_relaxed_dft_targets.pkl"
         ),
     ],
     "cattsunami": [
-        Path("tests/applications/cattsunami/tests/autoframe_inputs_dissociation.pkl"),
-        Path("tests/applications/cattsunami/tests/autoframe_inputs_transfer.pkl"),
+        Path("packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_dissociation.pkl"),
+        Path("packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_transfer.pkl"),
     ],
     "docs": [
         Path("docs/tutorials/NRR/NRR_example_bulks.pkl"),
@@ -107,6 +107,11 @@ def change_path_for_pypi(
         top_level_name = file.parts[0]
         if top_level_name == "tests" and test_par_dir is not None:
             new_files.append(test_par_dir / file)
+        elif "src" in file.parts and "fairchem" in file.parts:
+            # Repo paths are packages/<...>/src/fairchem/...; in an
+            # installed build they land in <site-packages>/fairchem/...
+            idx = file.parts.index("src")
+            new_files.append(install_dir / par_dir / Path(*file.parts[idx + 1:]))
         elif top_level_name == "src":
             # turn `src` into `site-packages` or whatever the correct name is
             new_files.append(install_dir / Path(str(file).replace("src", par_dir, 1)))
@@ -134,6 +139,14 @@ def download_file_group(file_group: str, test_par_dir: Path | None = None) -> No
     # The grandparent of fairchem_root is the install location,
     # this is the git repo top-level directory for dev builds, i.e. `fairchem`
     install_dir = fc_root.parent.parent
+    if fc_root.parent.name == "src" and not (install_dir / "uv.lock").exists():
+        # Post-reorg dev layout: fairchem.core lives at
+        # packages/fairchem-core/src/fairchem, so walk up to the
+        # workspace root (marked by the root pyproject/uv.lock).
+        for ancestor in fc_root.parents:
+            if (ancestor / "uv.lock").exists():
+                install_dir = ancestor
+                break
     # The parent of fairchem_root is `src` on git repo/dev builds and
     # usually `site-packages` for PyPi builds (to be safe, we don't assume
     # that name)

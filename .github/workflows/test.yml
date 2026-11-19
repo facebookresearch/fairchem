@@ -19,7 +19,7 @@ on:
 env:
   CI: true
   # Trace the checked-out source consistently across CPU and GPU jobs.
-  PYTHONPATH: ${{ github.workspace }}/src
+  PYTHONPATH: ${{ github.workspace }}/packages/fairchem-core/src
   PYTHONFAULTHANDLER: '1'
   PYTHONUNBUFFERED: '1'
   HEAD_SHA: |
