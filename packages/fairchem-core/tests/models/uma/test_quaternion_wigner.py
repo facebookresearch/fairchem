@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 import torch
 
+import fairchem.core.models.uma
 from fairchem.core.models.uma.common.quaternion.quaternion_utils import (
     BLEND_START,
     BLEND_WIDTH,
@@ -168,15 +169,7 @@ def get_so3_generators(
     Returns:
         Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
     """
-    jd_path = (
-        Path(__file__).parents[4]
-        / "src"
-        / "fairchem"
-        / "core"
-        / "models"
-        / "uma"
-        / "Jd.pt"
-    )
+    jd_path = Path(fairchem.core.models.uma.__file__).parent / "Jd.pt"
     Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
 
     K_x_list = []
@@ -276,7 +269,17 @@ def Jd_matrices(lmax, dtype, device):
     """Load the J matrices used by the Euler angle approach."""
     test_dir = Path(__file__).parent
     repo_root = test_dir.parent.parent.parent.parent
-    jd_path = repo_root / "packages" / "fairchem-core" / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
+    jd_path = (
+        repo_root
+        / "packages"
+        / "fairchem-core"
+        / "src"
+        / "fairchem"
+        / "core"
+        / "models"
+        / "uma"
+        / "Jd.pt"
+    )
 
     if jd_path.exists():
         Jd = torch.load(jd_path, map_location=device, weights_only=True)
