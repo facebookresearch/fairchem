@@ -40,6 +40,11 @@ on:
         required: false
         type: boolean
         default: false
+      python-versions:
+        description: JSON list of Python versions to test on
+        required: false
+        type: string
+        default: '["3.11", "3.14"]'
       pytest-args:
         description: Extra arguments for pytest
         required: false
@@ -60,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ['3.11', '3.14']
+        python_version: ${{ fromJSON(inputs.python-versions) }}
     steps:
       - uses: actions/checkout@v7
         with:
