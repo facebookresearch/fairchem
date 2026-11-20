@@ -786,7 +786,6 @@ from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_RESUME_CONFIG,
 )
 from tests.testing_utils import launch_main
-from tests.units.mlip_unit.create_fake_dataset import create_fake_uma_dataset
 
 DEFAULT_RTOL = 1.0e-03
 DEFAULT_ATOL = 1.0e-03
@@ -1139,6 +1138,11 @@ def conserving_mole_checkpoint(fake_uma_dataset, tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def fake_uma_dataset(tmp_path_factory):
+    # Imported here, not at module level: it pulls in the benchmark
+    # stack (pyarrow et al.), which leaner conftest consumers such as
+    # integration-tests do not install.
+    from tests.units.mlip_unit.create_fake_dataset import create_fake_uma_dataset
+
     # Use filelock so only one xdist worker creates the dataset
     root_tmp = tmp_path_factory.getbasetemp().parent
     data_dir = str(root_tmp / "fake_uma_dataset")
