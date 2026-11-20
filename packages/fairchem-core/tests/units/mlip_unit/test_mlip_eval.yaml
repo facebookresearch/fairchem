@@ -38,7 +38,7 @@ runner:
         forces:
           module: fairchem.core.models.uma.escn_md.Linear_Force_Head
   callbacks:
-    - _target_: tests.core.units.mlip_unit.test_mlip_unit.EvalEndCallback
+    - _target_: tests.units.mlip_unit.test_mlip_unit.EvalEndCallback
       total_atoms: 1425
       oc20_energy_mae: 69.90238240559896
       omol_energy_mae: 5.362845706939697

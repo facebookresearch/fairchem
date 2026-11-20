@@ -40,7 +40,7 @@ pytestmark = pytest.mark.serial
 # Workers record this commit only if they read it from the snapshot marker.
 _SNAPSHOT_COMMIT = "e2e0" * 10
 _PASSING = {"PASS", "PASS@FP32", "PASS@TF32"}
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _link_farm(source: Path, destination: Path, copied: Path) -> None:

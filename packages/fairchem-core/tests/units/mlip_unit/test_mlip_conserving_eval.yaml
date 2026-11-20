@@ -45,7 +45,7 @@ runner:
       heads: ${heads}
       pass_through_head_outputs: True
   callbacks:
-    - _target_: tests.core.units.mlip_unit.test_mlip_unit.EvalEndCallbackASELMDB
+    - _target_: tests.units.mlip_unit.test_mlip_unit.EvalEndCallbackASELMDB
       total_atoms: 90
       oc20_energy_mae: ${oc20_energy_mae}
       omol_energy_mae: ${omol_energy_mae}
