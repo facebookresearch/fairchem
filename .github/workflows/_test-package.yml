@@ -82,6 +82,8 @@ jobs:
             pip install -e "${{ inputs.package-dir }}"
           fi
           pip install -r integration-tests/requirements.txt
+          # The test step below always passes --cov flags.
+          pip install pytest-cov
 
       - name: Run tests
         run: |
