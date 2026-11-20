@@ -924,6 +924,10 @@ jobs:
       extras: ''
       extra-packages: lammps
       apt-packages: mpich
+      # hydra-core is incompatible with Python 3.14's argparse
+      # (LazyCompletionHelp), which breaks the lmp_fc entrypoint
+      # test; run this suite on 3.11 until hydra supports 3.14.
+      python-versions: '["3.11"]'
       test-path: packages/fairchem-lammps/tests
       cov-module: fairchem.lammps
       pytest-args: '-m "not gpu and not pretrained"'
