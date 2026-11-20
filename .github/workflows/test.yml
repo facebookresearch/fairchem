@@ -808,11 +808,23 @@ jobs:
     if: ${{ needs.changes.outputs.core == 'true' }}
     permissions:
       contents: read
+    # Sharded like the legacy core jobs above: the whole core suite
+    # in one job starves the runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: units
+            paths: packages/fairchem-core/tests/units
+          - name: main
+            paths: packages/fairchem-core/tests/models packages/fairchem-core/tests/graph packages/fairchem-core/tests/calculate packages/fairchem-core/tests/components packages/fairchem-core/tests/common packages/fairchem-core/tests/datasets packages/fairchem-core/tests/evaluator packages/fairchem-core/tests/modules packages/fairchem-core/tests/scripts packages/fairchem-core/tests/launchers packages/fairchem-core/tests/test_cli.py packages/fairchem-core/tests/test_download_large_files.py packages/fairchem-core/tests/test_imports.py
+          - name: regression
+            paths: packages/fairchem-core/tests/regression_suite
     uses: ./.github/workflows/_test-package.yml
     with:
       package-dir: packages/fairchem-core
       extras: dev,extras
-      test-path: packages/fairchem-core/tests
+      test-path: ${{ matrix.shard.paths }}
       cov-module: fairchem.core
       pytest-args: '-n auto -m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
     secrets: inherit
