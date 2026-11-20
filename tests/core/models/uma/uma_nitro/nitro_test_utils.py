@@ -68,7 +68,7 @@ TASKS = [
 
 def model_config(model_id: str | None = "UMA-S-1.2.1", **backbone_changes) -> dict:
     """
-    A UMA-S configuration (Nitro's architecture) with few experts.
+    A complete UMA-S configuration (Nitro's architecture) with few experts.
 
     Args:
         model_id: The UMA generation tag; ``None`` omits it, as UMA 1.1 does.
@@ -81,7 +81,10 @@ def model_config(model_id: str | None = "UMA-S-1.2.1", **backbone_changes) -> di
         "lmax": 2,
         "mmax": 2,
         "otf_graph": False,
+        "use_pbc": True,
+        "use_pbc_single": True,
         "cutoff": 6,
+        "max_neighbors": 300,
         "num_distance_basis": 32,
         "num_layers": 4,
         "ff_type": "spectral",
@@ -96,6 +99,7 @@ def model_config(model_id: str | None = "UMA-S-1.2.1", **backbone_changes) -> di
         "dataset_mapping": dict(_DATASETS),
         "moe_layer_type": "pytorch",
         "use_composition_embedding": True,
+        "use_global_embedding": False,
         "sphere_channels": 128,
         "edge_channels": 128,
         "norm_type": "rms_norm_sh",
@@ -133,26 +137,39 @@ def direct_head_model_config() -> dict:
     return config
 
 
-def random_checkpoint(**config_changes) -> MLIPInferenceCheckpoint:
+def checkpoint_from_config(
+    config: dict, tasks: list[dict] = TASKS
+) -> MLIPInferenceCheckpoint:
     """
-    A randomly initialized UMA-S checkpoint, as ``torch.load`` would return it.
+    A randomly initialized checkpoint, as ``torch.load`` would return it.
 
     Args:
-        config_changes: Passed to :func:`model_config`, e.g. ``model_id=None,
-            model_version=1.1`` for a UMA 1.1 checkpoint.
+        config: The model config.
+        tasks: The task configs.
     """
     torch.manual_seed(0)
-    model = hydra.utils.instantiate(_loadable(model_config(**config_changes)))
+    model = hydra.utils.instantiate(_loadable(config))
     state = model.state_dict()
     return MLIPInferenceCheckpoint(
-        model_config=model_config(**config_changes),
+        model_config=copy.deepcopy(config),
         model_state_dict=state,
         ema_state_dict={
             **{f"module.{k}": v for k, v in state.items()},
             "n_averaged": torch.tensor(1),
         },
-        tasks_config=copy.deepcopy(TASKS),
+        tasks_config=copy.deepcopy(tasks),
     )
+
+
+def random_checkpoint(**config_changes) -> MLIPInferenceCheckpoint:
+    """
+    A randomly initialized UMA-S checkpoint.
+
+    Args:
+        config_changes: Passed to :func:`model_config`, e.g. ``model_id=None,
+            model_version=1.1`` for a UMA 1.1 checkpoint.
+    """
+    return checkpoint_from_config(model_config(**config_changes))
 
 
 def _loadable(config: dict) -> dict:
@@ -165,27 +182,18 @@ def _loadable(config: dict) -> dict:
     return config
 
 
+DIRECT_HEAD_TASKS = [
+    {**_task("omat", "energy", "system", True), "name": "energy"},
+    {**_task("omat", "forces", "atom", False), "name": "forces"},
+    {**_task("omat", "stress", "system", False), "name": "stress"},
+]
+
+
 def direct_head_random_checkpoint() -> MLIPInferenceCheckpoint:
     """
     A random single-dataset checkpoint with an unwrapped EFS head.
     """
-    torch.manual_seed(0)
-    config = direct_head_model_config()
-    model = hydra.utils.instantiate(config)
-    state = model.state_dict()
-    return MLIPInferenceCheckpoint(
-        model_config=config,
-        model_state_dict=state,
-        ema_state_dict={
-            **{f"module.{key}": value for key, value in state.items()},
-            "n_averaged": torch.tensor(1),
-        },
-        tasks_config=[
-            {**_task("omat", "energy", "system", True), "name": "energy"},
-            {**_task("omat", "forces", "atom", False), "name": "forces"},
-            {**_task("omat", "stress", "system", False), "name": "stress"},
-        ],
-    )
+    return checkpoint_from_config(direct_head_model_config(), DIRECT_HEAD_TASKS)
 
 
 def batch(*systems):

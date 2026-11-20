@@ -335,9 +335,15 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             ) from error
 
         UMANitroModel.validate(
-            self.inference_settings, self._inference_model_path, self._requested_device
+            self.inference_settings,
+            checkpoint,
+            self._inference_model_path,
+            self._requested_device,
+            self._overrides,
         )
-        self.model = _ModelWrapper(UMANitroModel.from_checkpoint(checkpoint))
+        self.model = _ModelWrapper(
+            UMANitroModel.from_checkpoint(checkpoint, self._overrides)
+        )
 
     def _fall_back_with(self, reason: str, **changes) -> None:
         """

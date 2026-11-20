@@ -37,9 +37,11 @@ from tests.core.models.uma.uma_nitro.nitro_test_utils import (
     UNSUPPORTED_SETTINGS,
     assert_close,
     batch,
+    checkpoint_from_config,
     checkpoint_path,
     general_predictor,
     load_time_reason,
+    model_config,
     nitro_settings,
     random_checkpoint,
     requires_nitro_gpu,
@@ -217,6 +219,55 @@ def test_falls_back_for_a_modified_uma_1p2p1_file(nitro_random_checkpoint_path, 
         )
     _assert_on_multigpu(
         predictor, caplog, load_time_reason("is not supported in nitro mode (md5 ")
+    )
+
+
+def _mean_head_config() -> dict:
+    config = model_config()
+    config["heads"]["energyandforcehead"]["head_kwargs"]["reduce"] = "mean"
+    return config
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    ("config", "reason"),
+    [
+        (model_config(cutoff=5), "backbone.cutoff=5 (expected 6)"),
+        (
+            _mean_head_config(),
+            "heads.energyandforcehead.head_kwargs.reduce='mean' (unexpected)",
+        ),
+    ],
+    ids=["cutoff", "head-reduce"],
+)
+def test_falls_back_for_a_changed_architecture(tmp_path, caplog, config, reason):
+    """
+    A file tagged UMA-S-1.2.1 whose config Nitro's kernels do not compute.
+    """
+    path = tmp_path / "changed.pt"
+    torch.save(checkpoint_from_config(config), path)
+    with caplog.at_level(logging.WARNING):
+        predictor = MLIPPredictUnit(
+            str(path), "cuda", inference_settings=nitro_settings()
+        )
+    _assert_on_multigpu(predictor, caplog, load_time_reason(reason))
+
+
+@pytest.mark.gpu()
+def test_falls_back_for_overrides_nitro_cannot_compute(
+    nitro_random_checkpoint_path, caplog
+):
+    with caplog.at_level(logging.WARNING):
+        predictor = MLIPPredictUnit(
+            nitro_random_checkpoint_path,
+            "cuda",
+            inference_settings=nitro_settings(),
+            overrides={"backbone": {"max_neighbors": 10}},
+        )
+    _assert_on_multigpu(
+        predictor,
+        caplog,
+        load_time_reason("overrides set backbone.max_neighbors=10 (expected 300)"),
     )
 
 

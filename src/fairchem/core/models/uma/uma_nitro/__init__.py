@@ -19,12 +19,10 @@ from fairchem.core.models.uma.uma_nitro._inference import (
     UMANitroModel,
     UMANitroNotSupportedError,
     kernel_backend_summary,
-    verify_checkpoint_file,
 )
 
 __all__ = [
     "UMANitroModel",
     "UMANitroNotSupportedError",
     "kernel_backend_summary",
-    "verify_checkpoint_file",
 ]
