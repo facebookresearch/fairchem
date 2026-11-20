@@ -1,5 +1,4 @@
 include-paths:
-  - src/fairchem/applications/cattsunami
   - packages/fairchem-applications/fairchem-applications-cattsunami/
 tag-prefix: fairchem_applications_cattsunami
 tag-template: 'fairchem_applications_cattsunami-$RESOLVED_VERSION'

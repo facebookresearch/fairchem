@@ -1,5 +1,4 @@
 include-paths:
-  - src/fairchem/demo/ocpapi
   - packages/fairchem-demo-ocpapi
 tag-prefix: fairchem_demo_ocpapi
 tag-template: 'fairchem_demo_ocpapi-$RESOLVED_VERSION'
