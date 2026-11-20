@@ -911,6 +911,7 @@ jobs:
       package-dir: packages/fairchem-lammps
       extras: ''
       extra-packages: lammps
+      apt-packages: mpich
       test-path: packages/fairchem-lammps/tests
       cov-module: fairchem.lammps
       pytest-args: '-m "not gpu and not pretrained"'

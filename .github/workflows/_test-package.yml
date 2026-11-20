@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: dev
+      apt-packages:
+        description: Additional system packages to install (apt) for the test env
+        required: false
+        type: string
+        default: ''
       extra-packages:
         description: Additional PyPI packages to install for the test env
         required: false
@@ -97,6 +102,12 @@ jobs:
           if [ -n "${{ inputs.extra-packages }}" ]; then
             pip install ${{ inputs.extra-packages }}
           fi
+
+      - name: Install system packages
+        if: ${{ inputs.apt-packages != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - name: Install packmol
         if: ${{ inputs.install-packmol }}
