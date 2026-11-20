@@ -120,6 +120,15 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 print(predictor.inference_settings.nitro)  # True when Nitro runs
 ```
 
+Nitro also runs your own fine-tunes of `uma-s-1p2p1`. To run one, list its MD5 in `~/.fairchem/nitro_compatible_checkpoints.txt` (`$FAIRCHEM_CONFIG_DIR` replaces `~/.fairchem` if set). The file holds `md5sum` output:
+
+```bash
+mkdir -p ~/.fairchem
+md5sum /runs/my_ft/inference_ckpt.pt >> ~/.fairchem/nitro_compatible_checkpoints.txt
+```
+
+Nitro compares every checkpoint's config with the architecture of `uma-s-1p2p1`. An unlisted fine-tune falls back to `multigpu`, and the warning prints the command above. A listed checkpoint whose config Nitro cannot compute fails to load with a `ValueError` that names the keys that differ. The check cannot see the weights themselves, so after listing a fine-tune, compare a few energies and forces against `inference_settings="high-precision"`. In the fine-tuning template, set `base_model_name: uma-s-1p2p1` and keep `max_neighbors: 300`. Nitro does not run fine-tunes of other base models or with another `max_neighbors`.
+
 On Hopper and Blackwell GPUs, Nitro computes with TF32 matrix multiplies (multigpu does so on every GPU), so the predictor warns once that higher-order derivatives such as phonons are less accurate. Use `inference_settings="high-precision"` for standard FP32 precision.
 
 Nitro sizes its graph buffers to the number of edges measured on the first evaluation times an edge margin, 1.3 by default (`UMA_NITRO_EDGE_MARGIN`). The margin leaves room for the graph to grow as atoms move; if it overflows, Nitro measures the graph again and retries, which is slow. A smaller margin is faster per step but overflows more often.

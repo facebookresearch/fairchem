@@ -52,7 +52,7 @@ See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations 
 
 ## Library change — the default inference mode is nitro, and turbo is no longer available
 
-- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (and the fine-tunes of it on Nitro's checkpoint allowlist) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
+- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (its released fine-tunes, and fine-tunes of it you list in `~/.fairchem/nitro_compatible_checkpoints.txt`) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
 - The previous default (full FP32 with `merge_mole + compile`) is now `inference_settings="high-precision"`.
 - **Breaking:** `turbo` is no longer available; please use `nitro` (the default). Its former settings are `inference_settings="multigpu"`, which multi-worker inference (`workers > 1`) uses.
 - The batch server's `ModelSpec` and the torch-sim interface default to `"batch"`.

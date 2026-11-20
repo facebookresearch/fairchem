@@ -828,7 +828,7 @@ See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations 
 
 ## Library change — the default inference mode is nitro, and turbo is no longer available
 
-- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (and the fine-tunes of it on Nitro's checkpoint allowlist) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
+- `inference_settings="default"`, the default for `get_predict_unit`, `load_predict_unit` and `FAIRChemCalculator.from_model_checkpoint`, is now the `nitro` preset, which we recommend for MD and other standard workflows. It runs UMA Nitro for `uma-s-1p2p1` (its released fine-tunes, and fine-tunes of it you list in `~/.fairchem/nitro_compatible_checkpoints.txt`) on Ampere, Hopper and Blackwell GPUs, and `multigpu` otherwise, warning once that results are reduced precision.
 - The previous default (full FP32 with `merge_mole + compile`) is now `inference_settings="high-precision"`.
 - **Breaking:** `turbo` is no longer available; please use `nitro` (the default). Its former settings are `inference_settings="multigpu"`, which multi-worker inference (`workers > 1`) uses.
 - The batch server's `ModelSpec` and the torch-sim interface default to `"batch"`.
@@ -1217,6 +1217,15 @@ The default mode is `nitro`, and we recommend it for MD and other standard singl
 predictor = pretrained_mlip.get_predict_unit("uma-s-1p2p1", device="cuda")
 print(predictor.inference_settings.nitro)  # True when Nitro runs
 ```
+
+Nitro also runs your own fine-tunes of `uma-s-1p2p1`. To run one, list its MD5 in `~/.fairchem/nitro_compatible_checkpoints.txt` (`$FAIRCHEM_CONFIG_DIR` replaces `~/.fairchem` if set). The file holds `md5sum` output:
+
+```bash
+mkdir -p ~/.fairchem
+md5sum /runs/my_ft/inference_ckpt.pt >> ~/.fairchem/nitro_compatible_checkpoints.txt
+```
+
+Nitro compares every checkpoint's config with the architecture of `uma-s-1p2p1`. An unlisted fine-tune falls back to `multigpu`, and the warning prints the command above. A listed checkpoint whose config Nitro cannot compute fails to load with a `ValueError` that names the keys that differ. The check cannot see the weights themselves, so after listing a fine-tune, compare a few energies and forces against `inference_settings="high-precision"`. In the fine-tuning template, set `base_model_name: uma-s-1p2p1` and keep `max_neighbors: 300`. Nitro does not run fine-tunes of other base models or with another `max_neighbors`.
 
 On Hopper and Blackwell GPUs, Nitro computes with TF32 matrix multiplies (multigpu does so on every GPU), so the predictor warns once that higher-order derivatives such as phonons are less accurate. Use `inference_settings="high-precision"` for standard FP32 precision.
 
