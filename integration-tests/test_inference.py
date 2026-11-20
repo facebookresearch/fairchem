@@ -26,7 +26,7 @@ import pytest
 import torch
 from ase.build import bulk, make_supercell
 from conftest import get_predict_unit_for_test, models_to_test
-from performance_report import MeasurementStats, PerformanceReport
+from tests.performance_report import MeasurementStats, PerformanceReport
 
 from fairchem.core.datasets.atomic_data import AtomicData
 
