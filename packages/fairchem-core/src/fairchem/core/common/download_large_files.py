@@ -28,16 +28,24 @@ S3_ROOT = "https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/"
 FILE_GROUPS = {
     "odac": [
         Path("configs/odac/s2ef/scaling_factors/painn.pt"),
-        Path("packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/force_field/data_w_oms.json"),
+        Path(
+            "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/force_field/data_w_oms.json"
+        ),
         Path(
             "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/promising_mof/promising_mof_features/JmolData.jar"
         ),
         Path(
             "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/promising_mof/promising_mof_energies/adsorption_energy.txt"
         ),
-        Path("packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/supercell_info.csv"),
+        Path(
+            "packages/fairchem-data/fairchem-data-odac/src/fairchem/data/odac/supercell_info.csv"
+        ),
     ],
-    "oc": [Path("packages/fairchem-data/fairchem-data-oc/src/fairchem/data/oc/databases/pkls/bulks.pkl")],
+    "oc": [
+        Path(
+            "packages/fairchem-data/fairchem-data-oc/src/fairchem/data/oc/databases/pkls/bulks.pkl"
+        )
+    ],
     "adsorbml": [
         Path(
             "packages/fairchem-applications/fairchem-applications-adsorbml/src/fairchem/applications/AdsorbML/adsorbml/2023_neurips_challenge/oc20dense_mapping.pkl"
@@ -47,8 +55,12 @@ FILE_GROUPS = {
         ),
     ],
     "cattsunami": [
-        Path("packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_dissociation.pkl"),
-        Path("packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_transfer.pkl"),
+        Path(
+            "packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_dissociation.pkl"
+        ),
+        Path(
+            "packages/fairchem-applications/fairchem-applications-cattsunami/tests/autoframe_inputs_transfer.pkl"
+        ),
     ],
     "docs": [
         Path("docs/tutorials/NRR/NRR_example_bulks.pkl"),
@@ -109,7 +121,7 @@ def change_path_for_pypi(
             new_files.append(test_par_dir / file)
         elif "src" in file.parts and "fairchem" in file.parts:
             idx = file.parts.index("src")
-            new_files.append(install_dir / par_dir / Path(*file.parts[idx + 1:]))
+            new_files.append(install_dir / par_dir / Path(*file.parts[idx + 1 :]))
         elif top_level_name == "src":
             # turn `src` into `site-packages` or whatever the correct name is
             new_files.append(install_dir / Path(str(file).replace("src", par_dir, 1)))
