@@ -10,7 +10,7 @@ UMA Nitro: a standalone UMA-small model for energy, force, and stress inference.
 (``model_config``, ``ema_state_dict`` and ``tasks_config``) without constructing
 the composable ``HydraModel``. The architecture is fixed to uma-s-1p2p1's, and
 ``_checkpoints.admit`` accepts only checkpoints whose config matches it and whose
-MD5 is a known one. It owns everything between the checkpoint and the kernels:
+MD5 is listed. It owns everything between the checkpoint and the kernels:
 the mixture-of-linear-experts (MOLE) merge for the system being simulated, the
 SO(2) block-diagonal weight layout, and the unified radial MLP layout. It
 implements the subset of the ``HydraModel`` interface that ``MLIPPredictUnit``

@@ -36,9 +36,6 @@ class MergeMoleConsistencyError(ValueError):
     """Raised when input data is incompatible with an already merged MOLE model."""
 
 
-# The released checkpoint nitro mode is for, and the model_id of every checkpoint
-# it accepts: uma_nitro's MD5 allowlist also admits fine-tunes of uma-s-1p2p1,
-# which keep this model_id.
 NITRO_CHECKPOINT = "uma-s-1p2p1"
 NITRO_MODEL_ID = "UMA-S-1.2.1"
 
@@ -189,9 +186,9 @@ class InferenceSettings:
     # Accepts a torch.dtype or a string in ALLOWED_DTYPES (e.g. "float32").
     base_precision_dtype: torch.dtype | str = torch.float32
 
-    # Run the standalone UMA Nitro model (UMA-S-1.2.1 checkpoints on Nitro's MD5
-    # allowlist, CUDA capability 8.x-12.x, one system per call) instead of the
-    # HydraModel. Nitro requires tf32=True to allow its reduced-precision kernels;
+    # Run the standalone UMA Nitro model (UMA-S-1.2.1 checkpoints in Nitro's
+    # checkpoint lists, CUDA capability 8.x-12.x, one system per call) instead of
+    # the HydraModel. Nitro requires tf32=True to allow its reduced-precision kernels;
     # compute capability 8.x uses IEEE matmul to meet the numerical limits.
     # execution_mode does not apply, and compile only affects the HydraModel: a
     # request Nitro cannot serve warns and runs the same settings with

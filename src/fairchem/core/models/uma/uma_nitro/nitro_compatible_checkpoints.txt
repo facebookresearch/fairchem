@@ -1,0 +1,16 @@
+# Released checkpoints UMA Nitro (inference_settings="nitro") accepts, in md5sum
+# format. Maintained by fairchem; edits here are lost on reinstall.
+#
+# List your own fine-tunes of uma-s-1p2p1 in the same format in
+# ~/.fairchem/nitro_compatible_checkpoints.txt ($FAIRCHEM_CONFIG_DIR replaces
+# ~/.fairchem if set):
+#
+#     mkdir -p ~/.fairchem
+#     md5sum /path/to/my_finetune.pt >> ~/.fairchem/nitro_compatible_checkpoints.txt
+#
+# Nitro still checks that a listed checkpoint's config matches uma-s-1p2p1's
+# architecture, and refuses to load one that does not.
+
+3497615fd30a24c5b35cd3b41a682e6e  uma-s-1p2p1
+eb6fed512b3f0801b27dfdd6e8c1f9ee  uma-s-1p2p1-ft-d4rev
+fc041fe67c6e1501bf8b71cc490826f7  uma-s-1p2p1-ft-r2scan

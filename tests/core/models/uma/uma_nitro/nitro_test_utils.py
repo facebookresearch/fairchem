@@ -10,12 +10,15 @@ Shared helpers for the UMA Nitro tests.
 from __future__ import annotations
 
 import copy
+import hashlib
 import os
+from pathlib import Path
 
 import hydra
 import pytest
 import torch
 
+from fairchem.core._config import config_dir
 from fairchem.core.calculate.pretrained_mlip import (
     pretrained_checkpoint_path_from_name,
 )
@@ -194,6 +197,17 @@ def direct_head_random_checkpoint() -> MLIPInferenceCheckpoint:
     A random single-dataset checkpoint with an unwrapped EFS head.
     """
     return checkpoint_from_config(direct_head_model_config(), DIRECT_HEAD_TASKS)
+
+
+def list_checkpoint(path) -> None:
+    """
+    Add ``path`` to the user's Nitro list, as ``md5sum path >> list`` would.
+    """
+    listing = Path(config_dir()) / "nitro_compatible_checkpoints.txt"
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.md5(Path(path).read_bytes(), usedforsecurity=False)
+    with open(listing, "a") as f:
+        f.write(f"{digest.hexdigest()}  {path}\n")
 
 
 def batch(*systems):

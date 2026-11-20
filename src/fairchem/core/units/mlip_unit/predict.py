@@ -316,14 +316,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             UMANitroNotSupportedError: If Nitro cannot serve this request.
         """
         # Checked here, before importing Nitro, so these requests get a clear
-        # reason even where its kernels cannot be imported (e.g. no Triton). A
-        # fine-tune added to Nitro's MD5 allowlist must keep model_id
-        # UMA-S-1.2.1, or this check rejects it before the allowlist is read.
+        # reason even where its kernels cannot be imported (e.g. no Triton).
         model_name = _checkpoint_model_name(checkpoint.model_config)
         if model_name != NITRO_MODEL_ID:
             raise UMANitroNotSupportedError(
                 f"{model_name} is not supported in nitro mode; use UMA 1.2.1 "
-                f"({NITRO_CHECKPOINT}) for the nitro speedup"
+                f"({NITRO_CHECKPOINT}) for the nitro speedup. Nitro's checkpoint "
+                f"lists admit only model_id {NITRO_MODEL_ID}"
             )
         if torch.device(self._requested_device).type != "cuda":
             raise UMANitroNotSupportedError("nitro mode requires a CUDA device")

@@ -8,13 +8,20 @@ Which checkpoints UMA Nitro admits.
 
 Nitro's kernels hard-code uma-s-1p2p1's architecture, so a checkpoint is
 admitted only when the config HydraModel would build from it matches that
-architecture (``config_mismatches``) and its MD5 is a known one (``admit``).
+architecture (``config_mismatches``) and its MD5 is in the shipped list or the
+user's list (``compatible_checkpoints``). ``admit`` decides.
 """
 
 from __future__ import annotations
 
+import os
+import re
+import shlex
 from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import NamedTuple
 
+from fairchem.core._config import config_dir
 from fairchem.core.common.checksums import cached_file_md5
 from fairchem.core.units.mlip_unit.api.inference import (
     NITRO_CHECKPOINT,
@@ -23,11 +30,11 @@ from fairchem.core.units.mlip_unit.api.inference import (
 )
 from fairchem.core.units.mlip_unit.utils import update_configs
 
-_SUPPORTED_CHECKPOINTS = {
-    "3497615fd30a24c5b35cd3b41a682e6e": NITRO_CHECKPOINT,
-    "eb6fed512b3f0801b27dfdd6e8c1f9ee": "uma-s-1p2p1-ft-d4rev",
-    "fc041fe67c6e1501bf8b71cc490826f7": "uma-s-1p2p1-ft-r2scan",
-}
+LIST_NAME = "nitro_compatible_checkpoints.txt"
+SHIPPED_LIST = Path(__file__).with_name(LIST_NAME)
+
+# An md5sum output line; md5sum prefixes a backslash when it escapes the name.
+_LIST_LINE = re.compile(r"\\?(?P<digest>[0-9a-fA-F]{32})(?:\s+\*?(?P<label>.*))?")
 
 SUPPORTED_PROPERTIES = frozenset({"energy", "forces", "stress"})
 
@@ -151,13 +158,84 @@ def config_mismatches(model_config: Mapping, tasks_config: Sequence) -> list[str
     return mismatches
 
 
+class ListEntry(NamedTuple):
+    """
+    A listed checkpoint: the label its line gives and the list file it is in.
+    """
+
+    label: str
+    source: Path
+
+
+def user_list() -> Path:
+    """
+    The user's list of Nitro-compatible checkpoints, which may not exist.
+    """
+    return Path(config_dir()) / LIST_NAME
+
+
+def _read_list(path: Path) -> dict[str, ListEntry]:
+    """
+    Parse an md5sum-format checkpoint list.
+
+    Blank lines and ``#`` comments are skipped. Each other line is an MD5
+    digest, optionally followed by whitespace, md5sum's binary-mode ``*`` and a
+    label.
+
+    Args:
+        path: The list file.
+
+    Returns:
+        A mapping from lowercase MD5 digest to its entry; empty if the file
+        does not exist.
+
+    Raises:
+        ValueError: If the file cannot be read or has a malformed line.
+    """
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeDecodeError) as error:
+        raise ValueError(f"cannot read the checkpoint list {path}: {error}") from error
+    entries = {}
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = _LIST_LINE.fullmatch(line)
+        if match is None:
+            raise ValueError(
+                f"{path}:{number}: expected an md5sum line, '<md5 digest>  <label>', "
+                f"got {line!r}"
+            )
+        entries[match["digest"].lower()] = ListEntry(match["label"] or "", path)
+    return entries
+
+
+def compatible_checkpoints() -> dict[str, ListEntry]:
+    """
+    Read the shipped and user lists; the shipped entry wins on a shared digest.
+
+    Returns:
+        A mapping from MD5 digest to its entry.
+
+    Raises:
+        ValueError: If a list cannot be read or has a malformed line.
+    """
+    return {**_read_list(user_list()), **_read_list(SHIPPED_LIST)}
+
+
 def admit(checkpoint, path, overrides: dict | None = None) -> None:
     """
-    Check that Nitro computes what HydraModel would for this checkpoint.
+    Decide whether Nitro runs this checkpoint.
 
-    The config is compared before the file is hashed, since the comparison is
-    free and the hash reads the whole file. The MD5 sum is cached in a
-    ``<path>.md5`` sidecar (``cached_file_md5``).
+    The checks run in order: the model_id, the config HydraModel would build
+    (overrides included), then the lists. The config is compared before the
+    file is hashed, since the comparison is free and the hash reads the whole
+    file; a mismatched file is hashed only to tell a wrong list entry from an
+    unlisted file. The MD5 sum is cached in a ``<path>.md5`` sidecar
+    (``cached_file_md5``).
 
     Args:
         checkpoint: The loaded ``MLIPInferenceCheckpoint``.
@@ -165,10 +243,18 @@ def admit(checkpoint, path, overrides: dict | None = None) -> None:
         overrides: Config overrides the predictor applies to HydraModel.
 
     Raises:
-        UMANitroNotSupportedError: If the checkpoint, with its overrides, is
-            not one Nitro computes.
+        UMANitroNotSupportedError: If Nitro should not run this checkpoint, so
+            the predictor falls back.
+        ValueError: If the checkpoint is listed but Nitro cannot compute it, or
+            the user's list cannot be read.
     """
     model_config, tasks = checkpoint.model_config, checkpoint.tasks_config
+    model_id = model_config.get("model_id")
+    if model_id != NITRO_MODEL_ID:
+        raise UMANitroNotSupportedError(
+            f"its model_id is {model_id!r}, and Nitro's checkpoint lists admit "
+            f"only model_id {NITRO_MODEL_ID}"
+        )
     effective = update_configs(model_config, overrides) if overrides else model_config
     mismatches = config_mismatches(effective, tasks)
     if mismatches and overrides and not config_mismatches(model_config, tasks):
@@ -176,18 +262,28 @@ def admit(checkpoint, path, overrides: dict | None = None) -> None:
             f"overrides set {'; '.join(mismatches)}, which UMA Nitro's kernels "
             f"cannot compute (they hard-code {NITRO_CHECKPOINT}'s architecture)"
         )
+    digest = cached_file_md5(path)
+    entry = compatible_checkpoints().get(digest)
+    if mismatches and entry is not None:
+        raise ValueError(
+            f"{path} is listed as {entry.label!r} in {entry.source}, but UMA "
+            f"Nitro cannot compute it: it differs from {NITRO_CHECKPOINT}'s "
+            f"architecture, which Nitro's kernels hard-code: "
+            f"{'; '.join(mismatches)}. Remove its line from {entry.source}"
+        )
     if mismatches:
         raise UMANitroNotSupportedError(
             f"{path} differs from {NITRO_CHECKPOINT}'s architecture, which UMA "
             f"Nitro's kernels hard-code: {'; '.join(mismatches)}"
         )
-    digest = cached_file_md5(path)
-    if digest not in _SUPPORTED_CHECKPOINTS:
-        supported = ", ".join(
-            f"{name} (md5 {checksum})"
-            for checksum, name in _SUPPORTED_CHECKPOINTS.items()
+    if entry is None:
+        listing = user_list()
+        command = (
+            f"mkdir -p {shlex.quote(str(listing.parent))} && md5sum "
+            f"{shlex.quote(os.path.abspath(path))} >> {shlex.quote(str(listing))}"
         )
         raise UMANitroNotSupportedError(
-            f"{path} is not supported in nitro mode (md5 {digest}); supported "
-            f"checkpoints are {supported}"
+            f"{path} (md5 {digest}) is not in Nitro's checkpoint lists. If it is "
+            f"a fine-tune of {NITRO_CHECKPOINT}, list it to run it with Nitro: "
+            f"`{command}`"
         )
