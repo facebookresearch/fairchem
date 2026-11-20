@@ -56,7 +56,7 @@ jobs:
       - name: Performance tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: pytest integration-tests -s -c ./packages/fairchem-core/pyproject.toml -vv
+        run: pytest integration-tests -s -vv
       
       - name: Cleanup
         if: always()
