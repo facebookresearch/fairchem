@@ -52,7 +52,9 @@ env:
 jobs:
   test:
     if: ${{ inputs.test-path != '' }}
-    runs-on: ubuntu-latest
+    # Matches the legacy CPU test jobs; the suites starve on
+    # ubuntu-latest's 4 cores / 16 GB.
+    runs-on: 32-core-ubuntu
     permissions:
       contents: read
     strategy:
