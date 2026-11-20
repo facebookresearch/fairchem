@@ -1,3 +1,0 @@
-_target_: tests.core.units.mlip_unit.test_unit_utils.GradSaveOptimizer
-_partial_: true
-save_path: null
