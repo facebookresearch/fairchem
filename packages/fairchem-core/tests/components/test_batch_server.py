@@ -897,6 +897,9 @@ def test_two_inference_actors_and_request_workers_fit_cpu_budget():
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        # Run from the test package root so the child interpreter finds
+        # the tests package the way the repo root used to provide it.
+        cwd=Path(__file__).resolve().parents[2],
         env={**os.environ, **RAY_TEST_ENV},
         text=True,
         start_new_session=True,
