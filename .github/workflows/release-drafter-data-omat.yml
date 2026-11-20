@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'src/fairchem/data/omat/**'
-      - 'packages/fairchem-data-omat/**'
+      - 'packages/fairchem-data/fairchem-data-omat/**'
   workflow_dispatch:
 
 permissions:
