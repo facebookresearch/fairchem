@@ -25,6 +25,16 @@ on:
         required: false
         type: string
         default: dev
+      extra-packages:
+        description: Additional PyPI packages to install for the test env
+        required: false
+        type: string
+        default: ''
+      install-packmol:
+        description: Build the packmol binary from source (fairchem-data-oc tests shell out to it)
+        required: false
+        type: boolean
+        default: false
       pytest-args:
         description: Extra arguments for pytest
         required: false
@@ -84,6 +94,19 @@ jobs:
           pip install -r integration-tests/requirements.txt
           # The test step below always passes --cov flags.
           pip install pytest-cov
+          if [ -n "${{ inputs.extra-packages }}" ]; then
+            pip install ${{ inputs.extra-packages }}
+          fi
+
+      - name: Install packmol
+        if: ${{ inputs.install-packmol }}
+        run: |
+          wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
+          tar -xzf v20.15.0.tar.gz
+          cd packmol-20.15.0
+          ./configure
+          make
+          echo "$(readlink -f .)" >> "$GITHUB_PATH"
 
       - name: Run tests
         run: |

@@ -827,6 +827,7 @@ jobs:
       package-dir: packages/fairchem-data/fairchem-data-oc
       test-path: packages/fairchem-data/fairchem-data-oc/tests
       cov-module: fairchem.data.oc
+      install-packmol: true
     secrets: inherit
 
   test-data-omat:
@@ -909,6 +910,7 @@ jobs:
     with:
       package-dir: packages/fairchem-lammps
       extras: ''
+      extra-packages: lammps
       test-path: packages/fairchem-lammps/tests
       cov-module: fairchem.lammps
       pytest-args: '-m "not gpu and not pretrained"'
