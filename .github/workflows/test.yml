@@ -579,7 +579,9 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.14']
+        # 3.13: fairchem-lammps declares <3.14 until hydra-core
+        # supports Python 3.14 (see packages/fairchem-lammps/pyproject.toml).
+        python_version: ['3.13']
 
     steps:
       - uses: actions/checkout@v7
@@ -587,7 +589,7 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.14 # Specifies packages to install into the new environment
+          create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -625,7 +627,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 tests/lammps --durations=0 -vv -m gpu -c packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 packages/fairchem-lammps/tests --durations=0 -vv -m gpu -c packages/fairchem-lammps/pyproject.toml
 
       - name: Cleanup
         if: always()
