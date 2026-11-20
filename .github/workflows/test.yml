@@ -814,7 +814,7 @@ jobs:
       extras: dev,extras
       test-path: packages/fairchem-core/tests
       cov-module: fairchem.core
-      pytest-args: '-m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
+      pytest-args: '-n auto -m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
     secrets: inherit
 
   test-data-oc:
