@@ -49,7 +49,7 @@ runner:
     clip_grad_norm: 100
   max_epochs: ${runner.train_eval_unit.cosine_lr_scheduler_fn.epochs}
   callbacks:
-    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+    - _target_: tests.units.mlip_unit.test_mlip_unit.TrainEndCallback
       expected_loss: ${expected_loss}
       expected_max_steps: null
       expected_max_epochs: null

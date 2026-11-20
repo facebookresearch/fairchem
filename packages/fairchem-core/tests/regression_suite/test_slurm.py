@@ -25,7 +25,7 @@ from fairchem.core.regression_suite.spec.schema import CommandError
 from fairchem.core.regression_suite.suites import SUITES
 
 _CAMPAIGN = "fairchem.core.regression_suite.execution.campaign"
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parents[4]
 _NVE_SHARDS = 200
 
 
