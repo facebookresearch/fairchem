@@ -226,7 +226,7 @@ def test_create_finetune_dataset(type, random_state):
         )
         create_dataset_command = [
             "python",
-            "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
+            "packages/fairchem-core/src/fairchem/core/scripts/create_uma_finetune_dataset.py",
             "--train-dir",
             f"{tmpdirname}/train",
             "--val-dir",
@@ -340,7 +340,7 @@ def test_e2e_finetuning_bulks(reg_task, type):
         generated_dataset_dir = os.path.join(tmpdirname, "dataset")
         create_dataset_command = [
             "python",
-            "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
+            "packages/fairchem-core/src/fairchem/core/scripts/create_uma_finetune_dataset.py",
             "--train-dir",
             f"{tmpdirname}/train",
             "--val-dir",
