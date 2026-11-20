@@ -56,7 +56,7 @@ runner:
   max_epochs: ${max_epochs}
   max_steps: ${max_steps}
   callbacks:
-    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+    - _target_: tests.units.mlip_unit.test_mlip_unit.TrainEndCallback
       expected_loss: ${expected_loss}
       expected_max_steps: ${max_steps}
       expected_max_epochs: ${max_epochs}
