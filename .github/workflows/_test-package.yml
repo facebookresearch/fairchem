@@ -70,6 +70,12 @@ jobs:
           if [ "${{ inputs.package-dir }}" != "packages/fairchem-core" ]; then
             pip install -e packages/fairchem-core
           fi
+          # fairchem.core.components.calculate.recipes.omol imports
+          # fairchem.data.omol at module level, so core's test env needs
+          # the data-omol distribution installed as well.
+          if [ "${{ inputs.package-dir }}" = "packages/fairchem-core" ]; then
+            pip install -e packages/fairchem-data/fairchem-data-omol
+          fi
           if [ -n "${{ inputs.extras }}" ]; then
             pip install -e "${{ inputs.package-dir }}[${{ inputs.extras }}]"
           else
