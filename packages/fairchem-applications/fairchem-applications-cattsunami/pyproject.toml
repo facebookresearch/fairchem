@@ -20,11 +20,11 @@ documentation = "https://facebookresearch.github.io/fairchem/"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
-root = "../../"
+root = "../../../"
 git_describe_command = 'git describe --tags --match fairchem_applications_cattsunami-*'
 
 [tool.hatch.build]
-directory = "../../dist-applications-cattsunami"
+directory = "../../../dist-applications-cattsunami"
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/fairchem/applications/cattsunami"]
@@ -39,3 +39,6 @@ fragments = [
   { path = "src/fairchem/applications/cattsunami/README.md" },
   { path = "src/fairchem/applications/cattsunami/DATASET.md" }
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

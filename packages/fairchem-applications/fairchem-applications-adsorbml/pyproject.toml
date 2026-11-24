@@ -20,14 +20,13 @@ documentation = "https://facebookresearch.github.io/fairchem/"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
-root = "../../"
+root = "../../../"
 git_describe_command = 'git describe --tags --match  fairchem_applications_adsorbml-*'
 
 [tool.hatch.build]
-directory = "../../dist-applications-adsorbml"
+directory = "../../../dist-applications-adsorbml"
 
 [tool.hatch.build.targets.sdist]
-sources = ["src"]
 only-include = ["src/fairchem/applications/AdsorbML"]
 
 [tool.hatch.build.targets.wheel]
