@@ -42,7 +42,7 @@ jobs:
           pip install -e packages/fairchem-data-oc[dev]
           pip install -e packages/fairchem-demo-ocpapi[dev]
           pip install -e packages/fairchem-applications/fairchem-applications-cattsunami
-          pip install -r integration-tests/requirements.txt # pin test packages
+          pip install -r packages/fairchem-core/tests/integration/requirements.txt # pin test packages
 
       # The ocpapi integration tests are no longer run in CI:
       # fairchem-demo-ocpapi is unmaintained. Its unit tests still
