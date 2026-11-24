@@ -95,14 +95,14 @@ Results written to `benchmark_results.json` in the run directory under `/checkpo
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=local_8gpu \
   runner.natoms_list=[8000,32000] \
   runner.timeiters=100 \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=local_8gpu \
   runner.natoms_list=[8000,32000] \
   runner.timeiters=100 \
@@ -116,7 +116,7 @@ Expected: A2A within ±5% of BL (NVLink hides comm cost).
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=2 \
   job.scheduler.ranks_per_node=8 \
@@ -128,7 +128,7 @@ fairchem -c configs/uma/speed/uma-speed.yaml \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=2 \
   job.scheduler.ranks_per_node=8 \
@@ -147,7 +147,7 @@ Expected: A2A +2-3%.
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=4 \
   job.scheduler.ranks_per_node=8 \
@@ -159,7 +159,7 @@ fairchem -c configs/uma/speed/uma-speed.yaml \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=4 \
   job.scheduler.ranks_per_node=8 \
@@ -178,7 +178,7 @@ Expected: A2A +5-10%.
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=8 \
   job.scheduler.ranks_per_node=8 \
@@ -190,7 +190,7 @@ fairchem -c configs/uma/speed/uma-speed.yaml \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=8 \
   job.scheduler.ranks_per_node=8 \
@@ -209,7 +209,7 @@ Expected: A2A +10-20%.
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=16 \
   job.scheduler.ranks_per_node=8 \
@@ -221,7 +221,7 @@ fairchem -c configs/uma/speed/uma-speed.yaml \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=16 \
   job.scheduler.ranks_per_node=8 \
@@ -240,7 +240,7 @@ Expected: A2A +30-40%.
 
 ```bash
 # BL baseline
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=32 \
   job.scheduler.ranks_per_node=8 \
@@ -252,7 +252,7 @@ fairchem -c configs/uma/speed/uma-speed.yaml \
   runner.repeats=5
 
 # A2A + spatial
-fairchem -c configs/uma/speed/uma-speed.yaml \
+fairchem -c packages/fairchem-core/configs/uma/speed/uma-speed.yaml \
   job=slurm \
   job.scheduler.num_nodes=32 \
   job.scheduler.ranks_per_node=8 \

@@ -338,8 +338,8 @@ class PerfCheckRunner(Runner):
     accuracy error and performance metrics.
 
     Usage via fairchem CLI:
-        fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml
-        fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
+        fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml
+        fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml \
             runner.inference_settings.execution_mode=umas_fast_gpu
     """
 
@@ -805,7 +805,7 @@ class MixedPerfCheckRunner(Runner):
     benchmark cost.
 
     Usage:
-        fairchem -c configs/uma/benchmark/perf_check/mixed_benchmark.yaml
+        fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/mixed_benchmark.yaml
     """
 
     def __init__(

@@ -324,7 +324,7 @@ def test_reducer_rejects_json_pickle_density_mismatch(tmp_path: Path) -> None:
 
 def test_hydra_config_exposes_runtime_controls() -> None:
     config_path = (
-        Path(__file__).resolve().parents[4]
+        Path(__file__).resolve().parents[2]
         / "configs"
         / "uma"
         / "benchmark"

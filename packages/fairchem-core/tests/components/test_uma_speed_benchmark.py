@@ -31,7 +31,7 @@ def test_uma_speed_benchmark_natoms_list():
     with tempfile.TemporaryDirectory() as run_root:
         sys_args = [
             "-c",
-            "configs/uma/speed/uma-speed.yaml",
+            "packages/fairchem-core/configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
             f"job.run_dir={run_root}",
             "runner.natoms_list=[20]",
@@ -47,7 +47,7 @@ def test_uma_speed_benchmark_input_system(water_xyz_file):
         input_system_override = f"+runner.input_system={{water: {water_xyz_file}}}"
         sys_args = [
             "-c",
-            "configs/uma/speed/uma-speed.yaml",
+            "packages/fairchem-core/configs/uma/speed/uma-speed.yaml",
             *COMMON_ARGS,
             f"job.run_dir={run_root}",
             input_system_override,

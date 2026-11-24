@@ -22,7 +22,9 @@ from fairchem.core.units.mlip_unit.api.inference import UMATask
 
 logging.basicConfig(level=logging.INFO)
 
-TEMPLATE_DIR = Path("configs/uma/finetune")
+# Templates live in the fairchem-core package directory (not shipped
+# in the wheel); resolve them relative to this file, not the CWD.
+TEMPLATE_DIR = Path(__file__).resolve().parents[4] / "configs" / "uma" / "finetune"
 DATA_YAML_DIR = Path("data")
 REGRESSION_LABEL_TO_TASK_YAML = {
     "e": DATA_YAML_DIR / Path("uma_conserving_data_task_energy.yaml"),
