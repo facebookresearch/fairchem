@@ -760,14 +760,18 @@ jobs:
 
       # Resolve the final per-suite booleans for every trigger type
       # in one place: push runs everything; workflow_dispatch runs
-      # the suites named in `only`; PR / merge-queue runs use the
-      # path filters, with core and shared changes fanning out to
-      # dependents (every distribution imports fairchem-core).
+      # the suites named in `only` (`all` = everything); PR /
+      # merge-queue runs use the path filters and run ONLY the
+      # suites whose own files changed. In particular a fairchem-core
+      # change does not fan out to the distributions that import it:
+      # those get far less maintenance, and gating every core PR on
+      # their suites slows development. Full coverage comes from
+      # push-to-main runs, manual dispatches, and build/release
+      # workflows instead of the required status checks.
       - id: select
         env:
           EVENT: ${{ github.event_name }}
           ONLY: ${{ inputs.only }}
-          SHARED: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.shared || steps.filter.outputs.shared }}
           GITHUB_CHANGED: ${{ steps.filter_wr.outputs.github-changed }}
           CORE: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.core || steps.filter.outputs.core }}
           DATA_OC: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-oc || steps.filter.outputs.data-oc }}
@@ -789,10 +793,6 @@ jobs:
             else
               IFS=',' read -ra wanted <<< "$ONLY"
               for s in "${wanted[@]}"; do run["${s// /}"]=true; done
-              # Dependent fan-out, same as for PRs.
-              if [ "${run[core]:-}" = "true" ]; then
-                for s in data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
-              fi
             fi
           else
             # A PR that edits anything under .github/ runs no tests
@@ -815,11 +815,8 @@ jobs:
             run[applications]="${APPLICATIONS:-false}"
             run[demo]="${DEMO:-false}"
             run[lammps]="${LAMMPS:-false}"
-            if [ "${SHARED:-false}" = "true" ] || [ "${CORE:-false}" = "true" ]; then
-              for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
-            fi
             # NOTE: the ocpapi integration suite deliberately does
-            # NOT run on core/shared changes. fairchem-demo-ocpapi is
+            # NOT run on core changes. fairchem-demo-ocpapi is
             # unmaintained; its integration tests run only when the
             # demo package itself changes (or when explicitly
             # selected via workflow_dispatch).
