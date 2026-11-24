@@ -512,7 +512,7 @@ def main():
         "--config",
         "-c",
         type=str,
-        default="configs/uma/speed/uma-speed.yaml",
+        default="packages/fairchem-core/configs/uma/speed/uma-speed.yaml",
         required=True,
         help="Path to base config YAML file",
     )

@@ -34,7 +34,7 @@ def test_public_md_config_runs_with_emt(ensemble, monkeypatch, tmp_path):
         "from_model_checkpoint",
         staticmethod(lambda **_: EMT()),
     )
-    repo_root = Path(__file__).parents[4]
+    repo_root = Path(__file__).parents[2]
     config_path = repo_root / "configs" / "uma" / "md" / f"{ensemble}.yaml"
     run_dir = tmp_path / ensemble
     cfg = get_hydra_config_from_yaml(

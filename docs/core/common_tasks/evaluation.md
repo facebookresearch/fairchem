@@ -8,7 +8,7 @@ FAIRChem v2 provides a number of methods used to benchmark and evaluate the UMA 
 
 ## Running Model Evaluations
 
-To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate UMA models are stored in `configs/uma/evaluate`.
+To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate UMA models are stored in `packages/fairchem-core/configs/uma/evaluate`.
 
 Run the evaluation script:
 
@@ -16,7 +16,7 @@ Run the evaluation script:
 fairchem --config evaluation_config.yaml
 ```
 
-Replace `evaluation_config.yaml` with the desired config file. For example, `configs/uma/evaluate/uma_conserving.yaml`
+Replace `evaluation_config.yaml` with the desired config file. For example, `packages/fairchem-core/configs/uma/evaluate/uma_conserving.yaml`
 
 :::{tip}
 Results will be logged according to the specified logger. We currently only support Weights and Biases.
@@ -24,7 +24,7 @@ Results will be logged according to the specified logger. We currently only supp
 
 ## Evaluation Configuration File Format
 
-Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `configs/uma/evaluate/`.
+Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `packages/fairchem-core/configs/uma/evaluate/`.
 
 ### Top-Level Keys
 
@@ -73,7 +73,7 @@ defaults:
   - data: my_eval_data
 ```
 
-This will include the configuration from `configs/uma/evaluate/model/omc_conserving.yaml` and `configs/uma/evaluate/data/my_eval_data.yaml` into the main config. The `_self_` entry ensures the current file's contents are included.
+This will include the configuration from `packages/fairchem-core/configs/uma/evaluate/model/omc_conserving.yaml` and `packages/fairchem-core/configs/uma/evaluate/data/my_eval_data.yaml` into the main config. The `_self_` entry ensures the current file's contents are included.
 
 You can create new config groups or override existing ones by changing the entries under `defaults`:
 
@@ -92,4 +92,4 @@ Using config groups allows you to easily override defaults in the CLI. For examp
 fairchem --config evaluation_config.yaml cluster=cluster_config checkpoint=checkpoint_config
 ```
 
-Where `cluster_config` and `checkpoint_config` are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in `configs/uma/evaluate` as a full example.
+Where `cluster_config` and `checkpoint_config` are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in `packages/fairchem-core/configs/uma/evaluate` as a full example.
