@@ -103,7 +103,7 @@ jobs:
           else
             pip install -e "${{ inputs.package-dir }}"
           fi
-          pip install -r integration-tests/requirements.txt
+          pip install -r packages/fairchem-core/tests/integration/requirements.txt
           # The test step below always passes --cov flags.
           pip install pytest-cov
           if [ -n "${{ inputs.extra-packages }}" ]; then

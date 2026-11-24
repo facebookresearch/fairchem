@@ -80,7 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ['3.11', '3.14']
-        # integration-tests/ is run by perf-test.yml on a separate cadence.
+        # tests/integration is run by perf-test.yml on a separate cadence.
         # applications/lammps suites live under their packages
         # and test_lammps_gpu respectively. Both shards below intentionally
         # exclude those paths.
@@ -688,7 +688,7 @@ jobs:
           hit() { grep -qE "$1" <<< "$files"; }
           {
             hit '^\.github/' && echo "github-changed=true" || echo "github-changed=false"
-            if hit '^(pyproject\.toml|uv\.lock|ruff\.toml|\.github/workflows/test\.yml|\.github/workflows/_test-package\.yml|integration-tests/requirements\.txt)$'; then echo "shared=true"; else echo "shared=false"; fi
+            if hit '^(pyproject\.toml|uv\.lock|ruff\.toml|\.github/workflows/test\.yml|\.github/workflows/_test-package\.yml|packages/fairchem-core/tests/integration/requirements\.txt)$'; then echo "shared=true"; else echo "shared=false"; fi
             if hit '^packages/fairchem-core/'; then echo "core=true"; else echo "core=false"; fi
             if hit '^packages/fairchem-data/fairchem-data-oc/'; then echo "data-oc=true"; else echo "data-oc=false"; fi
             if hit '^packages/fairchem-data/fairchem-data-omat/'; then echo "data-omat=true"; else echo "data-omat=false"; fi
@@ -710,7 +710,7 @@ jobs:
               - 'ruff.toml'
               - '.github/workflows/test.yml'
               - '.github/workflows/_test-package.yml'
-              - 'integration-tests/requirements.txt'
+              - 'packages/fairchem-core/tests/integration/requirements.txt'
             core:
               - 'packages/fairchem-core/**'
             data-oc:
@@ -962,7 +962,7 @@ jobs:
           pip install -e packages/fairchem-data/fairchem-data-oc[dev]
           pip install -e packages/fairchem-demo-ocpapi[dev]
           pip install -e packages/fairchem-applications/fairchem-applications-cattsunami
-          pip install -r integration-tests/requirements.txt
+          pip install -r packages/fairchem-core/tests/integration/requirements.txt
 
       - name: Integration tests
         run: |
