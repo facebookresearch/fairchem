@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 
 ## Testing Conventions
 
-Tests go in the owning distribution's `packages/<dist>/tests/` (cross-package suites in `integration-tests/`). Always run with:
+Tests go in the owning distribution's `packages/<dist>/tests/` (cross-package suites in `packages/fairchem-core/tests/integration/`). Always run with:
 ```bash
 pytest packages/fairchem-core/tests -c packages/fairchem-core/pyproject.toml
 ```
