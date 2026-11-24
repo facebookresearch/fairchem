@@ -265,12 +265,15 @@ def main() -> int:
 
     docs_dir = Path(args.docs_dir).resolve()
     # Scan docs/**/*.md plus the user-facing READMEs that link into the docs
-    # site (repo root + each src/** package). Those READMEs live outside docs/
+    # site (repo root + each packages/** distribution). Those READMEs live outside docs/
     # and so were historically unchecked -- yet they carry absolute links to the
     # published site that break when a page's URL changes (e.g. the mystmd slug
     # migration turned `core/common_tasks/summary.html` into `/summary`).
     repo_root = docs_dir.parent
-    extra_readmes = [repo_root / "README.md", *(repo_root / "src").rglob("README.md")]
+    extra_readmes = [
+        repo_root / "README.md",
+        *(repo_root / "packages").rglob("README.md"),
+    ]
     md_files = sorted(docs_dir.rglob("*.md")) + [p for p in extra_readmes if p.exists()]
     print(f"Scanning {len(md_files)} markdown files under {repo_root}")
 

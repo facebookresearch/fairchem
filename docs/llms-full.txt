@@ -5606,7 +5606,7 @@ The OC20Dense dataset is a validation dataset which was used to assess model per
 |ASE Trajectories    |29G    |112G   | [ee937e5290f8f720c914dc9a56e0281f](https://dl.fbaipublicfiles.com/opencatalystproject/data/adsorbml/oc20_dense_trajectories.tar.gz)   |
 
 The following files are also provided to be used for evaluation and general information:
-* `oc20dense_mapping.pkl` : Mapping of the LMDB `sid` to general metadata information. If this file is not present, run the command `python src/fairchem/core/scripts/download_large_files.py adsorbml` from the root of the fairchem repo to download it. -
+* `oc20dense_mapping.pkl` : Mapping of the LMDB `sid` to general metadata information. If this file is not present, run the command `python -m fairchem.core.scripts.download_large_files adsorbml` from the root of the fairchem repo to download it. -
   * `system_id`: Unique system identifier for an adsorbate, bulk, surface combination.
   * `config_id`: Unique configuration identifier, where `rand` and `heur` correspond to random and heuristic initial configurations, respectively.
   * `mpid`: Materials Project bulk identifier.
@@ -6617,7 +6617,7 @@ To do this, we will enumerate adsorbate-slab configurations and run ML relaxatio
 
 +++
 
-Be sure to set the path in `fairchem/data/oc/configs/paths.py` to point to the correct place or pass the paths as an argument. The database pickles can be found in `fairchem/data/oc/databases/pkls` (some pkl files are only downloaded by running the command `python src/fairchem/core/scripts/download_large_files.py oc` from the root of the fairchem repo). We will show one explicitly here as an example and then run all of them in an automated fashion for brevity.
+Be sure to set the path in `fairchem/data/oc/configs/paths.py` to point to the correct place or pass the paths as an argument. The database pickles can be found in `fairchem/data/oc/databases/pkls` (some pkl files are only downloaded by running the command `python -m fairchem.core.scripts.download_large_files oc` from the root of the fairchem repo). We will show one explicitly here as an example and then run all of them in an automated fashion for brevity.
 
 ```{code-cell} ipython3
 from pathlib import Path
