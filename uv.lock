@@ -2164,7 +2164,6 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fairchem-core" },
-    { name = "fairchem-lammps" },
 ]
 
 [package.optional-dependencies]
@@ -2184,6 +2183,14 @@ data = [
 demo = [
     { name = "fairchem-demo-ocpapi" },
 ]
+lammps = [
+    { name = "fairchem-lammps" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "fairchem-core", extra = ["dev", "extras"] },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2198,9 +2205,12 @@ requires-dist = [
     { name = "fairchem-data-omc", marker = "extra == 'data'", editable = "packages/fairchem-data-omc" },
     { name = "fairchem-data-omol", marker = "extra == 'data'", editable = "packages/fairchem-data-omol" },
     { name = "fairchem-demo-ocpapi", marker = "extra == 'demo'", editable = "packages/fairchem-demo-ocpapi" },
-    { name = "fairchem-lammps", editable = "packages/fairchem-lammps" },
+    { name = "fairchem-lammps", marker = "extra == 'lammps'", editable = "packages/fairchem-lammps" },
 ]
-provides-extras = ["data", "applications", "demo"]
+provides-extras = ["lammps", "data", "applications", "demo"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "fairchem-core", extras = ["dev", "extras"], editable = "packages/fairchem-core" }]
 
 [[package]]
 name = "fairchem-applications-adsorbml"

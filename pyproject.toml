@@ -11,12 +11,29 @@
 # unchanged; pip simply ignores the [tool.uv] tables.
 #
 # Install control (uv only): `uv sync` installs just the default
-# distributions (fairchem-core and fairchem-lammps). Add groups with
-# extras, e.g.:
+# distribution (fairchem-core). Add groups with extras, e.g.:
 #
 #   uv sync --extra data           # + fairchem.data.*
 #   uv sync --extra applications   # + fairchem.applications.*
+#   uv sync --extra lammps         # + fairchem-lammps (see note below)
 #   uv sync --all-extras           # everything
+#
+# Development dependencies (pytest, ruff, ...) come from
+# fairchem-core's dev/extras extras via the dev group:
+#
+#   uv sync --group dev
+#
+# Torch builds are selected with fairchem-core's cpu/cuXXX
+# dependency groups; from the root, select them per package:
+#
+#   uv sync --package fairchem-core --no-default-groups --group cpu
+#
+# Note: fairchem-lammps is opt-in because LAMMPS itself is an
+# external, non-pip dependency: without a system or conda LAMMPS
+# install the `lmp_fc` entry point cannot run. fairchem-lammps
+# also declares Python <3.14 (its @hydra.main entry point is
+# incompatible with hydra-core on 3.14); keeping it out of the
+# default install keeps the rest of the workspace usable on 3.14.
 
 [project]
 name = "fairchem"
@@ -25,10 +42,12 @@ description = "Workspace root for the fairchem monorepo (not published)"
 requires-python = ">=3.11, <3.15"
 dependencies = [
     "fairchem-core",
-    "fairchem-lammps",
 ]
 
 [project.optional-dependencies]
+lammps = [
+    "fairchem-lammps",
+]
 data = [
     "fairchem-data-oc",
     "fairchem-data-odac",
@@ -45,6 +64,9 @@ applications = [
 demo = [
     "fairchem-demo-ocpapi",
 ]
+
+[dependency-groups]
+dev = ["fairchem-core[dev,extras]"]
 
 [tool.uv]
 package = false
