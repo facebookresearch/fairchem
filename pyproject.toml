@@ -76,7 +76,7 @@ members = ["packages/*", "packages/fairchem-data/*"]
 # fairchem-core-numpy126 publishes the same distribution name as
 # fairchem-core (a build variant with different pins), so it cannot
 # be a workspace member alongside it.
-exclude = ["packages/fairchem-core-numpy126"]
+exclude = ["packages/fairchem-core-numpy126", "packages/fairchem-data"]
 
 [tool.uv.sources]
 fairchem-core = { workspace = true }
