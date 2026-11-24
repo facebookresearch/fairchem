@@ -299,7 +299,8 @@ def pack_baseline(artifact_dir: str | Path, destination: str | Path) -> Path:
 
 
 def repository_root() -> Path:
-    return Path(__file__).resolve().parents[5]
+    # packages/fairchem-core/src/fairchem/core/regression_suite/artifacts/
+    return Path(__file__).resolve().parents[7]
 
 
 def checkout_root() -> Path:

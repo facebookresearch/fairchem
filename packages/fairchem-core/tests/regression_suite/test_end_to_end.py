@@ -68,7 +68,8 @@ def _working_tree_snapshot(_repo_dir, commit, destination) -> Path:
     """
     root = Path(destination)
     copied = Path(storage.__file__).resolve()
-    _link_farm(copied.parents[3], root / "src" / "fairchem", copied)
+    sources = root / "packages" / "fairchem-core" / "src" / "fairchem"
+    _link_farm(copied.parents[3], sources, copied)
     write_json_atomic(root / SOURCE_MARKER, {"git_commit": commit})
     return root
 

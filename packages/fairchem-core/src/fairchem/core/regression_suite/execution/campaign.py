@@ -50,6 +50,7 @@ from fairchem.core.regression_suite.execution.source import (
     clean_commit,
     create_source_snapshot,
     prepend_pythonpath,
+    source_directory,
 )
 from fairchem.core.regression_suite.reporting.report import (
     build_candidate_report,
@@ -414,7 +415,7 @@ def _launch(
         repo_dir, fields["git_commit"], launch_dir / "source"
     )
     manifest["source_dir"] = str(source_dir)
-    prepend_pythonpath(str(source_dir / "src"))
+    prepend_pythonpath(str(source_directory(source_dir)))
     job = functools.partial(
         call_in_source,
         str(source_dir),

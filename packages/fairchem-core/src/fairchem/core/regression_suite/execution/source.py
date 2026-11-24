@@ -41,11 +41,49 @@ _PROXY_VARIABLES = (
 
 
 SOURCE_MARKER = "fairchem-regression-source.json"
-_SNAPSHOT_PATHS = ("src", "packages/fairchem-core/pyproject.toml")
+# Core sources live under packages/fairchem-core/src; commits from before the
+# monorepo reorganization keep them under src. The first entry wins.
+_SOURCE_DIRECTORIES = ("packages/fairchem-core/src", "src")
+_PYPROJECT = "packages/fairchem-core/pyproject.toml"
 _PROVENANCE_PATHSPECS = (
+    ":(top)packages/fairchem-core/src/fairchem/core",
     ":(top)src/fairchem/core",
-    ":(top)packages/fairchem-core/pyproject.toml",
+    f":(top){_PYPROJECT}",
 )
+
+
+def source_directory(root: str | Path) -> Path:
+    """
+    Return the directory holding ``fairchem`` sources in a checkout or snapshot.
+
+    Args:
+        root: Repository checkout or source snapshot.
+
+    Returns:
+        The first existing entry of ``_SOURCE_DIRECTORIES`` under ``root``,
+        falling back to the legacy ``src`` location.
+    """
+    for directory in _SOURCE_DIRECTORIES:
+        candidate = Path(root) / directory
+        if candidate.is_dir():
+            return candidate
+    return Path(root) / _SOURCE_DIRECTORIES[-1]
+
+
+def _commit_source_directory(repo_dir: str | Path, commit: str) -> str:
+    """
+    Return the source directory that exists in ``commit``.
+    """
+    for directory in _SOURCE_DIRECTORIES:
+        result = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}:{directory}"],
+            cwd=repo_dir,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return directory
+    return _SOURCE_DIRECTORIES[-1]
 
 
 def git_output(repo_dir: str | Path | None, *arguments: str) -> str:
@@ -96,7 +134,8 @@ def create_source_snapshot(
         destination: New snapshot directory; it must not exist.
 
     Returns:
-        The snapshot directory, which contains ``src`` and a provenance marker.
+        The snapshot directory, which contains the core source directory and
+        a provenance marker.
     """
     output = Path(destination)
     with staged_directory(output) as temporary:
@@ -108,7 +147,8 @@ def create_source_snapshot(
             f"--output={archive}",
             commit,
             "--",
-            *_SNAPSHOT_PATHS,
+            _commit_source_directory(repo_dir, commit),
+            _PYPROJECT,
         )
         with tarfile.open(archive) as handle:
             handle.extractall(temporary, filter="data")
@@ -158,11 +198,9 @@ def call_in_source(repo_dir: str, function: Callable[..., Any], /, *args, **kwar
 
 def _prepare_environment(repo_dir: str) -> None:
     os.chdir(repo_dir)
-    source_directory = str(Path(repo_dir) / "src")
-    sys.path[:] = [source_directory] + [
-        entry for entry in sys.path if entry != source_directory
-    ]
-    prepend_pythonpath(source_directory)
+    sources = str(source_directory(repo_dir))
+    sys.path[:] = [sources] + [entry for entry in sys.path if entry != sources]
+    prepend_pythonpath(sources)
     for variable in _PROXY_VARIABLES:
         os.environ.pop(variable, None)
     os.environ["HF_HUB_OFFLINE"] = "1"

@@ -15,6 +15,7 @@ from fairchem.core.regression_suite.execution.source import (
     SOURCE_MARKER,
     create_source_snapshot,
     git_provenance,
+    source_directory,
     source_provenance,
 )
 
@@ -29,14 +30,19 @@ def _git(repo, *args):
     ).stdout.strip()
 
 
+@pytest.fixture(params=["packages/fairchem-core/src", "src"])
+def source_root(request):
+    return request.param
+
+
 @pytest.fixture()
-def repository(tmp_path):
+def repository(tmp_path, source_root):
     repo = tmp_path / "repo"
-    module = repo / "src" / "fairchem" / "core" / "module.py"
+    module = repo / source_root / "fairchem" / "core" / "module.py"
     module.parent.mkdir(parents=True)
     module.write_text("VALUE = 'committed'\n")
     pyproject = repo / "packages" / "fairchem-core" / "pyproject.toml"
-    pyproject.parent.mkdir(parents=True)
+    pyproject.parent.mkdir(parents=True, exist_ok=True)
     pyproject.write_text("[project]\n")
     (repo / "README.md").write_text("outside the snapshot\n")
     _git(repo, "init", "--quiet")
@@ -56,17 +62,18 @@ def repository(tmp_path):
 
 
 def test_snapshot_contains_committed_source_and_ignores_later_edits(
-    repository, tmp_path
+    repository, source_root, tmp_path
 ):
     commit, dirty = git_provenance(repository)
-    module = repository / "src" / "fairchem" / "core" / "module.py"
+    module = repository / source_root / "fairchem" / "core" / "module.py"
     module.write_text("VALUE = 'edited after launch'\n")
 
     snapshot = create_source_snapshot(repository, commit, tmp_path / "source")
 
     assert not dirty
     assert git_provenance(repository) == (commit, True)
-    assert (snapshot / "src" / "fairchem" / "core" / "module.py").read_text() == (
+    assert source_directory(snapshot) == snapshot / source_root
+    assert (snapshot / source_root / "fairchem" / "core" / "module.py").read_text() == (
         "VALUE = 'committed'\n"
     )
     assert (snapshot / "packages" / "fairchem-core" / "pyproject.toml").is_file()
@@ -90,11 +97,13 @@ def test_failed_snapshot_leaves_no_partial_directory(repository, tmp_path):
     assert list((tmp_path / "snapshots").iterdir()) == []
 
 
-def test_source_provenance_inspects_the_given_checkout(repository, tmp_path):
+def test_source_provenance_inspects_the_given_checkout(
+    repository, source_root, tmp_path
+):
     commit, _dirty = git_provenance(repository)
 
     assert source_provenance(repository) == (commit, False)
-    (repository / "src" / "fairchem" / "core" / "new.py").write_text("")
+    (repository / source_root / "fairchem" / "core" / "new.py").write_text("")
     assert source_provenance(repository) == (commit, True)
     assert source_provenance(tmp_path / "not-a-checkout") == (None, None)
 

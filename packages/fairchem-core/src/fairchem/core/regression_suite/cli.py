@@ -69,6 +69,7 @@ from fairchem.core.regression_suite.execution.source import (
     call_in_source,
     git_provenance,
     prepend_pythonpath,
+    source_directory,
 )
 from fairchem.core.regression_suite.reporting.check_report import (
     build_check_report,
@@ -383,7 +384,7 @@ def _check(
             gpus_per_node=1,
             device=device,
         )
-        prepend_pythonpath(str(repo_dir / "src"))
+        prepend_pythonpath(str(source_directory(repo_dir)))
         job = executor.submit(
             functools.partial(
                 call_in_source,
