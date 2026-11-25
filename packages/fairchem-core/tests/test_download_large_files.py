@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-from fairchem.core.scripts import download_large_files as dl_large
+from fairchem.core.common import download_large_files as dl_large
 
 
 @patch.object(dl_large, "urlretrieve")

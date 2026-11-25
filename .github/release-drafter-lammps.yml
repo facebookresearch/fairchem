@@ -1,6 +1,5 @@
 include-paths:
   - packages/fairchem-lammps/
-  - src/fairchem/lammps/
 tag-prefix: fairchem_lammps
 tag-template: 'fairchem_lammps-$RESOLVED_VERSION'
 name-template: 'fairchem-lammps-$RESOLVED_VERSION'
