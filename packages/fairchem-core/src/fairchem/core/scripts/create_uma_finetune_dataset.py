@@ -131,17 +131,19 @@ if __name__ == "__main__":
         args.output_dir
     ).exists(), f"{args.output_dir} can't already exist, please choose a different dir"
 
+    require_forces = args.regression_tasks != "e"
     # Launch processing for training data
     train_path = args.output_dir / "train"
-    launch_processing(args.train_dir, train_path, args.num_workers)
-    force_rms, linref_coeff = compute_normalizer_and_linear_reference(
-        train_path, args.num_workers
+    launch_processing(
+        args.train_dir, train_path, args.num_workers, require_forces=require_forces
     )
-    # don't use force rms if doing energy only training
-    if args.regression_tasks == "e":
-        force_rms = 1.0
+    force_rms, linref_coeff = compute_normalizer_and_linear_reference(
+        train_path, args.num_workers, require_forces=require_forces
+    )
     val_path = args.output_dir / "val"
-    launch_processing(args.val_dir, val_path, args.num_workers)
+    launch_processing(
+        args.val_dir, val_path, args.num_workers, require_forces=require_forces
+    )
 
     create_yaml(
         train_path=str(train_path),
