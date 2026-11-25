@@ -19,14 +19,14 @@ import copy
 import pytest
 import torch
 from ase.build import bulk, molecule
-
-from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 from tests.models.uma.uma_nitro.nitro_test_utils import (
     batch,
     nitro_settings,
     random_checkpoint,
     requires_nitro_gpu,
 )
+
+from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 SYSTEMS = {
     "periodic": (bulk("Cu", "fcc", a=3.6, cubic=True), "omat"),
@@ -164,8 +164,9 @@ def test_refresh_rejects_a_different_model(checkpoints):
 
 
 @pytest.mark.gpu()
+@pytest.mark.compile_gpu()
 @pytest.mark.parametrize("system", SYSTEMS.values(), ids=SYSTEMS.keys())
-def test_refresh_fast_gpu_compiled(checkpoints, system):
+def test_refresh_fast_gpu_compiled(checkpoints, system, compile_reset_state):
     settings = InferenceSettings(
         merge_mole=True,
         compile=True,
