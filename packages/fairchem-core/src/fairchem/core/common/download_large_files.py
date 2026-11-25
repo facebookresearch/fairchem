@@ -120,8 +120,6 @@ def change_path_for_pypi(
         if top_level_name == "tests" and test_par_dir is not None:
             new_files.append(test_par_dir / file)
         elif "src" in file.parts and "fairchem" in file.parts:
-            # Repo paths are packages/<...>/src/fairchem/...; in an
-            # installed build they land in <site-packages>/fairchem/...
             idx = file.parts.index("src")
             new_files.append(install_dir / par_dir / Path(*file.parts[idx + 1 :]))
         elif top_level_name == "src":
@@ -152,9 +150,6 @@ def download_file_group(file_group: str, test_par_dir: Path | None = None) -> No
     # this is the git repo top-level directory for dev builds, i.e. `fairchem`
     install_dir = fc_root.parent.parent
     if fc_root.parent.name == "src" and not (install_dir / "uv.lock").exists():
-        # Post-reorg dev layout: fairchem.core lives at
-        # packages/fairchem-core/src/fairchem, so walk up to the
-        # workspace root (marked by the root pyproject/uv.lock).
         for ancestor in fc_root.parents:
             if (ancestor / "uv.lock").exists():
                 install_dir = ancestor
