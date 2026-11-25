@@ -16,6 +16,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Check the workspace lockfile is fresh
         run: uv lock --check
+      - name: Check referenced package paths exist
+        run: python3 .github/scripts/check_package_paths.py
 
   lint:
     runs-on: ubuntu-latest
