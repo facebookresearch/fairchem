@@ -692,8 +692,6 @@ jobs:
       pytest-args: '-n auto -m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
       serial-pytest-args: '-m "serial and not gpu" --exclude-models=uma-s-1p1,uma-s-1p2'
       install-torchsim: true
-      install-packmol: ${{ matrix.shard.name == 'main' }}
-      download-large-files: ${{ matrix.shard.name == 'main' && 'oc' || '' }}
     secrets: inherit
 
   test-data-oc:

@@ -60,11 +60,6 @@ on:
         required: false
         type: boolean
         default: false
-      download-large-files:
-        description: If set, fairchem.core.common.download_large_files group to fetch before testing (e.g. oc)
-        required: false
-        type: string
-        default: ''
 
 env:
   CI: true
@@ -168,10 +163,6 @@ jobs:
           ./configure
           make
           echo "$(readlink -f .)" >> "$GITHUB_PATH"
-
-      - name: Download large test files
-        if: ${{ inputs.download-large-files != '' }}
-        run: python -m fairchem.core.common.download_large_files ${{ inputs.download-large-files }}
 
       - name: Run tests
         run: |
