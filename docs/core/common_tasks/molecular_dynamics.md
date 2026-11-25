@@ -36,7 +36,7 @@ The checked-in configurations target a CUDA GPU. To run one on CPU, override
 both the launcher device and calculator device (CPU inference is much slower):
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   job.device_type=CPU runner.calculator.device=cpu
 ```
 
@@ -105,16 +105,16 @@ constraint-based behavior through `use_fix_com_constraint: true`.
 
 MD can also by run through a CLI which utilizes a Hydra configuration file.  The repository contains two example configurations:
 
-- [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
+- [`packages/fairchem-core/configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-core/configs/uma/md/nvt.yaml)
   uses Langevin NVT at 300 K.
-- [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
+- [`packages/fairchem-core/configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-core/configs/uma/md/npt.yaml)
   uses Berendsen NPT at 300 K and 1 bar.
 
 Either configuration from the repository root:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml
-fairchem -c configs/uma/md/npt.yaml
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml
+fairchem -c packages/fairchem-core/configs/uma/md/npt.yaml
 ```
 
 ### Choose an ensemble
@@ -148,7 +148,7 @@ isothermal compressibility whenever you replace the example system.
 Hydra overrides let you reuse the configuration without editing it:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   temperature_K=500 runner.steps=10000 runner.trajectory_interval=100
 ```
 
@@ -233,7 +233,7 @@ local example configuration and supply values appropriate to your site. For a
 single-GPU SLURM job, the required overrides typically look like:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   job.run_dir=/shared/path/md-runs \
   job.scheduler.mode=SLURM \
   job.scheduler.num_nodes=1 \
