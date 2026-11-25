@@ -238,13 +238,13 @@ def test_cell_conversion_preserves_volume(box_name, boxlo, boxhi, xy, yz, xz):
     )
 
 
-def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
+@pytest.fixture()
+def fake_lammps_run(monkeypatch):
     """
-    Test that the Hydra-decorated LAMMPS entry point composes config and starts.
+    Stub out model loading and the LAMMPS run; record what main() passes on.
     """
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    lammps_state = {}
-    run_args = {}
+    state = {}
 
     def fake_instantiate(_cfg):
         return object()
@@ -256,29 +256,35 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
         charge=0,
         spin=0,
     ):
-        run_args.update(
-            {
-                "predictor": predictor,
-                "lammps_input_path": lammps_input_path,
-                "task_name": task_name,
-                "charge": charge,
-                "spin": spin,
-            }
-        )
+        state["run_args"] = {
+            "predictor": predictor,
+            "lammps_input_path": lammps_input_path,
+            "task_name": task_name,
+            "charge": charge,
+            "spin": spin,
+        }
 
         class DummyLammps:
             pass
 
         lmp = DummyLammps()
         lmp._predictor = predictor
-        lammps_state["lmp"] = lmp
+        state["lmp"] = lmp
         return lmp
 
     monkeypatch.setattr(lammps_fc.hydra.utils, "instantiate", fake_instantiate)
     monkeypatch.setattr(
         lammps_fc, "run_lammps_with_fairchem", fake_run_lammps_with_fairchem
     )
+    yield state
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
 
+
+def test_lammps_entrypoint_startup(fake_lammps_run, tmp_path):
+    """
+    Test that the entry point composes the packaged config from sys.argv and
+    starts; Hydra run-dir overrides are accepted for backwards compatibility.
+    """
     old_argv = sys.argv[:]
     try:
         sys.argv = [
@@ -289,10 +295,44 @@ def test_lammps_hydra_entrypoint_startup(monkeypatch, tmp_path):
         lammps_fc.main()
     finally:
         sys.argv = old_argv
-        hydra.core.global_hydra.GlobalHydra.instance().clear()
 
+    run_args = fake_lammps_run["run_args"]
     assert run_args["lammps_input_path"] == "lammps_in_example.file"
     assert run_args["task_name"] == "omol"
     assert run_args["charge"] == 0
     assert run_args["spin"] == 1
-    assert not hasattr(lammps_state["lmp"], "_predictor")
+    assert not hasattr(fake_lammps_run["lmp"], "_predictor")
+
+
+def test_lammps_entrypoint_applies_overrides(fake_lammps_run):
+    lammps_fc.main(["lmp_in=in.lammps", "task_name=omat", "charge=0", "spin=0"])
+
+    assert fake_lammps_run["run_args"] == {
+        "predictor": fake_lammps_run["run_args"]["predictor"],
+        "lammps_input_path": "in.lammps",
+        "task_name": "omat",
+        "charge": 0,
+        "spin": 0,
+    }
+
+
+def test_lammps_entrypoint_custom_config(fake_lammps_run, tmp_path):
+    (tmp_path / "my_config.yaml").write_text(
+        "predict_unit: {}\nlmp_in: custom.in\ntask_name: odac\ncharge: 0\nspin: 0\n"
+    )
+
+    lammps_fc.main(["-cp", str(tmp_path), "-cn", "my_config", "spin=2"])
+
+    run_args = fake_lammps_run["run_args"]
+    assert run_args["lammps_input_path"] == "custom.in"
+    assert run_args["task_name"] == "odac"
+    assert run_args["spin"] == 2
+
+
+def test_lammps_entrypoint_help(fake_lammps_run, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        lammps_fc.main(["--help"])
+
+    assert exit_info.value.code == 0
+    assert "usage: lmp_fc" in capsys.readouterr().out
+    assert "run_args" not in fake_lammps_run

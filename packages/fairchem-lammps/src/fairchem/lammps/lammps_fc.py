@@ -7,8 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import hydra
@@ -23,6 +26,15 @@ from lammps import lammps
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
     from fairchem.core.units.mlip_unit.utils import DictConfig
+
+CONFIG_DIR = Path(__file__).resolve().parent
+CONFIG_NAME = "lammps_fc_config"
+EPILOG = """\
+Remaining arguments are Hydra overrides of the config, e.g.
+
+  lmp_fc lmp_in=in.lammps task_name=omol
+  lmp_fc lmp_in=in.lammps predict_unit='${parallel_predict_unit}'
+"""
 
 FIX_EXT_ID = "ext_fc"
 FIX_EXTERNAL_CMD = f"fix {FIX_EXT_ID} all external pf/callback 1 1"
@@ -236,12 +248,66 @@ def run_lammps_with_fairchem(
     return lmp
 
 
-@hydra.main(
-    version_base=None,
-    config_path=".",
-    config_name="lammps_fc_config",
-)
-def main(cfg: DictConfig):
+def compose_config(
+    overrides: list[str],
+    config_dir: str | Path = CONFIG_DIR,
+    config_name: str = CONFIG_NAME,
+) -> DictConfig:
+    """
+    Compose the lmp_fc config from a config directory and Hydra overrides.
+
+    Args:
+        overrides: Hydra override strings such as ``task_name=omol``.
+        config_dir: Directory containing the config file.
+        config_name: Config file name without the ``.yaml`` suffix.
+
+    Returns:
+        The composed config.
+    """
+    config_dir = str(Path(config_dir).resolve())
+    with hydra.initialize_config_dir(config_dir=config_dir, version_base=None):
+        return hydra.compose(config_name=config_name, overrides=overrides)
+
+
+def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
+    parser = argparse.ArgumentParser(
+        prog="lmp_fc",
+        description="Run LAMMPS with a FAIRChem model.",
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "-cp",
+        "--config-path",
+        default=str(CONFIG_DIR),
+        help="directory containing the config (default: the packaged config)",
+    )
+    parser.add_argument(
+        "-cn",
+        "--config-name",
+        default=CONFIG_NAME,
+        help=f"config name without .yaml (default: {CONFIG_NAME})",
+    )
+    return parser.parse_known_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """
+    Entry point for ``lmp_fc``.
+
+    Uses Hydra's compose API instead of ``@hydra.main``, whose argparse CLI
+    fails on Python 3.14 with hydra-core 1.3.
+
+    Args:
+        argv: Command-line arguments; defaults to ``sys.argv[1:]``.
+    """
+    args, overrides = _parse_args(sys.argv[1:] if argv is None else list(argv))
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s][%(name)s][%(levelname)s] - %(message)s",
+    )
+    cfg = compose_config(overrides, args.config_path, args.config_name)
     predict_unit = hydra.utils.instantiate(cfg.predict_unit)
     lmp = run_lammps_with_fairchem(
         predict_unit,

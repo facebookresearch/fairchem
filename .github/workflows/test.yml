@@ -585,9 +585,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        # 3.13: fairchem-lammps declares <3.14 until hydra-core
-        # supports Python 3.14 (see packages/fairchem-lammps/pyproject.toml).
-        python_version: ['3.13']
+        python_version: ['3.14']
 
     steps:
       - uses: actions/checkout@v7
@@ -595,7 +593,7 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.13 # Specifies packages to install into the new environment
+          create-args: python=${{ matrix.python_version }} # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v7
