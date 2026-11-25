@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'packages/fairchem-data-omat/**'
+      - 'packages/fairchem-data/fairchem-data-omat/**'
   workflow_dispatch:
 
 permissions:
