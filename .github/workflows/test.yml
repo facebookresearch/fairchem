@@ -772,6 +772,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           ONLY: ${{ inputs.only }}
+          SHARED: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.shared || steps.filter.outputs.shared }}
           GITHUB_CHANGED: ${{ steps.filter_wr.outputs.github-changed }}
           CORE: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.core || steps.filter.outputs.core }}
           DATA_OC: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-oc || steps.filter.outputs.data-oc }}
@@ -809,6 +810,10 @@ jobs:
             fi
             echo "blocked=false" >> "$GITHUB_OUTPUT"
             run[core]="${CORE:-false}"
+            # Root workspace files (lockfile, root pyproject, ruff config,
+            # pinned test requirements) select core only -- no fan-out --
+            # so such a PR is still tested instead of passing vacuously.
+            if [ "${SHARED:-false}" = "true" ]; then run[core]=true; fi
             run[data-oc]="${DATA_OC:-false}"
             run[data-omat]="${DATA_OMAT:-false}"
             run[data-rest]="${DATA_REST:-false}"
