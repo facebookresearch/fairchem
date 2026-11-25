@@ -37,6 +37,8 @@ env:
 
 jobs:
   test:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     timeout-minutes: 90
     # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
     # approval gate explicit: external-testing requires maintainer review before
@@ -210,6 +212,8 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_cpu_sweep:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     timeout-minutes: 120
     # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
     # approval gate explicit: external-testing requires maintainer review before
@@ -341,6 +345,8 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_gpu:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     timeout-minutes: 90
     # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
     # approval gate explicit: external-testing requires maintainer review before
@@ -461,6 +467,8 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
   test_gpu_sweep:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     timeout-minutes: 120
     # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
     # approval gate explicit: external-testing requires maintainer review before
@@ -567,6 +575,8 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
   test_lammps_gpu:
+    needs: changes
+    if: ${{ needs.changes.outputs.lammps == 'true' }}
     timeout-minutes: 90
     # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
     # approval gate explicit: external-testing requires maintainer review before
@@ -647,6 +657,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      statuses: write
     outputs:
       blocked: ${{ steps.select.outputs.blocked }}
       core: ${{ steps.select.outputs.core }}
@@ -658,6 +669,25 @@ jobs:
       lammps: ${{ steps.select.outputs.lammps }}
       integration: ${{ steps.select.outputs.integration }}
     steps:
+      # Show `tests-passed` as pending on the tested commit right away;
+      # the tests-passed job reports the final state.
+      - name: Report tests-passed pending
+        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+        uses: actions/github-script@v7
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.SHA,
+              state: 'pending',
+              context: 'tests-passed',
+              target_url: process.env.TARGET_URL,
+            });
+
       - if: ${{ github.event_name == 'workflow_run' }}
         uses: actions/checkout@v7
         with:
@@ -974,7 +1004,9 @@ jobs:
   # package jobs count as success.
   tests-passed:
     if: ${{ always() }}
-    needs: [changes, test-core, test-data-oc, test-data-omat, build-data-rest, build-applications, test-demo, test-lammps, integration]
+    needs: [changes, test, test_cpu_sweep, test_gpu, test_gpu_sweep, test_lammps_gpu, test-core, test-data-oc, test-data-omat, build-data-rest, build-applications, test-demo, test-lammps, integration]
+    permissions:
+      statuses: write
     runs-on: ubuntu-latest
     steps:
       - name: Fail if .github was edited
@@ -989,3 +1021,28 @@ jobs:
           echo "One or more jobs failed or were cancelled: ${{ toJSON(needs.*.result) }}"
           exit 1
       - run: echo "All required package tests passed or were skipped."
+
+      # workflow_run and workflow_dispatch runs attach their check runs
+      # to the default branch / dispatched ref, not to the PR head, so
+      # the required `tests-passed` check would never appear on the PR.
+      # Report it as a commit status instead (inline script, no
+      # checkout, so PR code cannot alter it).
+      - name: Report tests-passed on the tested commit
+        if: ${{ always() && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/github-script@v7
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const state = process.env.JOB_STATUS === 'success' ? 'success'
+              : process.env.JOB_STATUS === 'failure' ? 'failure' : 'error';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.SHA,
+              state,
+              context: 'tests-passed',
+              target_url: process.env.TARGET_URL,
+            });
