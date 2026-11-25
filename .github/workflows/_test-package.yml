@@ -1,8 +1,8 @@
 name: test-package
 
-# Reusable per-distribution test + build check. Called by
-# test-packages.yml only for distributions whose files changed
-# (plus their dependents), so PRs do not pay for the whole repo.
+# Reusable per-distribution test + build check. Called by test.yml
+# only for distributions whose own files changed, so PRs do not pay
+# for the whole repo.
 
 on:
   workflow_call:
@@ -50,6 +50,21 @@ on:
         required: false
         type: string
         default: '-m "not gpu"'
+      serial-pytest-args:
+        description: If set, a second, non-parallel pytest run with these arguments (e.g. serial-marked tests)
+        required: false
+        type: string
+        default: ''
+      install-torchsim:
+        description: Install fairchem-core[torchsim] on Python >= 3.12
+        required: false
+        type: boolean
+        default: false
+      download-large-files:
+        description: If set, fairchem.core.common.download_large_files group to fetch before testing (e.g. oc)
+        required: false
+        type: string
+        default: ''
 
 env:
   CI: true
@@ -57,6 +72,19 @@ env:
 jobs:
   test:
     if: ${{ inputs.test-path != '' }}
+    timeout-minutes: 90
+    # Runs PR code: fork PRs go through the external-testing environment,
+    # whose required reviewers approve the commit before checkout and
+    # release of secrets (same gate as the legacy test jobs).
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      COVERAGE_CORE: ${{ matrix.python_version == '3.14' && 'sysmon' || 'ctrace' }}
+      # Only Python 3.14 reports are uploaded; skip 3.11 tracing.
+      PYTEST_ADDOPTS: ${{ matrix.python_version == '3.11' && '--no-cov' || '' }}
     # Matches the legacy CPU test jobs; the suites starve on
     # ubuntu-latest's 4 cores / 16 GB.
     runs-on: 32-core-ubuntu
@@ -69,6 +97,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # Under workflow_run (how PRs run) the default ref is the
+          # default branch; test the PR's head commit instead.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Required since actions/checkout refuses fork PR code in
+          # workflow_run jobs; forks are gated by external-testing above.
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0 # tags are needed for hatch-vcs versioning
 
       - name: Set up Python ${{ matrix.python_version }}
@@ -95,8 +129,13 @@ jobs:
           # fairchem.core.components.calculate.recipes.omol imports
           # fairchem.data.omol at module level, so core's test env needs
           # the data-omol distribution installed as well.
+          # The legacy core jobs also installed the data-oc/omat and demo
+          # distributions into core's test env; keep that environment.
           if [ "${{ inputs.package-dir }}" = "packages/fairchem-core" ]; then
-            pip install -e packages/fairchem-data/fairchem-data-omol
+            pip install -e "packages/fairchem-data/fairchem-data-omol[dev]" \
+              -e "packages/fairchem-data/fairchem-data-oc[dev]" \
+              -e packages/fairchem-data/fairchem-data-omat \
+              -e "packages/fairchem-demo-ocpapi[dev]"
           fi
           if [ -n "${{ inputs.extras }}" ]; then
             pip install -e "${{ inputs.package-dir }}[${{ inputs.extras }}]"
@@ -109,6 +148,10 @@ jobs:
           if [ -n "${{ inputs.extra-packages }}" ]; then
             pip install ${{ inputs.extra-packages }}
           fi
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ inputs.install-torchsim && matrix.python_version != '3.11' }}
+        run: pip install -e "packages/fairchem-core[torchsim]"
 
       - name: Install system packages
         if: ${{ inputs.apt-packages != '' }}
@@ -126,6 +169,10 @@ jobs:
           make
           echo "$(readlink -f .)" >> "$GITHUB_PATH"
 
+      - name: Download large test files
+        if: ${{ inputs.download-large-files != '' }}
+        run: python -m fairchem.core.common.download_large_files ${{ inputs.download-large-files }}
+
       - name: Run tests
         run: |
           pytest ${{ inputs.test-path }} ${{ inputs.pytest-args }} -vv --durations=20 \
@@ -133,6 +180,16 @@ jobs:
             --cov-config=packages/fairchem-core/pyproject.toml \
             --cov-report=xml --cov-report=term \
             --junitxml=junit.xml -o junit_family=legacy \
+            -c "${{ inputs.package-dir }}/pyproject.toml"
+
+      - name: Run serial tests
+        if: ${{ inputs.serial-pytest-args != '' }}
+        run: |
+          pytest ${{ inputs.test-path }} ${{ inputs.serial-pytest-args }} -vv --durations=20 \
+            --cov=${{ inputs.cov-module }} --cov-append \
+            --cov-config=packages/fairchem-core/pyproject.toml \
+            --cov-report=xml --cov-report=term \
+            --junitxml=junit-serial.xml -o junit_family=legacy \
             -c "${{ inputs.package-dir }}/pyproject.toml"
 
       - if: ${{ matrix.python_version == '3.14' }}
@@ -147,16 +204,29 @@ jobs:
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
-          files: ./junit.xml
+          files: ./junit.xml,./junit-serial.xml
           token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
+    # Runs PR code: fork PRs go through the external-testing environment,
+    # whose required reviewers approve the commit before checkout and
+    # release of secrets (same gate as the legacy test jobs).
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
         with:
+          # Under workflow_run (how PRs run) the default ref is the
+          # default branch; test the PR's head commit instead.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Required since actions/checkout refuses fork PR code in
+          # workflow_run jobs; forks are gated by external-testing above.
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
 
       - name: Set up Python
