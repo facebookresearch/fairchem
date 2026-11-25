@@ -16,6 +16,20 @@ CACHE_DIR = os.environ.get(
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
+def config_dir() -> str:
+    """
+    The user configuration directory, read from the environment on each call.
+
+    ``FAIRCHEM_CONFIG_DIR`` with ``~`` expanded if set, else ``~/.fairchem``.
+    Unlike ``CACHE_DIR`` it is not created here, and ``clear_cache`` leaves it
+    alone.
+
+    Returns:
+        The directory path, which may not exist.
+    """
+    return os.path.expanduser(os.environ.get("FAIRCHEM_CONFIG_DIR") or "~/.fairchem")
+
+
 def clear_cache():
     try:
         shutil.rmtree(CACHE_DIR)

@@ -751,6 +751,16 @@ def models_to_test(config) -> list[str]:
 
 
 @pytest.fixture(autouse=True)
+def isolated_fairchem_config_dir(monkeypatch, tmp_path_factory):
+    """
+    Point FAIRCHEM_CONFIG_DIR at an empty directory, so no test reads the
+    developer's ~/.fairchem, such as their Nitro checkpoint list.
+    """
+    config_dir = tmp_path_factory.mktemp("fairchem_config")
+    monkeypatch.setenv("FAIRCHEM_CONFIG_DIR", str(config_dir))
+
+
+@pytest.fixture(autouse=True)
 def setup_before_each_test():
     if ray.is_initialized():
         ray.shutdown()

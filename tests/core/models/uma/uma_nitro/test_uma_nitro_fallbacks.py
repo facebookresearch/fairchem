@@ -37,9 +37,13 @@ from tests.core.models.uma.uma_nitro.nitro_test_utils import (
     UNSUPPORTED_SETTINGS,
     assert_close,
     batch,
+    checkpoint_from_config,
     checkpoint_path,
     general_predictor,
+    list_checkpoint,
     load_time_reason,
+    model_config,
+    nitro_gpu,
     nitro_settings,
     random_checkpoint,
     requires_nitro_gpu,
@@ -93,11 +97,12 @@ def test_other_uma_versions_fall_back_to_multigpu(
 ):
     """
     Nitro mode names the unsupported UMA version, says to use UMA 1.2.1 for the
-    speedup, and runs multigpu. Decided from the checkpoint config, so it applies
-    on any device.
+    speedup, and runs multigpu, even for a listed file. Decided from the
+    checkpoint config, so it applies on any device.
     """
     path = tmp_path / "uma.pt"
     torch.save(random_checkpoint(**config_changes), path)
+    list_checkpoint(path)
     with caplog.at_level(logging.WARNING):
         predictor = MLIPPredictUnit(
             str(path), "cpu", inference_settings=nitro_settings()
@@ -106,7 +111,8 @@ def test_other_uma_versions_fall_back_to_multigpu(
         predictor,
         caplog,
         f"{name} is not supported in nitro mode; use UMA 1.2.1 (uma-s-1p2p1) "
-        "for the nitro speedup",
+        "for the nitro speedup. Nitro's checkpoint lists admit only model_id "
+        "UMA-S-1.2.1",
     )
 
 
@@ -207,16 +213,82 @@ def test_falls_back_on_a_gpu_other_than_the_kernels_were_chosen_for(
 
 
 @pytest.mark.gpu()
-def test_falls_back_for_a_modified_uma_1p2p1_file(nitro_random_checkpoint_path, caplog):
+def test_falls_back_with_a_listing_hint_for_an_unlisted_file(
+    nitro_random_checkpoint_path, caplog
+):
     """
-    A file tagged UMA-S-1.2.1 that is not on the MD5 allowlist.
+    A file Nitro computes, but in neither list, prints how to list it.
     """
     with caplog.at_level(logging.WARNING):
         predictor = MLIPPredictUnit(
             nitro_random_checkpoint_path, "cuda", inference_settings=nitro_settings()
         )
     _assert_on_multigpu(
-        predictor, caplog, load_time_reason("is not supported in nitro mode (md5 ")
+        predictor, caplog, load_time_reason("is not in Nitro's checkpoint lists")
+    )
+    if nitro_gpu():
+        assert "nitro_compatible_checkpoints.txt`" in caplog.text
+
+
+def _mean_head_config() -> dict:
+    config = model_config()
+    config["heads"]["energyandforcehead"]["head_kwargs"]["reduce"] = "mean"
+    return config
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    ("config", "reason"),
+    [
+        (model_config(cutoff=5), "backbone.cutoff=5 (expected 6)"),
+        (
+            _mean_head_config(),
+            "heads.energyandforcehead.head_kwargs.reduce='mean' (unexpected)",
+        ),
+    ],
+    ids=["cutoff", "head-reduce"],
+)
+def test_falls_back_for_a_changed_architecture(tmp_path, caplog, config, reason):
+    """
+    A file tagged UMA-S-1.2.1 whose config Nitro's kernels do not compute gets
+    no hint to list it.
+    """
+    path = tmp_path / "changed.pt"
+    torch.save(checkpoint_from_config(config), path)
+    with caplog.at_level(logging.WARNING):
+        predictor = MLIPPredictUnit(
+            str(path), "cuda", inference_settings=nitro_settings()
+        )
+    _assert_on_multigpu(predictor, caplog, load_time_reason(reason))
+    assert "md5sum" not in caplog.text
+
+
+@pytest.mark.gpu()
+@requires_nitro_gpu
+def test_listed_file_nitro_cannot_compute_does_not_load(tmp_path):
+    path = tmp_path / "cutoff5.pt"
+    torch.save(random_checkpoint(cutoff=5), path)
+    list_checkpoint(path)
+    with pytest.raises(ValueError, match="backbone.cutoff=5"):
+        MLIPPredictUnit(str(path), "cuda", inference_settings=nitro_settings())
+
+
+@pytest.mark.gpu()
+def test_falls_back_for_overrides_nitro_cannot_compute(
+    nitro_random_checkpoint_path, caplog
+):
+    list_checkpoint(nitro_random_checkpoint_path)
+    with caplog.at_level(logging.WARNING):
+        predictor = MLIPPredictUnit(
+            nitro_random_checkpoint_path,
+            "cuda",
+            inference_settings=nitro_settings(),
+            overrides={"backbone": {"max_neighbors": 10}},
+        )
+    _assert_on_multigpu(
+        predictor,
+        caplog,
+        load_time_reason("overrides set backbone.max_neighbors=10 (expected 300)"),
     )
 
 

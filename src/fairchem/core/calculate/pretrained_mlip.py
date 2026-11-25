@@ -148,14 +148,16 @@ def get_predict_unit(
         model_name: Name of the model to load from available pretrained models, or a
             path to a checkpoint file. Paths are loaded without reference energies.
         inference_settings: Settings for inference. "default" (the same as "nitro") runs
-            UMA Nitro for uma-s-1p2p1, uma-s-1p2p1-ft-d4rev and uma-s-1p2p1-ft-r2scan
-            on CUDA capability 8.x-12.x and "multigpu" otherwise. "nitro" and
-            "multigpu" are reduced-precision modes; "multigpu" uses merge_mole +
-            compile with TF32 matrix multiplies on CUDA. "high-precision" uses
-            merge_mole + compile in full FP32. "multigpu" and "high-precision" fall
-            back automatically if their fixed-input contract is broken. "batch" keeps
-            MOLE unmerged for heterogeneous inputs. More advanced use cases can use a
-            custom InferenceSettings object.
+            UMA Nitro for uma-s-1p2p1, uma-s-1p2p1-ft-d4rev, uma-s-1p2p1-ft-r2scan
+            and the fine-tunes of uma-s-1p2p1 listed in
+            ~/.fairchem/nitro_compatible_checkpoints.txt on CUDA capability
+            8.x-12.x and "multigpu" otherwise. "nitro" and "multigpu" are
+            reduced-precision modes; "multigpu" uses merge_mole + compile with TF32
+            matrix multiplies on CUDA. "high-precision" uses merge_mole + compile in
+            full FP32. "multigpu" and "high-precision" fall back automatically if
+            their fixed-input contract is broken. "batch" keeps MOLE unmerged for
+            heterogeneous inputs. More advanced use cases can use a custom
+            InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"

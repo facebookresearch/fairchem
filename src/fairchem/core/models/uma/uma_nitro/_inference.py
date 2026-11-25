@@ -9,13 +9,13 @@ UMA Nitro: a standalone UMA-small model for energy, force, and stress inference.
 ``UMANitroModel`` is built directly from an inference checkpoint
 (``model_config``, ``ema_state_dict`` and ``tasks_config``) without constructing
 the composable ``HydraModel``. The architecture is fixed to uma-s-1p2p1's, and
-``verify_checkpoint_file`` accepts only the checkpoints on its MD5 allowlist
-(uma-s-1p2p1 and fine-tunes of it). It owns everything between the checkpoint
-and the kernels: the mixture-of-linear-experts (MOLE) merge for the system being
-simulated, the SO(2) block-diagonal weight layout, and the unified radial MLP
-layout. It implements the subset of the ``HydraModel`` interface that
-``MLIPPredictUnit`` uses, so the predict unit's task handling and its fast-path
-fallback (``MergeMoleConsistencyError``) apply unchanged.
+``_checkpoints.admit`` accepts only checkpoints whose config matches it and whose
+MD5 is listed. It owns everything between the checkpoint and the kernels:
+the mixture-of-linear-experts (MOLE) merge for the system being simulated, the
+SO(2) block-diagonal weight layout, and the unified radial MLP layout. It
+implements the subset of the ``HydraModel`` interface that ``MLIPPredictUnit``
+uses, so the predict unit's task handling and its fast-path fallback
+(``MergeMoleConsistencyError``) apply unchanged.
 
 The forward combines a fixed-capacity padded radius graph, fused Triton/CuTe
 kernels, architecture-specific kernel selection, and optional CUDA graph
@@ -78,12 +78,14 @@ import triton.language as tl
 from torch.autograd.profiler import record_function
 from torch.library import triton_op, wrap_triton
 
-from fairchem.core.common.checksums import cached_file_md5
 from fairchem.core.models.uma.escn_md import GradRegressConfig
-from fairchem.core.units.mlip_unit.api.inference import (
-    NITRO_CHECKPOINT,
-    UMANitroNotSupportedError,
+from fairchem.core.models.uma.uma_nitro._checkpoints import (
+    _REFERENCE_CONFIG,
+    SUPPORTED_PROPERTIES,
+    admit,
 )
+from fairchem.core.units.mlip_unit.api.inference import UMANitroNotSupportedError
+from fairchem.core.units.mlip_unit.utils import update_configs
 
 # This will catch the warning despite its C++ origin
 # torch.Tensor.index_reduce is in beta
@@ -15236,24 +15238,19 @@ def set_force_precision(force_fp32: bool) -> None:
 # they have no forward of their own. Their attribute names are the ones the
 # kernels address (``blocks[i].edge_wise.so2_conv_1.fc_m0`` and so on).
 
-# The checkpoints these kernels were written and qualified for. The hash gate in
-# verify_checkpoint_file stands in for checking their fixed architecture.
-_SUPPORTED_CHECKPOINTS = {
-    "3497615fd30a24c5b35cd3b41a682e6e": NITRO_CHECKPOINT,
-    "eb6fed512b3f0801b27dfdd6e8c1f9ee": "uma-s-1p2p1-ft-d4rev",
-    "fc041fe67c6e1501bf8b71cc490826f7": "uma-s-1p2p1-ft-r2scan",
-}
-
-# Architecture of those checkpoints, baked into the kernels above.
-_LMAX_MMAX = 2
-_SPHERE_CHANNELS = 128
-_HIDDEN_CHANNELS = 128
-_EDGE_CHANNELS = 128
-_NUM_LAYERS = 4
-_CUTOFF = 6.0
-_NUM_DISTANCE_BASIS = 32
-_MAX_NUM_ELEMENTS = 100
-_CHARGE_CHANNELS = (0, 3)  # charge_balanced_channels [0, 1, 2]
+_REFERENCE_BACKBONE = _REFERENCE_CONFIG["backbone"]
+_LMAX_MMAX = _REFERENCE_BACKBONE["lmax"]
+_SPHERE_CHANNELS = _REFERENCE_BACKBONE["sphere_channels"]
+_HIDDEN_CHANNELS = _REFERENCE_BACKBONE["hidden_channels"]
+_EDGE_CHANNELS = _REFERENCE_BACKBONE["edge_channels"]
+_NUM_LAYERS = _REFERENCE_BACKBONE["num_layers"]
+_CUTOFF = float(_REFERENCE_BACKBONE["cutoff"])
+_NUM_DISTANCE_BASIS = _REFERENCE_BACKBONE["num_distance_basis"]
+_MAX_NUM_ELEMENTS = _REFERENCE_BACKBONE["max_num_elements"]
+_CHARGE_CHANNELS = (
+    _REFERENCE_BACKBONE["charge_balanced_channels"][0],
+    _REFERENCE_BACKBONE["charge_balanced_channels"][-1] + 1,
+)
 # UMA-S 1.2.1 averages the composition embedding without the zero self value.
 _COMPOSITION_INCLUDE_SELF = False
 
@@ -15271,7 +15268,6 @@ _EDGE_DEGREE_RESCALE = 5.0
 _GAUSSIAN_WIDTH = 2.0
 _CHARGE_INDEX_OFFSET = 100
 _SPIN_INDEX_OFFSET = 0
-_SUPPORTED_PROPERTIES = frozenset({"energy", "forces", "stress"})
 
 
 def _l_expand_index(lmax: int) -> torch.Tensor:
@@ -15641,30 +15637,6 @@ def _wigner_l2_coefficients() -> torch.Tensor:
     return _load_and_decompress_coefficients()["C_l2"]
 
 
-def verify_checkpoint_file(path) -> None:
-    """
-    Check that ``path`` is one of the checkpoints UMA Nitro supports.
-
-    The MD5 sum is cached in a ``<path>.md5`` sidecar (``cached_file_md5``).
-
-    Args:
-        path: Checkpoint file.
-
-    Raises:
-        UMANitroNotSupportedError: If the file's MD5 is not on the allowlist.
-    """
-    digest = cached_file_md5(path)
-    if digest not in _SUPPORTED_CHECKPOINTS:
-        supported = ", ".join(
-            f"{name} (md5 {checksum})"
-            for checksum, name in _SUPPORTED_CHECKPOINTS.items()
-        )
-        raise UMANitroNotSupportedError(
-            f"{path} is not supported in nitro mode (md5 {digest}); supported "
-            f"checkpoints are {supported}"
-        )
-
-
 def _validate_device(device) -> None:
     """
     Check that ``device`` supports Nitro and matches the selected kernel policy.
@@ -15745,8 +15717,6 @@ class UMANitroModel(nn.Module):
 
     def __init__(self, model_config: dict, state_dict: dict[str, torch.Tensor]):
         super().__init__()
-        # The architecture is fixed (see verify_checkpoint_file); the config only
-        # supplies data: the task datasets and single-atom support.
         dataset_mapping = model_config["backbone"]["dataset_mapping"]
         ((head_name, head_config),) = model_config["heads"].items()
         self.supports_single_atoms = bool(model_config.get("supports_single_atoms"))
@@ -15771,17 +15741,21 @@ class UMANitroModel(nn.Module):
         self._experts = self._load_state_dict(state_dict)
 
     @classmethod
-    def from_checkpoint(cls, checkpoint) -> UMANitroModel:
+    def from_checkpoint(
+        cls, checkpoint, overrides: dict | None = None
+    ) -> UMANitroModel:
         """
         Build the model from a loaded UMA inference checkpoint.
 
         Args:
             checkpoint: An ``MLIPInferenceCheckpoint`` (``torch.load`` result).
+            overrides: Config overrides, applied as for HydraModel.
 
         Returns:
             The unprepared model, with its checkpoint tasks set up.
         """
-        model = cls(checkpoint.model_config, checkpoint.ema_state_dict)
+        model_config = update_configs(checkpoint.model_config, overrides or {})
+        model = cls(model_config, checkpoint.ema_state_dict)
         model.setup_tasks(checkpoint.tasks_config)
         return model
 
@@ -15861,7 +15835,7 @@ class UMANitroModel(nn.Module):
         from fairchem.core.models.base import _get_dataset_to_tasks_map
 
         for task in tasks:
-            if task.property not in _SUPPORTED_PROPERTIES:
+            if task.property not in SUPPORTED_PROPERTIES:
                 raise ValueError(
                     f"uma_nitro predicts energy, forces and stress only; task "
                     f"{task.name!r} requests {task.property!r}"
@@ -15879,22 +15853,24 @@ class UMANitroModel(nn.Module):
 
     # ------------------------------------------------------------ inference
     @staticmethod
-    def validate(settings, path, device) -> None:
+    def validate(settings, checkpoint, path, device, overrides=None) -> None:
         """
         Check that Nitro can serve this request: the GPU, the settings, then the
-        checkpoint file (the only check that reads it).
+        checkpoint (``_checkpoints.admit``, the only check that reads the file).
 
         Args:
             settings: The predictor's inference settings.
+            checkpoint: The loaded checkpoint.
             path: The checkpoint file.
             device: The predictor's device.
+            overrides: Config overrides the predictor applies to HydraModel.
 
         Raises:
             UMANitroNotSupportedError: For a request outside Nitro's contract.
         """
         _validate_device(device)
         _validate_settings(settings)
-        verify_checkpoint_file(path)
+        admit(checkpoint, path, overrides)
 
     def _merge_key(self, data) -> tuple:
         """

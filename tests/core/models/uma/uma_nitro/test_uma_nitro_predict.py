@@ -5,8 +5,8 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 GPU tests for UMA Nitro running through MLIPPredictUnit and FAIRChemCalculator
-on the pinned uma-s-1p2p1 checkpoint. Fallbacks are in
-test_uma_nitro_fallbacks.py.
+on the pinned uma-s-1p2p1 checkpoint and on a fine-tune the user lists.
+Fallbacks are in test_uma_nitro_fallbacks.py.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from tests.core.models.uma.uma_nitro.nitro_test_utils import (
     batch,
     checkpoint_path,
     general_predictor,
+    list_checkpoint,
     nitro_settings,
     requires_nitro_gpu,
     task_names,
@@ -87,6 +88,21 @@ def test_matches_general(pretrained_model_name, general, system):
         output = predictor.predict(batch(moved_system))
         _assert_runs_nitro(predictor)
         assert_close(output, general.predict(batch(moved_system)))
+
+
+def test_listed_fine_tune_runs_nitro(nitro_random_checkpoint_path):
+    """
+    A checkpoint in the user's list runs Nitro and agrees with the general model.
+    """
+    list_checkpoint(nitro_random_checkpoint_path)
+    predictor = MLIPPredictUnit(
+        nitro_random_checkpoint_path, "cuda", inference_settings=nitro_settings()
+    )
+    system = (bulk("Cu", "fcc", a=3.6) * (2, 2, 2), "omat")
+    output = predictor.predict(batch(system))
+    _assert_runs_nitro(predictor)
+    general = general_predictor(nitro_random_checkpoint_path)
+    assert_close(output, general.predict(batch(system)))
 
 
 def test_matches_general_without_element_references(pretrained_model_name, general):

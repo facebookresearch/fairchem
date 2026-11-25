@@ -38,12 +38,14 @@ def load_predict_unit(
     Args:
         path: Path to the checkpoint file
         inference_settings: Settings for inference. "default" (the same as "nitro") runs
-            UMA Nitro for uma-s-1p2p1 on CUDA capability 8.x-12.x and "multigpu"
-            otherwise. "multigpu" is a reduced-precision mode (merge_mole + compile with
-            TF32 matrix multiplies on CUDA); "high-precision" uses merge_mole + compile
-            in full FP32. Both fall back automatically if their fixed-input contract is
-            broken. "batch" keeps MOLE unmerged for heterogeneous inputs. More advanced
-            use cases can use a custom InferenceSettings object.
+            UMA Nitro for uma-s-1p2p1, its released fine-tunes and the fine-tunes
+            of it listed in ~/.fairchem/nitro_compatible_checkpoints.txt on CUDA
+            capability 8.x-12.x and "multigpu" otherwise. "multigpu" is a
+            reduced-precision mode (merge_mole + compile with TF32 matrix multiplies
+            on CUDA); "high-precision" uses merge_mole + compile in full FP32. Both
+            fall back automatically if their fixed-input contract is broken. "batch"
+            keeps MOLE unmerged for heterogeneous inputs. More advanced use cases can
+            use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.

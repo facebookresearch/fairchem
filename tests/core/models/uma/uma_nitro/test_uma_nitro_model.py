@@ -115,18 +115,6 @@ def test_loads_direct_energy_head(nitro_direct_head_checkpoint):
         )
 
 
-def test_verify_checkpoint_file_rejects_other_checkpoints(tmp_path):
-    """
-    Files outside the pinned checkpoint allowlist fail the checksum gate.
-    """
-    from fairchem.core.models.uma.uma_nitro import verify_checkpoint_file
-
-    path = tmp_path / "other.pt"
-    torch.save({"weights": torch.zeros(3)}, path)
-    with pytest.raises(UMANitroNotSupportedError, match="uma-s-1p2p1"):
-        verify_checkpoint_file(path)
-
-
 def test_regress_config_is_conservative(nitro_random_checkpoint):
     """
     The backbone reports the gradients the kernels compute.
