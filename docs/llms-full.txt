@@ -1413,7 +1413,7 @@ The checked-in configurations target a CUDA GPU. To run one on CPU, override
 both the launcher device and calculator device (CPU inference is much slower):
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   job.device_type=CPU runner.calculator.device=cpu
 ```
 
@@ -1482,16 +1482,16 @@ constraint-based behavior through `use_fix_com_constraint: true`.
 
 MD can also by run through a CLI which utilizes a Hydra configuration file.  The repository contains two example configurations:
 
-- [`configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/nvt.yaml)
+- [`packages/fairchem-core/configs/uma/md/nvt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-core/configs/uma/md/nvt.yaml)
   uses Langevin NVT at 300 K.
-- [`configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/configs/uma/md/npt.yaml)
+- [`packages/fairchem-core/configs/uma/md/npt.yaml`](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-core/configs/uma/md/npt.yaml)
   uses Berendsen NPT at 300 K and 1 bar.
 
 Either configuration from the repository root:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml
-fairchem -c configs/uma/md/npt.yaml
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml
+fairchem -c packages/fairchem-core/configs/uma/md/npt.yaml
 ```
 
 ### Choose an ensemble
@@ -1525,7 +1525,7 @@ isothermal compressibility whenever you replace the example system.
 Hydra overrides let you reuse the configuration without editing it:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   temperature_K=500 runner.steps=10000 runner.trajectory_interval=100
 ```
 
@@ -1610,7 +1610,7 @@ local example configuration and supply values appropriate to your site. For a
 single-GPU SLURM job, the required overrides typically look like:
 
 ```bash
-fairchem -c configs/uma/md/nvt.yaml \
+fairchem -c packages/fairchem-core/configs/uma/md/nvt.yaml \
   job.run_dir=/shared/path/md-runs \
   job.scheduler.mode=SLURM \
   job.scheduler.num_nodes=1 \
@@ -2337,7 +2337,7 @@ Training, evaluation, and inference are all defined in the [mlip unit](https://g
 
 To train a model, we need to initialize a [TrainRunner](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/train/train_runner.py) with a [MLIPTrainEvalUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py).
 
-Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage [config groups](https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/) syntax in Hydra to organize UMA training into the [following sections](https://github.com/facebookresearch/fairchem/tree/main/configs/uma/training_release):
+Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage [config groups](https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/) syntax in Hydra to organize UMA training into the [following sections](https://github.com/facebookresearch/fairchem/tree/main/packages/fairchem-core/configs/uma/training_release):
 
 - **backbone** - selects the specific backbone architecture (e.g., uma-sm, uma-md, uma-large)
 - **cluster** - quickly switch settings between different SLURM clusters or local environment
@@ -2354,13 +2354,13 @@ We can switch between different combinations of configs easily this way!
 **Get training started locally using local settings and the debug dataset:**
 
 ```bash
-fairchem -c configs/uma/training_release/uma_sm_direct_pretrain.yaml cluster=h100_local dataset=uma_debug
+fairchem -c packages/fairchem-core/configs/uma/training_release/uma_sm_direct_pretrain.yaml cluster=h100_local dataset=uma_debug
 ```
 
 **Train UMA conservative with 16 nodes on SLURM:**
 
 ```bash
-fairchem -c configs/uma/training_release/uma_sm_conserve_finetune.yaml cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
+fairchem -c packages/fairchem-core/configs/uma/training_release/uma_sm_conserve_finetune.yaml cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
 ```
 
 ---
@@ -2377,7 +2377,7 @@ FAIRChem v2 provides a number of methods used to benchmark and evaluate the UMA 
 
 ## Running Model Evaluations
 
-To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate UMA models are stored in `configs/uma/evaluate`.
+To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate UMA models are stored in `packages/fairchem-core/configs/uma/evaluate`.
 
 Run the evaluation script:
 
@@ -2385,7 +2385,7 @@ Run the evaluation script:
 fairchem --config evaluation_config.yaml
 ```
 
-Replace `evaluation_config.yaml` with the desired config file. For example, `configs/uma/evaluate/uma_conserving.yaml`
+Replace `evaluation_config.yaml` with the desired config file. For example, `packages/fairchem-core/configs/uma/evaluate/uma_conserving.yaml`
 
 :::{tip}
 Results will be logged according to the specified logger. We currently only support Weights and Biases.
@@ -2393,7 +2393,7 @@ Results will be logged according to the specified logger. We currently only supp
 
 ## Evaluation Configuration File Format
 
-Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `configs/uma/evaluate/`.
+Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `packages/fairchem-core/configs/uma/evaluate/`.
 
 ### Top-Level Keys
 
@@ -2442,7 +2442,7 @@ defaults:
   - data: my_eval_data
 ```
 
-This will include the configuration from `configs/uma/evaluate/model/omc_conserving.yaml` and `configs/uma/evaluate/data/my_eval_data.yaml` into the main config. The `_self_` entry ensures the current file's contents are included.
+This will include the configuration from `packages/fairchem-core/configs/uma/evaluate/model/omc_conserving.yaml` and `packages/fairchem-core/configs/uma/evaluate/data/my_eval_data.yaml` into the main config. The `_self_` entry ensures the current file's contents are included.
 
 You can create new config groups or override existing ones by changing the entries under `defaults`:
 
@@ -2461,7 +2461,7 @@ Using config groups allows you to easily override defaults in the CLI. For examp
 fairchem --config evaluation_config.yaml cluster=cluster_config checkpoint=checkpoint_config
 ```
 
-Where `cluster_config` and `checkpoint_config` are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in `configs/uma/evaluate` as a full example.
+Where `cluster_config` and `checkpoint_config` are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in `packages/fairchem-core/configs/uma/evaluate` as a full example.
 
 ---
 

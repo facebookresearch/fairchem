@@ -191,7 +191,7 @@ runner:
 ```
 
 Config sections: `job`, `runner`, `datasets`, `tasks`, `backbone`, `optimizer`.
-Default configs in `configs/`. Overrides via CLI: `fairchem -c config.yaml key=value`.
+Default configs in `packages/fairchem-core/configs/`. Overrides via CLI: `fairchem -c config.yaml key=value`.
 
 ### Task Names
 - `oc20`: Catalysis (Open Catalyst)
@@ -230,7 +230,7 @@ src/fairchem/core/
 
 tests/                   # All tests (mirrors src structure)
 packages/                # Installable packages (fairchem-core, fairchem-data-*)
-configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimizer)
+packages/fairchem-core/configs/   # Hydra YAML configs (datasets, tasks, backbone, optimizer)
 ```
 
 ## Key Dependencies

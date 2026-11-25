@@ -1,9 +1,0 @@
-train_dataloader:
-  _target_: tests.core.units.mlip_unit.test_mlip_unit.pickle_data_loader
-  pickle_path: tests/core/units/mlip_unit/wombat_batch.pkl
-  steps: 5
-
-val_dataloader:
-  _target_: tests.core.units.mlip_unit.test_mlip_unit.pickle_data_loader
-  pickle_path: tests/core/units/mlip_unit/wombat_batch.pkl
-  steps: 5
