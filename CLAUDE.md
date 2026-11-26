@@ -8,9 +8,9 @@ FAIRChem is Meta FAIR Chemistry's ML framework for atomistic simulations. Core a
 pip install -e packages/fairchem-core[dev]
 
 # Tests (always pass -c flag)
-pytest tests -c packages/fairchem-core/pyproject.toml
-pytest tests/core/models/test_uma.py -vv
-pytest tests/core -m "not gpu"
+pytest packages/fairchem-core/tests -c packages/fairchem-core/pyproject.toml
+pytest packages/fairchem-core/tests/models/test_uma.py -vv
+pytest packages/fairchem-core/tests -m "not gpu"
 
 # Lint & format — REQUIRED for every modified file before committing
 pre-commit run --files path/to/modified_file.py
@@ -69,9 +69,9 @@ if TYPE_CHECKING:
 
 ## Testing Conventions
 
-All tests go in `tests/` (mirrors `src/fairchem/` structure). Always run with:
+Tests go in the owning distribution's `packages/<dist>/tests/` (cross-package suites in `packages/fairchem-core/tests/integration/`). Always run with:
 ```bash
-pytest tests -c packages/fairchem-core/pyproject.toml
+pytest packages/fairchem-core/tests -c packages/fairchem-core/pyproject.toml
 ```
 
 ### Test Markers
@@ -82,13 +82,13 @@ pytest tests -c packages/fairchem-core/pyproject.toml
 
 ### Key Fixtures
 
-**Root conftest (`tests/conftest.py`):**
+**Core conftest (`packages/fairchem-core/tests/conftest.py`):**
 - `seed_fixture` (function): Seeds all RNGs to 42
 - `water_xyz_file` (session): Path to a minimal 3-atom water XYZ file
 - `compile_reset_state` (function): Resets `torch.compiler` before/after test
 - `setup_before_each_test` (autouse): Cleans up Ray, GPU memory, distributed state
 
-**Core conftest (`tests/core/conftest.py`):**
+**Core fixtures (same conftest, merged):**
 - `dummy_binary_dataset` (session, parametrized): ASE dataset in both LMDB and CIF formats
 - `fake_uma_dataset` (session): Full UMA training dataset path + config
 - `direct_checkpoint` (session): Trained model checkpoint (inference + resume)
@@ -96,7 +96,7 @@ pytest tests -c packages/fairchem-core/pyproject.toml
 - `torch_deterministic` (function): Enables deterministic algorithms
 - `snapshot` (function): Syrupy snapshot with approximate numpy comparison (`Approx`)
 
-**Dataset conftest (`tests/core/datasets/conftest.py`):**
+**Dataset conftest (`packages/fairchem-core/tests/datasets/conftest.py`):**
 - `structures` (module): List of test atoms [H2O molecule, Cu bulk, Pt slab]
 
 ### Test Patterns
@@ -132,7 +132,7 @@ from tests.core.testing_utils import launch_main
 def test_training(fake_uma_dataset):
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "packages/fairchem-core/tests/units/mlip_unit/test_mlip_train.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
         "job.device_type=CPU",
         "max_steps=2",
@@ -191,7 +191,7 @@ runner:
 ```
 
 Config sections: `job`, `runner`, `datasets`, `tasks`, `backbone`, `optimizer`.
-Default configs in `configs/`. Overrides via CLI: `fairchem -c config.yaml key=value`.
+Default configs in `packages/fairchem-core/configs/`. Overrides via CLI: `fairchem -c config.yaml key=value`.
 
 ### Task Names
 - `oc20`: Catalysis (Open Catalyst)
@@ -217,7 +217,7 @@ atoms.calc = calc
 ## Repository Structure
 
 ```
-src/fairchem/core/
+packages/fairchem-core/src/fairchem/core/
 ├── models/              # Backbones and heads (UMA, eSCN-MD, GemNet)
 ├── datasets/            # Data loading (LMDB, ASE), collaters, samplers
 ├── components/          # Runner components (train, evaluate, calculate)
@@ -228,9 +228,9 @@ src/fairchem/core/
 ├── graph/               # Graph generation, neighbor finding with PBC
 └── _cli.py              # CLI entry point
 
-tests/                   # All tests (mirrors src structure)
-packages/                # Installable packages (fairchem-core, fairchem-data-*)
-configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimizer)
+packages/                # Installable distributions, each with src/ + tests/ (fairchem-core, fairchem-data-*)
+packages/fairchem-core/configs/   # Hydra YAML configs (datasets, tasks, backbone, optimizer)
+packages/fairchem-core/tests/integration/  # Cross-package suites
 ```
 
 ## Key Dependencies
@@ -245,7 +245,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 ## Testing Gotchas
 
 - The canonical Ray Serve batching implementation is
-  `src/fairchem/core/components/batch_server.py`. During rebases, do not
+  `packages/fairchem-core/src/fairchem/core/components/batch_server.py`. During rebases, do not
   resurrect the legacy `units/mlip_unit/_batch_serve.py`,
   `units/mlip_unit/batch_server.py`, or `calculate/_batch_server.py` paths;
   port their functional changes into the component instead.
@@ -253,7 +253,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   `pretrained` marker. This lets base CI deselect them with `--exclude-models`
   and routes them to the matching model-sweep job.
 - The core CI workflow uses explicit shard path lists rather than discovering
-  every directory under `tests/core`; add new test directories to the relevant
+  every directory under `packages/fairchem-core/tests`; add new test directories to the relevant
   shard or CI will silently omit them.
 - External model tests intentionally run through the privileged `workflow_run`
   path after `contributor check`, allowing approved PRs to access `HF_TOKEN`.
@@ -363,7 +363,7 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
   repeat it when appropriate) before rerunning a full GPU shard.
 - Executable documentation runs notebooks from their source directories. Do
   not rely on a fixed relative `chdir`; locate the repository root by a stable
-  marker such as `src/fairchem` instead.
+  marker such as `packages/fairchem-core/src/fairchem` instead.
 - MyST static builds configured with a `BASE_URL` must be reviewed through an
   HTTP server at that same path prefix. Opening `index.html` directly can
   trigger a redirect that does not resolve on the local filesystem.
@@ -393,6 +393,14 @@ configs/                 # Hydra YAML configs (datasets, tasks, backbone, optimi
 - Optional packages imported by eagerly loaded `fairchem.core` modules must use
   a guarded import and `monty.dev.requires` on the feature entry point so the
   base package remains importable without the optional dependency.
+- Slow-to-import packages (`ray`, `nvalchemiops`/`warp`, `wandb`) must not be
+  imported at module level outside modules dedicated to them. Check
+  availability with `importlib.util.find_spec` for the `requires` condition and
+  import the package inside the functions that use it.
+  `packages/fairchem-core/tests/test_imports.py` fails if they are imported eagerly.
+- `fairchem/core/__init__.py` and `fairchem/core/calculate/__init__.py` resolve
+  their exports lazily through a module `__getattr__`. Every `fairchem.core.*`
+  import runs the top-level `__init__`, so do not add eager imports there.
 - `pymatgen` and `pymatgen-core` are independently versioned. Slab tests must
   not depend on enumeration order, seeded random coordinates, or atom counts
   unless those values are part of the public contract; prefer composition,

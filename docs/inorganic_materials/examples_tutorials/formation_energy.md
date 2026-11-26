@@ -57,7 +57,7 @@ import pprint
 
 from ase.build import bulk
 from ase.optimize import FIRE
-from quacc.recipes.mlp.core import relax_job
+from quacc.recipes.mlip.core import relax_job
 from quacc import flow
 from fairchem.core.calculate import FAIRChemCalculator, FormationEnergyCalculator
 
@@ -71,7 +71,7 @@ def relax_flow(*args, **kwargs):
 
 result = relax_flow(
     atoms,
-    method="fairchem",
+    library="fairchem",
     name_or_path="uma-s-1p2p1",
     task_name="omat",
     relax_cell=True,

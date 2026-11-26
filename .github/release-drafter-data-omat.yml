@@ -1,6 +1,5 @@
 include-paths:
-  - src/fairchem/data/omat
-  - packages/fairchem-data-omat
+  - packages/fairchem-data/fairchem-data-omat
 tag-prefix: fairchem_data_omat
 tag-template: 'fairchem_data_omat-$RESOLVED_VERSION'
 name-template: 'fairchem_data_omat-$RESOLVED_VERSION'

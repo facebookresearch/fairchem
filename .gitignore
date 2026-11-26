@@ -144,3 +144,6 @@ package-lock.json
 bulks.pkl
 # MyST build outputs
 _build
+
+# Regression suite artifacts written inside the checkout
+regression-artifacts/
