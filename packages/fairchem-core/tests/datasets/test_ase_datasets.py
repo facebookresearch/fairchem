@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import pickle
 
 import numpy as np
 import pytest
@@ -148,6 +149,59 @@ def test_db_add_delete(tmp_path, structures):
 
     # Make sure get_atoms does not raise
     dataset.get_atoms(0)
+
+
+def _write_trajs(tmp_path, structures):
+    for i, atoms in enumerate(structures):
+        write(tmp_path / f"{i}.traj", atoms)
+
+
+@pytest.mark.parametrize("keep_in_memory", [True, False])
+def test_ase_read_dataset_keep_in_memory(
+    tmp_path, structures, monkeypatch, keep_in_memory
+):
+    _write_trajs(tmp_path, structures)
+    dataset = AseReadDataset(
+        config={
+            "src": str(tmp_path),
+            "pattern": "*.traj",
+            "keep_in_memory": keep_in_memory,
+        }
+    )
+    reads = []
+    get_atoms = dataset.get_atoms
+    monkeypatch.setattr(
+        dataset, "get_atoms", lambda idx: reads.append(idx) or get_atoms(idx)
+    )
+
+    first = dataset[0]
+    again = dataset[0]
+    batch = dataset[:2]
+
+    # the cache must only skip reads, never change what is returned
+    assert (again.pos == first.pos).all()
+    assert (batch[0].pos == first.pos).all()
+    assert len(batch) == 2
+    assert reads == ([0, 1] if keep_in_memory else [0, 0, 0, 1])
+
+
+@pytest.mark.parametrize("keep_in_memory", [True, False])
+def test_ase_read_dataset_picklable(tmp_path, structures, keep_in_memory):
+    # datasets are sent to DataLoader worker processes, so they must stay picklable
+    _write_trajs(tmp_path, structures)
+    dataset = AseReadDataset(
+        config={
+            "src": str(tmp_path),
+            "pattern": "*.traj",
+            "keep_in_memory": keep_in_memory,
+        }
+    )
+    first = dataset[0]
+
+    restored = pickle.loads(pickle.dumps(dataset))
+
+    assert len(restored) == len(dataset)
+    assert (restored[0].pos == first.pos).all()
 
 
 def test_ase_multiread_dataset(tmp_path):
