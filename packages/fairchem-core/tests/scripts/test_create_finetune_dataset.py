@@ -20,6 +20,8 @@ from ase import Atoms
 from ase.build import bulk, molecule
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import write
+from hydra import compose, initialize_config_dir
+from hydra.utils import instantiate
 from sklearn.model_selection import train_test_split
 
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
@@ -245,6 +247,83 @@ def test_create_finetune_dataset(type, random_state):
         assert os.path.exists(
             os.path.join(tmpdirname, "dataset", "val", "data.0000.aselmdb")
         )
+
+
+@pytest.mark.parametrize("mixed_labels", [False, True], ids=["energy-only", "mixed"])
+def test_create_finetune_dataset_energy_only(tmp_path, mixed_labels):
+    energies = {"train": [-3.25], "val": [-3.0]}
+    forces = [[1.0, 2.0, 3.0]]
+    stress = [0.1, 0.2, 0.3, 0.0, 0.0, 0.0]
+    for split, split_energies in energies.items():
+        split_dir = tmp_path / split
+        split_dir.mkdir()
+        atoms = bulk("Al")
+        atoms.calc = SinglePointCalculator(atoms, energy=split_energies[0])
+        structures = [atoms]
+        if mixed_labels:
+            split_energies.append(split_energies[0] + 0.5)
+            labeled = atoms.copy()
+            labeled.calc = SinglePointCalculator(
+                labeled, energy=split_energies[1], forces=forces, stress=stress
+            )
+            structures.append(labeled)
+        write(split_dir / "structure.extxyz", structures)
+
+    output_dir = tmp_path / "dataset"
+    subprocess.run(
+        [
+            "python",
+            "packages/fairchem-core/src/fairchem/core/scripts/create_uma_finetune_dataset.py",
+            "--train-dir",
+            str(tmp_path / "train"),
+            "--val-dir",
+            str(tmp_path / "val"),
+            "--output-dir",
+            str(output_dir),
+            "--uma-task",
+            "omat",
+            "--regression-tasks",
+            "e",
+            "--num-workers",
+            "1",
+        ],
+        check=True,
+    )
+
+    with initialize_config_dir(config_dir=str(output_dir), version_base=None):
+        config = compose(config_name="uma_sm_finetune_template")
+    assert config.data.normalizer_rmsd == 1.0
+    assert config.data.elem_refs[13] == pytest.approx(np.mean(energies["train"]))
+
+    for split, loader_config in (
+        ("train", config.train_dataloader),
+        ("val", config.eval_dataloader),
+    ):
+        stored = AseDBDataset({"src": str(output_dir / split)})
+        assert len(stored) == len(energies[split])
+        for idx, energy in enumerate(energies[split]):
+            assert stored[idx].energy.item() == pytest.approx(energy)
+        assert "forces" not in stored.get_atoms(0).calc.results
+        assert "stress" not in stored.get_atoms(0).calc.results
+        if mixed_labels:
+            labeled = stored.get_atoms(1)
+            np.testing.assert_allclose(labeled.get_forces(), forces)
+            np.testing.assert_allclose(labeled.get_stress(), stress)
+        del stored
+
+        dataset = instantiate(loader_config.dataset)
+        collate = instantiate(loader_config.collate_fn)
+        rows = [dataset[idx] for idx in range(len(dataset))]
+        assert sorted(row.energy.item() for row in rows) == pytest.approx(
+            energies[split]
+        )
+        for ordered_rows in (rows, rows[::-1]):
+            batch = collate(ordered_rows)
+            assert batch.energy.tolist() == pytest.approx(
+                [row.energy.item() for row in ordered_rows]
+            )
+            assert "forces" not in batch
+            assert "stress" not in batch
 
 
 def test_write_ase_db_preserves_charge_and_spin(tmp_path):

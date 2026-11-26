@@ -13,6 +13,7 @@ import logging
 import multiprocessing as mp
 import os
 import random
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +26,9 @@ from fairchem.core.datasets import AseDBDataset
 logging.basicConfig(level=logging.INFO)
 
 
-def compute_normalizer_and_linear_reference(train_path, num_workers):
+def compute_normalizer_and_linear_reference(
+    train_path, num_workers, *, require_forces=True
+):
     """
     Given a path to an ASE database file, compute the normalizer value and linear
     reference coefficients. These are used to normalize energies and forces during
@@ -35,35 +38,41 @@ def compute_normalizer_and_linear_reference(train_path, num_workers):
     dataset = AseDBDataset({"src": str(train_path)})
 
     sample_indices = random.sample(range(len(dataset)), min(100000, len(dataset)))
+    extract = partial(extract_energy_and_forces, require_forces=require_forces)
     # Python 3.14 changed the POSIX default start method from ``fork`` to
     # ``forkserver``. These workers rely on inheriting the dataset initialized
     # above, so keep using ``fork`` explicitly.
     with mp.get_context("fork").Pool(num_workers) as pool:
         outputs = list(
             tqdm(
-                pool.imap(extract_energy_and_forces, sample_indices),
+                pool.imap(extract, sample_indices),
                 total=len(sample_indices),
                 desc="Computing normalizer values.",
             )
         )
         atomic_numbers = [x[0] for x in outputs]
         energies = [x[1] for x in outputs]
-        forces = np.array([force for x in outputs for force in x[2]])
-        force_rms = np.sqrt(np.mean(np.square(forces)))
-        assert (
-            np.isfinite(force_rms).all()
-        ), "We found non-finite values in the forces, please check your input data!"
+        force_rms = 1.0
+        if require_forces:
+            forces = np.array([force for x in outputs for force in x[2]])
+            force_rms = np.sqrt(np.mean(np.square(forces)))
+            assert (
+                np.isfinite(force_rms).all()
+            ), "We found non-finite values in the forces, please check your input data!"
         coeff = compute_lin_ref(atomic_numbers, energies)
     return force_rms, coeff
 
 
-def extract_energy_and_forces(idx):
+def extract_energy_and_forces(idx, *, require_forces=True):
     """
     Extract energy and forces from an ASE atoms object at a given index in the dataset.
     """
     atoms = dataset.get_atoms(idx)
     atomic_numbers = atoms.get_atomic_numbers()
     energy = atoms.get_potential_energy()
+    if not require_forces:
+        return atomic_numbers, energy, None
+
     forces = atoms.get_forces()
     n_atoms = len(atoms)
 
@@ -97,7 +106,7 @@ def compute_lin_ref(atomic_numbers, energies):
     return coeff.tolist()
 
 
-def write_ase_db(mp_arg):
+def write_ase_db(mp_arg, *, require_forces=True):
     """
     Write ASE atoms objects to an ASE database file. This function is designed to be
     run in parallel using multiprocessing.
@@ -116,7 +125,8 @@ def write_ase_db(mp_arg):
                         atoms.calc is not None
                     ), "No calculator attached to atoms object."
                     assert "energy" in atoms.calc.results, "Missing energy result"
-                    assert "forces" in atoms.calc.results, "Missing forces result"
+                    if require_forces:
+                        assert "forces" in atoms.calc.results, "Missing forces result"
                     db.write(atoms, data=atoms.info)
                     natoms.append(len(atoms))
                     successful.append(f"{file},{i}")
@@ -126,7 +136,7 @@ def write_ase_db(mp_arg):
     return db_file, natoms, successful, failed
 
 
-def launch_processing(data_dir, output_dir, num_workers):
+def launch_processing(data_dir, output_dir, num_workers, *, require_forces=True):
     """
     Driver script to launch processing of ASE atoms files into an ASE database.
     """
@@ -139,8 +149,9 @@ def launch_processing(data_dir, output_dir, num_workers):
     chunked_files = np.array_split(input_files, num_workers)
     db_files = [output_dir / f"data.{i:04d}.aselmdb" for i in range(num_workers)]
     mp_args = [(db_files[i], chunked_files[i], i) for i in range(num_workers)]
+    write_db = partial(write_ase_db, require_forces=require_forces)
     with mp.Pool(num_workers) as pool:
-        outputs = pool.map(write_ase_db, mp_args)
+        outputs = pool.map(write_db, mp_args)
 
     # Log results
     natoms = []
