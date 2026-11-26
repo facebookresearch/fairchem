@@ -531,12 +531,12 @@ class AtomicData:
             if hasattr(self, "forces") and self.forces is not None:
                 fields["forces"] = self.forces.cpu().numpy()
             if hasattr(self, "stress") and self.stress is not None:
-                if self.stress.shape == (3, 3):
-                    fields["stress"] = full_3x3_to_voigt_6_stress(
-                        self.stress.squeeze().cpu().numpy()
-                    )
-                elif self.stress.shape == (6,):
-                    fields["stress"] = self.stress.squeeze().numpy()
+                # from_ase stores stress as (1, 3, 3); a Voigt (6,) is also accepted
+                stress = self.stress.cpu().numpy()
+                if stress.size == 9:
+                    fields["stress"] = full_3x3_to_voigt_6_stress(stress.reshape(3, 3))
+                elif stress.size == 6:
+                    fields["stress"] = stress.reshape(6)
             atoms.calc = SinglePointCalculator(atoms=atoms, **fields)
 
         atoms.info = {

@@ -10,10 +10,13 @@ from __future__ import annotations
 import logging
 
 import ase
+import numpy as np
 import pytest
 import torch
 from ase.build import molecule
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.data import atomic_masses
+from ase.stress import voigt_6_to_full_3x3_stress
 
 from fairchem.core.datasets.atomic_data import (
     AtomicData,
@@ -31,6 +34,47 @@ def ase_atoms():
 def test_to_ase_single(ase_atoms):
     atoms = AtomicData.from_ase(ase_atoms).to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
+
+
+@pytest.mark.parametrize("stress_shape", [(6,), (3, 3), (9,)])
+def test_to_ase_single_keeps_stress(stress_shape):
+    atoms = ase.Atoms("Cu", cell=[3.6, 3.6, 3.6], pbc=True)
+    voigt = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    stress = voigt if stress_shape == (6,) else voigt_6_to_full_3x3_stress(voigt)
+    atoms.calc = SinglePointCalculator(
+        atoms, energy=-1.0, stress=stress.reshape(stress_shape)
+    )
+
+    roundtrip = AtomicData.from_ase(atoms, task_name="omat").to_ase_single()
+
+    assert "stress" in roundtrip.calc.results
+    np.testing.assert_allclose(roundtrip.get_stress(), voigt, rtol=1e-6)
+
+
+@pytest.mark.parametrize("shape", [(6,), (1, 6), (3, 3)])
+def test_to_ase_single_stress_layouts(shape):
+    # from_ase always stores (1, 3, 3); check the other layouts directly
+    voigt = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    atoms = ase.Atoms("Cu", cell=[3.6, 3.6, 3.6], pbc=True)
+    data = AtomicData.from_ase(atoms, task_name="omat")
+    stress = voigt if shape != (3, 3) else voigt_6_to_full_3x3_stress(voigt)
+    data.stress = torch.tensor(stress.reshape(shape), dtype=torch.float32)
+
+    np.testing.assert_allclose(data.to_ase_single().get_stress(), voigt, rtol=1e-6)
+
+
+def test_to_ase_batch_keeps_stress():
+    voigt = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    data_list = []
+    for scale in (1.0, 2.0):
+        atoms = ase.Atoms("Cu", cell=[3.6, 3.6, 3.6], pbc=True)
+        atoms.calc = SinglePointCalculator(atoms, stress=scale * voigt)
+        data_list.append(AtomicData.from_ase(atoms, task_name="omat"))
+
+    out = atomicdata_list_to_batch(data_list).to_ase()
+
+    np.testing.assert_allclose(out[0].get_stress(), voigt, rtol=1e-6)
+    np.testing.assert_allclose(out[1].get_stress(), 2 * voigt, rtol=1e-6)
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
