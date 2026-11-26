@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-data-oc"
+dynamic = ["version", "readme"]
+description = "Code for generating adsorbate-catalyst input configurations"
+license = {text = "MIT License"}
+dependencies = [
+    "fairchem-core>=2.20.0",  # first release with fairchem.core.common.safe_pickle
+    "numpy>=2.0",
+    "scipy>=1.15.0",
+    "matplotlib",
+    "ase>=3.27",  #  this was pinned to 3.22.1
+    "pymatgen>=2023.10.3",  # this was pinned to 2023.5.10
+    "tqdm"
+]
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/oc"
+documentation = "https://facebookresearch.github.io/fairchem/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../../"
+git_describe_command = 'git describe --tags --match  fairchem_data_oc-*'
+
+[tool.hatch.build]
+directory = "../../../dist-data-oc"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/data/oc"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/data/oc"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/data/oc/README.md" }
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

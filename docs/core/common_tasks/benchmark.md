@@ -8,7 +8,7 @@ Model benchmarks involve evaluating a model on downstream property predictions i
 
 ## Available Benchmark Configurations
 
-To benchmark UMA models on standard datasets, you can find benchmark configuration files in `configs/uma/benchmark`. Example files include:
+To benchmark UMA models on standard datasets, you can find benchmark configuration files in `packages/fairchem-core/configs/uma/benchmark`. Example files include:
 - `adsorbml.yaml`
 - `hea-is2re.yaml`
 - `kappa103.yaml`
@@ -24,7 +24,7 @@ To run these UMA benchmarks you will need to obtain the target data.
 Run the benchmark script using the fairchem CLI, specifying the benchmark config:
 
 ```bash
-fairchem --config configs/uma/benchmark/benchmark.yaml
+fairchem --config packages/fairchem-core/configs/uma/benchmark/benchmark.yaml
 ```
 
 Replace `benchmark.yaml` with the desired benchmark config file.
@@ -35,7 +35,7 @@ Benchmark results are saved to a **results** directory under the **run_dir** spe
 
 ## Benchmark Configuration File Format
 
-Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `configs/uma/evaluate/`.
+Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in `packages/fairchem-core/configs/uma/evaluate/`.
 
 ### Top-Level Keys
 
@@ -108,7 +108,7 @@ If it makes sense for your benchmark metrics and are happy working with dictiona
 
 ## Inference & Training Perf Check
 
-The perf check (`configs/uma/benchmark/perf_check/`) provides lightweight benchmarks for validating inference and training fidelity and performance. Unlike the model benchmarks above, these do **not** require real datasets — they use built-in test systems or auto-generated fake data, making them ideal for quick sanity checks after configuration changes.
+The perf check (`packages/fairchem-core/configs/uma/benchmark/perf_check/`) provides lightweight benchmarks for validating inference and training fidelity and performance. Unlike the model benchmarks above, these do **not** require real datasets — they use built-in test systems or auto-generated fake data, making them ideal for quick sanity checks after configuration changes.
 
 ### Inference Benchmark
 
@@ -138,18 +138,18 @@ Three built-in test systems are used:
 
 ```bash
 # Run with default settings
-fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml
 
 # Test a specific execution mode
-fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml \
   runner.inference_settings.execution_mode=umas_fast_gpu
 
 # Enable TF32 and torch.compile
-fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml \
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml \
   runner.inference_settings.tf32=True runner.inference_settings.compile=True
 
 # Run on CPU
-fairchem -c configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/benchmark.yaml runner.device=cpu
 ```
 
 **Available overrides:**
@@ -187,18 +187,18 @@ The training benchmark compares an **fp32 baseline** against a candidate trainin
 
 ```bash
 # Run with default settings
-fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/training_benchmark.yaml
 
 # Enable bf16 candidate
-fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.bf16=True
 
 # Increase throughput measurement steps
-fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.throughput_steps=20
 
 # Run on CPU
-fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
+fairchem -c packages/fairchem-core/configs/uma/benchmark/perf_check/training_benchmark.yaml \
   runner.device=cpu
 ```
 
@@ -210,4 +210,4 @@ fairchem -c configs/uma/benchmark/perf_check/training_benchmark.yaml \
 | `runner.bf16` | `False` | Enable bf16 mixed precision for the candidate run |
 | `runner.throughput_steps` | `50` | Number of training steps for throughput measurement |
 | `runner.seed` | `42` | Random seed for reproducibility |
-| `runner.training_config` | `configs/uma/benchmark/perf_check/training_inner.yaml` | Inner training config path |
+| `runner.training_config` | `packages/fairchem-core/configs/uma/benchmark/perf_check/training_inner.yaml` | Inner training config path |

@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'src/fairchem/applications/cattsunami/**'
-      - 'packages/fairchem-applications-cattsunami/**'
+      - 'packages/fairchem-applications/fairchem-applications-cattsunami/**'
   workflow_dispatch:
 
 permissions:

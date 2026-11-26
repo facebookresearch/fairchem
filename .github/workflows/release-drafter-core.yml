@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths:
-      - 'src/fairchem/core/**'
       - 'packages/fairchem-core/**'
   workflow_dispatch:
 

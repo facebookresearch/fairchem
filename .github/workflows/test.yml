@@ -3,6 +3,12 @@ name: tests
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated suites to run: core,data-oc,data-omat,data-rest,applications,demo,lammps,integration (or all)'
+        required: false
+        type: string
+        default: all
   merge_group:
   push:
     branches: [main]
@@ -18,6 +24,10 @@ on:
 # pushes and manual triggers, we want the sha of the branch.
 env:
   CI: true
+  # Trace the checked-out source consistently across CPU and GPU jobs.
+  PYTHONPATH: ${{ github.workspace }}/packages/fairchem-core/src:${{ github.workspace }}/packages/fairchem-data/fairchem-data-oc/src:${{ github.workspace }}/packages/fairchem-data/fairchem-data-omat/src:${{ github.workspace }}/packages/fairchem-data/fairchem-data-omol/src:${{ github.workspace }}/packages/fairchem-demo-ocpapi/src
+  PYTHONFAULTHANDLER: '1'
+  PYTHONUNBUFFERED: '1'
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
@@ -26,163 +36,38 @@ env:
     }}
 
 jobs:
-  test:
-    runs-on: 32-core-ubuntu
-    # Explicit `name:` overrides GitHub Actions' default check-run name.
-    # Without it, GitHub auto-expands EVERY field of the object-typed
-    # `shard` matrix entry — including `shard.paths` — into a
-    # >100-character truncated string like
-    # `test (3.14, core, tests/core/models tests/core/graph ...`.
-    # That diverges from the short custom status emitted by
-    # multi-trigger-setup, forcing branch protection to pick one event
-    # type's names and break the others.
-    #
-    # We use a literal job key (`test`) rather than `${{ github.job }}`
-    # because `github.job` is only populated inside the execution of
-    # `steps:` per the GitHub docs, and resolves to null at job-level
-    # `name:` evaluation time. The literal matches what `github.job`
-    # would have produced and matches the multi-trigger-setup template
-    # verbatim, so the auto-generated check-run name and the custom
-    # commit status now share a single string set across all event
-    # types (push, merge_group, workflow_run, workflow_dispatch).
-    name: 'test (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
-    permissions:
-      contents: read
-      # Needed to manually set commit status
-      statuses: write
-    strategy:
-      max-parallel: 10
-      fail-fast: false
-      matrix:
-        python_version: ['3.11', '3.14']
-        # tests/perf is run by perf-test.yml on a separate cadence.
-        # tests/applications and tests/lammps are run by integration-test.yml
-        # and test_lammps_gpu respectively. Both shards below intentionally
-        # exclude those paths.
-        # YAML anchor: shard list is reused by test_cpu_sweep below.
-        # Do not reorder jobs (the alias must follow the anchor textually).
-        shard: &cpu_shards
-          - name: units
-            paths: tests/core/units
-          - name: core
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/common tests/core/datasets tests/core/evaluator tests/core/modules tests/core/scripts tests/core/launchers tests/core/test_cli.py tests/core/test_download_large_files.py tests/core/test_imports.py tests/data tests/demo
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.HEAD_SHA }}
-          # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Safe here: fork PRs from all external
-          # contributors require maintainer approval before this trusted,
-          # secret-holding run can execute (repo Actions setting).
-          # See https://gh.io/securely-using-pull_request_target
-          allow-unsafe-pr-checkout: true
-          # Optional: get full history if needed
-          fetch-depth: 0
-
-      - name: Setup
-        uses: ./.github/actions/multi-trigger-setup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
-
-      - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version:  ${{ matrix.python_version }}
-
-      - name: Cache pip
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-
-      - name: Install core dependencies and package
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            packages/fairchem-core[dev,extras] \
-            packages/fairchem-data-oc[dev] \
-            packages/fairchem-data-omat \
-            packages/fairchem-data-omol[dev] \
-            packages/fairchem-demo-ocpapi[dev] \
-            -r tests/requirements.txt # pin test packages
-
-      - name: Install torchsim (Python 3.12+)
-        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
-        run: |
-          pip install packages/fairchem-core[torchsim]
-
-      - name: Install additional dependencies
-        if: matrix.shard.name == 'core'
-        run: |
-          wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
-          tar -xzvf v20.15.0.tar.gz
-          cd packmol-20.15.0
-          ./configure
-          make
-          echo "$(readlink -f .)" >> $GITHUB_PATH
-
-      - name: Download large test files
-        if: matrix.shard.name == 'core'
-        run: coverage run -m fairchem.core.scripts.download_large_files oc
-
-      - name: Core tests (${{ matrix.shard.name }})
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        # --exclude-models deselects tests locked to sweep models and
-        # removes sweep models from all-models parametrization. The
-        # sweep jobs (test_cpu_sweep) handle those models.
-        run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
-
-      - name: Serial CPU tests (${{ matrix.shard.name }})
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --exclude-models=uma-s-1p1,uma-s-1p2 --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial-${{ matrix.shard.name }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
-
-      - if: ${{ matrix.python_version == '3.14' }}
-        name: codecov-coverage
-        uses: codecov/codecov-action@v7
-        with:
-          fail_ci_if_error: false
-          files: ./coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          verbose: true
-
-      - if: ${{ matrix.python_version == '3.14' }}
-        name: codecov-test-results
-        uses: codecov/test-results-action@v1
-        with:
-          files: ./junit-${{ matrix.shard.name }}.xml,./junit-serial-${{ matrix.shard.name }}.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          commit_parent: ${{ env.HEAD_SHA }}
-          verbose: true
-
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/multi-trigger-cleanup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
-
   test_cpu_sweep:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    timeout-minutes: 120
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
+      PARALLEL_TIMEOUT_SECONDS: 1200
+      SERIAL_TIMEOUT_SECONDS: 2700
     runs-on: 32-core-ubuntu
     # See `test` job above for the `name:` rationale (literal job key,
     # not `${{ github.job }}`, to avoid the null-at-job-level pitfall).
     name: 'test_cpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
     permissions:
       contents: read
-      statuses: write
     strategy:
       fail-fast: false
       matrix:
         python_version: ['3.14']
         sweep_model: [uma-s-1p1, uma-s-1p2]
-        shard: *cpu_shards
+        shard:
+          - name: units
+            paths: packages/fairchem-core/tests/units
+          - name: core
+            paths: packages/fairchem-core/tests/models packages/fairchem-core/tests/graph packages/fairchem-core/tests/calculate packages/fairchem-core/tests/components packages/fairchem-core/tests/common packages/fairchem-core/tests/datasets packages/fairchem-core/tests/evaluator packages/fairchem-core/tests/modules packages/fairchem-core/tests/scripts packages/fairchem-core/tests/launchers packages/fairchem-core/tests/test_cli.py packages/fairchem-core/tests/test_download_large_files.py packages/fairchem-core/tests/test_imports.py packages/fairchem-data/fairchem-data-oc/tests packages/fairchem-data/fairchem-data-omat/tests packages/fairchem-demo-ocpapi/tests/unit
 
     steps:
       - name: Checkout code
@@ -190,14 +75,9 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # See the checkout step in the `test` job for why this is set
-          # and why it is safe (external-contributor approval gate).
+          # and why it is safe (external-testing required-reviewer gate).
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
-
-      - name: Setup
-        uses: ./.github/actions/multi-trigger-setup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -218,11 +98,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install \
             packages/fairchem-core[dev,extras] \
-            packages/fairchem-data-oc[dev] \
-            packages/fairchem-data-omat \
-            packages/fairchem-data-omol[dev] \
+            packages/fairchem-data/fairchem-data-oc[dev] \
+            packages/fairchem-data/fairchem-data-omat \
+            packages/fairchem-data/fairchem-data-omol[dev] \
             packages/fairchem-demo-ocpapi[dev] \
-            -r tests/requirements.txt # pin test packages
+            -r packages/fairchem-core/tests/integration/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
@@ -241,13 +121,13 @@ jobs:
 
       - name: Download large test files
         if: matrix.shard.name == 'core'
-        run: coverage run -m fairchem.core.scripts.download_large_files oc
+        run: coverage run --rcfile=packages/fairchem-core/pyproject.toml -m fairchem.core.common.download_large_files oc
 
       - name: Sweep CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${PARALLEL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -n auto --maxfail=0 -m "not subprocess and not serial and not gpu" ${{ matrix.shard.paths }} --durations=0 -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
 
       - name: Sweep serial CPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # The core shard has no serial @pretrained tests, so the sweep
@@ -257,7 +137,20 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=tests/demo/ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+          timeout --verbose --signal=KILL "${SERIAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 -m "serial and not gpu" ${{ matrix.shard.paths }} -vv --ignore=packages/fairchem-demo-ocpapi/tests/integration/ --sweep-model=${{ matrix.sweep_model }} --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-sweep-serial-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
@@ -268,20 +161,27 @@ jobs:
           commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
 
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/multi-trigger-cleanup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
-
   test_gpu:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    timeout-minutes: 90
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
+      GENERAL_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'units' && 1800 || 2700 }}
+      COMPILE_TIMEOUT_SECONDS: 1200
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
     permissions:
       contents: read
-      # Needed to manually set commit status
-      statuses: write
     strategy:
       fail-fast: false
       matrix:
@@ -290,9 +190,9 @@ jobs:
         # Do not reorder jobs (the alias must follow the anchor textually).
         shard: &gpu_shards
           - name: models
-            paths: tests/core/models tests/core/graph tests/core/calculate tests/core/components tests/core/datasets tests/core/common tests/core/scripts
+            paths: packages/fairchem-core/tests/models packages/fairchem-core/tests/graph packages/fairchem-core/tests/calculate packages/fairchem-core/tests/components packages/fairchem-core/tests/datasets packages/fairchem-core/tests/common packages/fairchem-core/tests/scripts
           - name: units
-            paths: tests/core/units
+            paths: packages/fairchem-core/tests/units
 
     steps:
       - name: Checkout code
@@ -300,18 +200,12 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Safe here: fork PRs from all external
-          # contributors require maintainer approval before this trusted,
-          # secret-holding run can execute (repo Actions setting).
+          # workflow_run jobs. Fork runs use the external-testing environment,
+          # whose required reviewers approve this commit before checkout.
           # See https://gh.io/securely-using-pull_request_target
           allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
-
-      - name: Setup
-        uses: ./.github/actions/multi-trigger-setup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -322,9 +216,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras] \
-          packages/fairchem-data-omol[dev] \
-          packages/fairchem-data-omat \
-          -r tests/requirements.txt # pin test packages
+          packages/fairchem-data/fairchem-data-omol[dev] \
+          packages/fairchem-data/fairchem-data-omat \
+          -r packages/fairchem-core/tests/integration/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
@@ -339,7 +233,7 @@ jobs:
         # removes sweep models from all-models parametrization. The
         # sweep jobs (test_gpu_sweep) handle those models.
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --eager-inference --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
 
       - name: Core GPU compile tests (${{ matrix.shard.name }})
         # compile_gpu tests exist in both models and units shards.
@@ -347,8 +241,25 @@ jobs:
         # UMA-S) run in test_gpu_sweep, not here.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TORCHINDUCTOR_COMPILE_THREADS: 2
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${COMPILE_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --exclude-models=uma-s-1p1,uma-s-1p2 -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-compile-${{ matrix.shard.name }}.xml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
@@ -359,19 +270,27 @@ jobs:
           commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
 
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/multi-trigger-cleanup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }})'
-
   test_gpu_sweep:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    timeout-minutes: 120
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      # Python monitoring avoids per-line tracing overhead in model tests.
+      COVERAGE_CORE: sysmon
+      GENERAL_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'units' && 2700 || 4500 }}
+      COMPILE_TIMEOUT_SECONDS: 1200
     runs-on: 4-core-ubuntu-gpu-t4
     # See `test` job above for the `name:` rationale.
     name: 'test_gpu_sweep (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
     permissions:
       contents: read
-      statuses: write
     strategy:
       fail-fast: false
       matrix:
@@ -385,14 +304,9 @@ jobs:
         with:
           ref: ${{ env.HEAD_SHA }}
           # See the checkout step in the `test` job for why this is set
-          # and why it is safe (external-contributor approval gate).
+          # and why it is safe (external-testing required-reviewer gate).
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
-
-      - name: Setup
-        uses: ./.github/actions/multi-trigger-setup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -403,9 +317,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras] \
-          packages/fairchem-data-omol[dev] \
-          packages/fairchem-data-omat \
-          -r tests/requirements.txt # pin test packages
+          packages/fairchem-data/fairchem-data-omol[dev] \
+          packages/fairchem-data/fairchem-data-omat \
+          -r packages/fairchem-core/tests/integration/requirements.txt # pin test packages
 
       - name: Install torchsim (Python 3.12+)
         if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' || matrix.python_version == '3.14' }}
@@ -416,15 +330,32 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m "gpu and not compile_gpu" --eager-inference --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-sweep-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
 
       - name: Sweep compile GPU tests (${{ matrix.shard.name }}, ${{ matrix.sweep_model }})
         # Covers @compile_gpu + @pretrained-locked-to-UMA-S tests that
         # the base test_gpu compile step excludes via --exclude-models.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TORCHINDUCTOR_COMPILE_THREADS: 2
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          OPENBLAS_NUM_THREADS: 1
         run: |
-          NCCL_DEBUG=INFO pytest ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${COMPILE_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 ${{ matrix.shard.paths }} --durations=0 -vv -m compile_gpu --sweep-model=${{ matrix.sweep_model }} -c ./packages/fairchem-core/pyproject.toml --cov-config=packages/fairchem-core/pyproject.toml --cov=packages/fairchem-core/src/fairchem/core --cov-append --cov-report= --junitxml=junit-gpu-sweep-compile-${{ matrix.shard.name }}-${{ matrix.sweep_model }}.xml --suppress-no-test-exit-code
+
+      - name: Generate coverage report
+        if: ${{ always() && hashFiles('.coverage') != '' }}
+        run: python -m coverage xml --rcfile=packages/fairchem-core/pyproject.toml -o coverage.xml
+
+      - name: codecov-coverage
+        if: ${{ always() && hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: codecov-test-results
         if: always()
@@ -435,22 +366,28 @@ jobs:
           commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
 
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/multi-trigger-cleanup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }}, ${{ matrix.shard.name }}, ${{ matrix.sweep_model }})'
-
   test_lammps_gpu:
+    needs: changes
+    if: ${{ needs.changes.outputs.lammps == 'true' }}
+    timeout-minutes: 90
+    # Addresses CodeQL actions/untrusted-checkout/critical by making the fork
+    # approval gate explicit: external-testing requires maintainer review before
+    # checkout and release of HF_TOKEN; repository runs use internal-testing.
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      GENERAL_TIMEOUT_SECONDS: 1800
     runs-on: 4-core-ubuntu-gpu-t4
     permissions:
       contents: read
-      # Needed to manually set commit status
-      statuses: write
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.14']
+        # 3.13: fairchem-lammps declares <3.14 until hydra-core
+        # supports Python 3.14 (see packages/fairchem-lammps/pyproject.toml).
+        python_version: ['3.13']
 
     steps:
       - uses: actions/checkout@v7
@@ -458,25 +395,19 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.14 # Specifies packages to install into the new environment
+          create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           ref: ${{ env.HEAD_SHA }}
           # Required since actions/checkout began refusing fork PR code in
-          # workflow_run jobs. Safe here: fork PRs from all external
-          # contributors require maintainer approval before this trusted,
-          # secret-holding run can execute (repo Actions setting).
+          # workflow_run jobs. Fork runs use the external-testing environment,
+          # whose required reviewers approve this commit before checkout.
           # See https://gh.io/securely-using-pull_request_target
           allow-unsafe-pr-checkout: true
           # Optional: get full history if needed
           fetch-depth: 0
-
-      - name: Setup
-        uses: ./.github/actions/multi-trigger-setup
-        with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v6
@@ -490,17 +421,413 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras] \
           packages/fairchem-lammps \
-          -r tests/requirements.txt # pin test packages
+          -r packages/fairchem-core/tests/integration/requirements.txt # pin test packages
 
       - name: Core GPU tests
         shell: micromamba-shell {0}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
+          NCCL_DEBUG=INFO timeout --verbose --signal=KILL "${GENERAL_TIMEOUT_SECONDS}s" pytest -o faulthandler_timeout=300 packages/fairchem-lammps/tests --durations=0 -vv -m gpu -c packages/fairchem-lammps/pyproject.toml
 
-      - name: Cleanup
-        if: always()
-        uses: ./.github/actions/multi-trigger-cleanup
+  # --- Change-scoped package tests (branch-protection gate) ---
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      blocked: ${{ steps.select.outputs.blocked }}
+      core: ${{ steps.select.outputs.core }}
+      data-oc: ${{ steps.select.outputs.data-oc }}
+      data-omat: ${{ steps.select.outputs.data-omat }}
+      data-rest: ${{ steps.select.outputs.data-rest }}
+      applications: ${{ steps.select.outputs.applications }}
+      demo: ${{ steps.select.outputs.demo }}
+      lammps: ${{ steps.select.outputs.lammps }}
+      integration: ${{ steps.select.outputs.integration }}
+    steps:
+      # Show `tests-passed` as pending on the tested commit right away;
+      # the tests-passed job reports the final state.
+      - name: Report tests-passed pending
+        if: ${{ github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+        uses: actions/github-script@v7
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
-          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.SHA,
+              state: 'pending',
+              context: 'tests-passed',
+              target_url: process.env.TARGET_URL,
+            });
+
+      - if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Merge-queue runs need a checkout for paths-filter to diff
+      # the queue's merge commit against its base.
+      - if: ${{ github.event_name == 'merge_group' }}
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # On workflow_run the workflow definition comes from the
+      # default branch (a PR cannot rewrite its own test gate).
+      # Detect changed files by diffing the PR head against the
+      # default branch, mirroring the paths-filter outputs below.
+      - if: ${{ github.event_name == 'workflow_run' }}
+        id: filter_wr
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.event.repository.default_branch }}"
+          # Fetch the PR head by SHA: the checkout above only has branches
+          # and tags, so a fork PR's commit is otherwise missing. Nothing
+          # from the PR is checked out or executed here.
+          git fetch origin "$HEAD_SHA"
+          files=$(git diff --name-only "origin/${{ github.event.repository.default_branch }}...$HEAD_SHA")
+          echo "$files"
+          hit() { grep -qE "$1" <<< "$files"; }
+          {
+            hit '^\.github/' && echo "github-changed=true" || echo "github-changed=false"
+            if hit '^(pyproject\.toml|uv\.lock|ruff\.toml|\.github/workflows/test\.yml|\.github/workflows/_test-package\.yml|packages/fairchem-core/tests/integration/requirements\.txt)$'; then echo "shared=true"; else echo "shared=false"; fi
+            if hit '^packages/fairchem-core/'; then echo "core=true"; else echo "core=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-oc/'; then echo "data-oc=true"; else echo "data-oc=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-omat/'; then echo "data-omat=true"; else echo "data-omat=false"; fi
+            if hit '^packages/fairchem-data/fairchem-data-(odac|omc|omol)/'; then echo "data-rest=true"; else echo "data-rest=false"; fi
+            if hit '^packages/fairchem-applications/'; then echo "applications=true"; else echo "applications=false"; fi
+            if hit '^packages/fairchem-demo-ocpapi/'; then echo "demo=true"; else echo "demo=false"; fi
+            if hit '^packages/fairchem-lammps/'; then echo "lammps=true"; else echo "lammps=false"; fi
+          } >> "$GITHUB_OUTPUT"
+
+      - if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+          filters: |
+            shared:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'ruff.toml'
+              - '.github/workflows/test.yml'
+              - '.github/workflows/_test-package.yml'
+              - 'packages/fairchem-core/tests/integration/requirements.txt'
+            core:
+              - 'packages/fairchem-core/**'
+            data-oc:
+              - 'packages/fairchem-data/fairchem-data-oc/**'
+            data-omat:
+              - 'packages/fairchem-data/fairchem-data-omat/**'
+            data-rest:
+              - 'packages/fairchem-data/fairchem-data-odac/**'
+              - 'packages/fairchem-data/fairchem-data-omc/**'
+              - 'packages/fairchem-data/fairchem-data-omol/**'
+            applications:
+              - 'packages/fairchem-applications/**'
+            demo:
+              - 'packages/fairchem-demo-ocpapi/**'
+            lammps:
+              - 'packages/fairchem-lammps/**'
+
+      # Resolve the final per-suite booleans for every trigger type
+      # in one place: push runs everything; workflow_dispatch runs
+      # the suites named in `only` (`all` = everything); PR /
+      # merge-queue runs use the path filters and run ONLY the
+      # suites whose own files changed. In particular a fairchem-core
+      # change does not fan out to the distributions that import it:
+      # those get far less maintenance, and gating every core PR on
+      # their suites slows development. Full coverage comes from
+      # push-to-main runs, manual dispatches, and build/release
+      # workflows instead of the required status checks.
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          ONLY: ${{ inputs.only }}
+          SHARED: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.shared || steps.filter.outputs.shared }}
+          GITHUB_CHANGED: ${{ steps.filter_wr.outputs.github-changed }}
+          CORE: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.core || steps.filter.outputs.core }}
+          DATA_OC: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-oc || steps.filter.outputs.data-oc }}
+          DATA_OMAT: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-omat || steps.filter.outputs.data-omat }}
+          DATA_REST: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.data-rest || steps.filter.outputs.data-rest }}
+          APPLICATIONS: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.applications || steps.filter.outputs.applications }}
+          DEMO: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.demo || steps.filter.outputs.demo }}
+          LAMMPS: ${{ github.event_name == 'workflow_run' && steps.filter_wr.outputs.lammps || steps.filter.outputs.lammps }}
+        run: |
+          set -euo pipefail
+          declare -A run=()
+          if [ "$EVENT" = "push" ]; then
+            # Everything except the unmaintained ocpapi integration
+            # suite (see the note in the PR branch below).
+            for s in core data-oc data-omat data-rest applications demo lammps; do run[$s]=true; done
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ -z "$ONLY" ] || [ "$ONLY" = "all" ]; then
+              for s in core data-oc data-omat data-rest applications demo lammps integration; do run[$s]=true; done
+            else
+              IFS=',' read -ra wanted <<< "$ONLY"
+              for s in "${wanted[@]}"; do run["${s// /}"]=true; done
+            fi
+          else
+            # A PR that edits anything under .github/ runs no tests
+            # at all: the gate fails and a maintainer must invoke
+            # this workflow manually (workflow_dispatch, which uses
+            # the branch's own workflow file) after review.
+            if [ "${GITHUB_CHANGED:-false}" = "true" ]; then
+              echo "blocked=true" >> "$GITHUB_OUTPUT"
+              for s in core data-oc data-omat data-rest applications demo lammps integration; do
+                echo "$s=false" >> "$GITHUB_OUTPUT"
+              done
+              echo "Selected suites: none (.github changed; manual dispatch required)"
+              exit 0
+            fi
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            run[core]="${CORE:-false}"
+            # Root workspace files (lockfile, root pyproject, ruff config,
+            # pinned test requirements) select core only -- no fan-out --
+            # so such a PR is still tested instead of passing vacuously.
+            if [ "${SHARED:-false}" = "true" ]; then run[core]=true; fi
+            run[data-oc]="${DATA_OC:-false}"
+            run[data-omat]="${DATA_OMAT:-false}"
+            run[data-rest]="${DATA_REST:-false}"
+            run[applications]="${APPLICATIONS:-false}"
+            run[demo]="${DEMO:-false}"
+            run[lammps]="${LAMMPS:-false}"
+            # NOTE: the ocpapi integration suite deliberately does
+            # NOT run on core changes. fairchem-demo-ocpapi is
+            # unmaintained; its integration tests run only when the
+            # demo package itself changes (or when explicitly
+            # selected via workflow_dispatch).
+            if [ "${DEMO:-false}" = "true" ]; then run[integration]=true; fi
+          fi
+          # Selecting demo on dispatch also selects its integration suite.
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "${run[demo]:-false}" = "true" ]; then run[integration]=true; fi
+          echo "blocked=false" >> "$GITHUB_OUTPUT"
+          for s in core data-oc data-omat data-rest applications demo lammps integration; do
+            echo "$s=${run[$s]:-false}" >> "$GITHUB_OUTPUT"
+          done
+          echo "Selected suites: ${!run[@]}"
+
+  test-core:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    permissions:
+      contents: read
+    # Sharded: the whole core suite in one job starves the runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: units
+            paths: packages/fairchem-core/tests/units
+          - name: main
+            paths: packages/fairchem-core/tests/models packages/fairchem-core/tests/graph packages/fairchem-core/tests/calculate packages/fairchem-core/tests/components packages/fairchem-core/tests/common packages/fairchem-core/tests/datasets packages/fairchem-core/tests/evaluator packages/fairchem-core/tests/modules packages/fairchem-core/tests/scripts packages/fairchem-core/tests/launchers packages/fairchem-core/tests/test_cli.py packages/fairchem-core/tests/test_download_large_files.py packages/fairchem-core/tests/test_imports.py
+          - name: regression
+            paths: packages/fairchem-core/tests/regression_suite
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-core
+      extras: dev,extras
+      test-path: ${{ matrix.shard.paths }}
+      cov-module: fairchem.core
+      pytest-args: '-n auto -m "not gpu and not subprocess and not serial" --exclude-models=uma-s-1p1,uma-s-1p2'
+      serial-pytest-args: '-m "serial and not gpu" --exclude-models=uma-s-1p1,uma-s-1p2'
+      install-torchsim: true
+    secrets: inherit
+
+  test-data-oc:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-oc == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-oc
+      test-path: packages/fairchem-data/fairchem-data-oc/tests
+      cov-module: fairchem.data.oc
+      install-packmol: true
+    secrets: inherit
+
+  test-data-omat:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-omat == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-data/fairchem-data-omat
+      test-path: packages/fairchem-data/fairchem-data-omat/tests
+      cov-module: fairchem.data.omat
+    secrets: inherit
+
+  # odac / omc / omol and the applications distributions have no
+  # runnable test suites today (cattsunami's is bit-rotted; see PR
+  # #2378 audit) -- they still get a wheel build + contents check.
+  build-data-rest:
+    needs: changes
+    if: ${{ needs.changes.outputs.data-rest == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-data/fairchem-data-odac
+            cov-module: fairchem.data.odac
+          - package-dir: packages/fairchem-data/fairchem-data-omc
+            cov-module: fairchem.data.omc
+          - package-dir: packages/fairchem-data/fairchem-data-omol
+            cov-module: fairchem.data.omol
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  build-applications:
+    needs: changes
+    if: ${{ needs.changes.outputs.applications == 'true' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-dir: packages/fairchem-applications/fairchem-applications-adsorbml
+            cov-module: fairchem.applications.AdsorbML
+          - package-dir: packages/fairchem-applications/fairchem-applications-cattsunami
+            cov-module: fairchem.applications.cattsunami
+          - package-dir: packages/fairchem-applications/fairchem-applications-fastcsp
+            cov-module: fairchem.applications.fastcsp
+          - package-dir: packages/fairchem-applications/fairchem-applications-ocx
+            cov-module: fairchem.applications.ocx
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: ${{ matrix.package-dir }}
+      cov-module: ${{ matrix.cov-module }}
+    secrets: inherit
+
+  test-demo:
+    needs: changes
+    if: ${{ needs.changes.outputs.demo == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-demo-ocpapi
+      test-path: packages/fairchem-demo-ocpapi/tests/unit
+      cov-module: fairchem.demo.ocpapi
+    secrets: inherit
+
+  test-lammps:
+    needs: changes
+    if: ${{ needs.changes.outputs.lammps == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test-package.yml
+    with:
+      package-dir: packages/fairchem-lammps
+      extras: ''
+      extra-packages: lammps
+      apt-packages: mpich
+      # hydra-core is incompatible with Python 3.14's argparse
+      # (LazyCompletionHelp), which breaks the @hydra.main lmp_fc
+      # entrypoint; 3.13 is the newest Python where it works (and
+      # fairchem-lammps declares <3.14 until hydra supports 3.14).
+      python-versions: '["3.11", "3.13"]'
+      test-path: packages/fairchem-lammps/tests
+      cov-module: fairchem.lammps
+      pytest-args: '-m "not gpu and not pretrained"'
+    secrets: inherit
+
+  # Integration suite (ocpapi): fairchem-demo-ocpapi is
+  # unmaintained, so this runs only when the demo package itself
+  # changes, or when explicitly selected on workflow_dispatch
+  # (expensive ocpapi cases stay skipped, as before). It
+  # deliberately does not run on fairchem-core changes.
+  integration:
+    needs: changes
+    if: ${{ needs.changes.outputs.integration == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install core dependencies and packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e packages/fairchem-core[dev]
+          pip install -e packages/fairchem-data/fairchem-data-oc[dev]
+          pip install -e packages/fairchem-demo-ocpapi[dev]
+          pip install -e packages/fairchem-applications/fairchem-applications-cattsunami
+          pip install -r packages/fairchem-core/tests/integration/requirements.txt
+
+      - name: Integration tests
+        run: |
+          pytest packages/fairchem-demo-ocpapi/tests/integration/ \
+            --skip-ocpapi-integration \
+            -c ./packages/fairchem-core/pyproject.toml
+
+  # Single required status check for branch protection: skipped
+  # package jobs count as success.
+  tests-passed:
+    if: ${{ always() }}
+    needs: [changes, test_cpu_sweep, test_gpu, test_gpu_sweep, test_lammps_gpu, test-core, test-data-oc, test-data-omat, build-data-rest, build-applications, test-demo, test-lammps, integration]
+    permissions:
+      statuses: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if .github was edited
+        if: ${{ needs.changes.outputs.blocked == 'true' }}
+        run: |
+          echo "This PR edits files under .github/, so no tests were run."
+          echo "A maintainer must review the changes and invoke the tests workflow manually (workflow_dispatch) from the PR branch."
+          exit 1
+      - name: Check results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "One or more jobs failed or were cancelled: ${{ toJSON(needs.*.result) }}"
+          exit 1
+      - run: echo "All required package tests passed or were skipped."
+
+      # workflow_run and workflow_dispatch runs attach their check runs
+      # to the default branch / dispatched ref, not to the PR head, so
+      # the required `tests-passed` check would never appear on the PR.
+      # Report it as a commit status instead (inline script, no
+      # checkout, so PR code cannot alter it).
+      - name: Report tests-passed on the tested commit
+        if: ${{ always() && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/github-script@v7
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const state = process.env.JOB_STATUS === 'success' ? 'success'
+              : process.env.JOB_STATUS === 'failure' ? 'failure' : 'error';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.SHA,
+              state,
+              context: 'tests-passed',
+              target_url: process.env.TARGET_URL,
+            });

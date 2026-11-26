@@ -1,6 +1,6 @@
 pip install \
     packages/fairchem-core[docs,adsorbml,extras] \
-    packages/fairchem-data-oc[dev] \
-    packages/fairchem-applications-cattsunami \
-    packages/fairchem-data-omat \
+    packages/fairchem-data/fairchem-data-oc[dev] \
+    packages/fairchem-applications/fairchem-applications-cattsunami \
+    packages/fairchem-data/fairchem-data-omat \
     -r tests/requirements.txt

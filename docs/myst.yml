@@ -35,6 +35,7 @@ project:
             - file: core/common_tasks/ase_dataset_creation.md
             - file: core/common_tasks/training.md
             - file: core/common_tasks/evaluation.md
+            - file: core/common_tasks/regression_suite.md
             - file: core/common_tasks/fine_tuning.md
             - file: core/common_tasks/workflows.md
         - file: core/generative_models.md

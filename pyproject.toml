@@ -1,0 +1,93 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+#
+# Root workspace project (virtual): this file makes the repository a
+# single uv workspace. It is not itself published. Each distribution
+# under packages/ keeps its own pyproject.toml with hatchling as the
+# build backend, so the usual pip workflows (e.g.
+# `pip install -e packages/fairchem-core[dev]`) keep working
+# unchanged; pip simply ignores the [tool.uv] tables.
+#
+# Install control (uv only): `uv sync` installs just the default
+# distribution (fairchem-core). Add groups with extras, e.g.:
+#
+#   uv sync --extra data           # + fairchem.data.*
+#   uv sync --extra applications   # + fairchem.applications.*
+#   uv sync --extra lammps         # + fairchem-lammps (see note below)
+#   uv sync --all-extras           # everything
+#
+# Development dependencies (pytest, ruff, ...) come from
+# fairchem-core's dev/extras extras via the dev group:
+#
+#   uv sync --group dev
+#
+# Torch builds are selected with fairchem-core's cpu/cuXXX
+# dependency groups; from the root, select them per package:
+#
+#   uv sync --package fairchem-core --no-default-groups --group cpu
+#
+# Note: fairchem-lammps is opt-in because LAMMPS itself is an
+# external, non-pip dependency: without a system or conda LAMMPS
+# install the `lmp_fc` entry point cannot run. fairchem-lammps
+# also declares Python <3.14 (its @hydra.main entry point is
+# incompatible with hydra-core on 3.14); keeping it out of the
+# default install keeps the rest of the workspace usable on 3.14.
+
+[project]
+name = "fairchem"
+version = "0.0.0"
+description = "Workspace root for the fairchem monorepo (not published)"
+requires-python = ">=3.11, <3.15"
+dependencies = [
+    "fairchem-core",
+]
+
+[project.optional-dependencies]
+lammps = [
+    "fairchem-lammps",
+]
+data = [
+    "fairchem-data-oc",
+    "fairchem-data-odac",
+    "fairchem-data-omat",
+    "fairchem-data-omc",
+    "fairchem-data-omol",
+]
+applications = [
+    "fairchem-applications-adsorbml",
+    "fairchem-applications-cattsunami",
+    "fairchem-applications-fastcsp",
+    "fairchem-applications-ocx",
+]
+demo = [
+    "fairchem-demo-ocpapi",
+]
+
+[dependency-groups]
+dev = ["fairchem-core[dev,extras]"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "packages/fairchem-data/*", "packages/fairchem-applications/*"]
+# fairchem-core-numpy126 publishes the same distribution name as
+# fairchem-core (a build variant with different pins), so it cannot
+# be a workspace member alongside it.
+exclude = ["packages/fairchem-core-numpy126", "packages/fairchem-data", "packages/fairchem-applications"]
+
+[tool.uv.sources]
+fairchem-core = { workspace = true }
+fairchem-data-oc = { workspace = true }
+fairchem-data-odac = { workspace = true }
+fairchem-data-omat = { workspace = true }
+fairchem-data-omc = { workspace = true }
+fairchem-data-omol = { workspace = true }
+fairchem-applications-adsorbml = { workspace = true }
+fairchem-applications-cattsunami = { workspace = true }
+fairchem-applications-fastcsp = { workspace = true }
+fairchem-applications-ocx = { workspace = true }
+fairchem-demo-ocpapi = { workspace = true }
+fairchem-lammps = { workspace = true }
