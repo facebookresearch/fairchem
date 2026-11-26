@@ -1,0 +1,18 @@
+# Ablation: compilation alone on the general backend with merged MOLE.
+label: merged-fp32-compiled
+# A merged MOLE model serves one composition, so each structure gets its own.
+predictor_scope: structure
+# AOTAutograd's donated-buffer backward cannot construct the double-backward
+# graph required by the autograd Hessian.
+unsupported_suites: [autograd-frequencies]
+inference_settings:
+  _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+  base_precision_dtype: float32
+  tf32: false
+  compile: true
+  execution_mode: general
+  merge_mole: true
+  activation_checkpointing: false
+  external_graph_gen: false
+  internal_graph_gen_version: 2
+  hessian_vmap: false

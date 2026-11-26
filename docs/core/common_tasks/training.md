@@ -137,7 +137,7 @@ Training, evaluation, and inference are all defined in the [mlip unit](https://g
 
 To train a model, we need to initialize a [TrainRunner](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/train/train_runner.py) with a [MLIPTrainEvalUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py).
 
-Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage [config groups](https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/) syntax in Hydra to organize UMA training into the [following sections](https://github.com/facebookresearch/fairchem/tree/main/configs/uma/training_release):
+Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage [config groups](https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/) syntax in Hydra to organize UMA training into the [following sections](https://github.com/facebookresearch/fairchem/tree/main/packages/fairchem-core/configs/uma/training_release):
 
 - **backbone** - selects the specific backbone architecture (e.g., uma-sm, uma-md, uma-large)
 - **cluster** - quickly switch settings between different SLURM clusters or local environment
@@ -154,11 +154,11 @@ We can switch between different combinations of configs easily this way!
 **Get training started locally using local settings and the debug dataset:**
 
 ```bash
-fairchem -c configs/uma/training_release/uma_sm_direct_pretrain.yaml cluster=h100_local dataset=uma_debug
+fairchem -c packages/fairchem-core/configs/uma/training_release/uma_sm_direct_pretrain.yaml cluster=h100_local dataset=uma_debug
 ```
 
 **Train UMA conservative with 16 nodes on SLURM:**
 
 ```bash
-fairchem -c configs/uma/training_release/uma_sm_conserve_finetune.yaml cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
+fairchem -c packages/fairchem-core/configs/uma/training_release/uma_sm_conserve_finetune.yaml cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
 ```
