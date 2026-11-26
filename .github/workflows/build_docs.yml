@@ -19,7 +19,51 @@ env:
   BASE_URL: ''
 
 jobs:
+  # Same rule as test.yml: a PR that edits anything under .github/ gets
+  # no automatic docs build, since the build checks out the PR and runs
+  # its copy of .github/actions with secrets. A maintainer dispatches
+  # this workflow on the PR branch after review. This job never checks
+  # out or runs PR code.
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Uses the compare API only: nothing from the PR is fetched,
+      # checked out or executed. The API lists at most 300 files, so a
+      # larger PR is treated as blocked (fail closed).
+      - name: Block PRs that edit .github/
+        if: ${{ github.event_name == 'workflow_run' }}
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/compare/$DEFAULT_BRANCH...$HEAD_SHA" --jq '.files[].filename')
+          count=$(grep -c . <<< "$files" || true)
+          if [ "$count" -ge 300 ] || grep -q '^\.github/' <<< "$files"; then
+            gh api "repos/$REPO/statuses/$HEAD_SHA" \
+              -f state=failure -f context=build \
+              -f description='.github/ edited: maintainer dispatch required' \
+              -f target_url="$TARGET_URL" > /dev/null
+            echo "This PR edits files under .github/ (or is too large to check), so the docs build does not run automatically."
+            echo "A maintainer must review the changes and dispatch this workflow from the PR branch."
+            exit 1
+          fi
+
   build:
+    needs: guard
+    # Checks out and runs PR code with HF_TOKEN: fork PRs go through the
+    # external-testing environment, whose required reviewers approve the
+    # commit first (same gate as the test jobs).
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
     runs-on: 4-core-ubuntu-gpu-t4
     permissions:
       contents: read
