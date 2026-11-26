@@ -9,6 +9,14 @@ on:
   merge_group:
 
 jobs:
+  uv-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Check the workspace lockfile is fresh
+        run: uv lock --check
+
   lint:
     runs-on: ubuntu-latest
     strategy:
@@ -27,5 +35,5 @@ jobs:
       - name: ruff
         run: |
           ruff --version
-          ruff check src # tests has a lot of issues , TODO
-          ruff format --check src # tests
+          ruff check packages/fairchem-core/src packages/fairchem-data/fairchem-data-oc/src # tests has a lot of issues , TODO
+          ruff format --check packages/fairchem-core/src packages/fairchem-data/fairchem-data-oc/src # tests

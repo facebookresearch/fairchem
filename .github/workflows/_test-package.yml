@@ -1,0 +1,249 @@
+name: test-package
+
+# Reusable per-distribution test + build check. Called by test.yml
+# only for distributions whose own files changed, so PRs do not pay
+# for the whole repo.
+
+on:
+  workflow_call:
+    inputs:
+      package-dir:
+        description: Distribution directory, e.g. packages/fairchem-data/fairchem-data-oc
+        required: true
+        type: string
+      test-path:
+        description: Test directory to run; empty means build-only (distribution has no tests)
+        required: false
+        type: string
+        default: ''
+      cov-module:
+        description: Dotted module the wheel must ship, e.g. fairchem.data.oc
+        required: true
+        type: string
+      extras:
+        description: Extras to install for the distribution under test
+        required: false
+        type: string
+        default: dev
+      apt-packages:
+        description: Additional system packages to install (apt) for the test env
+        required: false
+        type: string
+        default: ''
+      extra-packages:
+        description: Additional PyPI packages to install for the test env
+        required: false
+        type: string
+        default: ''
+      install-packmol:
+        description: Build the packmol binary from source (fairchem-data-oc tests shell out to it)
+        required: false
+        type: boolean
+        default: false
+      python-versions:
+        description: JSON list of Python versions to test on
+        required: false
+        type: string
+        default: '["3.11", "3.14"]'
+      pytest-args:
+        description: Extra arguments for pytest
+        required: false
+        type: string
+        default: '-m "not gpu"'
+      serial-pytest-args:
+        description: If set, a second, non-parallel pytest run with these arguments (e.g. serial-marked tests)
+        required: false
+        type: string
+        default: ''
+      install-torchsim:
+        description: Install fairchem-core[torchsim] on Python >= 3.12
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CI: true
+
+jobs:
+  test:
+    if: ${{ inputs.test-path != '' }}
+    timeout-minutes: 90
+    # Runs PR code: fork PRs go through the external-testing environment,
+    # whose required reviewers approve the commit before checkout and
+    # release of secrets (same gate as the legacy test jobs).
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      COVERAGE_CORE: ${{ matrix.python_version == '3.14' && 'sysmon' || 'ctrace' }}
+      # Only Python 3.14 reports are uploaded; skip 3.11 tracing.
+      PYTEST_ADDOPTS: ${{ matrix.python_version == '3.11' && '--no-cov' || '' }}
+    # Matches the legacy CPU test jobs; the suites starve on
+    # ubuntu-latest's 4 cores / 16 GB.
+    runs-on: 32-core-ubuntu
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ${{ fromJSON(inputs.python-versions) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Under workflow_run (how PRs run) the default ref is the
+          # default branch; test the PR's head commit instead.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Required since actions/checkout refuses fork PR code in
+          # workflow_run jobs; forks are gated by external-testing above.
+          allow-unsafe-pr-checkout: true
+          fetch-depth: 0 # tags are needed for hatch-vcs versioning
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Cache pip
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-py${{ matrix.python_version }}-${{ inputs.package-dir }}-pip-${{ hashFiles(format('{0}/pyproject.toml', inputs.package-dir)) }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python_version }}-
+
+      - name: Install workspace dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          # Sibling distributions come from this checkout (editable), not
+          # PyPI, so a core change is tested against dependent packages.
+          if [ "${{ inputs.package-dir }}" != "packages/fairchem-core" ]; then
+            pip install -e packages/fairchem-core
+          fi
+          # fairchem.core.components.calculate.recipes.omol imports
+          # fairchem.data.omol at module level, so core's test env needs
+          # the data-omol distribution installed as well.
+          # The legacy core jobs also installed the data-oc/omat and demo
+          # distributions into core's test env; keep that environment.
+          if [ "${{ inputs.package-dir }}" = "packages/fairchem-core" ]; then
+            pip install -e "packages/fairchem-data/fairchem-data-omol[dev]" \
+              -e "packages/fairchem-data/fairchem-data-oc[dev]" \
+              -e packages/fairchem-data/fairchem-data-omat \
+              -e "packages/fairchem-demo-ocpapi[dev]"
+          fi
+          if [ -n "${{ inputs.extras }}" ]; then
+            pip install -e "${{ inputs.package-dir }}[${{ inputs.extras }}]"
+          else
+            pip install -e "${{ inputs.package-dir }}"
+          fi
+          pip install -r packages/fairchem-core/tests/integration/requirements.txt
+          # The test step below always passes --cov flags.
+          pip install pytest-cov
+          if [ -n "${{ inputs.extra-packages }}" ]; then
+            pip install ${{ inputs.extra-packages }}
+          fi
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ inputs.install-torchsim && matrix.python_version != '3.11' }}
+        run: pip install -e "packages/fairchem-core[torchsim]"
+
+      - name: Install system packages
+        if: ${{ inputs.apt-packages != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
+
+      - name: Install packmol
+        if: ${{ inputs.install-packmol }}
+        run: |
+          wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
+          tar -xzf v20.15.0.tar.gz
+          cd packmol-20.15.0
+          ./configure
+          make
+          echo "$(readlink -f .)" >> "$GITHUB_PATH"
+
+      - name: Run tests
+        run: |
+          pytest ${{ inputs.test-path }} ${{ inputs.pytest-args }} -vv --durations=20 \
+            --cov=${{ inputs.cov-module }} \
+            --cov-config=packages/fairchem-core/pyproject.toml \
+            --cov-report=xml --cov-report=term \
+            --junitxml=junit.xml -o junit_family=legacy \
+            -c "${{ inputs.package-dir }}/pyproject.toml"
+
+      - name: Run serial tests
+        if: ${{ inputs.serial-pytest-args != '' }}
+        run: |
+          pytest ${{ inputs.test-path }} ${{ inputs.serial-pytest-args }} -vv --durations=20 \
+            --cov=${{ inputs.cov-module }} --cov-append \
+            --cov-config=packages/fairchem-core/pyproject.toml \
+            --cov-report=xml --cov-report=term \
+            --junitxml=junit-serial.xml -o junit_family=legacy \
+            -c "${{ inputs.package-dir }}/pyproject.toml"
+
+      - if: ${{ matrix.python_version == '3.14' }}
+        name: codecov-coverage
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - if: ${{ matrix.python_version == '3.14' }}
+        name: codecov-test-results
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit.xml,./junit-serial.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    # Runs PR code: fork PRs go through the external-testing environment,
+    # whose required reviewers approve the commit before checkout and
+    # release of secrets (same gate as the legacy test jobs).
+    environment: >-
+      ${{ github.event_name == 'workflow_run' &&
+          github.event.workflow_run.head_repository.full_name != github.repository &&
+          'external-testing' || 'internal-testing' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Under workflow_run (how PRs run) the default ref is the
+          # default branch; test the PR's head commit instead.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Required since actions/checkout refuses fork PR code in
+          # workflow_run jobs; forks are gated by external-testing above.
+          allow-unsafe-pr-checkout: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build "${{ inputs.package-dir }}" --outdir dist-check
+
+      - name: Check wheel only ships its own namespace subtree
+        env:
+          COV_MODULE: ${{ inputs.cov-module }}
+        run: |
+          python - <<'EOF'
+          import glob, os, sys, zipfile
+
+          prefix = os.environ["COV_MODULE"].replace(".", "/") + "/"
+          (wheel,) = glob.glob("dist-check/*.whl")
+          names = zipfile.ZipFile(wheel).namelist()
+          stray = [n for n in names if not n.startswith(prefix) and ".dist-info/" not in n]
+          if stray:
+              sys.exit(f"{wheel} contains files outside {prefix}:\n" + "\n".join(stray))
+          if not any(n.startswith(prefix) for n in names):
+              sys.exit(f"{wheel} contains nothing under {prefix}")
+          print(f"{wheel}: {len(names)} entries, all under {prefix} or dist-info")
+          EOF
