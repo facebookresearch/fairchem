@@ -13,7 +13,7 @@ import pandas as pd
 
 if not os.path.exists("adsorption_energy.txt"):
     # requires the download extra: pip install fairchem-data-odac[download]
-    from fairchem.core.common import download_large_files
+    from fairchem.core.scripts import download_large_files
 
     download_large_files.download_file_group("odac")
 raw_ads_energy_data = pd.read_csv("adsorption_energy.txt", header=None, sep=" ")

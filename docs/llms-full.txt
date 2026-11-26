@@ -1723,6 +1723,8 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
+Arguments are [Hydra overrides](https://hydra.cc/docs/advanced/override_grammar/basic/) of the packaged [config](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-lammps/src/fairchem/lammps/lammps_fc_config.yaml). Use `--config-path`/`-cp` and `--config-name`/`-cn` to start from your own config instead, and `lmp_fc --help` for usage. Logs go to stdout; `lmp_fc` does not create a Hydra `outputs/` directory.
+
 ## Multi-GPU Parallelism
 
 Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.
@@ -4864,14 +4866,14 @@ Data files for all tasks/splits were updated on Feb 10, 2021 due to minor bugs (
 IS2* datasets are stored as LMDB files and are ready to be used upon download.
 S2EF train+val datasets require an additional preprocessing step.
 
-For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
+For convenience, a self-contained script can be found [here](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-core/scripts/download_data.py) to download, preprocess, and organize the data directories to be readily usable by the existing [configs](https://github.com/facebookresearch/fairchem/tree/977a80328f2b/configs/oc20).
 
 For IS2*, run the script as:
 
 
 
 ```
-python scripts/download_data.py --task is2re
+python packages/fairchem-core/scripts/download_data.py --task is2re
 ```
 
 
@@ -4881,7 +4883,7 @@ For S2EF train/val, run the script as:
 
 
 ```
-python scripts/download_data.py --task s2ef --split SPLIT_SIZE --get-edges --num-workers WORKERS --ref-energy
+python packages/fairchem-core/scripts/download_data.py --task s2ef --split SPLIT_SIZE --get-edges --num-workers WORKERS --ref-energy
 ```
 
 
@@ -4897,7 +4899,7 @@ For S2EF test, run the script as:
 
 
 ```
-python scripts/download_data.py --task s2ef --split test
+python packages/fairchem-core/scripts/download_data.py --task s2ef --split test
 ```
 
 
@@ -5604,7 +5606,7 @@ The OC20Dense dataset is a validation dataset which was used to assess model per
 |ASE Trajectories    |29G    |112G   | [ee937e5290f8f720c914dc9a56e0281f](https://dl.fbaipublicfiles.com/opencatalystproject/data/adsorbml/oc20_dense_trajectories.tar.gz)   |
 
 The following files are also provided to be used for evaluation and general information:
-* `oc20dense_mapping.pkl` : Mapping of the LMDB `sid` to general metadata information. If this file is not present, run the command `python src/fairchem/core/scripts/download_large_files.py adsorbml` from the root of the fairchem repo to download it. -
+* `oc20dense_mapping.pkl` : Mapping of the LMDB `sid` to general metadata information. If this file is not present, run the command `python -m fairchem.core.scripts.download_large_files adsorbml` from the root of the fairchem repo to download it. -
   * `system_id`: Unique system identifier for an adsorbate, bulk, surface combination.
   * `config_id`: Unique configuration identifier, where `rand` and `heur` correspond to random and heuristic initial configurations, respectively.
   * `mpid`: Materials Project bulk identifier.
@@ -6615,7 +6617,7 @@ To do this, we will enumerate adsorbate-slab configurations and run ML relaxatio
 
 +++
 
-Be sure to set the path in `fairchem/data/oc/configs/paths.py` to point to the correct place or pass the paths as an argument. The database pickles can be found in `fairchem/data/oc/databases/pkls` (some pkl files are only downloaded by running the command `python src/fairchem/core/scripts/download_large_files.py oc` from the root of the fairchem repo). We will show one explicitly here as an example and then run all of them in an automated fashion for brevity.
+Be sure to set the path in `fairchem/data/oc/configs/paths.py` to point to the correct place or pass the paths as an argument. The database pickles can be found in `fairchem/data/oc/databases/pkls` (some pkl files are only downloaded by running the command `python -m fairchem.core.scripts.download_large_files oc` from the root of the fairchem repo). We will show one explicitly here as an example and then run all of them in an automated fashion for brevity.
 
 ```{code-cell} ipython3
 from pathlib import Path

@@ -3,4 +3,4 @@ pip install \
     packages/fairchem-data/fairchem-data-oc[dev] \
     packages/fairchem-applications/fairchem-applications-cattsunami \
     packages/fairchem-data/fairchem-data-omat \
-    -r tests/requirements.txt
+    -r packages/fairchem-core/tests/integration/requirements.txt

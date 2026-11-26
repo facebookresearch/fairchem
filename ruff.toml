@@ -1,4 +1,4 @@
-include = ["packages/fairchem-core/src/fairchem/core/**/*.py", "packages/fairchem-data/fairchem-data-oc/src/fairchem/data/oc/**/*.py", "packages/*/tests/**/*.py", "packages/fairchem-data/*/tests/**/*.py", "integration-tests/**/*.py"]
+include = ["packages/fairchem-core/src/fairchem/core/**/*.py", "packages/fairchem-data/fairchem-data-oc/src/fairchem/data/oc/**/*.py", "packages/*/tests/**/*.py", "packages/fairchem-data/*/tests/**/*.py"]
 line-length = 88
 
 [lint]

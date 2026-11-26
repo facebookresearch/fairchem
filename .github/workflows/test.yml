@@ -385,9 +385,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        # 3.13: fairchem-lammps declares <3.14 until hydra-core
-        # supports Python 3.14 (see packages/fairchem-lammps/pyproject.toml).
-        python_version: ['3.13']
+        python_version: ['3.14']
 
     steps:
       - uses: actions/checkout@v7
@@ -395,7 +393,7 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.13 # Specifies packages to install into the new environment
+          create-args: python=${{ matrix.python_version }} # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -739,11 +737,7 @@ jobs:
       extras: ''
       extra-packages: lammps
       apt-packages: mpich
-      # hydra-core is incompatible with Python 3.14's argparse
-      # (LazyCompletionHelp), which breaks the @hydra.main lmp_fc
-      # entrypoint; 3.13 is the newest Python where it works (and
-      # fairchem-lammps declares <3.14 until hydra supports 3.14).
-      python-versions: '["3.11", "3.13"]'
+      python-versions: '["3.11", "3.13", "3.14"]'
       test-path: packages/fairchem-lammps/tests
       cov-module: fairchem.lammps
       pytest-args: '-m "not gpu and not pretrained"'

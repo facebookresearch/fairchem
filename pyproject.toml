@@ -30,10 +30,7 @@
 #
 # Note: fairchem-lammps is opt-in because LAMMPS itself is an
 # external, non-pip dependency: without a system or conda LAMMPS
-# install the `lmp_fc` entry point cannot run. fairchem-lammps
-# also declares Python <3.14 (its @hydra.main entry point is
-# incompatible with hydra-core on 3.14); keeping it out of the
-# default install keeps the rest of the workspace usable on 3.14.
+# install the `lmp_fc` entry point cannot run.
 
 [project]
 name = "fairchem"

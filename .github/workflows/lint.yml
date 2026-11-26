@@ -16,6 +16,13 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Check the workspace lockfile is fresh
         run: uv lock --check
+      - name: Check referenced package paths exist
+        run: python3 .github/scripts/check_package_paths.py
+      - name: Check uv sync resolves on the oldest and newest supported Python
+        run: |
+          for python in 3.11 3.14; do
+            uv sync --locked --all-extras --dry-run --python "$python"
+          done
 
   lint:
     runs-on: ubuntu-latest

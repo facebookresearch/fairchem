@@ -72,6 +72,8 @@ To run, use the Python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol"
 ```
 
+Arguments are [Hydra overrides](https://hydra.cc/docs/advanced/override_grammar/basic/) of the packaged [config](https://github.com/facebookresearch/fairchem/blob/main/packages/fairchem-lammps/src/fairchem/lammps/lammps_fc_config.yaml). Use `--config-path`/`-cp` and `--config-name`/`-cn` to start from your own config instead, and `lmp_fc --help` for usage. Logs go to stdout; `lmp_fc` does not create a Hydra `outputs/` directory.
+
 ## Multi-GPU Parallelism
 
 Our LAMMPS integration is fully compatible out of the box with our Multi-GPU inference API.
