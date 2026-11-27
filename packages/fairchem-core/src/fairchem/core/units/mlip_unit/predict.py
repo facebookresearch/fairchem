@@ -178,6 +178,13 @@ def _checkpoint_model_name(model_config: dict) -> str:
     return "This checkpoint"
 
 
+def _model_tensors(model: torch.nn.Module) -> dict[str, torch.Tensor]:
+    """
+    A model's parameters and buffers, persistent or not, by name.
+    """
+    return {**dict(model.named_parameters()), **dict(model.named_buffers())}
+
+
 class _ModelWrapper(torch.nn.Module):
     """
     Expose a model as ``.module``, like the ``AveragedModel`` that
@@ -257,41 +264,56 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
     def _load_model(self) -> None:
         """Load a fresh, unprepared model from the inference checkpoint."""
+        self.model = self._build_model(self._inference_model_path)
+
+    def _build_model(self, inference_model_path: str) -> torch.nn.Module:
+        """
+        Build a fresh, unprepared model from an inference checkpoint.
+
+        A request the model cannot serve changes ``self.inference_settings`` (UMA
+        Nitro falls back to the composable model).
+
+        Args:
+            inference_model_path: The inference checkpoint.
+
+        Returns:
+            The model, wrapped so that the model itself is ``.module``.
+        """
         # Load checkpoint first to get model type; UMA compat fixups run downstream
         # in load_inference_model.
         checkpoint = torch.load(
-            self._inference_model_path, map_location="cpu", weights_only=False
+            inference_model_path, map_location="cpu", weights_only=False
         )
 
         if self.inference_settings.nitro:
             before = copy.deepcopy(self.inference_settings)
             try:
-                self._load_nitro_model(checkpoint)
+                model = self._load_nitro_model(checkpoint, inference_model_path)
             except UMANitroNotSupportedError as error:
                 logging.warning(f"UMA Nitro cannot serve this request: {error}.")
                 self.inference_settings.nitro = False
-                self._load_hydra_model(checkpoint)
+                model = self._load_hydra_model(checkpoint, inference_model_path)
                 self._log_settings_change(before)
         else:
-            self._load_hydra_model(checkpoint)
+            model = self._load_hydra_model(checkpoint, inference_model_path)
 
         # Get backbone's default untrained tasks (if supported and enabled)
         default_backbone_tasks = []
         if self.inference_settings.auto_add_default_untrained_tasks:
-            backbone = self.model.module.backbone
+            backbone = model.module.backbone
             if hasattr(backbone, "get_default_untrained_tasks"):
                 default_backbone_tasks = backbone.get_default_untrained_tasks(
-                    self.model.module.tasks,
+                    model.module.tasks,
                     self.inference_settings,
                 )
 
         # Create explicitly requested untrained tasks
         untrained_tasks = self._create_untrained_tasks(
-            self.inference_settings, self.model.module.tasks
+            self.inference_settings, model.module.tasks
         )
 
         explicit_task_names = {t.name for t in untrained_tasks}
-        checkpoint_task_names = set(self.model.module.tasks.keys())
+        checkpoint_task_names = set(model.module.tasks.keys())
 
         for task in default_backbone_tasks:
             if (
@@ -305,10 +327,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"Adding {len(untrained_tasks)} untrained task(s): "
                 f"{[t.name for t in untrained_tasks]}"
             )
-            self.model.module.add_tasks(untrained_tasks)
-        self.model.eval()
+            model.module.add_tasks(untrained_tasks)
+        model.eval()
+        return model
 
-    def _load_nitro_model(self, checkpoint: MLIPInferenceCheckpoint) -> None:
+    def _load_nitro_model(
+        self, checkpoint: MLIPInferenceCheckpoint, inference_model_path: str
+    ) -> torch.nn.Module:
         """
         Build the standalone UMA Nitro model from the checkpoint weights.
 
@@ -335,9 +360,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             ) from error
 
         UMANitroModel.validate(
-            self.inference_settings, self._inference_model_path, self._requested_device
+            self.inference_settings, inference_model_path, self._requested_device
         )
-        self.model = _ModelWrapper(UMANitroModel.from_checkpoint(checkpoint))
+        return _ModelWrapper(UMANitroModel.from_checkpoint(checkpoint))
 
     def _fall_back_with(self, reason: str, **changes) -> None:
         """
@@ -401,7 +426,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 self._fall_back(error)
         self._lazy_init(data)
 
-    def _load_hydra_model(self, checkpoint: MLIPInferenceCheckpoint) -> None:
+    def _load_hydra_model(
+        self, checkpoint: MLIPInferenceCheckpoint, inference_model_path: str
+    ) -> torch.nn.Module:
         """Build the composable HydraModel from the checkpoint."""
         # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode.
         # only for CUDA predict units: the fast backend uses Triton kernels that cannot run on CPU tensors.
@@ -423,17 +450,18 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         try:
             # Load model with overrides, passing pre-loaded checkpoint
-            self.model, checkpoint = load_inference_model(
-                self._inference_model_path,
+            model, checkpoint = load_inference_model(
+                inference_model_path,
                 use_ema=True,
                 overrides=final_overrides,
                 preloaded_checkpoint=checkpoint,
             )
 
             # Model sets up tasks
-            self.model.module.setup_tasks(checkpoint.tasks_config)
+            model.module.setup_tasks(checkpoint.tasks_config)
         finally:
             torch.set_default_dtype(prev_dtype)
+        return model
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -662,6 +690,87 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         self.model.module.validate_atoms_data(atoms, task_name)
 
+    def refresh_weights(self, inference_model_path: str) -> None:
+        """
+        Load the weights of another checkpoint of the same model, in place.
+
+        Use this to update a long-lived predict unit to a newer checkpoint of
+        its model, such as a later training step or a fine-tune, without
+        rebuilding it. Before the first prediction this simply loads the new
+        checkpoint. Afterwards the prepared model is kept: the new weights are
+        prepared the same way (MOLE merge for the same system, backend
+        transforms) and copied into it, so a compiled model and other fast-path
+        state are reused rather than rebuilt. Tasks, including normalizers and
+        element references, are taken from the new checkpoint.
+
+        Args:
+            inference_model_path: The new inference checkpoint.
+
+        Raises:
+            ValueError: If the checkpoint cannot be served with this predict
+                unit's current inference settings, or its model's weights do not
+                match the loaded model's. The loaded model is then unchanged.
+        """
+        if not self.lazy_model_intialized:
+            self.model = self._build_model(inference_model_path)
+            self._inference_model_path = inference_model_path
+            return
+
+        settings = copy.deepcopy(self.inference_settings)
+        source = self._build_model(inference_model_path)
+        if self.inference_settings != settings:
+            changed = [
+                field.name
+                for field in dataclasses.fields(settings)
+                if getattr(settings, field.name)
+                != getattr(self.inference_settings, field.name)
+            ]
+            self.inference_settings = settings
+            raise ValueError(
+                f"{inference_model_path} cannot be served with this predict unit's "
+                f"inference settings; it would change {', '.join(changed)}"
+            )
+        source.module.prepare_for_inference(
+            self._preparation_data.clone(), self.inference_settings
+        )
+        source.to(self.inference_settings.base_precision_dtype)
+
+        # A compiled model wraps the module whose weights it reads.
+        target = getattr(self.model, "_orig_mod", self.model)
+        # Some models derive tensors from their weights lazily (UMA Nitro); drop
+        # them first, so both models hold the same tensors.
+        drop_caches = getattr(target.module, "drop_weight_caches", None)
+        if drop_caches is not None:
+            drop_caches()
+        # The weights must match exactly. Non-persistent buffers present in both
+        # models are copied too, since prepared models can keep weights there
+        # (UMA Nitro's radial MLPs); one present in only one model is a constant
+        # built lazily on the first prediction.
+        new_tensors = _model_tensors(source)
+        old_tensors = _model_tensors(target)
+        persistent = source.state_dict().keys() | target.state_dict().keys()
+        mismatched = sorted(
+            (set(new_tensors) ^ set(old_tensors)) & persistent
+            | {
+                name
+                for name in set(new_tensors) & set(old_tensors)
+                if new_tensors[name].shape != old_tensors[name].shape
+            }
+        )
+        if mismatched:
+            raise ValueError(
+                f"{inference_model_path} does not match the loaded model; "
+                f"differing tensors: {mismatched[:5]}"
+            )
+        # In place, so compiled code and captured graphs read the new values.
+        with torch.no_grad():
+            for name in set(new_tensors) & set(old_tensors):
+                old_tensors[name].copy_(new_tensors[name])
+        target.module._tasks = source.module._tasks
+        target.module._dataset_to_tasks = source.module._dataset_to_tasks
+        self.move_to_device()
+        self._inference_model_path = inference_model_path
+
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)
 
@@ -726,6 +835,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         Lazy initialization on first predict call.
         """
+        # Kept so refresh_weights can prepare new weights for the same system.
+        self._preparation_data = data.clone().cpu()
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
         # Inference differentiates outputs with respect to inputs, not weights.

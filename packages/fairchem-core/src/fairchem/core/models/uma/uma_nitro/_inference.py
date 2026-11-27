@@ -16046,6 +16046,28 @@ class UMANitroModel(nn.Module):
         if _GRAPH_STATE:
             _flush_graphs()
 
+    def drop_weight_caches(self) -> None:
+        """
+        Forget everything derived from the weights after they changed in place.
+
+        Drops the captured CUDA graphs, the ``_uma_nitro_*`` tensors and the
+        block-diagonal SO(2) weights, all derived from the weights and rebuilt
+        from the new weights on the next call. The measured edge capacity
+        depends on geometry, not weights, so it is kept.
+        """
+        if _GRAPH_STATE:
+            _flush_graphs()
+        for module in self.modules():
+            for name in [
+                name
+                for name in vars(module)
+                if name.startswith("_uma_nitro_")
+                and name != "_uma_nitro_capacity_high_water"
+            ]:
+                delattr(module, name)
+            if isinstance(module, _SO2mConv):
+                module._w_block = None
+
 
 def _expert_key(parameter_name: str, head_prefix: str) -> str:
     """
