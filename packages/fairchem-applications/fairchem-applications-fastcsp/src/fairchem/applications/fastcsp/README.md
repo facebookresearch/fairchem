@@ -152,7 +152,7 @@ IHEPUG,IHEPUG_mol.xyz,"IHEPUG02,IHEPUG"
 
 ### Installation
 1. Clone the [fairchem repo](https://github.com/facebookresearch/fairchem/tree/main)
-2. Install FastCSP: `pip install -e packages/fairchem-applications-fastcsp`
+2. Install FastCSP: `pip install -e packages/fairchem-applications/fairchem-applications-fastcsp`
 
 ### External Dependencies
 - **(Required)** [`Genarris 3.0`](https://github.com/Yi5817/Genarris): Crystal structure generation engine

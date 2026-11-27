@@ -1,5 +1,5 @@
 include-paths:
-  - packages/fairchem-data-oc
+  - packages/fairchem-data/fairchem-data-oc
 tag-prefix: fairchem_data_oc
 tag-template: 'fairchem_data_oc-$RESOLVED_VERSION'
 name-template: 'fairchem_data_oc-$RESOLVED_VERSION'

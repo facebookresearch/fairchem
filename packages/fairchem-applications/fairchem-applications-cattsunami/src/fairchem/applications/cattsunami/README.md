@@ -18,7 +18,7 @@ pip install fairchem-applications-cattsunami
 Configured for local development:
 1. Clone the [fairchem repo](https://github.com/facebookresearch/fairchem/tree/main)
 2. Install `fairchem-data-oc` and `fairchem-core`:  [instructions](https://facebookresearch.github.io/fairchem/install)
-3. Install this repository `pip install -e packages/fairchem-applications-cattsunami`
+3. Install this repository `pip install -e packages/fairchem-applications/fairchem-applications-cattsunami`
 4. Check out the [tutorial notebook](https://facebookresearch.github.io/fairchem/cattsunami-tutorial)
 
 
