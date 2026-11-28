@@ -36,7 +36,7 @@ Loading now requires a `model_id` to be defined. UMA 1.1 (which ships without on
 - `uma-s-1p2p1-ft-d4rev`: `omol` task at the ωB97M-D4rev level of theory, fine-tuned on approximately 4 million OMol25 structures recomputed with ωB97M-D4rev labels.
 - `uma-s-1p2p1-ft-r2scan`: `omat` task at the r²SCAN level of theory, trained on [MAD-1.6](https://arxiv.org/abs/2603.02089).
 
-See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations and acknowledgements.
+See [the UMA models page](uma.md#uma-s-121-fine-tunes-d4rev-and-rscan) for usage, limitations and acknowledgements.
 
 ---
 
@@ -46,7 +46,7 @@ See [the UMA models page](uma.md#uma-s-1p2p1-fine-tunes) for usage, limitations 
   On a single NVIDIA H200, it reaches **~6 ns/day for 1,000 atoms** in ASE MD
   and raw inference throughput equivalent to **~33 ns/day for 150 atoms**,
   with support for systems up to **15,000 atoms**.
-- **`DFTD3Calculator`** adds GPU DFT-D3(BJ) energies, forces and analytic stresses to any ASE calculator, with `pbe` and `r2scan` presets. See [Adding a DFT-D3(BJ) dispersion correction](common_tasks/ase_calculator.md#adding-a-dft-d3-bj-dispersion-correction).
+- **`DFTD3Calculator`** adds GPU DFT-D3(BJ) energies, forces and analytic stresses to any ASE calculator, with `pbe` and `r2scan` presets. See [Adding a DFT-D3(BJ) dispersion correction](common_tasks/ase_calculator.md#adding-a-dft-d3bj-dispersion-correction).
 
 ---
 
